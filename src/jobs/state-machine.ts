@@ -7,6 +7,17 @@ export const jobStates = [
   "interrupted",
 ] as const;
 
+export const jobKinds = [
+  "analyze_import",
+  "prepare_draft",
+  "build_preview",
+  "build_publish",
+  "verify_version",
+  "reconcile",
+  "reclaim",
+] as const;
+
+export type JobKind = (typeof jobKinds)[number];
 export type JobState = (typeof jobStates)[number];
 export type TerminalJobState = Extract<
   JobState,

@@ -6,21 +6,13 @@ import { createOpaqueId } from "../../domain/ids.js";
 import {
   assertJobTransition,
   isTerminalJobState,
+  jobKinds,
+  type JobKind,
   type JobState,
   type TerminalJobState,
 } from "../../jobs/state-machine.js";
 
-export const jobKinds = [
-  "analyze_import",
-  "prepare_draft",
-  "build_preview",
-  "build_publish",
-  "verify_version",
-  "reconcile",
-  "reclaim",
-] as const;
-
-export type JobKind = (typeof jobKinds)[number];
+export { jobKinds, type JobKind };
 export type JobErrorClass =
   | "infrastructure"
   | "content"

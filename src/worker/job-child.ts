@@ -1,43 +1,61 @@
-export interface JobChildRequest {
-  readonly jobId: string;
-  readonly kind: string;
-  readonly payload: Readonly<Record<string, unknown>>;
-}
+import {
+  isCancelJobMessage,
+  isRunJobMessage,
+  jobChildProtocolVersion,
+  type JobResultMessage,
+  type RunJobMessage,
+} from "./protocol.js";
 
-export interface JobChildResult {
-  readonly jobId: string;
-  readonly ok: boolean;
-  readonly result?: Readonly<Record<string, unknown>>;
-  readonly safeErrorCode?: string;
-}
+let active: RunJobMessage | undefined;
+const controller = new AbortController();
 
-function isJobChildRequest(value: unknown): value is JobChildRequest {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const candidate = value as Partial<JobChildRequest>;
-  return (
-    typeof candidate.jobId === "string" &&
-    typeof candidate.kind === "string" &&
-    typeof candidate.payload === "object" &&
-    candidate.payload !== null
-  );
+function send(result: JobResultMessage): void {
+  process.send?.(result, () => {
+    if (process.connected) process.disconnect();
+  });
 }
 
 process.on("message", (message: unknown) => {
-  if (!isJobChildRequest(message)) {
-    process.send?.({
-      jobId: "unknown",
+  if (isCancelJobMessage(message)) {
+    if (active?.input.jobId === message.jobId) controller.abort();
+    return;
+  }
+  if (!isRunJobMessage(message) || active) {
+    send({
+      jobId:
+        typeof message === "object" &&
+        message !== null &&
+        "jobId" in message &&
+        typeof message.jobId === "string"
+          ? message.jobId
+          : "job_invalid",
       ok: false,
+      protocolVersion: jobChildProtocolVersion,
+      safeErrorClass: "infrastructure",
       safeErrorCode: "INVALID_JOB_CHILD_REQUEST",
-    } satisfies JobChildResult);
+      type: "result",
+    });
     return;
   }
 
-  process.send?.({
-    jobId: message.jobId,
+  active = message;
+  if (controller.signal.aborted) {
+    send({
+      jobId: message.input.jobId,
+      ok: false,
+      protocolVersion: jobChildProtocolVersion,
+      safeErrorClass: "canceled",
+      safeErrorCode: "JOB_CANCELED",
+      type: "result",
+    });
+    return;
+  }
+  send({
+    jobId: message.input.jobId,
     ok: false,
+    protocolVersion: jobChildProtocolVersion,
+    safeErrorClass: "infrastructure",
     safeErrorCode: "JOB_HANDLER_NOT_IMPLEMENTED",
-  } satisfies JobChildResult);
+    type: "result",
+  });
 });

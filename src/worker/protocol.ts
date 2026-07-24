@@ -1,0 +1,152 @@
+import { isOpaqueId } from "../domain/ids.js";
+import { jobKinds, type JobKind } from "../jobs/state-machine.js";
+
+export const jobChildProtocolVersion = 1;
+
+export interface FrozenJobInput {
+  readonly attempt: number;
+  readonly bookId: number | null;
+  readonly capturedConfigRevision: number | null;
+  readonly capturedCurrentVersionId: string | null;
+  readonly capturedSourceId: string | null;
+  readonly importId: string | null;
+  readonly jobId: string;
+  readonly kind: JobKind;
+  readonly stagingRelativePath: string;
+  readonly versionId: string | null;
+}
+
+export interface RunJobMessage {
+  readonly input: FrozenJobInput;
+  readonly protocolVersion: typeof jobChildProtocolVersion;
+  readonly type: "run";
+}
+
+export interface CancelJobMessage {
+  readonly jobId: string;
+  readonly protocolVersion: typeof jobChildProtocolVersion;
+  readonly type: "cancel";
+}
+
+export type ParentToChildMessage = CancelJobMessage | RunJobMessage;
+
+export interface JobProgressMessage {
+  readonly jobId: string;
+  readonly phase: string;
+  readonly progress: Readonly<Record<string, string | number | boolean | null>>;
+  readonly protocolVersion: typeof jobChildProtocolVersion;
+  readonly type: "progress";
+}
+
+export interface JobResultMessage {
+  readonly jobId: string;
+  readonly ok: boolean;
+  readonly protocolVersion: typeof jobChildProtocolVersion;
+  readonly result?: Readonly<Record<string, string | number | boolean | null>>;
+  readonly safeErrorClass?:
+    | "infrastructure"
+    | "content"
+    | "validation"
+    | "security_limit"
+    | "timeout"
+    | "canceled";
+  readonly safeErrorCode?: string;
+  readonly type: "result";
+}
+
+export type ChildToParentMessage = JobProgressMessage | JobResultMessage;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isNullablePositiveInteger(value: unknown): value is number | null {
+  return (
+    value === null ||
+    (typeof value === "number" && Number.isSafeInteger(value) && value >= 1)
+  );
+}
+
+function isSafeScalarRecord(
+  value: unknown,
+): value is Record<string, string | number | boolean | null> {
+  if (!isRecord(value) || Object.keys(value).length > 100) return false;
+  return Object.entries(value).every(
+    ([key, item]) =>
+      key.length >= 1 &&
+      key.length <= 80 &&
+      (item === null ||
+        typeof item === "string" ||
+        typeof item === "number" ||
+        typeof item === "boolean") &&
+      (typeof item !== "string" || item.length <= 500) &&
+      (typeof item !== "number" || Number.isFinite(item)),
+  );
+}
+
+export function isRunJobMessage(value: unknown): value is RunJobMessage {
+  if (!isRecord(value) || value.type !== "run") return false;
+  if (value.protocolVersion !== jobChildProtocolVersion) return false;
+  const input = value.input;
+  if (!isRecord(input)) return false;
+  return (
+    isOpaqueId("job", String(input.jobId)) &&
+    jobKinds.includes(input.kind as JobKind) &&
+    Number.isSafeInteger(input.attempt) &&
+    Number(input.attempt) >= 1 &&
+    isNullablePositiveInteger(input.bookId) &&
+    isNullablePositiveInteger(input.capturedConfigRevision) &&
+    isNullableString(input.capturedCurrentVersionId) &&
+    isNullableString(input.capturedSourceId) &&
+    isNullableString(input.importId) &&
+    isNullableString(input.versionId) &&
+    input.stagingRelativePath === `staging/${input.jobId}`
+  );
+}
+
+export function isCancelJobMessage(value: unknown): value is CancelJobMessage {
+  return (
+    isRecord(value) &&
+    value.type === "cancel" &&
+    value.protocolVersion === jobChildProtocolVersion &&
+    typeof value.jobId === "string" &&
+    isOpaqueId("job", value.jobId)
+  );
+}
+
+export function isChildToParentMessage(
+  value: unknown,
+): value is ChildToParentMessage {
+  if (
+    !isRecord(value) ||
+    value.protocolVersion !== jobChildProtocolVersion ||
+    typeof value.jobId !== "string" ||
+    !isOpaqueId("job", value.jobId)
+  ) {
+    return false;
+  }
+  if (value.type === "progress") {
+    return (
+      typeof value.phase === "string" &&
+      value.phase.length >= 1 &&
+      value.phase.length <= 80 &&
+      isSafeScalarRecord(value.progress)
+    );
+  }
+  if (value.type !== "result" || typeof value.ok !== "boolean") return false;
+  if (value.result !== undefined && !isSafeScalarRecord(value.result)) {
+    return false;
+  }
+  if (
+    value.safeErrorCode !== undefined &&
+    (typeof value.safeErrorCode !== "string" ||
+      !/^[A-Z][A-Z0-9_]{2,79}$/.test(value.safeErrorCode))
+  ) {
+    return false;
+  }
+  return true;
+}
