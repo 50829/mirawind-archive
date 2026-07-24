@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "id": "synthetic-cloud",
+      "kind": "cloud",
+      "root": "cases/cloud",
+      "expected": {
+        "decision": "automatic",
+        "candidate": "wrapper/result/full.md",
+        "reason": "cloud-high-confidence"
+      }
+    },
+    {
+      "id": "synthetic-cli",
+      "kind": "cli",
+      "root": "cases/cli",
+      "expected": {
+        "decision": "automatic",
+        "candidate": "exports/book/auto/book.md",
+        "reason": "cli-high-confidence"
+      }
+    },
+    {
+      "id": "synthetic-generic",
+      "kind": "generic",
+      "root": "cases/generic",
+      "expected": {
+        "decision": "confirmation",
+        "candidate": "notes.md",
+        "reason": "generic-single-markdown"
+      }
+    },
+    {
+      "id": "synthetic-ambiguous",
+      "kind": "ambiguous",
+      "root": "cases/ambiguous",
+      "expected": {
+        "decision": "reject",
+        "candidate": null,
+        "reason": "ambiguous-candidates"
+      }
+    },
+    {
+      "id": "synthetic-multi-book",
+      "kind": "multi-book",
+      "root": "cases/multi-book",
+      "expected": {
+        "decision": "reject",
+        "candidate": null,
+        "reason": "multiple-book-bundles"
+      }
+    }
+  ]
+}

@@ -17,6 +17,7 @@
     "dev:worker": "tsx src/worker/index.ts",
     "format": "prettier --check package.json pnpm-workspace.yaml tsconfig.json tsconfig.processes.json astro.config.mjs eslint.config.js commitlint.config.mjs vitest.config.ts playwright.config.ts CONTRIBUTING.md .github/workflows src tests scripts docs/operations docs/third-party",
     "format:write": "prettier --write package.json pnpm-workspace.yaml tsconfig.json tsconfig.processes.json astro.config.mjs eslint.config.js commitlint.config.mjs vitest.config.ts playwright.config.ts CONTRIBUTING.md .github/workflows src tests scripts docs/operations docs/third-party",
+    "fixtures:verify-real": "tsx scripts/fixtures/verify-real-mineru.ts",
     "lint": "eslint .",
     "mirawind": "tsx src/cli/index.ts",
     "preview": "astro preview",

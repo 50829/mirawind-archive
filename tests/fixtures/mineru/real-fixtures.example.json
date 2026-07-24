@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "id": "real-mineru-a7f31c",
+      "file_name": "real-mineru-a7f31c.zip",
+      "mineru_version": "REPLACE_WITH_EXACT_VERSION",
+      "page_count_range": {
+        "minimum": 200,
+        "maximum": 600
+      },
+      "size_bytes": 123456789,
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "usage_scope": {
+        "designated_by": "administrator",
+        "local_compatibility_testing": true,
+        "local_performance_testing": true,
+        "public_ci": false,
+        "redistribution": false,
+        "repository_storage": false
+      }
+    },
+    {
+      "id": "real-mineru-b9d204",
+      "file_name": "real-mineru-b9d204.zip",
+      "mineru_version": "REPLACE_WITH_EXACT_VERSION",
+      "page_count_range": {
+        "minimum": 200,
+        "maximum": 600
+      },
+      "size_bytes": 123456789,
+      "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      "usage_scope": {
+        "designated_by": "administrator",
+        "local_compatibility_testing": true,
+        "local_performance_testing": true,
+        "public_ci": false,
+        "redistribution": false,
+        "repository_storage": false
+      }
+    }
+  ]
+}
