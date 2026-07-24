@@ -1,10 +1,98 @@
 ---
+import { ImportUploader } from "@/components/import/ImportUploader";
+import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
+import { applyResponsePolicy } from "@/http/cache/policies";
+
 export const prerender = false;
-return new Response(null, {
-  headers: {
-    "Cache-Control": "private, no-store",
-    Location: "/manage/security",
-  },
-  status: 303,
-});
+
+if (!Astro.locals.session) {
+  return Astro.redirect(
+    `/login?next=${encodeURIComponent(Astro.url.pathname)}`,
+  );
+}
+try {
+  requireRuntimeAdministrator(Astro.locals.session, { hideExistence: true });
+} catch {
+  return new Response("Not found", {
+    headers: { "Cache-Control": "private, no-store" },
+    status: 404,
+  });
+}
+applyResponsePolicy(Astro.response.headers, "manage");
 ---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>导入书籍 · Mirawind</title>
+  </head>
+  <body>
+    <main>
+      <ImportUploader client:load />
+      <p><a href="/manage/security">Passkey 安全设置</a></p>
+    </main>
+  </body>
+</html>
+
+<style>
+  :global(*) {
+    box-sizing: border-box;
+  }
+  :global(body) {
+    margin: 0;
+    color: #25211b;
+    background: #f4efe6;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+  main {
+    width: min(66rem, calc(100vw - 2rem));
+    margin: 0 auto;
+    padding: 4rem 0;
+  }
+  :global(.import-workspace) {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+  :global(.upload-card),
+  :global(.status-card),
+  :global(.candidate) {
+    padding: 1.5rem;
+    border: 1px solid #d7ccbd;
+    border-radius: 1rem;
+    background: #fffdf8;
+  }
+  :global(label) {
+    display: grid;
+    gap: 0.45rem;
+    margin: 1rem 0;
+  }
+  :global(input),
+  :global(button) {
+    min-height: 2.75rem;
+    padding: 0.65rem 0.8rem;
+    font: inherit;
+  }
+  :global(button) {
+    border: 0;
+    border-radius: 0.6rem;
+    color: white;
+    background: #2f5b49;
+    cursor: pointer;
+  }
+  :global(.candidate-list) {
+    display: grid;
+    gap: 0.8rem;
+  }
+  :global(.diagnostic) {
+    color: #9b3228;
+  }
+  @media (max-width: 760px) {
+    :global(.import-workspace) {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

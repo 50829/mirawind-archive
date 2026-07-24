@@ -97,7 +97,7 @@ non-cacheable response.
 
 ### Evidence tests for User Story 1
 
-- [ ] T040 [P] [US1] Add failing OpenAPI contract tests for import creation/status/confirmation, draft retrieval/update and revision-pinned preview routes in `tests/contract/import-preview.contract.test.ts`
+- [X] T040 [P] [US1] Add failing OpenAPI contract tests for import creation/status/confirmation, draft retrieval/update and revision-pinned preview routes in `tests/contract/import-preview.contract.test.ts`
 - [X] T041 [P] [US1] Add failing archive path tests for absolute/drive/UNC/traversal/NUL/empty/dot paths, Windows separators, NFC collisions, duplicates and file-directory prefix conflicts in `tests/integration/archive/path-security.test.ts`
 - [X] T042 [P] [US1] Add failing archive format tests for malformed headers, local/central ambiguity, overlaps, CRC, encryption, multi-disk, methods other than 0/8, links and special files in `tests/integration/archive/format-security.test.ts`
 - [X] T043 [P] [US1] Add failing actual-stream limit tests for 2 GiB upload/entry, 8 GiB package, 20,000 entries, 64 MiB ratio threshold, 200:1 entry/package ratio, depth/path limits, cancellation and cleanup in `tests/integration/archive/resource-limits.test.ts`
@@ -105,8 +105,8 @@ non-cacheable response.
 - [X] T045 [P] [US1] Add failing Markdown tests for fatal UTF-8, source positions, opaque block IDs, NFC visible text, GFM/math, semantic containers, resource-base containment and malicious raw HTML/URLs in `tests/integration/compiler/document-parse.test.ts`
 - [X] T046 [P] [US1] Add failing raster tests for magic/format mismatch, corrupt decode, 100M pixels, 32,768-pixel sides, animation/multipage/SVG rejection and bounded real decode in `tests/integration/compiler/image-security.test.ts`
 - [X] T047 [P] [US1] Add failing strict YAML/JSON Schema tests for aliases, duplicate keys, custom tags, merge keys, unknown fields, unsupported newer versions and non-mutating validation in `tests/contract/book-schema.test.ts`
-- [ ] T048 [P] [US1] Add failing authorization/cache tests proving preview pages/assets, candidates, jobs, sources and diagnostics are administrator-only and anonymous private/missing responses match in `tests/integration/auth/draft-visibility.test.ts`
-- [ ] T049 [US1] Add a failing browser journey covering high-confidence import, generic confirmation, ambiguous rejection, draft preview and source-Markdown immutability in `tests/e2e/import-preview.spec.ts`
+- [X] T048 [P] [US1] Add failing authorization/cache tests proving preview pages/assets, candidates, jobs, sources and diagnostics are administrator-only and anonymous private/missing responses match in `tests/integration/auth/draft-visibility.test.ts`
+- [X] T049 [US1] Add a failing browser journey covering high-confidence import, generic confirmation, ambiguous rejection, draft preview and source-Markdown immutability in `tests/e2e/import-preview.spec.ts`
 
 ### Implementation for User Story 1
 
@@ -126,10 +126,10 @@ non-cacheable response.
 - [X] T063 [US1] Implement default TOC inclusion, four-role, continuous-level and heading-only page-boundary proposals without changing source order in `src/compiler/document/structure-proposal.ts`
 - [X] T064 [US1] Implement sanitized raw-HTML HAST conversion and the authenticated draft-preview rendering pipeline in `src/compiler/render/sanitize.ts` and `src/compiler/render/preview.ts`
 - [X] T065 [US1] Implement `prepare_draft` and `build_preview` job handlers that create immutable config revisions and revision-pinned derived preview directories in `src/jobs/handlers/prepare-draft.ts` and `src/jobs/handlers/build-preview.ts`
-- [ ] T066 [US1] Implement import create/status/main-Markdown confirmation endpoints according to OpenAPI in `src/pages/api/manage/imports/index.ts`, `src/pages/api/manage/imports/[importId]/index.ts`, and `src/pages/api/manage/imports/[importId]/main-markdown.ts`
-- [ ] T067 [US1] Implement draft metadata and the exact revision-pinned preview page/asset routes from OpenAPI with no-store/noindex authorization in `src/pages/api/manage/books/[bookId]/draft.ts`, `src/pages/api/manage/books/[bookId]/preview/[configRevision]/pages/[pageId].ts`, and `src/pages/api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].ts`
-- [ ] T068 [P] [US1] Implement the import uploader, durable job progress and candidate-confirmation management interface in `src/pages/manage/index.astro`, `src/components/import/ImportUploader.tsx`, and `src/components/import/CandidateReview.tsx`
-- [ ] T069 [US1] Implement the structure/diagnostic preview interface with stale-revision labeling and authenticated resource URLs in `src/components/preview/StructurePreview.tsx`, `src/components/preview/DiagnosticsPanel.tsx`, and `src/pages/manage/books/[bookId]/preview.astro`
+- [X] T066 [US1] Implement import create/status/main-Markdown confirmation endpoints according to OpenAPI in `src/pages/api/manage/imports/index.ts`, `src/pages/api/manage/imports/[importId]/index.ts`, and `src/pages/api/manage/imports/[importId]/main-markdown.ts`
+- [X] T067 [US1] Implement draft metadata and the exact revision-pinned preview page/asset routes from OpenAPI with no-store/noindex authorization in `src/pages/api/manage/books/[bookId]/draft.ts`, `src/pages/api/manage/books/[bookId]/preview/[configRevision]/pages/[pageId].ts`, and `src/pages/api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].ts`
+- [X] T068 [P] [US1] Implement the import uploader, durable job progress and candidate-confirmation management interface in `src/pages/manage/index.astro`, `src/components/import/ImportUploader.tsx`, and `src/components/import/CandidateReview.tsx`
+- [X] T069 [US1] Implement the structure/diagnostic preview interface with stale-revision labeling and authenticated resource URLs in `src/components/preview/StructurePreview.tsx`, `src/components/preview/DiagnosticsPanel.tsx`, and `src/pages/manage/books/[bookId]/preview.astro`
 
 **Checkpoint**: User Story 1 passes independently. No import has become public.
 
@@ -254,7 +254,7 @@ continued availability of unrelated/current books.
 
 ### Implementation for User Story 4
 
-- [ ] T125 [P] [US4] Implement authorized job status serialization with safe phase/progress/error categories in `src/services/job-status.ts` and `src/pages/api/manage/jobs/[jobId]/index.ts`
+- [X] T125 [P] [US4] Implement authorized job status serialization with safe phase/progress/error categories in `src/services/job-status.ts` and `src/pages/api/manage/jobs/[jobId]/index.ts`
 - [ ] T126 [US4] Implement cancel and explicit-retry endpoints with origin/idempotency checks and new immutable attempt rows in `src/pages/api/manage/jobs/[jobId]/cancel.ts` and `src/pages/api/manage/jobs/[jobId]/retry.ts`
 - [ ] T127 [P] [US4] Implement the task list/detail, phase progress, cancellation, failure-category and retry interface in `src/components/import/TaskMonitor.tsx` and `src/pages/manage/tasks.astro`
 - [ ] T128 [US4] Implement cooperative cancellation followed by a fixed 10-second SIGTERM grace, whole-process-group SIGKILL escalation and close-confirmed terminal state in `src/worker/child-runner.ts`

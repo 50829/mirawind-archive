@@ -43,7 +43,8 @@ paths:
               description: Public books revalidate; administrator-only private books never store.
               schema:
                 type: string
-                enum: ["public, max-age=0, must-revalidate", "private, no-store"]
+                enum:
+                  ["public, max-age=0, must-revalidate", "private, no-store"]
             ETag:
               $ref: "#/components/headers/ETag"
           content:
@@ -53,7 +54,8 @@ paths:
           description: Authorized current representation is unchanged
           headers:
             Cache-Control:
-              schema: { type: string, const: "public, max-age=0, must-revalidate" }
+              schema:
+                { type: string, const: "public, max-age=0, must-revalidate" }
             ETag:
               $ref: "#/components/headers/ETag"
         "404":
@@ -93,7 +95,8 @@ paths:
               description: Public books use private browser-only immutable cache; private books never store.
               schema:
                 type: string
-                enum: ["private, max-age=31536000, immutable", "private, no-store"]
+                enum:
+                  ["private, max-age=31536000, immutable", "private, no-store"]
             ETag:
               $ref: "#/components/headers/ETag"
             X-Content-Type-Options:
@@ -200,7 +203,8 @@ paths:
             Cache-Control:
               schema:
                 type: string
-                enum: ["public, max-age=0, must-revalidate", "private, no-store"]
+                enum:
+                  ["public, max-age=0, must-revalidate", "private, no-store"]
           content:
             application/json:
               schema:
@@ -282,12 +286,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Import" }
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
         "404":
-          $ref: "#/components/responses/NotFoundJson"
+          $ref: "#/components/responses/HiddenOrMissingJson"
 
   /api/manage/imports/{importId}/main-markdown:
     put:
@@ -348,12 +348,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Draft" }
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
         "404":
-          $ref: "#/components/responses/NotFoundJson"
+          $ref: "#/components/responses/HiddenOrMissingJson"
     put:
       tags: [Drafts]
       operationId: replaceDraftConfig
@@ -419,16 +415,16 @@ paths:
             Cache-Control:
               schema: { type: string, const: "private, no-store" }
             X-Robots-Tag:
-              schema: { type: string, const: "noindex, nofollow" }
+              schema:
+                {
+                  type: string,
+                  const: "noindex, nofollow, noarchive, nosnippet",
+                }
           content:
             text/html:
               schema: { type: string }
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
         "404":
-          $ref: "#/components/responses/NotFoundHtml"
+          $ref: "#/components/responses/HiddenOrMissingHtml"
 
   /api/manage/books/{bookId}/preview/{configRevision}/assets/{resourceId}:
     get:
@@ -450,14 +446,14 @@ paths:
             X-Content-Type-Options:
               schema: { type: string, const: nosniff }
             X-Robots-Tag:
-              schema: { type: string, const: "noindex, nofollow" }
+              schema:
+                {
+                  type: string,
+                  const: "noindex, nofollow, noarchive, nosnippet",
+                }
           content:
             image/*:
               schema: { type: string, contentEncoding: binary }
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/HiddenOrMissingBinary"
 
@@ -567,12 +563,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Job" }
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
         "404":
-          $ref: "#/components/responses/NotFoundJson"
+          $ref: "#/components/responses/HiddenOrMissingJson"
 
   /api/manage/jobs/{jobId}/cancel:
     post:
@@ -786,7 +778,8 @@ components:
         Cache-Control:
           schema: { type: string, const: no-store }
         X-Robots-Tag:
-          schema: { type: string, const: "noindex, nofollow" }
+          schema:
+            { type: string, const: "noindex, nofollow, noarchive, nosnippet" }
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -796,7 +789,8 @@ components:
         Cache-Control:
           schema: { type: string, const: no-store }
         X-Robots-Tag:
-          schema: { type: string, const: "noindex, nofollow" }
+          schema:
+            { type: string, const: "noindex, nofollow, noarchive, nosnippet" }
       content:
         text/html:
           schema: { type: string }
@@ -806,7 +800,8 @@ components:
         Cache-Control:
           schema: { type: string, const: no-store }
         X-Robots-Tag:
-          schema: { type: string, const: "noindex, nofollow" }
+          schema:
+            { type: string, const: "noindex, nofollow, noarchive, nosnippet" }
 
   schemas:
     Error:
@@ -870,16 +865,31 @@ components:
     Import:
       type: object
       additionalProperties: false
-      required: [import_id, state, candidates, created_at, updated_at]
+      required:
+        [import_id, state, candidates, current_job_id, created_at, updated_at]
       properties:
         import_id: { type: string, pattern: "^imp_[A-Za-z0-9_-]{16,80}$" }
         state:
           type: string
-          enum: [uploading, uploaded, analyzing, needs_main_confirmation, preparing, draft_ready, rejected, canceled, expired]
+          enum:
+            [
+              uploading,
+              uploaded,
+              analyzing,
+              needs_main_confirmation,
+              preparing,
+              draft_ready,
+              rejected,
+              canceled,
+              expired,
+            ]
         candidates:
           type: array
           maxItems: 20000
           items: { $ref: "#/components/schemas/Candidate" }
+        current_job_id:
+          type: [string, "null"]
+          pattern: "^job_[A-Za-z0-9_-]{16,80}$"
         selected_candidate_id: { type: [string, "null"] }
         book_id: { type: [integer, "null"], minimum: 1 }
         error_code: { type: [string, "null"], maxLength: 80 }
@@ -888,7 +898,16 @@ components:
     Draft:
       type: object
       additionalProperties: false
-      required: [book_id, source_id, config_revision, config, diagnostics, preview, preview_state]
+      required:
+        [
+          book_id,
+          source_id,
+          config_revision,
+          config,
+          diagnostics,
+          preview,
+          preview_state,
+        ]
       properties:
         book_id: { type: integer, minimum: 1 }
         source_id: { type: string, pattern: "^src_[A-Za-z0-9_-]{16,80}$" }
@@ -920,7 +939,16 @@ components:
               maxItems: 20000
               items:
                 type: object
-                required: [block_id, title, source_level, display_level, include_in_toc, starts_page, role]
+                required:
+                  [
+                    block_id,
+                    title,
+                    source_level,
+                    display_level,
+                    include_in_toc,
+                    starts_page,
+                    role,
+                  ]
                 properties:
                   block_id: { type: string }
                   title: { type: string, maxLength: 500 }
@@ -928,7 +956,11 @@ components:
                   display_level: { type: integer, minimum: 1, maximum: 4 }
                   include_in_toc: { type: boolean }
                   starts_page: { type: boolean }
-                  role: { type: string, enum: [frontmatter, body, appendix, backmatter] }
+                  role:
+                    {
+                      type: string,
+                      enum: [frontmatter, body, appendix, backmatter],
+                    }
         preview_state:
           type: string
           enum: [building, ready, failed]
@@ -949,7 +981,16 @@ components:
         job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
         kind:
           type: string
-          enum: [analyze_import, prepare_draft, build_preview, build_publish, verify_version, reconcile, reclaim]
+          enum:
+            [
+              analyze_import,
+              prepare_draft,
+              build_preview,
+              build_publish,
+              verify_version,
+              reconcile,
+              reclaim,
+            ]
         state:
           type: string
           enum: [queued, running, succeeded, failed, canceled, interrupted]
@@ -963,7 +1004,16 @@ components:
         error_code: { type: [string, "null"], maxLength: 80 }
         error_class:
           type: [string, "null"]
-          enum: [null, infrastructure, content, validation, security_limit, timeout, canceled]
+          enum:
+            [
+              null,
+              infrastructure,
+              content,
+              validation,
+              security_limit,
+              timeout,
+              canceled,
+            ]
         created_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }
         finished_at: { type: [string, "null"], format: date-time }

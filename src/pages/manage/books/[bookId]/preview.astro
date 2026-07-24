@@ -1,0 +1,123 @@
+---
+import { StructurePreview } from "@/components/preview/StructurePreview";
+import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
+import { applyResponsePolicy } from "@/http/cache/policies";
+
+export const prerender = false;
+
+try {
+  requireRuntimeAdministrator(Astro.locals.session, { hideExistence: true });
+} catch {
+  return new Response("Not found", {
+    headers: {
+      "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
+    },
+    status: 404,
+  });
+}
+const bookId = Number(Astro.params.bookId);
+if (!Number.isSafeInteger(bookId) || bookId < 1) {
+  return new Response("Not found", {
+    headers: {
+      "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
+    },
+    status: 404,
+  });
+}
+applyResponsePolicy(Astro.response.headers, "manage");
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>结构预览 · Mirawind</title>
+  </head>
+  <body>
+    <main>
+      <nav><a href="/manage">← 返回导入</a></nav>
+      <StructurePreview bookId={bookId} client:load />
+    </main>
+  </body>
+</html>
+
+<style>
+  :global(*) {
+    box-sizing: border-box;
+  }
+  :global(body) {
+    margin: 0;
+    color: #25211b;
+    background: #f4efe6;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+  main {
+    width: min(90rem, calc(100vw - 2rem));
+    margin: 0 auto;
+    padding: 2rem 0 4rem;
+  }
+  nav {
+    margin-bottom: 2rem;
+  }
+  :global(.preview-header),
+  :global(.structure-panel),
+  :global(.document-panel) {
+    padding: 1.5rem;
+    border: 1px solid #d7ccbd;
+    border-radius: 1rem;
+    background: #fffdf8;
+  }
+  :global(.preview-header) {
+    margin-bottom: 1rem;
+  }
+  :global(.preview-grid) {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(18rem, 26rem) minmax(0, 1fr);
+  }
+  :global(.heading-list) {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0;
+    list-style: none;
+  }
+  :global(.heading-list li),
+  :global(.heading-list span) {
+    display: block;
+  }
+  :global(.heading-list span),
+  :global(.quiet) {
+    color: #6b6257;
+    font-size: 0.875rem;
+  }
+  :global(.stale),
+  :global(.diagnostics-panel li) {
+    color: #8b4513;
+  }
+  :global(label) {
+    display: grid;
+    gap: 0.4rem;
+    margin: 1rem 0;
+  }
+  :global(select) {
+    min-height: 2.75rem;
+    padding: 0.5rem;
+    font: inherit;
+  }
+  :global(iframe) {
+    width: 100%;
+    min-height: 70vh;
+    border: 1px solid #ded6ca;
+    border-radius: 0.5rem;
+    background: white;
+  }
+  @media (max-width: 850px) {
+    :global(.preview-grid) {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

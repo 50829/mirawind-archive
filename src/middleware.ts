@@ -6,6 +6,7 @@ import {
   createSafeJsonError,
   safeErrorInputFromUnknown,
 } from "@/http/errors/responses";
+import { errorPolicyForRequest } from "@/http/errors/error-policy";
 import { createRequestContext } from "@/http/request-context";
 
 export const onRequest = defineMiddleware(async ({ locals, request }, next) => {
@@ -17,13 +18,14 @@ export const onRequest = defineMiddleware(async ({ locals, request }, next) => {
     locals.session = await resolveRequestSession(request);
     response = await next();
   } catch (cause) {
-    const input = safeErrorInputFromUnknown({
+    const safe = safeErrorInputFromUnknown({
       cause,
-      policy: requestPath.startsWith("/api/")
-        ? "private-api"
-        : "hidden-or-missing",
       requestId: requestContext.id,
     });
+    const input = {
+      ...safe,
+      policy: errorPolicyForRequest(requestPath, safe.status),
+    };
     response =
       requestPath.startsWith("/api/") ||
       request.headers.get("accept")?.includes("application/json")

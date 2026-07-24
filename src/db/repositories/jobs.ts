@@ -282,6 +282,18 @@ export class JobRepository {
     return row ? mapJob(row) : null;
   }
 
+  latestForImport(importId: string): JobRecord | null {
+    const row = this.database
+      .prepare(
+        `SELECT * FROM jobs
+         WHERE import_id = ?
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT 1`,
+      )
+      .get(importId) as JobRow | undefined;
+    return row ? mapJob(row) : null;
+  }
+
   private getRequired(id: string): JobRecord {
     const job = this.get(id);
     if (!job) throw new Error("JOB_NOT_FOUND");

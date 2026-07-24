@@ -16,7 +16,9 @@ import type { StorageLayout } from "../storage/layout.js";
 import { openExclusiveFile } from "../storage/layout.js";
 
 export const maximumUploadBytes = 2 * 1024 * 1024 * 1024;
+export const m1ImportExpiryMs = Number.MAX_SAFE_INTEGER;
 const idempotencyOperation = "import.upload";
+export const importUploadIdempotencyOperation = idempotencyOperation;
 
 export interface ImportUploadResult {
   readonly import: ImportRecord;
@@ -24,7 +26,7 @@ export interface ImportUploadResult {
 }
 
 export interface StoreImportUploadOptions {
-  readonly bookId?: number;
+  readonly bookId?: number | Promise<number | undefined>;
   readonly bytes: AsyncIterable<Uint8Array>;
   readonly expiresAtMs: number;
   readonly idempotencyKey: string;
@@ -151,9 +153,10 @@ export class ImportUploadService {
       renamed = true;
       await syncDirectory(directory);
       await syncDirectory(this.layout.uploadDirectory);
+      const bookId = await options.bookId;
       const result = withImmediateTransaction(this.database, () => {
         const importRecord = this.imports.createUploaded({
-          ...(options.bookId === undefined ? {} : { bookId: options.bookId }),
+          ...(bookId === undefined ? {} : { bookId }),
           expiresAtMs: options.expiresAtMs,
           id: importId,
           nowMs,
@@ -162,7 +165,7 @@ export class ImportUploadService {
           uploadSizeBytes: written.sizeBytes,
         });
         const job = this.jobs.create({
-          ...(options.bookId === undefined ? {} : { bookId: options.bookId }),
+          ...(bookId === undefined ? {} : { bookId }),
           idempotency: {
             key: options.idempotencyKey,
             operation: idempotencyOperation,

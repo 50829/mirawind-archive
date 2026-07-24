@@ -184,6 +184,9 @@ application, and verify durable status, bounded retry, cleanup, and unchanged pu
   depth, path, duration, and expansion limit against actual processed data.
 - **FR-009**: Any import security violation MUST fail the whole import, remove incomplete
   output, and preserve every current publication.
+- **FR-009a**: M1 MUST NOT automatically expire administrator imports or referenced upload
+  files by an arbitrary elapsed-time policy; incomplete writes and failed staging remain
+  subject to immediate cleanup.
 - **FR-010**: Draft content, diagnostics, resources, and tasks MUST be visible only to the
   administrator and indistinguishable from nonexistent resources to anonymous visitors.
 - **FR-011**: The preview MUST show candidate evidence, diagnostics, proposed navigation,
