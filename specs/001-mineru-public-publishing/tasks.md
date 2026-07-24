@@ -74,7 +74,7 @@ logging and durable-job infrastructure required by every user story.
 - [X] T036 Implement request IDs, JSON/HTML safe errors, exact-origin checks and centralized cache/indexing policy builders in `src/http/request-context.ts`, `src/http/errors/responses.ts`, `src/http/origin.ts`, and `src/http/cache/policies.ts`
 - [X] T037 [P] Build isolated temporary data-root, real SQLite, Web/worker process and HTTP test helpers in `tests/helpers/data-root.ts`, `tests/helpers/database.ts`, `tests/helpers/processes.ts`, and `tests/helpers/http.ts`
 - [X] T038 [P] Add minimized Cloud/CLI/generic/ambiguous/multi-book fixtures plus a non-redistributable Git-external usage-scope manifest and size/SHA-256 verifier for the two or three real several-hundred-page MinerU ZIPs supplied during testing in `tests/fixtures/mineru/README.md`, `tests/fixtures/mineru/fixtures.json`, `tests/fixtures/mineru/real-fixtures.example.json`, and `scripts/fixtures/verify-real-mineru.ts`
-- [ ] T039 [P] Implement deterministic hostile-ZIP and large-book fixture generators without committing multi-gigabyte binaries in `scripts/fixtures/build-hostile-zips.ts`, `scripts/fixtures/build-stress-book.ts`, and `tests/fixtures/hostile-archives/README.md`
+- [X] T039 [P] Implement deterministic hostile-ZIP and large-book fixture generators without committing multi-gigabyte binaries in `scripts/fixtures/build-hostile-zips.ts`, `scripts/fixtures/build-stress-book.ts`, and `tests/fixtures/hostile-archives/README.md`
 
 **Checkpoint**: Authentication, persistent storage, migrations, safe HTTP behavior and a
 single durable worker queue pass their evidence tests. User-story work may begin.
