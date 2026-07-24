@@ -1,9 +1,65 @@
 services:
+  data-init:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    cap_drop:
+      - ALL
+    command:
+      [
+        "sh",
+        "-eu",
+        "-c",
+        "chown -R 10001:10001 /var/lib/mirawind && chmod 0700 /var/lib/mirawind",
+      ]
+    network_mode: none
+    read_only: true
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    user: "0:0"
+    volumes:
+      - mirawind-data:/var/lib/mirawind
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    cap_drop:
+      - ALL
+    command: ["node", "dist/processes/cli/index.js", "db", "migrate"]
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+    environment:
+      MIRAWIND_DATA_DIR: /var/lib/mirawind
+    network_mode: none
+    read_only: true
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700
+    user: "10001:10001"
+    volumes:
+      - mirawind-data:/var/lib/mirawind
+
   web:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     command: ["node", "dist/server/entry.mjs"]
+    cap_drop:
+      - ALL
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
     env_file:
       - path: ../.env
         required: false
@@ -14,17 +70,22 @@ services:
     expose:
       - "4321"
     healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:4321/').then(r=>{if(!r.ok)process.exit(1)})",
-        ]
+      test: ["CMD", "node", "/app/healthcheck.mjs", "web"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 10s
+    init: true
+    pids_limit: 256
+    read_only: true
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    stop_signal: SIGTERM
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700
+    user: "10001:10001"
     volumes:
       - mirawind-data:/var/lib/mirawind
 
@@ -33,15 +94,37 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     command: ["node", "dist/processes/worker/index.js"]
+    cap_drop:
+      - ALL
     env_file:
       - path: ../.env
         required: false
     environment:
       MIRAWIND_DATA_DIR: /var/lib/mirawind
     depends_on:
+      data-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
       web:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "/app/healthcheck.mjs", "worker"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    init: true
+    pids_limit: 512
+    read_only: true
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    stop_signal: SIGTERM
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=256m,uid=10001,gid=10001,mode=0700
+    user: "10001:10001"
     volumes:
       - mirawind-data:/var/lib/mirawind
 
@@ -55,7 +138,12 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    read_only: true
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
