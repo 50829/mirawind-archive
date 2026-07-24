@@ -3,6 +3,7 @@ import {
   applyResponsePolicy,
   type ResponsePolicyKind,
 } from "../cache/policies.js";
+import { robotsMetaContent } from "../seo/robots.js";
 
 export interface SafeErrorInput {
   readonly cause?: unknown;
@@ -42,12 +43,14 @@ function safeRepresentation(input: SafeErrorInput): SafeErrorRepresentation {
 function errorHeaders(
   policy: ResponsePolicyKind,
   contentType: string,
+  status: number,
 ): Headers {
   const headers = new Headers({
     "Content-Type": contentType,
     "X-Content-Type-Options": "nosniff",
   });
   applyResponsePolicy(headers, policy);
+  if (status === 503) headers.set("Retry-After", "30");
   return headers;
 }
 
@@ -77,6 +80,7 @@ export function createSafeJsonError(input: SafeErrorInput): Response {
       headers: errorHeaders(
         input.policy ?? "private-api",
         "application/json; charset=utf-8",
+        safe.status,
       ),
       status: safe.status,
     },
@@ -90,7 +94,7 @@ export function createSafeHtmlError(input: SafeErrorInput): Response {
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="robots" content="noindex,nofollow">
+    <meta name="robots" content="${robotsMetaContent(false)}">
     <meta name="viewport" content="width=device-width">
     <title>${escapeHtml(title)}</title>
   </head>
@@ -106,6 +110,7 @@ export function createSafeHtmlError(input: SafeErrorInput): Response {
     headers: errorHeaders(
       input.policy ?? "hidden-or-missing",
       "text/html; charset=utf-8",
+      safe.status,
     ),
     status: safe.status,
   });

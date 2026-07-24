@@ -180,6 +180,7 @@ export async function replaceDraftConfig(input: {
     await atomicWriteFile(yamlPath, yaml, { mode: 0o600 });
     await chmod(yamlPath, 0o400);
     const selected = drafts.replaceConfigAndQueuePreview({
+      alias: typeof next.alias === "string" ? next.alias : null,
       bookId: input.bookId,
       expectedRevision: current.revision,
       expectedYamlSha256: current.yamlSha256,

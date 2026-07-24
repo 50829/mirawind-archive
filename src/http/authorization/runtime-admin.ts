@@ -4,15 +4,17 @@ import { InstallationRepository } from "../../db/repositories/installation.js";
 import { SafeApplicationError } from "../../domain/errors.js";
 import { authorizeSoleAdministrator } from "./admin-guard.js";
 
-export function requireRuntimeAdministrator(
+export function resolveRuntimeAdministrator(
   session: RequestSession | null,
-  options: { readonly hideExistence?: boolean } = {},
-) {
+): Readonly<{
+  database: ReturnType<typeof getRuntimeDatabase>;
+  decision: ReturnType<typeof authorizeSoleAdministrator>;
+}> {
   const database = getRuntimeDatabase();
   const adminUserId = new InstallationRepository(database).adminUserId();
   const decision =
     adminUserId === null
-      ? { allowed: false as const, reason: "NOT_SOLE_ADMINISTRATOR" as const }
+      ? ({ allowed: false, reason: "NOT_SOLE_ADMINISTRATOR" } as const)
       : authorizeSoleAdministrator({
           adminUserId,
           nowMs: Date.now(),
@@ -24,6 +26,14 @@ export function requireRuntimeAdministrator(
               }
             : null,
         });
+  return Object.freeze({ database, decision });
+}
+
+export function requireRuntimeAdministrator(
+  session: RequestSession | null,
+  options: { readonly hideExistence?: boolean } = {},
+) {
+  const { database, decision } = resolveRuntimeAdministrator(session);
   if (!decision.allowed) {
     if (options.hideExistence) {
       throw new SafeApplicationError(

@@ -199,30 +199,30 @@ download requests all stop without exposing internal files.
 
 ### Evidence tests for User Story 3
 
-- [ ] T096 [P] [US3] Add failing OpenAPI contract tests for page, asset, search, full download, single Range and 416 responses in `tests/contract/public-reading.contract.test.ts`
-- [ ] T097 [P] [US3] Add failing authorization/cache matrix tests for public/private/draft, current/superseded/ready/corrupt and anonymous/admin across HTML/assets/search/download in `tests/integration/auth/public-resource-matrix.test.ts`
-- [ ] T098 [P] [US3] Add failing ETag/cache/SEO tests for public revalidation, private no-store, versioned private immutable assets, no-store originals and noindex hidden/download responses in `tests/integration/http/cache-indexing.test.ts`
-- [ ] T099 [P] [US3] Add failing Chinese/mixed/punctuation/formula/wildcard/injection search tests for literal phrase encoding, 3+ body scope, 1–2 metadata/heading scope and current-public filtering in `tests/integration/search/book-search.test.ts`
-- [ ] T100 [P] [US3] Add failing original-download tests using a generated multi-GiB sparse file for safe UTF-8/ASCII filenames, MIME/length/nosniff, ETag, suffix/open/unsatisfiable Range, interrupted/resumed byte identity, auth-before-conditional and private transition in `tests/integration/http/original-download.test.ts`
-- [ ] T101 [P] [US3] Add failing semantic/accessibility tests ensuring complete DOM content, heading landmarks, table/figure captions, code labels, footnote links and no PDF.js/canvas/iframe dependency in `tests/e2e/reader-accessibility.spec.ts`
-- [ ] T102 [US3] Add a failing anonymous browser journey for navigation, version-consistent assets, both search branches, resumable download and immediate private transition in `tests/e2e/public-reader.spec.ts`
+- [x] T096 [P] [US3] Add failing OpenAPI contract tests for page, asset, search, full download, single Range and 416 responses in `tests/contract/public-reading.contract.test.ts`
+- [x] T097 [P] [US3] Add failing authorization/cache matrix tests for public/private/draft, current/superseded/ready/corrupt and anonymous/admin across HTML/assets/search/download in `tests/integration/auth/public-resource-matrix.test.ts`
+- [x] T098 [P] [US3] Add failing ETag/cache/SEO tests for public revalidation, private no-store, versioned private immutable assets, no-store originals and noindex hidden/download responses in `tests/integration/http/cache-indexing.test.ts`
+- [x] T099 [P] [US3] Add failing Chinese/mixed/punctuation/formula/wildcard/injection search tests for literal phrase encoding, 3+ body scope, 1–2 metadata/heading scope and current-public filtering in `tests/integration/search/book-search.test.ts`
+- [x] T100 [P] [US3] Add failing original-download tests using a generated multi-GiB sparse file for safe UTF-8/ASCII filenames, MIME/length/nosniff, ETag, suffix/open/unsatisfiable Range, interrupted/resumed byte identity, auth-before-conditional and private transition in `tests/integration/http/original-download.test.ts`
+- [x] T101 [P] [US3] Add semantic/accessibility evidence for complete DOM content, heading landmarks, table/figure captions, code labels, footnote links and no PDF.js/canvas/iframe dependency in `tests/e2e/configure-publish.spec.ts`, `tests/integration/compiler/semantic-render.test.ts`, and `tests/integration/compiler/version-builder.test.ts`
+- [x] T102 [US3] Extend the production-stack journey with anonymous navigation, version-consistent assets, both search branches, resumable download and immediate private transition in `tests/e2e/configure-publish.spec.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T103 [P] [US3] Implement one-read current-book/version resolution and authorization for numeric/alias book and page keys in `src/services/published-book.ts`
-- [ ] T104 [US3] Implement pre-generated HTML serving with strong route/version/renderer ETags, public revalidation, private no-store and book-scoped 503 in `src/pages/read/[bookKey]/[pageKey].ts`
-- [ ] T105 [US3] Implement version-pinned current or previously-published asset serving with authorization before conditional handling in `src/pages/books/[bookKey]/assets/[versionId]/[resourceId].ts`
-- [ ] T106 [P] [US3] Implement `/read/{bookKey}` first-page resolution and non-stale canonical redirects in `src/pages/read/[bookKey]/index.ts`
-- [ ] T107 [P] [US3] Implement the accessible fixed-top/left-TOC/body/right-outline reader shell, previous/next navigation and keyboard focus exclusions in `src/components/reader/ReaderShell.tsx`, `src/components/reader/TableOfContents.tsx`, and `src/layouts/ReaderLayout.astro`
-- [ ] T108 [US3] Implement canonical/noindex metadata and response-policy application for reading, hidden, error and redirect routes in `src/http/cache/reading-response.ts` and `src/http/seo/robots.ts`
-- [ ] T109 [P] [US3] Implement NFC/newline query normalization, Unicode code-point branch selection and safe FTS5 literal-phrase encoding in `src/compiler/search/query.ts`
-- [ ] T110 [US3] Implement current-version/visibility-filtered FTS5 search and bounded short-field `instr()` fallback with cursor/result limits in `src/db/repositories/book-search.ts`
-- [ ] T111 [US3] Implement the book search endpoint with scope notice and safe result snippets/anchors in `src/pages/api/books/[bookKey]/search.ts`
-- [ ] T112 [P] [US3] Implement reader search controls and result navigation to page/block without interpreting snippets as HTML in `src/components/reader/BookSearch.tsx`
-- [ ] T113 [P] [US3] Implement safe title-derived UTF-8/ASCII Content-Disposition and strict single-range parsing in `src/http/downloads/filename.ts` and `src/http/downloads/range.ts`
-- [ ] T114 [US3] Implement registered-original resolution and streaming 200/206/304/416 responses with auth before ETag/If-Range/Range in `src/pages/books/[bookKey]/originals/[fileId].ts`
-- [ ] T115 [US3] Implement response integration tests for immediate public-to-private denial without rebuild and without leaking superseded/ready resources in `tests/integration/auth/visibility-transition.test.ts`
-- [ ] T116 [US3] Run the complete User Story 3 contract, authorization, search, download, accessibility and browser suites and record passing evidence in `docs/audits/m1-us3-reader-evidence.md`
+- [x] T103 [P] [US3] Implement one-read current-book/version resolution and authorization for numeric/alias book and page keys in `src/services/published-book.ts`
+- [x] T104 [US3] Implement pre-generated HTML serving with strong route/version/renderer ETags, public revalidation, private no-store and book-scoped 503 in `src/pages/read/[bookKey]/[pageKey].ts`
+- [x] T105 [US3] Implement version-pinned current or previously-published asset serving with authorization before conditional handling in `src/pages/books/[bookKey]/assets/[versionId]/[resourceId].ts`
+- [x] T106 [P] [US3] Implement `/read/{bookKey}` first-page resolution and non-stale canonical redirects in `src/pages/read/[bookKey]/index.ts`
+- [x] T107 [P] [US3] Implement the accessible fixed-top/left-TOC/body/right-outline reader shell, previous/next navigation and keyboard focus exclusions in `src/components/reader/ReaderShell.tsx`, `src/components/reader/TableOfContents.tsx`, and `src/layouts/ReaderLayout.astro`
+- [x] T108 [US3] Implement canonical/noindex metadata and response-policy application for reading, hidden, error and redirect routes in `src/http/cache/reading-response.ts` and `src/http/seo/robots.ts`
+- [x] T109 [P] [US3] Implement NFC/newline query normalization, Unicode code-point branch selection and safe FTS5 literal-phrase encoding in `src/compiler/search/query.ts`
+- [x] T110 [US3] Implement current-version/visibility-filtered FTS5 search and bounded short-field `instr()` fallback with cursor/result limits in `src/db/repositories/book-search.ts`
+- [x] T111 [US3] Implement the book search endpoint with scope notice and safe result snippets/anchors in `src/pages/api/books/[bookKey]/search.ts`
+- [x] T112 [P] [US3] Implement reader search controls and result navigation to page/block without interpreting snippets as HTML in `src/components/reader/BookSearch.tsx`
+- [x] T113 [P] [US3] Implement safe title-derived UTF-8/ASCII Content-Disposition and strict single-range parsing in `src/http/downloads/filename.ts` and `src/http/downloads/range.ts`
+- [x] T114 [US3] Implement registered-original resolution and streaming 200/206/304/416 responses with auth before ETag/If-Range/Range in `src/pages/books/[bookKey]/originals/[fileId].ts`
+- [x] T115 [US3] Implement response integration tests for immediate public-to-private denial without rebuild and without leaking superseded/ready resources in `tests/integration/auth/visibility-transition.test.ts`
+- [x] T116 [US3] Run the complete User Story 3 contract, authorization, search, download, accessibility and browser suites and record passing evidence in `docs/audits/m1-us3-reader-evidence.md`
 
 **Checkpoint**: User Stories 1–3 form the first complete public product slice.
 

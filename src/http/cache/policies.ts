@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { noIndexRobotsTag } from "../seo/robots.js";
+
 export type ResponsePolicyKind =
   | "draft"
   | "hidden-or-missing"
@@ -18,36 +20,34 @@ export interface ResponsePolicy {
   readonly robotsTag?: string;
 }
 
-const noIndex = "noindex, nofollow, noarchive, nosnippet";
-
 const policies: Readonly<Record<ResponsePolicyKind, ResponsePolicy>> = {
   draft: {
     cacheControl: "private, no-store",
-    robotsTag: noIndex,
+    robotsTag: noIndexRobotsTag,
   },
   "hidden-or-missing": {
     cacheControl: "no-store",
-    robotsTag: noIndex,
+    robotsTag: noIndexRobotsTag,
   },
   login: {
     cacheControl: "private, no-store",
-    robotsTag: noIndex,
+    robotsTag: noIndexRobotsTag,
   },
   manage: {
     cacheControl: "private, no-store",
-    robotsTag: noIndex,
+    robotsTag: noIndexRobotsTag,
   },
   "original-download": {
     cacheControl: "private, no-store",
-    robotsTag: noIndex,
+    robotsTag: noIndexRobotsTag,
   },
   private: {
     cacheControl: "private, no-store",
-    robotsTag: noIndex,
+    robotsTag: noIndexRobotsTag,
   },
   "private-api": {
     cacheControl: "private, no-store",
-    robotsTag: noIndex,
+    robotsTag: noIndexRobotsTag,
   },
   "public-html": {
     cacheControl: "public, max-age=0, must-revalidate",
@@ -57,7 +57,7 @@ const policies: Readonly<Record<ResponsePolicyKind, ResponsePolicy>> = {
   },
   redirect: {
     cacheControl: "no-store",
-    robotsTag: noIndex,
+    robotsTag: noIndexRobotsTag,
   },
   "site-static": {
     cacheControl: "public, max-age=31536000, immutable",

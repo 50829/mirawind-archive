@@ -12,6 +12,10 @@ import {
 import { dirname, relative, resolve, sep } from "node:path";
 
 import {
+  readerShellCss,
+  renderReaderShell,
+} from "../components/reader/render.js";
+import {
   buildDocumentManifest,
   canonicalJson,
   compilerIdentity,
@@ -101,7 +105,8 @@ function htmlEscape(value: string): string {
 
 function htmlDocument(input: {
   readonly body: string;
-  readonly cssPath: string;
+  readonly canonicalPath: string;
+  readonly css: string;
   readonly language: string;
   readonly title: string;
 }): string {
@@ -111,9 +116,10 @@ function htmlDocument(input: {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width">
 <title>${htmlEscape(input.title)}</title>
-<link rel="stylesheet" href="${htmlEscape(input.cssPath)}">
+<link rel="canonical" href="${htmlEscape(input.canonicalPath)}">
+<style>${input.css}</style>
 </head>
-<body><main>${input.body}</main></body>
+<body>${input.body}</body>
 </html>
 `;
 }
@@ -354,11 +360,11 @@ export async function buildImmutableVersion(input: {
           headingHref(blockId) {
             const pageId = pageByHeading.get(blockId);
             if (!pageId) throw new Error("VERSION_HEADING_PAGE_MISSING");
-            return `/books/${input.bookId}/pages/${pageId}#${blockId}`;
+            return `/read/${input.bookId}/${pageId}#${blockId}`;
           },
           headingOverrides: page.headingOverrides,
           publishedResourceUrl: (resourceId) =>
-            `/books/${input.bookId}/versions/${input.versionId}/resources/${resourceId}`,
+            `/books/${input.bookId}/assets/${input.versionId}/${resourceId}`,
           resourceResolution,
         });
         if (rendered.diagnostics.length > 0) {
@@ -385,11 +391,47 @@ export async function buildImmutableVersion(input: {
           )
         : "zh-CN";
     for (const { page, rendered } of renderedPages) {
+      const pageIndex = pages.findIndex(
+        (candidate) => candidate.pageId === page.pageId,
+      );
+      const bookKey =
+        typeof config.alias === "string" ? config.alias : String(input.bookId);
+      const pageHref = (candidate: (typeof pages)[number]) =>
+        `/read/${bookKey}/${candidate.alias ?? candidate.pageId}`;
+      const nextPage = pageIndex >= 0 ? pages.at(pageIndex + 1) : undefined;
+      const previousPage = pageIndex > 0 ? pages.at(pageIndex - 1) : undefined;
       await atomicWriteFile(
         resolve(versionDirectory, page.outputPath),
         htmlDocument({
-          body: rendered.html,
-          cssPath: `/books/${input.bookId}/versions/${input.versionId}/styles/document.css`,
+          body: renderReaderShell({
+            bodyHtml: rendered.html,
+            bookKey,
+            bookTitle: String(config.title),
+            currentPageId: page.pageId,
+            nextHref: nextPage ? pageHref(nextPage) : null,
+            originalDownloads: originalFiles.map((original) => ({
+              href: `/books/${bookKey}/originals/${String(original.id)}`,
+              label:
+                String(original.role) === "mineru_zip"
+                  ? "下载原始 ZIP"
+                  : "下载原文件",
+            })),
+            outline: headings
+              .filter((heading) => page.blockIds.includes(heading.block_id))
+              .map((heading) => ({
+                href: `#${heading.block_id}`,
+                level: heading.display_level,
+                title: heading.display_title,
+              })),
+            pages: pages.map((candidate) => ({
+              href: pageHref(candidate),
+              pageId: candidate.pageId,
+              title: candidate.title,
+            })),
+            previousHref: previousPage ? pageHref(previousPage) : null,
+          }),
+          canonicalPath: pageHref(page),
+          css: `${readerShellCss}\n${css}`,
           language,
           title: page.title,
         }),

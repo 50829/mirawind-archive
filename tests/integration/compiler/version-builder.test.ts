@@ -165,6 +165,17 @@ describe("complete immutable version construction", () => {
         version_id: versionId,
       });
       expect(manifest.resources as Record<string, unknown>).not.toEqual({});
+      const pageHtml = await readFile(
+        resolve(stagingA, "version", "published", "pages", "1.html"),
+        "utf8",
+      );
+      expect(pageHtml).toContain('<header class="reader-topbar">');
+      expect(pageHtml).toContain('aria-label="全书目录"');
+      expect(pageHtml).toContain('<main class="reader-main"');
+      expect(pageHtml).toContain('aria-label="本页提纲"');
+      expect(pageHtml).toContain('role="search"');
+      expect(pageHtml).toContain(`/books/${bookId}/assets/${versionId}/res_`);
+      expect(pageHtml).not.toMatch(/<(?:canvas|iframe)\b/u);
 
       const finalPath = await finalizeImmutableVersion({
         artifact: first,
