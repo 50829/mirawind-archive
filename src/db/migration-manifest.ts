@@ -35,6 +35,13 @@ const migrationDefinitions = [
     name: "job_idempotency",
     version: 4,
   },
+  {
+    checksum:
+      "3cd4efdb28a8538ac22182c78a7e8e722d3ca1c67ce1a7cf7ff2ffaa641c12c8",
+    file: "0005_version_reclamation.sql",
+    name: "version_reclamation",
+    version: 5,
+  },
 ] as const;
 
 export async function loadMigrationManifest(): Promise<readonly Migration[]> {

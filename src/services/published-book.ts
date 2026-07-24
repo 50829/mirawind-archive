@@ -167,6 +167,7 @@ function currentSelect(predicate: string): string {
           LEFT JOIN book_versions
             ON book_versions.id = books.current_version_id
            AND book_versions.book_id = books.id
+           AND book_versions.reclaimed_at IS NULL
           WHERE ${predicate}
           LIMIT 1`;
 }
@@ -269,9 +270,11 @@ export class PublishedBookService {
          LEFT JOIN book_versions AS current_version
            ON current_version.id = books.current_version_id
           AND current_version.book_id = books.id
+          AND current_version.reclaimed_at IS NULL
          LEFT JOIN book_versions AS requested_version
            ON requested_version.id = ?
           AND requested_version.book_id = books.id
+          AND requested_version.reclaimed_at IS NULL
          WHERE ${predicate.sql}
          LIMIT 1`,
       )
@@ -324,6 +327,7 @@ export class PublishedBookService {
          LEFT JOIN book_versions
            ON book_versions.id = books.current_version_id
           AND book_versions.book_id = books.id
+          AND book_versions.reclaimed_at IS NULL
          LEFT JOIN original_files
            ON original_files.id = ?
           AND original_files.book_id = books.id

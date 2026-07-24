@@ -18,6 +18,7 @@ interface VersionRow {
   manifest_sha256: string;
   predecessor_version_id: string | null;
   published_at: number | null;
+  reclaimed_at: number | null;
   renderer_version: string;
   source_id: string;
   state: BookVersionState;
@@ -36,6 +37,7 @@ export interface BookVersionRecord {
   readonly manifestSha256: string;
   readonly predecessorVersionId: string | null;
   readonly publishedAtMs: number | null;
+  readonly reclaimedAtMs: number | null;
   readonly rendererVersion: string;
   readonly sourceId: string;
   readonly state: BookVersionState;
@@ -55,6 +57,7 @@ function mapVersion(row: VersionRow): BookVersionRecord {
     manifestSha256: row.manifest_sha256,
     predecessorVersionId: row.predecessor_version_id,
     publishedAtMs: row.published_at,
+    reclaimedAtMs: row.reclaimed_at,
     rendererVersion: row.renderer_version,
     sourceId: row.source_id,
     state: row.state,
@@ -77,6 +80,46 @@ export class VersionRepository {
     const version = this.find(versionId);
     if (!version) throw new Error("BOOK_VERSION_NOT_FOUND");
     return version;
+  }
+
+  listForBook(bookId: number): readonly BookVersionRecord[] {
+    const rows = this.database
+      .prepare(
+        `SELECT * FROM book_versions
+         WHERE book_id = ?
+         ORDER BY complete_at DESC, id DESC`,
+      )
+      .all(bookId) as VersionRow[];
+    return Object.freeze(rows.map(mapVersion));
+  }
+
+  listAll(): readonly BookVersionRecord[] {
+    const rows = this.database
+      .prepare("SELECT * FROM book_versions ORDER BY book_id, complete_at, id")
+      .all() as VersionRow[];
+    return Object.freeze(rows.map(mapVersion));
+  }
+
+  markCorrupt(versionId: string): BookVersionRecord {
+    const changed = this.database
+      .prepare(
+        `UPDATE book_versions SET state = 'corrupt'
+         WHERE id = ? AND state <> 'corrupt'`,
+      )
+      .run(versionId);
+    if (changed.changes > 1) throw new Error("VERSION_CORRUPT_UPDATE_INVALID");
+    return this.require(versionId);
+  }
+
+  markVerified(versionId: string, nowMs: number): BookVersionRecord {
+    const changed = this.database
+      .prepare(
+        `UPDATE book_versions SET verified_at = ?
+         WHERE id = ? AND state <> 'corrupt'`,
+      )
+      .run(nowMs, versionId);
+    if (changed.changes !== 1) throw new Error("VERSION_VERIFY_UPDATE_INVALID");
+    return this.require(versionId);
   }
 
   registerReadyWithSearch(input: {

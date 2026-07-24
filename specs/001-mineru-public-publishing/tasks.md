@@ -247,8 +247,8 @@ continued availability of unrelated/current books.
 - [x] T118 [P] [US4] Add failing two-real-worker claim, heartbeat, lease-expiry and global concurrency tests using one real SQLite file in `tests/integration/recovery/worker-leases.test.ts`
 - [x] T119 [P] [US4] Add failing child SIGTERM/10-second-grace/SIGKILL/close, 30-minute timeout simulation and process-group termination tests in `tests/integration/recovery/child-termination.test.ts`
 - [x] T120 [P] [US4] Add failing retry-policy tests for one infrastructure auto-retry and manual-only content/limit/timeout/repeat-interruption retries in `tests/integration/recovery/retry-policy.test.ts`
-- [ ] T121 [P] [US4] Add failing startup inventory tests for incomplete staging, orphan complete directory, missing DB/files, corrupt current, ready non-publication, predecessor rollback and book-scoped 503 in `tests/integration/recovery/reconciliation.test.ts`
-- [ ] T122 [P] [US4] Add failing retention tests for current/previous preservation, 24-hour quarantine/grace, FTS cleanup and cleanup-failure non-interference in `tests/integration/recovery/retention.test.ts`
+- [x] T121 [P] [US4] Add failing startup inventory tests for incomplete staging, orphan complete directory, missing DB/files, corrupt current, ready non-publication, predecessor rollback and book-scoped 503 in `tests/integration/recovery/reconciliation.test.ts`
+- [x] T122 [P] [US4] Add failing retention tests for current/previous preservation, 24-hour quarantine/grace, FTS cleanup and cleanup-failure non-interference in `tests/integration/recovery/retention.test.ts`
 - [ ] T123 [P] [US4] Add failing worker-owned passive checkpoint, WAL-size alert, Web 250 ms busy bound and startup WAL-recovery retry tests in `tests/integration/storage/wal-operations.test.ts`
 - [ ] T124 [US4] Add a failing production-stack browser/process journey for task status, cancellation, restart, retry and unchanged current publication in `tests/e2e/worker-recovery.spec.ts`
 
@@ -258,11 +258,11 @@ continued availability of unrelated/current books.
 - [x] T126 [US4] Implement cancel and explicit-retry endpoints with origin/idempotency checks and new immutable attempt rows in `src/pages/api/manage/jobs/[jobId]/cancel.ts` and `src/pages/api/manage/jobs/[jobId]/retry.ts`
 - [x] T127 [P] [US4] Implement the task list/detail, phase progress, cancellation, failure-category and retry interface in `src/components/import/TaskMonitor.tsx` and `src/pages/manage/tasks.astro`
 - [x] T128 [US4] Implement cooperative cancellation followed by a fixed 10-second SIGTERM grace, whole-process-group SIGKILL escalation and close-confirmed terminal state in `src/worker/child-runner.ts`
-- [ ] T129 [US4] Implement expired-lease interruption classification, staging cleanup and one-time infrastructure auto-retry creation in `src/jobs/recovery.ts`
+- [x] T129 [US4] Implement expired-lease interruption classification, staging cleanup and one-time infrastructure auto-retry creation in `src/jobs/recovery.ts`
 - [x] T130 [US4] Implement explicit retry eligibility for content, validation, security-limit, timeout and repeat interruption failures in `src/jobs/retry-policy.ts`
-- [ ] T131 [US4] Implement startup inventory and reconciliation for staging, quarantine, version directories, DB rows and current pointers in `src/storage/reconcile.ts`
-- [ ] T132 [US4] Implement quick current-version verification, background full-hash verification, corrupt-state marking and atomic verified-predecessor rollback in `src/services/version-verifier.ts` and `src/jobs/handlers/verify-version.ts`
-- [ ] T133 [US4] Implement 24-hour orphan quarantine and retention-safe version/FTS reclamation that always preserves current and previous verified versions in `src/jobs/handlers/reconcile.ts` and `src/jobs/handlers/reclaim.ts`
+- [x] T131 [US4] Implement startup inventory and reconciliation for staging, quarantine, version directories, DB rows and current pointers in `src/storage/reconcile.ts`
+- [x] T132 [US4] Implement quick current-version verification, background full-hash verification, corrupt-state marking and atomic verified-predecessor rollback in `src/services/version-verifier.ts` and `src/jobs/handlers/verify-version.ts`
+- [x] T133 [US4] Implement 24-hour orphan quarantine and retention-safe version/FTS reclamation that always preserves current and previous verified versions in `src/jobs/handlers/reconcile.ts` and `src/jobs/handlers/reclaim.ts`
 - [ ] T134 [US4] Implement worker-owned scheduled PASSIVE checkpoints, WAL/lease health reporting and maintenance-only checkpoint controls in `src/worker/checkpoint.ts` and `src/pages/api/manage/health.ts`
 - [ ] T135 [P] [US4] Implement structured phase timings, queue age, disk usage, publication/recovery transitions, read/search percentiles and safe failure counters in `src/observability/metrics.ts`
 - [ ] T136 [US4] Wire reconciliation before worker claims and ensure Web startup contains corruption to one book in `src/worker/index.ts` and `src/middleware.ts`

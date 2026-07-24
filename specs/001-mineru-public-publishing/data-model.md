@@ -194,21 +194,22 @@ logged; UI strings are escaped and length-bounded.
 
 ### 3.9 `book_versions`
 
-| Field                                        | Type             | Rule                                                    |
-| -------------------------------------------- | ---------------- | ------------------------------------------------------- |
-| `id`                                         | text PK          | `ver_…` opaque ID                                       |
-| `book_id`                                    | integer FK       | Owner                                                   |
-| `source_id`                                  | text FK          | Captured immutable source                               |
-| `config_revision`                            | integer FK       | Captured config                                         |
-| `predecessor_version_id`                     | text nullable FK | Publication ancestry                                    |
-| `state`                                      | text             | `ready`, `published`, `superseded`, `failed`, `corrupt` |
-| `version_rel_path`                           | text             | Immutable complete directory                            |
-| `manifest_schema_version`                    | integer          | Supported manifest schema                               |
-| `manifest_sha256`                            | text             | Integrity                                               |
-| `compiler_version`                           | text             | Reproduction identity                                   |
-| `renderer_version`                           | text             | ETag/reproduction identity                              |
-| `complete_at`, `published_at`, `verified_at` | integer nullable | Lifecycle                                               |
-| `created_by_job_id`                          | text FK          | Provenance                                              |
+| Field                                        | Type             | Rule                                                     |
+| -------------------------------------------- | ---------------- | -------------------------------------------------------- |
+| `id`                                         | text PK          | `ver_…` opaque ID                                        |
+| `book_id`                                    | integer FK       | Owner                                                    |
+| `source_id`                                  | text FK          | Captured immutable source                                |
+| `config_revision`                            | integer FK       | Captured config                                          |
+| `predecessor_version_id`                     | text nullable FK | Publication ancestry                                     |
+| `state`                                      | text             | `ready`, `published`, `superseded`, `failed`, `corrupt`  |
+| `version_rel_path`                           | text             | Immutable complete directory                             |
+| `manifest_schema_version`                    | integer          | Supported manifest schema                                |
+| `manifest_sha256`                            | text             | Integrity                                                |
+| `compiler_version`                           | text             | Reproduction identity                                    |
+| `renderer_version`                           | text             | ETag/reproduction identity                               |
+| `complete_at`, `published_at`, `verified_at` | integer nullable | Lifecycle                                                |
+| `reclaimed_at`                               | integer nullable | Retention tombstone; excludes reads, search and recovery |
+| `created_by_job_id`                          | text FK          | Provenance                                               |
 
 `building` lives in `jobs` plus staging, not as a readable version row. A version row is
 inserted only after the directory is complete and durable. `ready` is never readable through

@@ -1,0 +1,196 @@
+import { mkdir, rm, stat } from "node:fs/promises";
+import { resolve } from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { JobRepository } from "@/db/repositories/jobs";
+import { VersionRepository } from "@/db/repositories/versions";
+import {
+  reclaimRetainedStorage,
+  versionRetentionGraceMs,
+} from "@/jobs/handlers/reclaim";
+import { publishReadyVersion } from "@/services/publication";
+
+import { createTemporaryDataRoot } from "../../helpers/data-root.js";
+import { openMigratedTestDatabase } from "../../helpers/database.js";
+import {
+  publicationTestLeaseOwner,
+  publicationTestVersionId,
+  setupPublicationFixture,
+} from "../publication/stale-build.test.js";
+
+const sourceId = "src_stale_publish_test_0001";
+const previousId = "ver_retention_previous_000001";
+const oldId = "ver_retention_old_00000000001";
+const failedCleanupId = "ver_retention_cleanup_000001";
+
+describe("published version and orphan retention", () => {
+  it("preserves current/previous, tombstones older versions after 24 hours and retries file cleanup", async () => {
+    const root = await createTemporaryDataRoot("retention");
+    const migrated = await openMigratedTestDatabase(root);
+    try {
+      const fixture = setupPublicationFixture(migrated.database);
+      await publishReadyVersion({
+        actorUserId: null,
+        database: migrated.database,
+        jobId: fixture.publishJob.id,
+        leaseOwner: publicationTestLeaseOwner,
+        nowMs: 300,
+        versionId: publicationTestVersionId,
+      });
+      const jobs = new JobRepository(migrated.database);
+      const jobIds = [oldId, previousId, failedCleanupId].map(
+        (versionId, index) => {
+          const job = jobs.create({
+            bookId: fixture.book.id,
+            kind: "build_publish",
+            nowMs: 400 + index,
+          });
+          jobs.fail(job.id, {
+            errorClass: "content",
+            errorCode: "TEST_RETAINED_VERSION",
+            nowMs: 500 + index,
+          });
+          return [versionId, job.id] as const;
+        },
+      );
+      const versionPath = (versionId: string) =>
+        `books/${fixture.book.id}/versions/${versionId}`;
+      const insert = migrated.database.prepare(
+        `INSERT INTO book_versions (
+           id, book_id, source_id, config_revision, predecessor_version_id,
+           state, version_rel_path, manifest_schema_version, manifest_sha256,
+           compiler_version, renderer_version, complete_at, published_at,
+           verified_at, created_by_job_id, reclaimed_at
+         ) VALUES (?, ?, ?, 1, ?, 'superseded', ?, 1, ?, 'compiler-v1',
+                   'renderer-v1', ?, ?, ?, ?, NULL)`,
+      );
+      insert.run(
+        oldId,
+        fixture.book.id,
+        sourceId,
+        null,
+        versionPath(oldId),
+        "b".repeat(64),
+        50,
+        50,
+        50,
+        jobIds[0]?.[1],
+      );
+      insert.run(
+        previousId,
+        fixture.book.id,
+        sourceId,
+        oldId,
+        versionPath(previousId),
+        "c".repeat(64),
+        200,
+        200,
+        200,
+        jobIds[1]?.[1],
+      );
+      insert.run(
+        failedCleanupId,
+        fixture.book.id,
+        sourceId,
+        previousId,
+        versionPath(failedCleanupId),
+        "d".repeat(64),
+        25,
+        25,
+        25,
+        jobIds[2]?.[1],
+      );
+      for (const versionId of [
+        publicationTestVersionId,
+        previousId,
+        oldId,
+        failedCleanupId,
+      ]) {
+        await mkdir(resolve(root.layout.root, versionPath(versionId)), {
+          recursive: true,
+        });
+      }
+      migrated.database
+        .prepare(
+          `INSERT INTO search_fts (
+             title, authors, heading, body, book_id, version_id,
+             page_id, block_id, kind, ordinal
+           ) VALUES ('old', '', '', 'old body', ?, ?, 1, 'blk_old', 'paragraph', 0)`,
+        )
+        .run(fixture.book.id, oldId);
+      migrated.database
+        .prepare(
+          `INSERT INTO search_short_fields (
+             book_id, version_id, page_id, block_id,
+             kind, normalized_text, ordinal
+           ) VALUES (?, ?, 1, NULL, 'title', 'old', 0)`,
+        )
+        .run(fixture.book.id, oldId);
+
+      const nowMs = 2 * versionRetentionGraceMs;
+      const quarantine = resolve(
+        root.layout.bookDirectory,
+        String(fixture.book.id),
+        "quarantine",
+      );
+      await mkdir(resolve(quarantine, "old-orphan.1"), { recursive: true });
+      await mkdir(resolve(quarantine, `recent-orphan.${nowMs}`), {
+        recursive: true,
+      });
+
+      const first = await reclaimRetainedStorage({
+        database: migrated.database,
+        layout: root.layout,
+        nowMs,
+        async removePath(path) {
+          if (path.endsWith(failedCleanupId)) {
+            throw new Error("SIMULATED_CLEANUP_FAILURE");
+          }
+          await rm(path, { force: true, recursive: true });
+        },
+      });
+      expect(first.reclaimedVersionIds).toEqual([failedCleanupId, oldId]);
+      expect(first.failedPaths).toEqual([versionPath(failedCleanupId)]);
+      expect(first.removedQuarantinePaths).toEqual([
+        `books/${fixture.book.id}/quarantine/old-orphan.1`,
+      ]);
+      const versions = new VersionRepository(migrated.database);
+      expect(
+        versions.require(publicationTestVersionId).reclaimedAtMs,
+      ).toBeNull();
+      expect(versions.require(previousId).reclaimedAtMs).toBeNull();
+      expect(versions.require(oldId).reclaimedAtMs).toBe(nowMs);
+      expect(versions.require(failedCleanupId).reclaimedAtMs).toBe(nowMs);
+      expect(fixture.drafts.requireBook(fixture.book.id).currentVersionId).toBe(
+        publicationTestVersionId,
+      );
+      expect(
+        migrated.database
+          .prepare(
+            "SELECT COUNT(*) AS count FROM search_fts WHERE version_id = ?",
+          )
+          .get(oldId),
+      ).toEqual({ count: 0 });
+      await expect(
+        stat(resolve(root.layout.root, versionPath(oldId))),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+      await stat(resolve(root.layout.root, versionPath(failedCleanupId)));
+      await stat(resolve(quarantine, `recent-orphan.${nowMs}`));
+
+      const retry = await reclaimRetainedStorage({
+        database: migrated.database,
+        layout: root.layout,
+        nowMs: nowMs + 1,
+      });
+      expect(retry.failedPaths).toEqual([]);
+      expect(retry.reclaimedVersionIds).toEqual([]);
+      await expect(
+        stat(resolve(root.layout.root, versionPath(failedCleanupId))),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      migrated.close();
+      await root.cleanup();
+    }
+  });
+});

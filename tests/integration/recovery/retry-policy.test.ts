@@ -1,7 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import type { JobRecord } from "@/db/repositories/jobs";
+import Database from "better-sqlite3";
+import { afterEach, describe, expect, it } from "vitest";
+
+import {
+  JobRepository,
+  createJobRepositorySchema,
+  type JobRecord,
+} from "@/db/repositories/jobs";
+import { recoverExpiredJobLeases } from "@/jobs/recovery";
 import { evaluateJobRetry } from "@/jobs/retry-policy";
+
+const temporaryRoots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryRoots
+      .splice(0)
+      .map((root) => rm(root, { force: true, recursive: true })),
+  );
+});
 
 function terminalJob(overrides: Partial<JobRecord> = {}): JobRecord {
   return {
@@ -66,6 +86,68 @@ describe("job retry policy", () => {
     ]) {
       expect(evaluateJobRetry(job, "automatic").allowed).toBe(false);
     }
+  });
+
+  it("cleans expired staging and creates at most one infrastructure retry", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mirawind-job-recovery-"));
+    temporaryRoots.push(root);
+    const database = new Database(join(root, "jobs.sqlite"));
+    createJobRepositorySchema(database);
+    const repository = new JobRepository(database);
+    const original = repository.create({
+      kind: "reconcile",
+      nowMs: 1_000,
+    });
+    repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
+    await mkdir(join(root, "staging", original.id), { recursive: true });
+
+    const firstRecovery = await recoverExpiredJobLeases({
+      nowMs: 62_001,
+      repository,
+      storageRoot: root,
+    });
+    expect(firstRecovery).toEqual([
+      expect.objectContaining({
+        interrupted: expect.objectContaining({
+          errorCode: "JOB_LEASE_EXPIRED",
+          id: original.id,
+          state: "interrupted",
+        }),
+        retry: expect.objectContaining({
+          attempt: 2,
+          automaticRetryCount: 1,
+          retryOfJobId: original.id,
+          state: "queued",
+        }),
+      }),
+    ]);
+    await expect(
+      stat(join(root, "staging", original.id)),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    const retry = firstRecovery[0]?.retry;
+    if (!retry) throw new Error("Expected automatic retry");
+    repository.claimNext({ leaseOwner: "worker-b", nowMs: 63_000 });
+    await mkdir(join(root, "staging", retry.id), { recursive: true });
+    const secondRecovery = await recoverExpiredJobLeases({
+      nowMs: 123_001,
+      repository,
+      storageRoot: root,
+    });
+    expect(secondRecovery).toEqual([
+      expect.objectContaining({
+        interrupted: expect.objectContaining({
+          automaticRetryCount: 1,
+          id: retry.id,
+          state: "interrupted",
+        }),
+        retry: null,
+      }),
+    ]);
+    expect(
+      database.prepare("SELECT COUNT(*) AS count FROM jobs").get(),
+    ).toEqual({ count: 2 });
+    database.close();
   });
 
   it.each([
