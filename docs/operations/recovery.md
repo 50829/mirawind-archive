@@ -1,0 +1,169 @@
+# Recovery and incident runbook
+
+Recovery never mutates the source deployment first. Stop writers, preserve evidence, make a
+copy or snapshot, and perform destructive tests only on that copy. A database backup alone
+does not contain Markdown, originals or immutable versions; normal disaster recovery
+requires the complete persistent volume.
+
+## 1. Backup policy
+
+Maintain:
+
+- frequent complete snapshots of the `mirawind-data` Docker volume;
+- a snapshot immediately before every upgrade or migration;
+- copies on storage independent of the application host;
+- recorded creation time, byte count and checksum;
+- periodic restore drills on a disposable host.
+
+For an application-consistent complete snapshot:
+
+1. stop worker, then Web;
+2. confirm both are stopped;
+3. snapshot or archive the complete named volume with a host backup tool that preserves
+   ownership, permissions and filenames;
+4. record and verify the backup checksum;
+5. restart the stack.
+
+```bash
+docker compose -f docker/compose.yaml stop worker web
+docker compose -f docker/compose.yaml ps
+# Run the host's volume snapshot/backup command here.
+docker compose -f docker/compose.yaml up -d
+```
+
+Resolve the exact volume instead of guessing it:
+
+```bash
+docker volume ls --filter name=mirawind-data
+docker volume inspect <exact-volume-name>
+```
+
+Do not copy only `mirawind.sqlite` while writers are running, and do not omit its WAL state.
+The supported migration command uses SQLite's online backup API for its pre-migration
+database copy, but that copy is not a substitute for the complete volume backup.
+
+## 2. Restore drill
+
+Restore into a new disposable volume or host, never over the only live copy:
+
+1. provision an empty volume;
+2. restore the complete data-root contents and metadata;
+3. run `data-init` to enforce UID/GID 10001 ownership;
+4. run `migrate` with the restored volume while Web/worker are stopped;
+5. verify SQLite integrity and migration completion;
+6. start one Web and one worker;
+7. verify public reads, private authorization, search, original download and the
+   administrator task/health page;
+8. retain the old live volume until acceptance is complete.
+
+The repository's recorded representative drill is
+`docs/audits/m1-migration-recovery-report.md`.
+
+## 3. Lost administrator credentials
+
+There is no Web recovery endpoint. From an SSH session on the host:
+
+```bash
+docker compose -f docker/compose.yaml stop worker web
+docker compose -f docker/compose.yaml run --rm --no-deps web \
+  node dist/processes/cli/index.js admin recover \
+  --data-dir /var/lib/mirawind
+docker compose -f docker/compose.yaml up -d
+```
+
+The command requires an interactive TTY and confirmation. It sets a new fallback password,
+revokes every session and deletes every Passkey. Register new Passkeys after signing in.
+Never pass the recovery password on the command line or through an environment variable.
+
+## 4. Worker interruption or crash
+
+Reader traffic remains on the current published version. Do not start an extra worker.
+
+1. inspect bounded worker logs and the administrator task page;
+2. confirm host memory and disk availability;
+3. restart the single worker;
+4. allow startup reconciliation and lease recovery to finish;
+5. inspect the job's safe error category.
+
+An expired running lease becomes interrupted. Only a first infrastructure interruption may
+retry automatically. Content, validation, security-limit, timeout, cancellation and second
+interruption failures require an explicit administrator retry. A recovered `ready` version
+is never automatically published.
+
+## 5. Failed build or publication
+
+A failed build must not alter `current_version_id`; readers continue receiving the old
+version. Preserve the source ZIP and job record, correct the cause, then use the management
+UI to retry.
+
+Do not publish a staging directory by hand. Publication is valid only after version closure,
+manifest, resource and search validation succeed and SQLite atomically advances the pointer.
+
+If a crash occurred around final rename or index creation, restart the worker. Reconciliation
+will remove incomplete staging, register/contain recoverable state or quarantine an
+unreferenced complete directory. Review the result before deleting anything.
+
+## 6. Corrupt or missing current version
+
+On startup, the worker quickly verifies every current version. If the current version is
+missing or corrupt, it marks that version corrupt and atomically promotes the newest
+verified, published predecessor. If no valid predecessor exists, only that book becomes
+unavailable with `503`; unrelated books continue.
+
+When automatic rollback occurs:
+
+1. keep both the database and filesystem unchanged after recovery;
+2. save bounded logs and the `book.version.recovered` audit event;
+3. determine whether the cause is disk failure, manual mutation or incomplete restore;
+4. restore the complete volume to a disposable location and compare;
+5. re-import/rebuild from authoritative Markdown, `book.yaml` and original only after the
+   storage cause is understood.
+
+Never edit the current pointer, version state, `version.json` or manifest manually.
+
+## 7. SQLite corruption or failed migration
+
+Stop both writers immediately:
+
+```bash
+docker compose -f docker/compose.yaml stop worker web
+```
+
+Preserve the live volume and the latest logs. Do not run ad-hoc `REPLACE`, delete WAL files,
+edit migration checksums or use SQLite `.recover` against the only copy.
+
+Restore the latest known-good complete snapshot into a new volume, then run the restore drill.
+If only the database is affected and a matching online database backup is known to correspond
+to the unchanged filesystem snapshot, test that pair on a disposable copy first. A successful
+test requires:
+
+- `PRAGMA integrity_check` returns `ok`;
+- `PRAGMA foreign_key_check` returns no rows;
+- all expected migration versions/checksums match;
+- current version files pass closure and hash verification;
+- public/private/search/download behavior matches the restored pointer.
+
+## 8. Disk full or WAL growth
+
+Stop new imports first. Keep the database, current version, previous verified version and
+authoritative originals.
+
+- Free space outside the Mirawind data root or expand the local volume.
+- Let the worker retry failed quarantine/reclaimed-version deletion.
+- Do not manually remove `mirawind.sqlite-wal`, active staging, current versions or originals.
+- If WAL is large, stop Web and worker, take a complete backup, then use a reviewed
+  maintenance procedure; normal runtime uses PASSIVE checkpoints only.
+
+After space is restored, start Web and worker, wait for reconciliation, verify current reads
+and inspect the health response.
+
+## 9. Suspected hostile archive incident
+
+Cancel the job through the management API/UI and preserve only opaque IDs and safe error
+codes in shared reports. The extractor removes failed staging and rejects traversal, links,
+special files, unsupported/encrypted/multi-disk archives and streamed resource-limit
+violations.
+
+Do not open the archive on the server, extract it with an ad-hoc tool, publish raw paths or
+upload it to a public issue. If deeper investigation is required, copy it by its registered
+hash to an isolated analysis machine under the administrator's data-handling policy.

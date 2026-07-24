@@ -20,5 +20,6 @@ Do not pass passwords, cookies, Passkey material, private Markdown, or recovery 
 through command arguments or environment variables. Administrator bootstrap and recovery
 read passwords from a hidden interactive TTY.
 
-Configuration validation and production startup refusal are implemented in the
-foundational environment tasks; this document defines the input contract in advance.
+Configuration is validated at process startup and invalid production configuration refuses
+to start. The Compose deployment initializes data-volume ownership and migrations before
+starting Web/worker; see `deployment.md`.
