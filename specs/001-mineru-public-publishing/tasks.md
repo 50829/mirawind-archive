@@ -101,7 +101,7 @@ non-cacheable response.
 - [X] T041 [P] [US1] Add failing archive path tests for absolute/drive/UNC/traversal/NUL/empty/dot paths, Windows separators, NFC collisions, duplicates and file-directory prefix conflicts in `tests/integration/archive/path-security.test.ts`
 - [X] T042 [P] [US1] Add failing archive format tests for malformed headers, local/central ambiguity, overlaps, CRC, encryption, multi-disk, methods other than 0/8, links and special files in `tests/integration/archive/format-security.test.ts`
 - [X] T043 [P] [US1] Add failing actual-stream limit tests for 2 GiB upload/entry, 8 GiB package, 20,000 entries, 64 MiB ratio threshold, 200:1 entry/package ratio, depth/path limits, cancellation and cleanup in `tests/integration/archive/resource-limits.test.ts`
-- [ ] T044 [P] [US1] Add failing main-document selection tests for nested Cloud/CLI, generic confirmation, missing resources, ambiguous candidates and multi-book rejection in `tests/integration/compiler/candidate-selection.test.ts`
+- [X] T044 [P] [US1] Add failing main-document selection tests for nested Cloud/CLI, generic confirmation, missing resources, ambiguous candidates and multi-book rejection in `tests/integration/compiler/candidate-selection.test.ts`
 - [ ] T045 [P] [US1] Add failing Markdown tests for fatal UTF-8, source positions, opaque block IDs, NFC visible text, GFM/math, semantic containers, resource-base containment and malicious raw HTML/URLs in `tests/integration/compiler/document-parse.test.ts`
 - [ ] T046 [P] [US1] Add failing raster tests for magic/format mismatch, corrupt decode, 100M pixels, 32,768-pixel sides, animation/multipage/SVG rejection and bounded real decode in `tests/integration/compiler/image-security.test.ts`
 - [ ] T047 [P] [US1] Add failing strict YAML/JSON Schema tests for aliases, duplicate keys, custom tags, merge keys, unknown fields, unsupported newer versions and non-mutating validation in `tests/contract/book-schema.test.ts`
@@ -115,7 +115,7 @@ non-cacheable response.
 - [X] T052 [P] [US1] Implement ZIP entry-name decoding, POSIX/NFC normalization, collision detection and byte/depth limit policy in `src/compiler/archive/path-policy.ts`
 - [X] T053 [US1] Implement strict zip.js enumeration and raw compressed-byte pass with ambiguity, overlap, CRC, method, disk, encryption and Unix-type validation in `src/compiler/archive/zip-reader.ts`
 - [X] T054 [US1] Implement exclusive no-follow streaming extraction with actual entry/package byte and expansion-ratio enforcement, cancellation, timeout counters and whole-staging cleanup in `src/compiler/archive/extractor.ts`
-- [ ] T055 [P] [US1] Implement recursive Markdown candidate parsing, resource-integrity evidence, high/generic/ambiguous scoring and one-book bundle detection in `src/compiler/document/candidate-discovery.ts`
+- [X] T055 [P] [US1] Implement recursive Markdown candidate parsing, resource-integrity evidence, high/generic/ambiguous scoring and one-book bundle detection in `src/compiler/document/candidate-discovery.ts`
 - [ ] T056 [US1] Implement the `analyze_import` worker handler and durable candidate state transitions without logging unsafe raw paths in `src/jobs/handlers/analyze-import.ts`
 - [ ] T057 [P] [US1] Implement strict YAML 1.2 JSON-only parsing, Ajv 2020 validation and explicit supported-version dispatch in `src/schemas/book-config.ts` and `src/schemas/versioning.ts`
 - [ ] T058 [US1] Implement immutable accepted source/original snapshot creation, reference-root pruning and rollback cleanup in `src/services/source-snapshot.ts`
