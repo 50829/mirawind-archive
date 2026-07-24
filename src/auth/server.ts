@@ -15,6 +15,11 @@ export interface AuthFactoryInput {
 
 function sharedOptions(input: AuthFactoryInput) {
   return {
+    advanced: {
+      ipAddress: {
+        ipAddressHeaders: ["x-real-ip"],
+      },
+    },
     basePath: "/api/auth",
     baseURL: input.environment.publicOrigin,
     database: input.database,

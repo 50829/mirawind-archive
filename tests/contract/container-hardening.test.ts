@@ -97,6 +97,7 @@ describe("container deployment hardening", () => {
     ]) {
       expect(caddyfile).toContain(header);
     }
+    expect(caddyfile).toContain("header_up X-Real-IP {remote_host}");
     expect(caddyfile).toContain("header_up X-Forwarded-Host {host}");
     expect(caddyfile).toContain("header_up X-Forwarded-Proto {scheme}");
   });

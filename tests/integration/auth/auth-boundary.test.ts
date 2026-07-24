@@ -88,6 +88,11 @@ describe("sole-administrator authorization", () => {
       environment,
     }).$context;
     expect(httpContext.options).toMatchObject({
+      advanced: {
+        ipAddress: {
+          ipAddressHeaders: ["x-real-ip"],
+        },
+      },
       baseURL: "https://library.example.test",
       emailAndPassword: {
         disableSignUp: true,
