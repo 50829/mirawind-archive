@@ -103,7 +103,7 @@ non-cacheable response.
 - [X] T043 [P] [US1] Add failing actual-stream limit tests for 2 GiB upload/entry, 8 GiB package, 20,000 entries, 64 MiB ratio threshold, 200:1 entry/package ratio, depth/path limits, cancellation and cleanup in `tests/integration/archive/resource-limits.test.ts`
 - [X] T044 [P] [US1] Add failing main-document selection tests for nested Cloud/CLI, generic confirmation, missing resources, ambiguous candidates and multi-book rejection in `tests/integration/compiler/candidate-selection.test.ts`
 - [ ] T045 [P] [US1] Add failing Markdown tests for fatal UTF-8, source positions, opaque block IDs, NFC visible text, GFM/math, semantic containers, resource-base containment and malicious raw HTML/URLs in `tests/integration/compiler/document-parse.test.ts`
-- [ ] T046 [P] [US1] Add failing raster tests for magic/format mismatch, corrupt decode, 100M pixels, 32,768-pixel sides, animation/multipage/SVG rejection and bounded real decode in `tests/integration/compiler/image-security.test.ts`
+- [X] T046 [P] [US1] Add failing raster tests for magic/format mismatch, corrupt decode, 100M pixels, 32,768-pixel sides, animation/multipage/SVG rejection and bounded real decode in `tests/integration/compiler/image-security.test.ts`
 - [X] T047 [P] [US1] Add failing strict YAML/JSON Schema tests for aliases, duplicate keys, custom tags, merge keys, unknown fields, unsupported newer versions and non-mutating validation in `tests/contract/book-schema.test.ts`
 - [ ] T048 [P] [US1] Add failing authorization/cache tests proving preview pages/assets, candidates, jobs, sources and diagnostics are administrator-only and anonymous private/missing responses match in `tests/integration/auth/draft-visibility.test.ts`
 - [ ] T049 [US1] Add a failing browser journey covering high-confidence import, generic confirmation, ambiguous rejection, draft preview and source-Markdown immutability in `tests/e2e/import-preview.spec.ts`
@@ -122,7 +122,7 @@ non-cacheable response.
 - [ ] T059 [P] [US1] Implement the ordered remark/GFM/math parser with current source spans and transient AST types in `src/compiler/document/parser.ts` and `src/compiler/document/types.ts`
 - [ ] T060 [US1] Implement block normalization, random stable IDs, heading extraction, NFC/newline visible-text normalization and versioned fingerprints in `src/compiler/document/normalize.ts`
 - [ ] T061 [P] [US1] Implement contained local-resource resolution, missing/cross-root diagnostics and opaque resource mapping in `src/compiler/resources/resolver.ts`
-- [ ] T062 [P] [US1] Implement bounded Sharp raster inspection and forced single-frame JPEG/PNG/WebP/GIF decode in `src/compiler/resources/images.ts`
+- [X] T062 [P] [US1] Implement bounded Sharp raster inspection and forced single-frame JPEG/PNG/WebP/GIF decode in `src/compiler/resources/images.ts`
 - [ ] T063 [US1] Implement default TOC inclusion, four-role, continuous-level and heading-only page-boundary proposals without changing source order in `src/compiler/document/structure-proposal.ts`
 - [ ] T064 [US1] Implement sanitized raw-HTML HAST conversion and the authenticated draft-preview rendering pipeline in `src/compiler/render/sanitize.ts` and `src/compiler/render/preview.ts`
 - [ ] T065 [US1] Implement `prepare_draft` and `build_preview` job handlers that create immutable config revisions and revision-pinned derived preview directories in `src/jobs/handlers/prepare-draft.ts` and `src/jobs/handlers/build-preview.ts`
