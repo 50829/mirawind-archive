@@ -294,6 +294,20 @@ export class JobRepository {
     return row ? mapJob(row) : null;
   }
 
+  listRecent(limit = 50): readonly JobRecord[] {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new RangeError("JOB_LIST_LIMIT_INVALID");
+    }
+    const rows = this.database
+      .prepare(
+        `SELECT * FROM jobs
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT ?`,
+      )
+      .all(limit) as JobRow[];
+    return Object.freeze(rows.map(mapJob));
+  }
+
   private getRequired(id: string): JobRecord {
     const job = this.get(id);
     if (!job) throw new Error("JOB_NOT_FOUND");

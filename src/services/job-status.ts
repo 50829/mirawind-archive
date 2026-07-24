@@ -43,6 +43,7 @@ export function serializeJobStatus(job: JobRecord) {
     kind: job.kind,
     phase: job.phase.slice(0, 80),
     progress: safeProgress(job.progress),
+    retry_of_job_id: job.retryOfJobId,
     started_at: timestamp(job.startedAtMs),
     state: job.state,
   });

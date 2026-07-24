@@ -243,10 +243,10 @@ continued availability of unrelated/current books.
 
 ### Evidence tests for User Story 4
 
-- [ ] T117 [P] [US4] Add failing OpenAPI contract tests for job status, cancel and explicit retry including immutable prior-attempt history in `tests/contract/jobs.contract.test.ts`
+- [x] T117 [P] [US4] Add failing OpenAPI contract tests for job status, cancel and explicit retry including immutable prior-attempt history in `tests/contract/jobs.contract.test.ts`
 - [ ] T118 [P] [US4] Add failing two-real-worker claim, heartbeat, lease-expiry and global concurrency tests using one real SQLite file in `tests/integration/recovery/worker-leases.test.ts`
 - [ ] T119 [P] [US4] Add failing child SIGTERM/10-second-grace/SIGKILL/close, 30-minute timeout simulation and process-group termination tests in `tests/integration/recovery/child-termination.test.ts`
-- [ ] T120 [P] [US4] Add failing retry-policy tests for one infrastructure auto-retry and manual-only content/limit/timeout/repeat-interruption retries in `tests/integration/recovery/retry-policy.test.ts`
+- [x] T120 [P] [US4] Add failing retry-policy tests for one infrastructure auto-retry and manual-only content/limit/timeout/repeat-interruption retries in `tests/integration/recovery/retry-policy.test.ts`
 - [ ] T121 [P] [US4] Add failing startup inventory tests for incomplete staging, orphan complete directory, missing DB/files, corrupt current, ready non-publication, predecessor rollback and book-scoped 503 in `tests/integration/recovery/reconciliation.test.ts`
 - [ ] T122 [P] [US4] Add failing retention tests for current/previous preservation, 24-hour quarantine/grace, FTS cleanup and cleanup-failure non-interference in `tests/integration/recovery/retention.test.ts`
 - [ ] T123 [P] [US4] Add failing worker-owned passive checkpoint, WAL-size alert, Web 250 ms busy bound and startup WAL-recovery retry tests in `tests/integration/storage/wal-operations.test.ts`
@@ -255,8 +255,8 @@ continued availability of unrelated/current books.
 ### Implementation for User Story 4
 
 - [x] T125 [P] [US4] Implement authorized job status serialization with safe phase/progress/error categories in `src/services/job-status.ts` and `src/pages/api/manage/jobs/[jobId]/index.ts`
-- [ ] T126 [US4] Implement cancel and explicit-retry endpoints with origin/idempotency checks and new immutable attempt rows in `src/pages/api/manage/jobs/[jobId]/cancel.ts` and `src/pages/api/manage/jobs/[jobId]/retry.ts`
-- [ ] T127 [P] [US4] Implement the task list/detail, phase progress, cancellation, failure-category and retry interface in `src/components/import/TaskMonitor.tsx` and `src/pages/manage/tasks.astro`
+- [x] T126 [US4] Implement cancel and explicit-retry endpoints with origin/idempotency checks and new immutable attempt rows in `src/pages/api/manage/jobs/[jobId]/cancel.ts` and `src/pages/api/manage/jobs/[jobId]/retry.ts`
+- [x] T127 [P] [US4] Implement the task list/detail, phase progress, cancellation, failure-category and retry interface in `src/components/import/TaskMonitor.tsx` and `src/pages/manage/tasks.astro`
 - [ ] T128 [US4] Implement cooperative cancellation followed by a fixed 10-second SIGTERM grace, whole-process-group SIGKILL escalation and close-confirmed terminal state in `src/worker/child-runner.ts`
 - [ ] T129 [US4] Implement expired-lease interruption classification, staging cleanup and one-time infrastructure auto-retry creation in `src/jobs/recovery.ts`
 - [ ] T130 [US4] Implement explicit retry eligibility for content, validation, security-limit, timeout and repeat interruption failures in `src/jobs/retry-policy.ts`
