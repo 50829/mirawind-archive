@@ -10,6 +10,7 @@ export interface FrozenJobInput {
   readonly capturedCurrentVersionId: string | null;
   readonly capturedSourceId: string | null;
   readonly importId: string | null;
+  readonly importUploadRelativePath: string | null;
   readonly jobId: string;
   readonly kind: JobKind;
   readonly stagingRelativePath: string;
@@ -103,8 +104,14 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
     isNullableString(input.capturedCurrentVersionId) &&
     isNullableString(input.capturedSourceId) &&
     isNullableString(input.importId) &&
+    isNullableString(input.importUploadRelativePath) &&
     isNullableString(input.versionId) &&
-    input.stagingRelativePath === `staging/${input.jobId}`
+    input.stagingRelativePath === `staging/${input.jobId}` &&
+    (input.kind === "analyze_import" || input.kind === "prepare_draft"
+      ? input.importId !== null &&
+        input.importUploadRelativePath ===
+          `tmp/uploads/${input.importId}/original.zip`
+      : input.importUploadRelativePath === null)
   );
 }
 

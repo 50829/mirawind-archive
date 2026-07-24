@@ -18,6 +18,7 @@ describe("job child IPC protocol", () => {
         capturedCurrentVersionId: null,
         capturedSourceId: null,
         importId: null,
+        importUploadRelativePath: null,
         jobId,
         kind: "reconcile",
         stagingRelativePath: `staging/${jobId}`,
@@ -31,6 +32,39 @@ describe("job child IPC protocol", () => {
       isRunJobMessage({
         ...message,
         input: { ...message.input, stagingRelativePath: "../../escape" },
+      }),
+    ).toBe(false);
+  });
+
+  it("binds analyze jobs to the matching durable import upload path", () => {
+    const jobId = createOpaqueId("job");
+    const importId = createOpaqueId("import");
+    const message = {
+      input: {
+        attempt: 1,
+        bookId: null,
+        capturedConfigRevision: null,
+        capturedCurrentVersionId: null,
+        capturedSourceId: null,
+        importId,
+        importUploadRelativePath: `tmp/uploads/${importId}/original.zip`,
+        jobId,
+        kind: "analyze_import",
+        stagingRelativePath: `staging/${jobId}`,
+        versionId: null,
+      },
+      protocolVersion: jobChildProtocolVersion,
+      type: "run",
+    };
+
+    expect(isRunJobMessage(message)).toBe(true);
+    expect(
+      isRunJobMessage({
+        ...message,
+        input: {
+          ...message.input,
+          importUploadRelativePath: "tmp/uploads/other/original.zip",
+        },
       }),
     ).toBe(false);
   });

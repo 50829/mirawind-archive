@@ -167,6 +167,8 @@ export class ImportRepository {
   }
 
   startAnalysis(importId: string, nowMs: number): ImportRecord {
+    const current = this.require(importId);
+    if (current.state === "analyzing") return current;
     this.transition(importId, "uploaded", "analyzing", nowMs);
     return this.require(importId);
   }
@@ -282,6 +284,66 @@ export class ImportRepository {
       .run(errorCode, nowMs, importId);
     if (result.changes !== 1) throw new Error("IMPORT_STATE_CONFLICT");
     return this.require(importId);
+  }
+
+  cancel(importId: string, nowMs: number): ImportRecord {
+    const result = this.database
+      .prepare(
+        `UPDATE imports
+         SET state = 'canceled', updated_at = ?
+         WHERE id = ? AND state IN (
+           'uploaded', 'analyzing', 'needs_main_confirmation', 'preparing'
+         )`,
+      )
+      .run(nowMs, importId);
+    if (result.changes !== 1) throw new Error("IMPORT_STATE_CONFLICT");
+    return this.require(importId);
+  }
+
+  saveRejectedCandidates(input: {
+    readonly candidates: readonly MarkdownCandidate[];
+    readonly errorCode: string;
+    readonly importId: string;
+    readonly nowMs: number;
+  }): ImportRecord {
+    validateSafeErrorCode(input.errorCode);
+    return withImmediateTransaction(this.database, () => {
+      const current = this.require(input.importId);
+      if (current.state !== "analyzing") {
+        throw new Error("IMPORT_STATE_CONFLICT");
+      }
+      const insert = this.database.prepare(
+        `INSERT INTO import_candidates (
+          id, import_id, normalized_path, confidence, score,
+          evidence_json, diagnostics_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const candidate of input.candidates) {
+        insert.run(
+          candidate.id,
+          input.importId,
+          candidate.normalizedPath,
+          candidate.confidence,
+          candidate.score,
+          JSON.stringify({
+            byteSize: candidate.byteSize,
+            companionFiles: candidate.companionFiles,
+            firstHeading: candidate.firstHeading,
+            referencedResources: candidate.referencedResources,
+          }),
+          JSON.stringify(candidate.diagnostics),
+        );
+      }
+      const changed = this.database
+        .prepare(
+          `UPDATE imports
+           SET state = 'rejected', safe_error_code = ?, updated_at = ?
+           WHERE id = ? AND state = 'analyzing'`,
+        )
+        .run(input.errorCode, input.nowMs, input.importId);
+      if (changed.changes !== 1) throw new Error("IMPORT_STATE_CONFLICT");
+      return this.require(input.importId);
+    });
   }
 
   private transition(

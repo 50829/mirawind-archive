@@ -20,6 +20,7 @@ export interface ChildRunnerOptions {
   readonly childModulePath?: string;
   readonly onProgress?: (progress: JobProgressMessage) => void;
   readonly signal?: AbortSignal;
+  readonly storageRoot?: string;
 }
 
 function defaultChildModulePath(): string {
@@ -78,6 +79,9 @@ export async function runJobChild(
   const child = fork(options.childModulePath ?? defaultChildModulePath(), [], {
     detached: process.platform !== "win32",
     env: {
+      ...(options.storageRoot
+        ? { MIRAWIND_JOB_STORAGE_ROOT: options.storageRoot }
+        : {}),
       NODE_ENV: process.env.NODE_ENV,
       PATH: process.env.PATH,
     },
