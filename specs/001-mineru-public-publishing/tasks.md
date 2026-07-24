@@ -110,7 +110,7 @@ non-cacheable response.
 
 ### Implementation for User Story 1
 
-- [ ] T050 [P] [US1] Implement import, candidate, source-snapshot, config-revision, original-file and draft-preview repositories in `src/db/repositories/imports.ts`, `src/db/repositories/sources.ts`, and `src/db/repositories/drafts.ts`
+- [X] T050 [P] [US1] Implement import, candidate, source-snapshot, config-revision, original-file and draft-preview repositories in `src/db/repositories/imports.ts`, `src/db/repositories/sources.ts`, and `src/db/repositories/drafts.ts`
 - [ ] T051 [US1] Implement authenticated multipart upload streaming to exclusive `.part` files with actual byte counting, SHA-256, fsync, durable rename and idempotent job enqueue in `src/services/import-upload.ts`
 - [X] T052 [P] [US1] Implement ZIP entry-name decoding, POSIX/NFC normalization, collision detection and byte/depth limit policy in `src/compiler/archive/path-policy.ts`
 - [X] T053 [US1] Implement strict zip.js enumeration and raw compressed-byte pass with ambiguity, overlap, CRC, method, disk, encryption and Unix-type validation in `src/compiler/archive/zip-reader.ts`
