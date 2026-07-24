@@ -360,7 +360,8 @@ Passkeys, headers, Range and anonymous/private route behavior.
 - Shared-database browser suites run with one test worker, or each test worker receives an
   entirely separate data root.
 - The administrator supplies two or three real, several-hundred-page MinerU ZIPs during the
-  test stage. Store them outside Git; register only opaque ID, MinerU version, size and
+  test stage. Store them outside Git tracking, either externally or in the entirely ignored
+  local fixture directory; register only opaque ID, MinerU version, page range, size and
   SHA-256. Ordinary CI explicitly skips real-fixture tests when absent, but final
   compatibility and performance reports require all registered samples.
 - Crash tests send real `SIGKILL` at named boundaries and restart processes.

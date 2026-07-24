@@ -338,9 +338,11 @@ application, and verify durable status, bounded retry, cleanup, and unchanged pu
 - Formula failures may be diagnosed and displayed as source notation without blocking an
   otherwise valid publication.
 - During the M1 test stage, the administrator will provide two or three real MinerU 3.4.4
-  output ZIPs of several hundred pages each. They remain outside Git and are registered by
-  opaque fixture ID, MinerU version, size, and SHA-256 before use. Formal M1 compatibility
-  and performance claims do not extend to other MinerU versions.
+  output ZIPs of several hundred pages each. They remain untracked and non-redistributable,
+  either outside the worktree or in the entirely Git-ignored
+  `tests/fixtures/mineru/real/` directory, and are registered by opaque fixture ID, MinerU
+  version, page range, size, and SHA-256 before use. Formal M1 compatibility and performance
+  claims do not extend to other MinerU versions.
 - Conventional Commits are adopted for reviewable history only; M1 does not infer automatic
   releases or version numbers from commit messages.
 

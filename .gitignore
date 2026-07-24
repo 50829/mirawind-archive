@@ -12,7 +12,9 @@ test-results/
 !.env.example
 
 data/
-tests/fixtures/mineru/real/
+
+# Administrator-provided, non-redistributable MinerU acceptance fixtures.
+/tests/fixtures/mineru/real/
 
 *.log
 *.tmp

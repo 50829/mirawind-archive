@@ -19,18 +19,20 @@ enumeration order.
 ## Real several-hundred-page fixtures
 
 The administrator will provide two or three real MinerU 3.4.4 ZIPs during final testing.
-They are non-redistributable test inputs and must remain outside this repository, outside
-public CI artifacts, and outside logs. A recommended directory is:
+They are non-redistributable test inputs and must remain outside Git tracking, public CI
+artifacts, and logs. For local development, use the entirely ignored directory:
 
 ```text
-/srv/mirawind-test-fixtures/real-mineru/
+tests/fixtures/mineru/real/
 ├── real-fixtures.json
 ├── real-mineru-a7f31c.zip
 └── real-mineru-b9d204.zip
 ```
 
-Copy `real-fixtures.example.json` to that external directory as `real-fixtures.json`, replace
-the size, hash and page-range placeholders with measured values, and keep opaque filenames.
+An external directory such as `/srv/mirawind-test-fixtures/real-mineru/` remains supported
+on a server. Copy `real-fixtures.example.json` to the selected directory as
+`real-fixtures.json`, replace the size, hash and page-range placeholders with measured
+values, and keep opaque filenames.
 The manifest records only an opaque ID, filename, the frozen MinerU 3.4.4 version,
 approximate page range, byte size, SHA-256 and the administrator-approved usage scope. Do not
 record book titles, authors or extracted content.
@@ -38,7 +40,7 @@ record book titles, authors or extracted content.
 Verify before any compatibility or performance run:
 
 ```bash
-pnpm fixtures:verify-real --dir /srv/mirawind-test-fixtures/real-mineru
+pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"
 ```
 
 The verifier rejects other MinerU versions, symlinks, paths, unexpected fields, duplicate
