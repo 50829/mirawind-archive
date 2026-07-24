@@ -99,7 +99,7 @@ non-cacheable response.
 
 - [ ] T040 [P] [US1] Add failing OpenAPI contract tests for import creation/status/confirmation, draft retrieval/update and revision-pinned preview routes in `tests/contract/import-preview.contract.test.ts`
 - [X] T041 [P] [US1] Add failing archive path tests for absolute/drive/UNC/traversal/NUL/empty/dot paths, Windows separators, NFC collisions, duplicates and file-directory prefix conflicts in `tests/integration/archive/path-security.test.ts`
-- [ ] T042 [P] [US1] Add failing archive format tests for malformed headers, local/central ambiguity, overlaps, CRC, encryption, multi-disk, methods other than 0/8, links and special files in `tests/integration/archive/format-security.test.ts`
+- [X] T042 [P] [US1] Add failing archive format tests for malformed headers, local/central ambiguity, overlaps, CRC, encryption, multi-disk, methods other than 0/8, links and special files in `tests/integration/archive/format-security.test.ts`
 - [ ] T043 [P] [US1] Add failing actual-stream limit tests for 2 GiB upload/entry, 8 GiB package, 20,000 entries, 64 MiB ratio threshold, 200:1 entry/package ratio, depth/path limits, cancellation and cleanup in `tests/integration/archive/resource-limits.test.ts`
 - [ ] T044 [P] [US1] Add failing main-document selection tests for nested Cloud/CLI, generic confirmation, missing resources, ambiguous candidates and multi-book rejection in `tests/integration/compiler/candidate-selection.test.ts`
 - [ ] T045 [P] [US1] Add failing Markdown tests for fatal UTF-8, source positions, opaque block IDs, NFC visible text, GFM/math, semantic containers, resource-base containment and malicious raw HTML/URLs in `tests/integration/compiler/document-parse.test.ts`
@@ -113,7 +113,7 @@ non-cacheable response.
 - [ ] T050 [P] [US1] Implement import, candidate, source-snapshot, config-revision, original-file and draft-preview repositories in `src/db/repositories/imports.ts`, `src/db/repositories/sources.ts`, and `src/db/repositories/drafts.ts`
 - [ ] T051 [US1] Implement authenticated multipart upload streaming to exclusive `.part` files with actual byte counting, SHA-256, fsync, durable rename and idempotent job enqueue in `src/services/import-upload.ts`
 - [X] T052 [P] [US1] Implement ZIP entry-name decoding, POSIX/NFC normalization, collision detection and byte/depth limit policy in `src/compiler/archive/path-policy.ts`
-- [ ] T053 [US1] Implement strict zip.js enumeration and raw compressed-byte pass with ambiguity, overlap, CRC, method, disk, encryption and Unix-type validation in `src/compiler/archive/zip-reader.ts`
+- [X] T053 [US1] Implement strict zip.js enumeration and raw compressed-byte pass with ambiguity, overlap, CRC, method, disk, encryption and Unix-type validation in `src/compiler/archive/zip-reader.ts`
 - [ ] T054 [US1] Implement exclusive no-follow streaming extraction with actual entry/package byte and expansion-ratio enforcement, cancellation, timeout counters and whole-staging cleanup in `src/compiler/archive/extractor.ts`
 - [ ] T055 [P] [US1] Implement recursive Markdown candidate parsing, resource-integrity evidence, high/generic/ambiguous scoring and one-book bundle detection in `src/compiler/document/candidate-discovery.ts`
 - [ ] T056 [US1] Implement the `analyze_import` worker handler and durable candidate state transitions without logging unsafe raw paths in `src/jobs/handlers/analyze-import.ts`
