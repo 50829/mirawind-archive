@@ -14,6 +14,7 @@
     "benchmark:read": "tsx scripts/benchmarks/read.ts",
     "benchmark:reference": "tsx scripts/benchmarks/reference.ts",
     "benchmark:search": "tsx scripts/benchmarks/search.ts",
+    "audit:migration-recovery": "tsx scripts/audits/migration-recovery.ts",
     "build": "astro build && tsc -p tsconfig.processes.json && node scripts/copy-runtime-schemas.mjs",
     "commitlint": "commitlint",
     "db:migrate": "tsx src/cli/index.ts db migrate",
