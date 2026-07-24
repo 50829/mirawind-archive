@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { constants } from "node:fs";
+import { mkdir, open, rm } from "node:fs/promises";
+import { dirname } from "node:path";
 
 import type Database from "better-sqlite3";
 
@@ -77,4 +80,27 @@ export function applyMigrations(
     }
   }
   return { applied, current: ordered.at(-1)?.version ?? 0 };
+}
+
+export async function withSchemaLock<T>(
+  lockPath: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  await mkdir(dirname(lockPath), { recursive: true, mode: 0o700 });
+  const lock = await open(
+    lockPath,
+    constants.O_CREAT |
+      constants.O_EXCL |
+      constants.O_WRONLY |
+      (constants.O_NOFOLLOW ?? 0),
+    0o600,
+  );
+  try {
+    await lock.writeFile(`${process.pid}\n`);
+    await lock.sync();
+    return await operation();
+  } finally {
+    await lock.close();
+    await rm(lockPath, { force: true });
+  }
 }

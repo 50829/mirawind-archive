@@ -16,3 +16,16 @@ await Promise.all(
     ),
   ),
 );
+
+const migrationDestination = resolve(
+  repositoryRoot,
+  "dist",
+  "processes",
+  "db",
+  "migrations",
+);
+await mkdir(migrationDestination, { recursive: true });
+await copyFile(
+  resolve(repositoryRoot, "src", "db", "migrations", "0001_m1_core.sql"),
+  resolve(migrationDestination, "0001_m1_core.sql"),
+);

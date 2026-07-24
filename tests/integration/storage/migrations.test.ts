@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -11,6 +11,8 @@ import {
   checksumMigration,
   type Migration,
 } from "@/db/migrate";
+import { loadMigrationManifest } from "@/db/migration-manifest";
+import { runDatabaseMigrations } from "@/cli/commands/db-migrate";
 
 const temporaryRoots: string[] = [];
 
@@ -92,5 +94,71 @@ describe("checksummed migrations", () => {
         .get(),
     ).toEqual({ count: 0 });
     database.close();
+  });
+
+  it("applies the locked M1 schema with FTS5 and all authority tables", async () => {
+    const database = await openTemporaryDatabase();
+    const result = applyMigrations(database, await loadMigrationManifest());
+    expect(result).toEqual({ applied: [1], current: 1 });
+
+    const names = (
+      database
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+        )
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "installation",
+        "books",
+        "source_snapshots",
+        "config_revisions",
+        "draft_previews",
+        "original_files",
+        "imports",
+        "import_candidates",
+        "book_versions",
+        "jobs",
+        "search_short_fields",
+        "search_fts",
+        "audit_events",
+      ]),
+    );
+    database.close();
+  });
+
+  it("takes a restorable pre-migration backup under an exclusive schema lock", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mirawind-migration-runner-"));
+    temporaryRoots.push(root);
+    const databasePath = join(root, "db", "mirawind.sqlite");
+    const backupDirectory = join(root, "backups");
+
+    expect(
+      await runDatabaseMigrations({
+        backupDirectory,
+        databasePath,
+        nowMs: 1_000,
+      }),
+    ).toMatchObject({ applied: [1], backupPath: null, current: 1 });
+    const second = await runDatabaseMigrations({
+      backupDirectory,
+      databasePath,
+      nowMs: 2_000,
+    });
+    expect(second).toMatchObject({ applied: [], current: 1 });
+    expect(second.backupPath).not.toBeNull();
+    if (!second.backupPath) throw new Error("Expected a pre-migration backup");
+    await access(second.backupPath);
+
+    const backup = new Database(second.backupPath);
+    expect(
+      backup
+        .prepare(
+          "SELECT COUNT(*) AS count FROM sqlite_master WHERE name = 'books'",
+        )
+        .get(),
+    ).toEqual({ count: 1 });
+    backup.close();
   });
 });
