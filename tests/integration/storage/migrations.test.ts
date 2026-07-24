@@ -99,7 +99,7 @@ describe("checksummed migrations", () => {
   it("applies the locked M1 schema with FTS5 and all authority tables", async () => {
     const database = await openTemporaryDatabase();
     const result = applyMigrations(database, await loadMigrationManifest());
-    expect(result).toEqual({ applied: [1], current: 1 });
+    expect(result).toEqual({ applied: [1, 2], current: 2 });
 
     const names = (
       database
@@ -123,6 +123,12 @@ describe("checksummed migrations", () => {
         "search_short_fields",
         "search_fts",
         "audit_events",
+        "user",
+        "session",
+        "account",
+        "verification",
+        "passkey",
+        "rateLimit",
       ]),
     );
     database.close();
@@ -140,13 +146,13 @@ describe("checksummed migrations", () => {
         databasePath,
         nowMs: 1_000,
       }),
-    ).toMatchObject({ applied: [1], backupPath: null, current: 1 });
+    ).toMatchObject({ applied: [1, 2], backupPath: null, current: 2 });
     const second = await runDatabaseMigrations({
       backupDirectory,
       databasePath,
       nowMs: 2_000,
     });
-    expect(second).toMatchObject({ applied: [], current: 1 });
+    expect(second).toMatchObject({ applied: [], current: 2 });
     expect(second.backupPath).not.toBeNull();
     if (!second.backupPath) throw new Error("Expected a pre-migration backup");
     await access(second.backupPath);
@@ -160,5 +166,34 @@ describe("checksummed migrations", () => {
         .get(),
     ).toEqual({ count: 1 });
     backup.close();
+  });
+
+  it("enforces the ten-Passkey ceiling inside SQLite", async () => {
+    const database = await openTemporaryDatabase();
+    applyMigrations(database, await loadMigrationManifest());
+    database
+      .prepare(
+        `INSERT INTO "user"
+          (id, name, email, emailVerified, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run("admin", "Admin", "admin@example.test", 1, Date.now(), Date.now());
+    const insert = database.prepare(
+      `INSERT INTO passkey
+        (id, publicKey, userId, credentialID, counter, deviceType, backedUp)
+       VALUES (?, ?, ?, ?, 0, 'singleDevice', 0)`,
+    );
+    for (let index = 0; index < 10; index += 1) {
+      insert.run(
+        `passkey-${index}`,
+        `public-key-${index}`,
+        "admin",
+        `credential-${index}`,
+      );
+    }
+    expect(() =>
+      insert.run("passkey-10", "public-key-10", "admin", "credential-10"),
+    ).toThrow(/PASSKEY_LIMIT_EXCEEDED/);
+    database.close();
   });
 });
