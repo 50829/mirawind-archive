@@ -92,7 +92,7 @@ The named volume is mounted at `/var/lib/mirawind`:
 ├── backups/
 ├── books/<book_id>/
 │   ├── draft/
-│   │   ├── sources/<source_id>/
+│   │   ├── source/<source_id>/
 │   │   ├── originals/<file_id>
 │   │   ├── configs/<revision>/book.yaml
 │   │   └── previews/<revision>/

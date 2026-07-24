@@ -1,10 +1,10 @@
 # M1 architecture: MinerU public publishing
 
-- Status: Draft for M1 planning
-- Date: 2026-07-24
+- Status: Implemented and verified for M1
+- Date: 2026-07-25
 - Scope: M0 foundations required by the first MinerU vertical slice, plus M1 import,
   preview, compile, search, publish, read, and original ZIP download
-- Governing decisions: D-019～D-025, D-042～D-086
+- Governing decisions: D-019～D-025, D-042～D-095
 
 ## 1. System boundary
 
@@ -61,8 +61,6 @@ data/
 │       │   ├── originals/<file_id>
 │       │   ├── configs/<revision>/book.yaml
 │       │   └── previews/<revision>/{pages,assets,diagnostics}/
-│       ├── staging/
-│       │   └── <job_id>/
 │       ├── quarantine/
 │       │   └── <version_id>/
 │       └── versions/
@@ -78,6 +76,8 @@ data/
 │               └── published/
 │                   ├── pages/
 │                   └── assets/
+├── staging/
+│   └── <job_id>/
 └── tmp/
     └── uploads/
         └── <upload_id>.part
@@ -242,7 +242,8 @@ A reading request:
 1. resolves the book and authorization;
 2. reads `current_version_id` once;
 3. derives the immutable version path;
-4. reads pre-generated HTML and response metadata;
+4. reads pre-generated HTML and response metadata; immutable manifests may be reused from a
+   bounded in-process cache keyed by version and manifest hash;
 5. returns without parsing, rendering, image processing, or indexing.
 
 The HTML references assets with a version ID or content hash so one page cannot mix resource
@@ -304,11 +305,11 @@ The uncached origin response for a public reading page must remain at or below 3
 the reference single-server deployment. The gate measures request handling only; build time
 is reported separately and never blocks the published read path.
 
-M1 planning must produce:
+M1 acceptance uses:
 
-- a Git-external set of two or three real, several-hundred-page MinerU ZIP fixtures supplied
-  by the administrator during testing, registered by opaque ID, MinerU version, size and
-  SHA-256;
+- two registered, Git-ignored local MinerU 3.4.4 ZIP fixtures supplied by the administrator,
+  including one 441-page and one 97-page book, identified in tracked evidence only by opaque
+  ID, MinerU version, size and SHA-256;
 - Cloud `full.md`, CLI `<stem>.md`, generic single Markdown, ambiguous multi-Markdown, and
   multi-book fixtures;
 - missing/cross-directory resources and raw-HTML fixtures;
@@ -318,8 +319,10 @@ M1 planning must produce:
 - Chinese search fixtures from `docs/research/sqlite-fts5-chinese-short-query.md`;
 - a large synthetic stress fixture that reaches meaningful resource and performance budgets.
 
-The plan must record import time, peak worker memory, extracted size, index size/build time,
-read p95, and search p95 for the representative and stress fixtures.
+The final benchmark records import time, peak worker memory, extracted size, index
+size/build time, idle and concurrent-build read percentiles, and normal/short search
+percentiles for both real fixtures and the stress fixture in
+`docs/audits/m1-performance-report.md`. Every measured p95 passed its release gate.
 
 ## 16. Deferred from M1
 

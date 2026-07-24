@@ -25,3 +25,19 @@ For each real entry:
 
 An entry in this ledger documents provenance; it does not by itself approve an
 incompatible license.
+
+## M1 release review
+
+Reviewed 2026-07-25 for D-090 and T147:
+
+- no repository file contains a substantive copy, translation, or structural adaptation of
+  the surveyed external applications, so the empty ledger above remains accurate;
+- implementation research remained behavior- and test-pattern-only, with independently
+  written local code;
+- ordinary packages are pinned in `package.json` and `pnpm-lock.yaml`;
+- `pnpm licenses list --prod --json` completed successfully. The copyleft-licensed
+  production transitive artifacts are the dynamically used libvips binary distributed by
+  Sharp under LGPL-3.0-or-later and Lightning CSS binaries/modules under MPL-2.0; neither
+  was copied into or modified as repository source.
+
+Any future external code port still requires a real table entry before merge.

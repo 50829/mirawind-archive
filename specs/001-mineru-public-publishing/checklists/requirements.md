@@ -31,6 +31,8 @@
 
 ## Notes
 
-- Validation completed against Constitution v1.0.0 and D-042 through D-086.
+- Initial specification validation completed against Constitution v1.0.0 and D-042 through
+  D-086; final M1 consistency validation includes subsequent accepted decisions through
+  D-095.
 - Technical stack, database schema, endpoint contracts, and storage details remain in the
   architecture and upcoming implementation plan rather than this product-facing spec.

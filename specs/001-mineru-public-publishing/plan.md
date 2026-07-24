@@ -71,7 +71,7 @@ reading state, body reordering and page-alias editing are excluded.
 
 ## Constitution Check
 
-*GATE: Passed before Phase 0 research and passed again after Phase 1 design.*
+_GATE: Passed before Phase 0 research and passed again after Phase 1 design._
 
 - **Authority & schemas — PASS**: Imported Markdown, registered originals and versioned
   `book.yaml` are authoritative. Draft source snapshots and config revisions are durable;
@@ -152,7 +152,6 @@ data/
 │   │   ├── originals/<file_id>
 │   │   ├── configs/<revision>/book.yaml
 │   │   └── previews/<revision>/{pages,assets,diagnostics}/
-│   ├── staging/<job_id>/
 │   ├── quarantine/<version_id>/
 │   └── versions/<version_id>/
 │       ├── version.json
@@ -161,6 +160,7 @@ data/
 │       ├── source/
 │       ├── originals/
 │       └── published/{pages,assets}/
+├── staging/<job_id>/
 └── tmp/uploads/<upload_id>.part
 ```
 

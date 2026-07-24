@@ -10,9 +10,11 @@ long and short queries under different scopes, load version-pinned resources and
 registered original ZIP. A public-to-private transition denies every new anonymous
 page/resource/search/download request without rebuilding or changing the current pointer.
 
-The representative several-hundred-page MinerU 3.4.4 ZIPs remain intentionally pending
-under D-088 until the administrator supplies them. This checkpoint does not claim final
-real-book compatibility, the 300 ms reading p95 or the one-second search p95.
+This story checkpoint originally preceded the administrator's real-fixture handoff. Final
+acceptance subsequently verified both registered MinerU 3.4.4 ZIPs, including the 441-page
+representative book, plus the synthetic stress book. The compatibility and latency evidence
+is recorded in `docs/audits/m1-performance-report.md`; the checkpoint measurements below
+remain the evidence captured when User Story 3 first completed.
 
 ## Automated evidence
 
