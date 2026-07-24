@@ -1,6 +1,20 @@
 import { resolve } from "node:path";
 
+import type Database from "better-sqlite3";
+
+import { createSetupAuth } from "../auth/setup-server.js";
+import { parseEnvironment } from "../config/environment.js";
+import { openDatabase } from "../db/connection.js";
+import { loadMigrationManifest } from "../db/migration-manifest.js";
+import {
+  acquireMaintenanceLock,
+  serviceIsRunning,
+} from "../storage/maintenance-lock.js";
+import { runAdminCli } from "./admin-cli.js";
+import { bootstrapAdministrator } from "./commands/admin-bootstrap.js";
+import { recoverAdministrator } from "./commands/admin-recover.js";
 import { runDatabaseMigrations } from "./commands/db-migrate.js";
+import { promptForAdministrator } from "./prompt.js";
 
 const usage = `Usage:
   pnpm db:migrate
@@ -9,6 +23,56 @@ const usage = `Usage:
 `;
 
 const [group, command] = process.argv.slice(2);
+
+async function assertMigrationsCurrent(
+  database: Database.Database,
+): Promise<void> {
+  const expected = await loadMigrationManifest();
+  const actual = database
+    .prepare("SELECT version, checksum FROM schema_migrations ORDER BY version")
+    .all() as { version: number; checksum: string }[];
+  if (
+    actual.length !== expected.length ||
+    expected.some(
+      (migration, index) =>
+        actual[index]?.version !== migration.version ||
+        actual[index]?.checksum !== migration.checksum,
+    )
+  ) {
+    throw new Error("DATABASE_MIGRATIONS_NOT_CURRENT");
+  }
+}
+
+async function withOfflineAdminContext(
+  dataDirectory: string,
+  operation: (input: {
+    readonly auth: ReturnType<typeof createSetupAuth>;
+    readonly database: Database.Database;
+  }) => Promise<void>,
+): Promise<void> {
+  const lock = await acquireMaintenanceLock(dataDirectory);
+  let database: Database.Database | undefined;
+  try {
+    const environment = parseEnvironment(
+      { ...process.env, MIRAWIND_DATA_DIR: dataDirectory },
+      {
+        mode:
+          process.env.NODE_ENV === "production" ? "production" : "development",
+      },
+    );
+    database = openDatabase(resolve(dataDirectory, "db", "mirawind.sqlite"), {
+      role: "worker",
+    });
+    await assertMigrationsCurrent(database);
+    await operation({
+      auth: createSetupAuth({ database, environment }),
+      database,
+    });
+  } finally {
+    database?.close();
+    await lock.release();
+  }
+}
 
 if (group === undefined || command === undefined) {
   process.stderr.write(usage);
@@ -32,12 +96,38 @@ if (group === undefined || command === undefined) {
       process.exitCode = 5;
     }
   }
+} else if (group === "admin" && ["bootstrap", "recover"].includes(command)) {
+  process.exitCode = await runAdminCli(process.argv.slice(2), {
+    async bootstrap(input) {
+      await withOfflineAdminContext(input.dataDirectory, async (context) => {
+        const result = await bootstrapAdministrator({
+          ...context,
+          displayName: input.displayName ?? "",
+          email: input.email ?? "",
+          nowMs: Date.now(),
+          password: input.password,
+        });
+        process.stdout.write(`Administrator ${result.userId} initialized.\n`);
+      });
+    },
+    input: process.stdin,
+    output: process.stderr,
+    prompt: promptForAdministrator,
+    async recover(input) {
+      await withOfflineAdminContext(input.dataDirectory, async (context) => {
+        const result = await recoverAdministrator({
+          ...context,
+          nowMs: Date.now(),
+          password: input.password,
+        });
+        process.stdout.write(
+          `Administrator ${result.userId} recovered; ${result.revokedSessions} sessions revoked and ${result.deletedPasskeys} Passkeys deleted.\n`,
+        );
+      });
+    },
+    serviceIsRunning,
+  });
 } else if (group !== "admin" || !["bootstrap", "recover"].includes(command)) {
   process.stderr.write(`Unsupported command.\n${usage}`);
   process.exitCode = 2;
-} else {
-  process.stderr.write(
-    `ADMIN_${command.toUpperCase()}_NOT_IMPLEMENTED: complete the foundational authentication tasks first.\n`,
-  );
-  process.exitCode = 3;
 }

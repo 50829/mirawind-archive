@@ -49,8 +49,20 @@ export async function runAdminCli(
   if (await dependencies.serviceIsRunning(dataDirectory)) return 3;
   if (!dependencies.prompt) return 2;
 
-  const answers = await dependencies.prompt(command);
+  let answers: AdminPromptResult;
+  try {
+    answers = await dependencies.prompt(command);
+  } catch {
+    return 4;
+  }
   if (!validateFallbackPassword(answers.password).valid) return 4;
+  if (command === "recover" && answers.confirmation !== true) return 3;
+  if (
+    command === "bootstrap" &&
+    (!answers.email?.trim() || !answers.displayName?.trim())
+  ) {
+    return 4;
+  }
 
   const mutation =
     command === "bootstrap" ? dependencies.bootstrap : dependencies.recover;
