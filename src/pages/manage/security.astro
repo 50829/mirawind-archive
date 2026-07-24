@@ -7,32 +7,30 @@ import {
   type ManagedPasskey,
 } from "@/components/auth/PasskeyManager";
 import { InstallationRepository } from "@/db/repositories/installation";
-import { cachePolicyFor } from "@/http/response-policy";
+import {
+  hiddenManagementPage,
+  redirectToAdministratorLogin,
+} from "@/http/authorization/manage-page";
+import { applyResponsePolicy } from "@/http/response-policy";
 
 export const prerender = false;
 
-Astro.response.headers.set("Cache-Control", cachePolicyFor("manage"));
-Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+// Astro's frontmatter checker does not count return expressions as symbol reads.
+void hiddenManagementPage;
+void redirectToAdministratorLogin;
+
+applyResponsePolicy(Astro.response.headers, "manage");
 
 const session = Astro.locals.session;
 if (!session) {
-  return new Response(null, {
-    headers: {
-      "Cache-Control": cachePolicyFor("manage"),
-      Location: `/login?next=${encodeURIComponent(Astro.url.pathname)}`,
-    },
-    status: 303,
-  });
+  return redirectToAdministratorLogin(Astro.url.pathname);
 }
 
 const adminUserId = new InstallationRepository(
   getRuntimeDatabase(),
 ).adminUserId();
 if (!adminUserId || session.user.id !== adminUserId) {
-  return new Response("Not found", {
-    headers: { "Cache-Control": "private, no-store" },
-    status: 404,
-  });
+  return hiddenManagementPage();
 }
 
 const passkeys = await getRuntimeAuth().api.listPasskeys({

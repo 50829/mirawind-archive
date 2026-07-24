@@ -66,7 +66,21 @@ describe("complete immutable version construction", () => {
         mode: 0o700,
         recursive: true,
       });
-      const markdown = '# Chapter\n\n![Pixel](images/pixel.png "Pixel")';
+      const markdown = [
+        "# Chapter",
+        "",
+        '![Pixel](images/pixel.png "Pixel")',
+        "",
+        "[External reference](https://example.test/reference)",
+        "",
+        "$$",
+        "\\notacommand{",
+        "$$",
+        "",
+        "```mineru-unknown",
+        "plain fallback",
+        "```",
+      ].join("\n");
       await writeFile(resolve(sourceRoot, "book.md"), markdown, {
         mode: 0o400,
       });
@@ -175,6 +189,12 @@ describe("complete immutable version construction", () => {
       expect(pageHtml).toContain('aria-label="本页提纲"');
       expect(pageHtml).toContain('role="search"');
       expect(pageHtml).toContain(`/books/${bookId}/assets/${versionId}/res_`);
+      expect(pageHtml).toContain(
+        'href="https://example.test/reference">External reference</a>',
+      );
+      expect(pageHtml).toContain("math-fallback");
+      expect(pageHtml).toContain("plain fallback");
+      expect(pageHtml).toContain('data-code-language="plain"');
       expect(pageHtml).not.toMatch(/<(?:canvas|iframe)\b/u);
 
       const finalPath = await finalizeImmutableVersion({

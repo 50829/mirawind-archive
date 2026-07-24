@@ -481,11 +481,9 @@ function assertPostRenderInvariants(tree: TreeNode): void {
         if (ids.has(id)) throw new Error("Duplicate rendered element ID");
         ids.add(id);
       }
-      for (const attribute of ["href", "src"]) {
-        const value = node.properties?.[attribute];
-        if (typeof value === "string" && /^(?:[a-z]+:)?\/\//iu.test(value)) {
-          throw new Error("External resource URL survived semantic rendering");
-        }
+      const source = node.properties?.src;
+      if (typeof source === "string" && /^(?:[a-z]+:)?\/\//iu.test(source)) {
+        throw new Error("External resource URL survived semantic rendering");
       }
     }
     for (const child of node.children ?? []) visit(child);

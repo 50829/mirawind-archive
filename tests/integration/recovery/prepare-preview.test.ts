@@ -128,7 +128,7 @@ describe("prepare_draft and build_preview handlers", () => {
           expect.objectContaining({
             display_level: 2,
             include_in_toc: true,
-            starts_page: false,
+            starts_page: true,
           }),
         ],
         title: "Prepared Book",
@@ -186,7 +186,7 @@ describe("prepare_draft and build_preview handlers", () => {
         config_revision: 1,
         headings: [
           { display_level: 1, role: "body", starts_page: true },
-          { display_level: 2, role: "body", starts_page: false },
+          { display_level: 2, role: "body", starts_page: true },
         ],
       });
     }));

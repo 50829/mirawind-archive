@@ -48,6 +48,14 @@ function safeErrorClass(
   return "content";
 }
 
+function safeErrorCode(error: unknown): string {
+  if (error instanceof SafeApplicationError) return error.code;
+  if (error instanceof Error && /^[A-Z][A-Z0-9_]{2,79}$/u.test(error.message)) {
+    return error.message;
+  }
+  return "JOB_HANDLER_FAILED";
+}
+
 async function execute(message: RunJobMessage): Promise<void> {
   try {
     const root = storageRoot();
@@ -290,10 +298,7 @@ async function execute(message: RunJobMessage): Promise<void> {
       ok: false,
       protocolVersion: jobChildProtocolVersion,
       safeErrorClass: safeErrorClass(error),
-      safeErrorCode:
-        error instanceof SafeApplicationError
-          ? error.code
-          : "JOB_HANDLER_FAILED",
+      safeErrorCode: safeErrorCode(error),
       type: "result",
     });
   }

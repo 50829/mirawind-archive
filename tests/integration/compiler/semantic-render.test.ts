@@ -209,4 +209,29 @@ describe("published semantic document rendering", () => {
       `href="/books/1/pages/2#${second.blockId}"`,
     );
   });
+
+  it("keeps safe external hyperlinks while removing executable URLs", async () => {
+    const document = normalized(
+      [
+        "# References",
+        "",
+        "[Safe reference](https://example.test/paper)",
+        "",
+        "[Unsafe reference](javascript:alert(1))",
+      ].join("\n"),
+    );
+    const rendered = await renderSemanticDocument({
+      document,
+      publishedResourceUrl: () => {
+        throw new Error("No resource expected");
+      },
+      resourceResolution: { diagnostics: [], references: [], resources: [] },
+    });
+
+    expect(rendered.html).toContain(
+      'href="https://example.test/paper">Safe reference</a>',
+    );
+    expect(rendered.html).toContain("Unsafe reference");
+    expect(rendered.html).not.toContain("javascript:");
+  });
 });

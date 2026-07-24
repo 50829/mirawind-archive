@@ -1,16 +1,22 @@
 ---
 import { TaskMonitor, type TaskView } from "@/components/import/TaskMonitor";
 import { JobRepository } from "@/db/repositories/jobs";
+import {
+  hiddenManagementPage,
+  redirectToAdministratorLogin,
+} from "@/http/authorization/manage-page";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { serializeJobStatus } from "@/services/job-status";
 
 export const prerender = false;
 
+// Astro's frontmatter checker does not count return expressions as symbol reads.
+void hiddenManagementPage;
+void redirectToAdministratorLogin;
+
 if (!Astro.locals.session) {
-  return Astro.redirect(
-    `/login?next=${encodeURIComponent(Astro.url.pathname)}`,
-  );
+  return redirectToAdministratorLogin(Astro.url.pathname);
 }
 
 let database;
@@ -19,10 +25,7 @@ try {
     hideExistence: true,
   }));
 } catch {
-  return new Response("Not found", {
-    headers: { "Cache-Control": "private, no-store" },
-    status: 404,
-  });
+  return hiddenManagementPage();
 }
 applyResponsePolicy(Astro.response.headers, "manage");
 const initialJobs = new JobRepository(database)

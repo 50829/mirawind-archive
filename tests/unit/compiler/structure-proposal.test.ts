@@ -5,7 +5,7 @@ import { parseMarkdownDocument } from "@/compiler/document/parser";
 import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
 
 describe("default document structure proposal", () => {
-  it("keeps heading order, closes level gaps and starts pages only at top-level headings", () => {
+  it("keeps heading order, closes level gaps and starts sections on pages when level two exists", () => {
     const normalized = normalizeDocumentBlocks(
       parseMarkdownDocument(
         [
@@ -37,12 +37,12 @@ describe("default document structure proposal", () => {
     ]);
     expect(proposal.nodes.map((node) => node.starts_page)).toEqual([
       true,
-      false,
-      false,
       true,
-      false,
       true,
-      false,
+      true,
+      true,
+      true,
+      true,
       true,
     ]);
     expect(proposal.nodes.map((node) => node.role)).toEqual([
@@ -67,5 +67,15 @@ describe("default document structure proposal", () => {
     proposeDocumentStructure(document);
 
     expect(JSON.stringify(document)).toBe(before);
+  });
+
+  it("keeps a chapter whole when there is no second-level heading", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument("# One\n\nText\n\n# Two\n\nText"),
+    );
+
+    expect(
+      proposeDocumentStructure(document).nodes.map((node) => node.starts_page),
+    ).toEqual([true, true]);
   });
 });

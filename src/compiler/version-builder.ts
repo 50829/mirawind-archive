@@ -32,6 +32,7 @@ import { inspectRasterImage } from "./resources/images.js";
 import { resolveDocumentResources } from "./resources/resolver.js";
 import { buildSearchSpool, writeSearchSpool } from "./search/build-spool.js";
 import { toIsoDateTime } from "../domain/time.js";
+import type { SafeDiagnostic } from "../domain/errors.js";
 import { parseBookConfigYaml } from "../schemas/book-config.js";
 import {
   validateDocumentManifest,
@@ -47,6 +48,23 @@ export interface VersionBuildArtifact {
   readonly manifestSha256: string;
   readonly versionDirectory: "version";
   readonly versionId: string;
+}
+
+const nonBlockingRenderDiagnosticCodes = new Set([
+  "CODE_LANGUAGE_UNSUPPORTED",
+  "MATH_RENDER_FAILED",
+]);
+
+function assertNonBlockingRenderDiagnostics(
+  diagnostics: readonly SafeDiagnostic[],
+): void {
+  if (
+    diagnostics.some(
+      (diagnostic) => !nonBlockingRenderDiagnosticCodes.has(diagnostic.code),
+    )
+  ) {
+    throw new Error("VERSION_RENDER_DIAGNOSTIC");
+  }
 }
 
 interface FileDescriptor {
@@ -367,9 +385,7 @@ export async function buildImmutableVersion(input: {
             `/books/${input.bookId}/assets/${input.versionId}/${resourceId}`,
           resourceResolution,
         });
-        if (rendered.diagnostics.length > 0) {
-          throw new Error("VERSION_RENDER_DIAGNOSTIC");
-        }
+        assertNonBlockingRenderDiagnostics(rendered.diagnostics);
         return { page, rendered };
       }),
     );

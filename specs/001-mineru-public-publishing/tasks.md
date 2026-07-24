@@ -277,12 +277,12 @@ continued availability of unrelated/current books.
 **Purpose**: Prove the integrated M1 against migration, security, performance,
 reproducibility, deployment and documentation gates.
 
-- [ ] T138 [P] Add generated OpenAPI/schema validation, operation-to-route coverage and response-header contract checks to `tests/contract/openapi-validation.test.ts`
-- [ ] T139 [P] Add a full cross-route authorization/cache matrix covering login, manage, errors, redirects, public/private HTML, assets, previews, APIs and downloads in `tests/integration/auth/full-route-matrix.test.ts`
-- [ ] T140 [P] Add dependency-version, linked-SQLite, FTS5, image-decoder and compiler-identity capture to `scripts/benchmarks/environment.ts`
-- [ ] T141 Implement production build/import benchmarks that record wall time, peak child memory, bytes/entries, output/index size and FTS build time for every registered real MinerU fixture plus the synthetic stress fixture in `scripts/benchmarks/build.ts`
-- [ ] T142 Implement production HTTP benchmarks for idle/concurrent-build read p50/p95/p99 and normal/short search p50/p95/p99 in `scripts/benchmarks/read.ts` and `scripts/benchmarks/search.ts`
-- [ ] T143 Require all administrator-supplied real fixture hashes, run each real and synthetic stress benchmark on the reference host, enforce read p95 <=300 ms and supported search p95 <1 s, and save raw/configured results in `docs/audits/m1-performance-report.md`
+- [x] T138 [P] Add generated OpenAPI/schema validation, operation-to-route coverage and response-header contract checks to `tests/contract/openapi-validation.test.ts`
+- [x] T139 [P] Add a full cross-route authorization/cache matrix covering login, manage, errors, redirects, public/private HTML, assets, previews, APIs and downloads in `tests/integration/auth/full-route-matrix.test.ts`
+- [x] T140 [P] Add dependency-version, linked-SQLite, FTS5, image-decoder and compiler-identity capture to `scripts/benchmarks/environment.ts`
+- [x] T141 Implement production build/import benchmarks that record wall time, peak child memory, bytes/entries, output/index size and FTS build time for every registered real MinerU fixture plus the synthetic stress fixture in `scripts/benchmarks/build.ts`
+- [x] T142 Implement production HTTP benchmarks for idle/concurrent-build read p50/p95/p99 and normal/short search p50/p95/p99 in `scripts/benchmarks/read.ts` and `scripts/benchmarks/search.ts`
+- [x] T143 Require all administrator-supplied real fixture hashes, run each real and synthetic stress benchmark on the reference host, enforce read p95 <=300 ms and supported search p95 <1 s, and save raw/configured results in `docs/audits/m1-performance-report.md`
 - [ ] T144 Exercise every migration and complete recovery against a disposable copy of representative persistent data and record backup/restore evidence in `docs/audits/m1-migration-recovery-report.md`
 - [ ] T145 [P] Harden container permissions, read-only application filesystem, writable data volume, Caddy security headers, process-group shutdown and non-root health checks in `docker/Dockerfile`, `docker/compose.yaml`, and `docker/Caddyfile`
 - [ ] T146 [P] Document install, migration, bootstrap/recovery, Web/worker lifecycle, storage layout, monitoring, quarantine and incident procedures in `README.md`, `docs/operations/deployment.md`, and `docs/operations/recovery.md`

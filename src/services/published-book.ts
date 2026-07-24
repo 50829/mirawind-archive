@@ -18,6 +18,7 @@ interface CurrentBookRow {
   alias: string | null;
   current_version_id: string | null;
   id: number;
+  manifest_sha256: string | null;
   renderer_version: string | null;
   state: VersionState | null;
   title_cache: string;
@@ -26,6 +27,7 @@ interface CurrentBookRow {
 }
 
 interface VersionAssetRow extends CurrentBookRow {
+  requested_manifest_sha256: string | null;
   requested_state: VersionState | null;
   requested_version_rel_path: string | null;
 }
@@ -64,6 +66,7 @@ export interface ResolvedPublishedBook {
   readonly audience: "administrator" | "anonymous";
   readonly bookId: number;
   readonly rendererVersion: string;
+  readonly manifestSha256: string;
   readonly title: string;
   readonly versionId: string;
   readonly versionRelativePath: string;
@@ -96,6 +99,62 @@ export interface ResolvedOriginalFile extends ResolvedPublishedBook {
 
 const bookAliasPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const pageAliasPattern = bookAliasPattern;
+const maximumCachedManifestBytes = 64 * 1024 * 1024;
+const maximumCachedManifests = 16;
+const manifestCache = new Map<
+  string,
+  {
+    readonly bytes: number;
+    readonly manifest: ReaderManifest;
+  }
+>();
+let cachedManifestBytes = 0;
+
+function manifestCacheKey(
+  layout: StorageLayout,
+  versionId: string,
+  manifestSha256: string,
+): string {
+  return `${layout.root}\0${versionId}\0${manifestSha256}`;
+}
+
+function cachedManifest(key: string): ReaderManifest | null {
+  const cached = manifestCache.get(key);
+  if (!cached) return null;
+  manifestCache.delete(key);
+  manifestCache.set(key, cached);
+  return cached.manifest;
+}
+
+function cacheManifest(
+  key: string,
+  manifest: ReaderManifest,
+  bytes: number,
+): void {
+  if (bytes > maximumCachedManifestBytes) return;
+  const existing = manifestCache.get(key);
+  if (existing) {
+    cachedManifestBytes -= existing.bytes;
+    manifestCache.delete(key);
+  }
+  manifestCache.set(key, { bytes, manifest });
+  cachedManifestBytes += bytes;
+  while (
+    manifestCache.size > maximumCachedManifests ||
+    cachedManifestBytes > maximumCachedManifestBytes
+  ) {
+    const oldestKey = manifestCache.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    const oldest = manifestCache.get(oldestKey);
+    manifestCache.delete(oldestKey);
+    cachedManifestBytes -= oldest?.bytes ?? 0;
+  }
+}
+
+export function resetPublishedManifestCacheForTests(): void {
+  manifestCache.clear();
+  cachedManifestBytes = 0;
+}
 
 function hidden(): never {
   throw new SafeApplicationError(
@@ -139,6 +198,7 @@ function mapCurrent(
   if (
     !row.current_version_id ||
     !row.version_rel_path ||
+    !row.manifest_sha256 ||
     !row.renderer_version ||
     row.state !== "published"
   ) {
@@ -151,6 +211,7 @@ function mapCurrent(
     alias: row.alias,
     audience: access.audience,
     bookId: row.id,
+    manifestSha256: row.manifest_sha256,
     rendererVersion: row.renderer_version,
     title: row.title_cache,
     versionId: row.current_version_id,
@@ -162,7 +223,8 @@ function mapCurrent(
 function currentSelect(predicate: string): string {
   return `SELECT books.id, books.alias, books.visibility, books.title_cache,
                  books.current_version_id, book_versions.state,
-                 book_versions.version_rel_path, book_versions.renderer_version
+                 book_versions.version_rel_path, book_versions.renderer_version,
+                 book_versions.manifest_sha256
           FROM books
           LEFT JOIN book_versions
             ON book_versions.id = books.current_version_id
@@ -177,23 +239,29 @@ async function readManifest(
   book: ResolvedPublishedBook,
   versionRelativePath = book.versionRelativePath,
   versionId = book.versionId,
+  manifestSha256 = book.manifestSha256,
 ): Promise<ReaderManifest> {
+  const cacheKey = manifestCacheKey(layout, versionId, manifestSha256);
+  const cached = cachedManifest(cacheKey);
+  if (cached) return cached;
   const path = await resolveContainedPath(
     layout.root,
     `${versionRelativePath}/document-manifest.json`,
   );
   let parsed: unknown;
   try {
-    parsed = JSON.parse(await readFile(path, "utf8"));
+    const json = await readFile(path, "utf8");
+    parsed = JSON.parse(json);
     validateDocumentManifest(parsed);
+    const manifest = parsed as ReaderManifest;
+    if (manifest.book_id !== book.bookId || manifest.version_id !== versionId) {
+      return unavailable();
+    }
+    cacheManifest(cacheKey, manifest, Buffer.byteLength(json, "utf8"));
+    return manifest;
   } catch {
     return unavailable();
   }
-  const manifest = parsed as ReaderManifest;
-  if (manifest.book_id !== book.bookId || manifest.version_id !== versionId) {
-    return unavailable();
-  }
-  return manifest;
 }
 
 export class PublishedBookService {
@@ -264,8 +332,10 @@ export class PublishedBookService {
                 books.current_version_id, current_version.state,
                 current_version.version_rel_path,
                 current_version.renderer_version,
+                current_version.manifest_sha256,
                 requested_version.state AS requested_state,
-                requested_version.version_rel_path AS requested_version_rel_path
+                requested_version.version_rel_path AS requested_version_rel_path,
+                requested_version.manifest_sha256 AS requested_manifest_sha256
          FROM books
          LEFT JOIN book_versions AS current_version
            ON current_version.id = books.current_version_id
@@ -287,12 +357,19 @@ export class PublishedBookService {
       ...(row.requested_state ? { versionState: row.requested_state } : {}),
       visibility: row.visibility,
     });
-    if (!access.allowed || !row.requested_version_rel_path) return hidden();
+    if (
+      !access.allowed ||
+      !row.requested_version_rel_path ||
+      !row.requested_manifest_sha256
+    ) {
+      return hidden();
+    }
     const manifest = await readManifest(
       this.layout,
       book,
       row.requested_version_rel_path,
       input.versionId,
+      row.requested_manifest_sha256,
     );
     const resource = manifest.resources[input.resourceId];
     if (!resource) return hidden();
@@ -320,6 +397,7 @@ export class PublishedBookService {
         `SELECT books.id, books.alias, books.visibility, books.title_cache,
                 books.current_version_id, book_versions.state,
                 book_versions.version_rel_path, book_versions.renderer_version,
+                book_versions.manifest_sha256,
                 original_files.id AS file_id, original_files.original_name,
                 original_files.media_type, original_files.size_bytes,
                 original_files.sha256

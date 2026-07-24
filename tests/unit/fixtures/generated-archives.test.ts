@@ -48,7 +48,7 @@ describe("deterministic generated archives", () => {
         "stress-result/full.md",
         "stress-result/content_list.json",
         "stress-result/layout.json",
-        "stress-result/images/image-003.svg",
+        "stress-result/images/image-003.png",
       ]),
     );
     expect(() =>

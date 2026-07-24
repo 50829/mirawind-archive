@@ -1,21 +1,19 @@
 ---
 import { LoginPanel } from "@/components/auth/LoginPanel";
-import { cachePolicyFor } from "@/http/response-policy";
+import { applyResponsePolicy } from "@/http/response-policy";
 
 export const prerender = false;
 
 if (Astro.locals.session) {
+  const headers = new Headers({ Location: "/manage" });
+  applyResponsePolicy(headers, "login");
   return new Response(null, {
-    headers: {
-      "Cache-Control": cachePolicyFor("login"),
-      Location: "/manage",
-    },
+    headers,
     status: 303,
   });
 }
 
-Astro.response.headers.set("Cache-Control", cachePolicyFor("login"));
-Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+applyResponsePolicy(Astro.response.headers, "login");
 
 const requestedNext = Astro.url.searchParams.get("next") ?? undefined;
 const nextPath =

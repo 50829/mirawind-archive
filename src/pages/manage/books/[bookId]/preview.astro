@@ -1,30 +1,22 @@
 ---
 import { StructurePreview } from "@/components/preview/StructurePreview";
+import { hiddenManagementPage } from "@/http/authorization/manage-page";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 
 export const prerender = false;
 
+// Astro's frontmatter checker does not count return expressions as symbol reads.
+void hiddenManagementPage;
+
 try {
   requireRuntimeAdministrator(Astro.locals.session, { hideExistence: true });
 } catch {
-  return new Response("Not found", {
-    headers: {
-      "Cache-Control": "no-store",
-      "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
-    },
-    status: 404,
-  });
+  return hiddenManagementPage();
 }
 const bookId = Number(Astro.params.bookId);
 if (!Number.isSafeInteger(bookId) || bookId < 1) {
-  return new Response("Not found", {
-    headers: {
-      "Cache-Control": "no-store",
-      "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
-    },
-    status: 404,
-  });
+  return hiddenManagementPage();
 }
 applyResponsePolicy(Astro.response.headers, "manage");
 ---

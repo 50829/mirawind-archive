@@ -1,0 +1,741 @@
+{
+  "build": {
+    "captured_at": "2026-07-24T20:13:45.918Z",
+    "real_fixture_gate": "required_and_verified",
+    "retained_data": true,
+    "results": [
+      {
+        "archive": {
+          "compressed_bytes": 97506068,
+          "entries": 1066,
+          "extracted_bytes": 144260277,
+          "files": 1064,
+          "sha256": "b309a572298b8f6f5d01c1d809c7391cba86e557a737fe5f84e7eef8acaf8f37"
+        },
+        "compiler_output": {
+          "blocks": 4425,
+          "bytes": 266552774,
+          "files": 1496,
+          "pages": 260,
+          "resources": 166
+        },
+        "database": {
+          "file_bytes": 311296,
+          "index_storage_bytes": 5611520,
+          "wal_bytes": 6629112
+        },
+        "fixture_id": "real-mineru-b309a572298b",
+        "fixture_type": "real",
+        "fts": {
+          "build_ms": 131.741,
+          "rows": 4069,
+          "short_rows": 261,
+          "spool_bytes": 1924839
+        },
+        "memory": {
+          "peak_process_tree_rss_bytes": 1031426048,
+          "sample_interval_ms": 25,
+          "samples": 878
+        },
+        "mineru_version": "3.4.4",
+        "page_count_range": {
+          "maximum": 441,
+          "minimum": 441
+        },
+        "phases": {
+          "analyze_import:1": {
+            "duration_ms": 3655,
+            "state": "succeeded"
+          },
+          "prepare_draft:1": {
+            "duration_ms": 5874,
+            "state": "succeeded"
+          },
+          "build_preview:1": {
+            "duration_ms": 3953,
+            "state": "succeeded"
+          },
+          "build_publish:1": {
+            "duration_ms": 6472,
+            "state": "succeeded"
+          }
+        },
+        "status": "passed",
+        "timings": {
+          "upload_ms": 137.401,
+          "wall_ms": 22655.411
+        },
+        "version_id": "ver_TIQZJZybP3aCKlRjs59se2WO"
+      },
+      {
+        "archive": {
+          "compressed_bytes": 2676379,
+          "entries": 10,
+          "extracted_bytes": 11170052,
+          "files": 8,
+          "sha256": "e80477ff22ac436d996507f342d67831222e82ed4b2e09848c47ae0c407c869b"
+        },
+        "compiler_output": {
+          "blocks": 318,
+          "bytes": 14983420,
+          "files": 35,
+          "pages": 20,
+          "resources": 1
+        },
+        "database": {
+          "file_bytes": 311296,
+          "index_storage_bytes": 1191936,
+          "wal_bytes": 1899352
+        },
+        "fixture_id": "real-mineru-e80477ff22ac",
+        "fixture_type": "real",
+        "fts": {
+          "build_ms": 31.664,
+          "rows": 316,
+          "short_rows": 21,
+          "spool_bytes": 316351
+        },
+        "memory": {
+          "peak_process_tree_rss_bytes": 298708992,
+          "sample_interval_ms": 25,
+          "samples": 147
+        },
+        "mineru_version": "3.4.4",
+        "page_count_range": {
+          "maximum": 97,
+          "minimum": 97
+        },
+        "phases": {
+          "analyze_import:1": {
+            "duration_ms": 461,
+            "state": "succeeded"
+          },
+          "prepare_draft:1": {
+            "duration_ms": 528,
+            "state": "succeeded"
+          },
+          "build_preview:1": {
+            "duration_ms": 402,
+            "state": "succeeded"
+          },
+          "build_publish:1": {
+            "duration_ms": 548,
+            "state": "succeeded"
+          }
+        },
+        "status": "passed",
+        "timings": {
+          "upload_ms": 12.413,
+          "wall_ms": 3806.886
+        },
+        "version_id": "ver_T3TJOLHdRSlzxDGtqd-Cm9r9"
+      },
+      {
+        "archive": {
+          "compressed_bytes": 154454,
+          "entries": 35,
+          "extracted_bytes": 1368465,
+          "files": 35,
+          "sha256": "8db7785dbc88f127cd2088f9c436e42a29f64daa75d531af9aa42e31bc4b6152"
+        },
+        "compiler_output": {
+          "blocks": 12002,
+          "bytes": 36594542,
+          "files": 574,
+          "pages": 501,
+          "resources": 32
+        },
+        "database": {
+          "file_bytes": 311296,
+          "index_storage_bytes": 11886592,
+          "wal_bytes": 13068672
+        },
+        "fixture_id": "synthetic-stress-v1",
+        "fixture_type": "synthetic",
+        "fts": {
+          "build_ms": 211.419,
+          "rows": 12002,
+          "short_rows": 502,
+          "spool_bytes": 4592480
+        },
+        "memory": {
+          "peak_process_tree_rss_bytes": 719667200,
+          "sample_interval_ms": 25,
+          "samples": 456
+        },
+        "mineru_version": "synthetic",
+        "page_count_range": {
+          "maximum": 500,
+          "minimum": 500
+        },
+        "phases": {
+          "analyze_import:1": {
+            "duration_ms": 815,
+            "state": "succeeded"
+          },
+          "prepare_draft:1": {
+            "duration_ms": 1318,
+            "state": "succeeded"
+          },
+          "build_preview:1": {
+            "duration_ms": 1890,
+            "state": "succeeded"
+          },
+          "build_publish:1": {
+            "duration_ms": 5392,
+            "state": "succeeded"
+          }
+        },
+        "status": "passed",
+        "timings": {
+          "upload_ms": 4.637,
+          "wall_ms": 11757.758
+        },
+        "version_id": "ver_7d4uumBMzYf9LH0P6neJD4Fo"
+      }
+    ],
+    "schema_version": 1,
+    "status": "passed",
+    "stress_configuration": {
+      "blocks_per_page": 20,
+      "image_count": 32,
+      "pages": 500
+    }
+  },
+  "captured_at": "2026-07-24T20:14:08.886Z",
+  "configuration": {
+    "concurrency": 8,
+    "concurrent_requests": 500,
+    "requests": 200,
+    "search_query_storage": "sha256_and_code_point_count_only",
+    "stress": {
+      "blocks_per_page": 20,
+      "image_count": 32,
+      "pages": 500
+    }
+  },
+  "environment": {
+    "captured_at": "2026-07-24T20:13:07.400Z",
+    "compiler_identity": {
+      "name": "mirawind-book-compiler",
+      "renderer_version": "semantic-html-v1",
+      "text_normalization_version": 1,
+      "version": "compiler-v1"
+    },
+    "dependencies": {
+      "production": {
+        "@astrojs/markdown-remark": "7.2.1",
+        "@astrojs/node": "11.0.2",
+        "@astrojs/react": "6.0.1",
+        "@better-auth/passkey": "1.6.25",
+        "@fastify/busboy": "3.2.0",
+        "@inquirer/prompts": "8.5.2",
+        "@shikijs/transformers": "4.3.1",
+        "@zip.js/zip.js": "2.8.34",
+        "ajv": "8.20.0",
+        "ajv-formats": "3.0.1",
+        "astro": "7.1.3",
+        "better-auth": "1.6.25",
+        "better-sqlite3": "12.11.1",
+        "katex": "0.18.1",
+        "pino": "10.3.1",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "rehype-katex": "7.0.1",
+        "rehype-raw": "7.0.0",
+        "rehype-sanitize": "6.0.0",
+        "rehype-stringify": "10.0.1",
+        "remark-gfm": "4.0.1",
+        "remark-math": "6.0.0",
+        "remark-parse": "11.0.0",
+        "remark-rehype": "11.1.2",
+        "sharp": "0.35.3",
+        "shiki": "4.3.1",
+        "unified": "11.0.5",
+        "yaml": "2.9.0"
+      },
+      "development": {
+        "@apidevtools/swagger-parser": "12.1.0",
+        "@astrojs/check": "0.9.9",
+        "@commitlint/cli": "21.2.1",
+        "@commitlint/config-conventional": "21.2.0",
+        "@eslint/js": "10.0.1",
+        "@playwright/test": "1.61.1",
+        "@testing-library/dom": "10.4.1",
+        "@testing-library/react": "16.3.2",
+        "@testing-library/user-event": "14.6.1",
+        "@types/better-sqlite3": "7.6.13",
+        "@types/katex": "0.16.8",
+        "@types/node": "24.13.3",
+        "@types/react": "19.2.17",
+        "@types/react-dom": "19.2.3",
+        "@vitest/coverage-v8": "4.1.10",
+        "eslint": "10.7.0",
+        "eslint-plugin-astro": "3.0.1",
+        "eslint-plugin-jsx-a11y": "6.10.2",
+        "eslint-plugin-react-hooks": "7.1.1",
+        "eslint-plugin-react-refresh": "0.5.3",
+        "globals": "17.7.0",
+        "happy-dom": "20.11.1",
+        "prettier": "3.9.6",
+        "prettier-plugin-astro": "0.14.1",
+        "tsx": "4.23.1",
+        "typescript": "6.0.3",
+        "typescript-eslint": "8.65.0",
+        "vite": "8.1.5",
+        "vitest": "4.1.10"
+      }
+    },
+    "host": {
+      "architecture": "x64",
+      "cpu_count": 18,
+      "cpu_models": ["Intel(R) Core(TM) Ultra 5 125H"],
+      "memory_bytes": 32695050240,
+      "platform": "linux",
+      "release": "7.0.0-28-generic"
+    },
+    "image_decoder": {
+      "formats": {
+        "input": [
+          "gif",
+          "heif",
+          "jpeg",
+          "png",
+          "raw",
+          "svg",
+          "tiff",
+          "vips",
+          "webp"
+        ],
+        "output": [
+          "dz",
+          "gif",
+          "heif",
+          "jpeg",
+          "png",
+          "raw",
+          "tiff",
+          "vips",
+          "webp"
+        ]
+      },
+      "versions": {
+        "aom": "3.14.1",
+        "archive": "3.8.8",
+        "cairo": "1.18.4",
+        "cgif": "0.5.3",
+        "exif": "0.6.26",
+        "expat": "2.8.2",
+        "ffi": "3.6.0",
+        "fontconfig": "2.18.1",
+        "freetype": "2.14.3",
+        "fribidi": "1.0.16",
+        "glib": "2.89.1",
+        "harfbuzz": "14.2.1",
+        "heif": "1.23.1",
+        "highway": "1.4.0",
+        "imagequant": "2.4.1",
+        "lcms": "2.19.1",
+        "mozjpeg": "0826579",
+        "pango": "1.58.0",
+        "pixman": "0.46.4",
+        "png": "1.6.58",
+        "proxy-libintl": "0.5",
+        "rsvg": "2.62.90",
+        "sharp": "0.35.3",
+        "tiff": "d01a94b",
+        "uhdr": "1acdbed",
+        "vips": "8.18.3",
+        "webp": "1.6.0",
+        "xml2": "2.15.3",
+        "zlib-ng": "2.3.3"
+      }
+    },
+    "package": {
+      "engines": {
+        "node": "24.x",
+        "pnpm": "11.9.0"
+      },
+      "lockfile_sha256": "a636e4c3975105855c233a1dfd206a829a0723a0791f4cac2e4b705ed03bd8fd",
+      "package_json_sha256": "e9ccac296f6c9962bebce9ad3faf94065679088e3a75b080266c389f4d639259",
+      "package_manager": "pnpm@11.9.0",
+      "version": "0.0.0"
+    },
+    "runtime": {
+      "node": "v24.15.0",
+      "versions": {
+        "acorn": "8.16.0",
+        "ada": "3.4.4",
+        "amaro": "1.1.8",
+        "ares": "1.34.6",
+        "brotli": "1.2.0",
+        "cldr": "48.0",
+        "icu": "78.2",
+        "llhttp": "9.3.1",
+        "merve": "1.2.2",
+        "modules": "137",
+        "napi": "10",
+        "nbytes": "0.1.3",
+        "ncrypto": "0.0.1",
+        "nghttp2": "1.68.0",
+        "node": "24.15.0",
+        "openssl": "3.5.5",
+        "simdjson": "4.5.0",
+        "simdutf": "6.4.0",
+        "sqlite": "3.51.3",
+        "tz": "2026a",
+        "undici": "7.24.4",
+        "unicode": "17.0",
+        "uv": "1.51.0",
+        "uvwasi": "0.0.23",
+        "v8": "13.6.233.17-node.48",
+        "zlib": "1.3.1-e00f703",
+        "zstd": "1.5.7"
+      }
+    },
+    "schema_version": 1,
+    "sqlite": {
+      "compile_options": [
+        "ATOMIC_INTRINSICS=1",
+        "COMPILER=gcc-10.2.1 20210110",
+        "DEFAULT_AUTOVACUUM",
+        "DEFAULT_CACHE_SIZE=-16000",
+        "DEFAULT_FILE_FORMAT=4",
+        "DEFAULT_FOREIGN_KEYS",
+        "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+        "DEFAULT_MEMSTATUS=0",
+        "DEFAULT_MMAP_SIZE=0",
+        "DEFAULT_PAGE_SIZE=4096",
+        "DEFAULT_PCACHE_INITSZ=20",
+        "DEFAULT_RECURSIVE_TRIGGERS",
+        "DEFAULT_SECTOR_SIZE=4096",
+        "DEFAULT_SYNCHRONOUS=2",
+        "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+        "DEFAULT_WAL_SYNCHRONOUS=1",
+        "DEFAULT_WORKER_THREADS=0",
+        "DIRECT_OVERFLOW_READ",
+        "DQS=0",
+        "ENABLE_COLUMN_METADATA",
+        "ENABLE_DBSTAT_VTAB",
+        "ENABLE_FTS3",
+        "ENABLE_FTS3_PARENTHESIS",
+        "ENABLE_FTS4",
+        "ENABLE_FTS5",
+        "ENABLE_GEOPOLY",
+        "ENABLE_MATH_FUNCTIONS",
+        "ENABLE_PERCENTILE",
+        "ENABLE_RTREE",
+        "ENABLE_STAT4",
+        "ENABLE_UPDATE_DELETE_LIMIT",
+        "LIKE_DOESNT_MATCH_BLOBS",
+        "MALLOC_SOFT_LIMIT=1024",
+        "MAX_ATTACHED=10",
+        "MAX_COLUMN=2000",
+        "MAX_COMPOUND_SELECT=500",
+        "MAX_DEFAULT_PAGE_SIZE=8192",
+        "MAX_EXPR_DEPTH=1000",
+        "MAX_FUNCTION_ARG=1000",
+        "MAX_LENGTH=1000000000",
+        "MAX_LIKE_PATTERN_LENGTH=50000",
+        "MAX_MMAP_SIZE=0x7fff0000",
+        "MAX_PAGE_COUNT=0xfffffffe",
+        "MAX_PAGE_SIZE=65536",
+        "MAX_SQL_LENGTH=1000000000",
+        "MAX_TRIGGER_DEPTH=1000",
+        "MAX_VARIABLE_NUMBER=32766",
+        "MAX_VDBE_OP=250000000",
+        "MAX_WORKER_THREADS=8",
+        "MUTEX_PTHREADS",
+        "OMIT_DEPRECATED",
+        "OMIT_PROGRESS_CALLBACK",
+        "OMIT_SHARED_CACHE",
+        "OMIT_TCL_VARIABLE",
+        "SOUNDEX",
+        "SYSTEM_MALLOC",
+        "TEMP_STORE=1",
+        "THREADSAFE=2",
+        "USE_URI"
+      ],
+      "fts5": true,
+      "journal_mode": "wal",
+      "linked_version": "3.53.2",
+      "minimum_version": "3.51.3",
+      "source_id": "2026-06-03 19:12:13 d6e03d8c777cfa2d35e3b60d8ec3e0187f3e9f99d8e2ee9cac695fd6fcdf1a24",
+      "trigram": true
+    }
+  },
+  "http_results": [
+    {
+      "fixture_id": "real-mineru-b309a572298b",
+      "concurrent_build_read": {
+        "concurrency": 8,
+        "mode": "concurrent-build",
+        "observed_running_build": true,
+        "requests": 500,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 500,
+          "maximum_ms": 16.048,
+          "mean_ms": 5.288,
+          "minimum_ms": 2.588,
+          "p50_ms": 4.2,
+          "p95_ms": 11.058,
+          "p99_ms": 14.589
+        },
+        "target_p95_ms": 300,
+        "warmups": 0
+      },
+      "idle_read": {
+        "concurrency": 8,
+        "mode": "idle",
+        "observed_running_build": false,
+        "requests": 200,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 200,
+          "maximum_ms": 17.961,
+          "mean_ms": 7.571,
+          "minimum_ms": 2.788,
+          "p50_ms": 6.145,
+          "p95_ms": 14.689,
+          "p99_ms": 16.794
+        },
+        "target_p95_ms": 300,
+        "warmups": 20
+      },
+      "publication": {
+        "foreground_requests_succeeded": true,
+        "pointer_advanced_after_build": true,
+        "version_before": "ver_TIQZJZybP3aCKlRjs59se2WO",
+        "version_after": "ver_nTsge6OBgsoCK2ITC1YkPAj7"
+      },
+      "search": {
+        "book_key": "1",
+        "concurrency": 8,
+        "normal": {
+          "query_code_points": 7,
+          "query_sha256": "35bc8047ebce89eac99b056d6e5a92b0b039589b978f5b56a9e9079c31a65216",
+          "scope": "metadata_heading_body",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 38.063,
+            "mean_ms": 15.981,
+            "minimum_ms": 2.941,
+            "p50_ms": 16.574,
+            "p95_ms": 21.218,
+            "p99_ms": 22.34
+          },
+          "target_p95_ms": 1000
+        },
+        "requests_per_branch": 200,
+        "schema_version": 1,
+        "short": {
+          "query_code_points": 1,
+          "query_sha256": "08f271887ce94707da822d5263bae19d5519cb3614e0daedc4c7ce5dab7473f1",
+          "scope": "metadata_heading_only",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 58.318,
+            "mean_ms": 16.9,
+            "minimum_ms": 7.287,
+            "p50_ms": 16.807,
+            "p95_ms": 22.263,
+            "p99_ms": 40.518
+          },
+          "target_p95_ms": 1000
+        },
+        "status": "passed",
+        "warmups_per_branch": 20
+      },
+      "status": "passed"
+    },
+    {
+      "fixture_id": "real-mineru-e80477ff22ac",
+      "concurrent_build_read": {
+        "concurrency": 8,
+        "mode": "concurrent-build",
+        "observed_running_build": true,
+        "requests": 500,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 500,
+          "maximum_ms": 10.307,
+          "mean_ms": 3.681,
+          "minimum_ms": 1.84,
+          "p50_ms": 3.416,
+          "p95_ms": 4.93,
+          "p99_ms": 10.005
+        },
+        "target_p95_ms": 300,
+        "warmups": 0
+      },
+      "idle_read": {
+        "concurrency": 8,
+        "mode": "idle",
+        "observed_running_build": false,
+        "requests": 200,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 200,
+          "maximum_ms": 9.991,
+          "mean_ms": 4.864,
+          "minimum_ms": 2.231,
+          "p50_ms": 4.725,
+          "p95_ms": 6.911,
+          "p99_ms": 9.488
+        },
+        "target_p95_ms": 300,
+        "warmups": 20
+      },
+      "publication": {
+        "foreground_requests_succeeded": true,
+        "pointer_advanced_after_build": true,
+        "version_before": "ver_T3TJOLHdRSlzxDGtqd-Cm9r9",
+        "version_after": "ver_9ldkXFx9YdKI08zMPMjNaBJw"
+      },
+      "search": {
+        "book_key": "1",
+        "concurrency": 8,
+        "normal": {
+          "query_code_points": 4,
+          "query_sha256": "f8d64a31eb7d864da9252b7e5dd2659229cf1a3c4bf9d6d544c0318c81e13cff",
+          "scope": "metadata_heading_body",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 35.951,
+            "mean_ms": 9.26,
+            "minimum_ms": 2.021,
+            "p50_ms": 9.152,
+            "p95_ms": 14.917,
+            "p99_ms": 25.822
+          },
+          "target_p95_ms": 1000
+        },
+        "requests_per_branch": 200,
+        "schema_version": 1,
+        "short": {
+          "query_code_points": 1,
+          "query_sha256": "ef2635e773789722621b09a9196758832009f88086d5256e678c604111d4cece",
+          "scope": "metadata_heading_only",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 31.724,
+            "mean_ms": 9.593,
+            "minimum_ms": 2.923,
+            "p50_ms": 9.177,
+            "p95_ms": 15.689,
+            "p99_ms": 23.194
+          },
+          "target_p95_ms": 1000
+        },
+        "status": "passed",
+        "warmups_per_branch": 20
+      },
+      "status": "passed"
+    },
+    {
+      "fixture_id": "synthetic-stress-v1",
+      "concurrent_build_read": {
+        "concurrency": 8,
+        "mode": "concurrent-build",
+        "observed_running_build": true,
+        "requests": 500,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 500,
+          "maximum_ms": 16.902,
+          "mean_ms": 4.849,
+          "minimum_ms": 2,
+          "p50_ms": 4.217,
+          "p95_ms": 8.879,
+          "p99_ms": 16.288
+        },
+        "target_p95_ms": 300,
+        "warmups": 0
+      },
+      "idle_read": {
+        "concurrency": 8,
+        "mode": "idle",
+        "observed_running_build": false,
+        "requests": 200,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 200,
+          "maximum_ms": 14.844,
+          "mean_ms": 6.267,
+          "minimum_ms": 2.532,
+          "p50_ms": 5.85,
+          "p95_ms": 9.616,
+          "p99_ms": 14.51
+        },
+        "target_p95_ms": 300,
+        "warmups": 20
+      },
+      "publication": {
+        "foreground_requests_succeeded": true,
+        "pointer_advanced_after_build": true,
+        "version_before": "ver_7d4uumBMzYf9LH0P6neJD4Fo",
+        "version_after": "ver_S3fejQmSGbti-8sSOHUv9lSX"
+      },
+      "search": {
+        "book_key": "1",
+        "concurrency": 8,
+        "normal": {
+          "query_code_points": 4,
+          "query_sha256": "86e1de74820a9b252ba33b2eed445b0cd02c445b5f4b8007205aff1762d7301a",
+          "scope": "metadata_heading_body",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 38.921,
+            "mean_ms": 27.761,
+            "minimum_ms": 4.036,
+            "p50_ms": 28.09,
+            "p95_ms": 34.146,
+            "p99_ms": 38.503
+          },
+          "target_p95_ms": 1000
+        },
+        "requests_per_branch": 200,
+        "schema_version": 1,
+        "short": {
+          "query_code_points": 1,
+          "query_sha256": "08f271887ce94707da822d5263bae19d5519cb3614e0daedc4c7ce5dab7473f1",
+          "scope": "metadata_heading_only",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 54.596,
+            "mean_ms": 28.333,
+            "minimum_ms": 8.654,
+            "p50_ms": 28.006,
+            "p95_ms": 34.258,
+            "p99_ms": 37.403
+          },
+          "target_p95_ms": 1000
+        },
+        "status": "passed",
+        "warmups_per_branch": 20
+      },
+      "status": "passed"
+    }
+  ],
+  "schema_version": 1,
+  "status": "passed"
+}

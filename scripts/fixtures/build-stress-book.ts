@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 
 import { buildZip, type ZipEntryInput } from "./zip-builder.js";
 
+const stressPixelPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
+
 export interface StressBookOptions {
   readonly blocksPerPage: number;
   readonly imageCount: number;
@@ -76,7 +81,7 @@ export function buildStressBook(options: StressBookOptions): {
     if (imageCount > 0) {
       const image = (page - 1) % imageCount;
       markdown.push(
-        `![Synthetic stress image ${image}](images/image-${image.toString().padStart(3, "0")}.svg)`,
+        `![Synthetic stress image ${image}](images/image-${image.toString().padStart(3, "0")}.png)`,
         "",
       );
     }
@@ -109,11 +114,10 @@ export function buildStressBook(options: StressBookOptions): {
     },
   ];
   for (let image = 0; image < imageCount; image += 1) {
-    const color = token(image, image).slice(0, 6);
     entries.push({
-      data: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="#${color}"/><text x="8" y="68">image-${image}</text></svg>\n`,
+      data: stressPixelPng,
       method: 8,
-      name: `stress-result/images/image-${image.toString().padStart(3, "0")}.svg`,
+      name: `stress-result/images/image-${image.toString().padStart(3, "0")}.png`,
     });
   }
   const bytes = buildZip({ entries });

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 
 import type Database from "better-sqlite3";
@@ -79,17 +79,17 @@ export async function finalizeBuiltPublication(input: {
       await readFile(resolve(finalDirectory, "document-manifest.json"), "utf8"),
     ),
   );
-  const spool = parseSearchSpool(
-    await readFile(
-      resolve(finalDirectory, "derived", "search-spool.json"),
-      "utf8",
-    ),
+  const spoolJson = await readFile(
+    resolve(finalDirectory, "derived", "search-spool.json"),
+    "utf8",
   );
+  const spool = parseSearchSpool(spoolJson);
   const blocks = manifest.blocks as Record<
     string,
     Readonly<Record<string, unknown>>
   >;
   await injectCrashPoint(input.crashPoint, "before_ready_search");
+  const ftsStartedAt = performance.now();
   new VersionRepository(input.database).registerReadyWithSearch({
     bookId: Number(marker.book_id),
     compilerVersion: String(
@@ -117,7 +117,14 @@ export async function finalizeBuiltPublication(input: {
       .split(sep)
       .join("/"),
   });
+  const ftsBuildMs =
+    Math.round((performance.now() - ftsStartedAt) * 1_000) / 1_000;
   await injectCrashPoint(input.crashPoint, "after_ready_search");
+  const markerFiles = marker.files as readonly {
+    readonly path: string;
+    readonly size: number;
+  }[];
+  const markerSize = (await stat(resolve(finalDirectory, "version.json"))).size;
   await publishReadyVersion({
     actorUserId: input.actorUserId,
     ...(input.crashPoint ? { crashPoint: input.crashPoint } : {}),
@@ -125,6 +132,15 @@ export async function finalizeBuiltPublication(input: {
     jobId: input.jobId,
     leaseOwner: input.leaseOwner,
     nowMs: input.nowMs,
+    progress: {
+      fts_build_ms: ftsBuildMs,
+      output_bytes:
+        markerSize + markerFiles.reduce((total, file) => total + file.size, 0),
+      output_files: markerFiles.length + 1,
+      search_fts_rows: spool.ftsRows.length,
+      search_short_rows: spool.shortRows.length,
+      search_spool_bytes: Buffer.byteLength(spoolJson, "utf8"),
+    },
     versionId: String(marker.version_id),
   });
   return String(marker.version_id);

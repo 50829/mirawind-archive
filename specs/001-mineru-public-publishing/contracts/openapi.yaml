@@ -106,6 +106,16 @@ paths:
               schema: { type: string, contentEncoding: binary }
         "304":
           description: Authorized immutable representation is unchanged
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  ["private, max-age=31536000, immutable", "private, no-store"]
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Content-Type-Options:
+              schema: { type: string, const: nosniff }
         "404":
           $ref: "#/components/responses/HiddenOrMissingBinary"
 
@@ -164,6 +174,10 @@ paths:
           headers:
             Cache-Control:
               schema: { type: string, const: "private, no-store" }
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Content-Type-Options:
+              schema: { type: string, const: nosniff }
         "404":
           $ref: "#/components/responses/HiddenOrMissingBinary"
         "416":
@@ -173,6 +187,8 @@ paths:
               schema: { type: string, pattern: "^bytes \\*/[0-9]+$" }
             Cache-Control:
               schema: { type: string, const: "private, no-store" }
+            X-Content-Type-Options:
+              schema: { type: string, const: nosniff }
 
   /api/books/{bookKey}/search:
     get:
@@ -264,6 +280,9 @@ paths:
           $ref: "#/components/responses/Conflict"
         "413":
           description: Actual streamed upload exceeded 2 GiB
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -314,6 +333,9 @@ paths:
       responses:
         "202":
           description: Confirmation accepted and preparation queued
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobAccepted" }
@@ -393,6 +415,9 @@ paths:
           $ref: "#/components/responses/Conflict"
         "412":
           description: Draft changed since the supplied ETag
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -487,6 +512,9 @@ paths:
       responses:
         "202":
           description: Build/publish job queued
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobAccepted" }
@@ -579,6 +607,9 @@ paths:
       responses:
         "202":
           description: Cancellation recorded
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Job" }
@@ -608,6 +639,9 @@ paths:
       responses:
         "202":
           description: New attempt queued; prior history is retained
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobAccepted" }
@@ -799,6 +833,8 @@ components:
       headers:
         Cache-Control:
           schema: { type: string, const: no-store }
+        X-Content-Type-Options:
+          schema: { type: string, const: nosniff }
         X-Robots-Tag:
           schema:
             { type: string, const: "noindex, nofollow, noarchive, nosnippet" }

@@ -60,6 +60,7 @@ export function proposeDocumentStructure(
   document: NormalizedDocument,
 ): StructureProposal {
   const levels = continuousLevels(document.headings);
+  const hasSecondLevelSections = levels.includes(2);
   const nodes = document.headings.map((heading, index) => {
     const displayLevel = levels[index] ?? 1;
     return Object.freeze({
@@ -69,7 +70,8 @@ export function proposeDocumentStructure(
       ...(displayLevel === 1
         ? { role: proposedRole(heading.sourceTitle) }
         : {}),
-      starts_page: displayLevel === 1,
+      starts_page:
+        displayLevel === 1 || (hasSecondLevelSections && displayLevel === 2),
     });
   });
   return Object.freeze({ nodes: Object.freeze(nodes) });
