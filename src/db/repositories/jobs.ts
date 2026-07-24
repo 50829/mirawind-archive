@@ -204,6 +204,18 @@ export function createJobRepositorySchema(database: Database.Database): void {
 export class JobRepository {
   constructor(private readonly database: Database.Database) {}
 
+  findByIdempotency(operation: string, key: string): JobRecord | null {
+    validateOperation(operation);
+    const row = this.database
+      .prepare(
+        `SELECT jobs.* FROM job_idempotency_keys
+         JOIN jobs ON jobs.id = job_idempotency_keys.job_id
+         WHERE operation = ? AND key_sha256 = ?`,
+      )
+      .get(operation, idempotencyHash(key)) as JobRow | undefined;
+    return row ? mapJob(row) : null;
+  }
+
   create(input: CreateJobInput): JobRecord {
     const nowMs = input.nowMs ?? Date.now();
     const operation = input.idempotency?.operation;
