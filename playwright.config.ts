@@ -15,6 +15,9 @@ export default defineConfig({
   reporter: process.env.CI ? [["html", { open: "never" }], ["list"]] : "list",
   use: {
     baseURL,
+    extraHTTPHeaders: {
+      "x-real-ip": "127.0.0.1",
+    },
     trace: "retain-on-failure",
   },
   projects: [
