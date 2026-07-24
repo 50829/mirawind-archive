@@ -156,8 +156,8 @@ unchanged.
 - [x] T073 [P] [US2] Add failing manifest/version tests for strict schema, link/resource closure, source spans, stable IDs, hashes, complete marker and unsupported newer schema rejection in `tests/contract/document-manifest.test.ts`
 - [ ] T074 [P] [US2] Add failing publication crash-matrix tests before/after fsync, rename, ready/search transaction and current-pointer transaction in `tests/integration/publication/crash-boundaries.test.ts`
 - [ ] T075 [P] [US2] Add failing stale-source/config/current-version compare-and-swap and competing-publish tests in `tests/integration/publication/stale-build.test.ts`
-- [ ] T076 [P] [US2] Add failing FTS row-count/ID-set validation and index-failure rollback tests in `tests/integration/publication/search-index-validation.test.ts`
-- [ ] T077 [P] [US2] Add failing same-version canonical manifest and unchanged-content page/resource/search reproducibility tests in `tests/integration/compiler/reproducibility.test.ts`
+- [x] T076 [P] [US2] Add failing FTS row-count/ID-set validation and index-failure rollback tests in `tests/integration/publication/search-index-validation.test.ts`
+- [x] T077 [P] [US2] Add failing same-version canonical manifest and unchanged-content page/resource/search reproducibility tests in `tests/integration/compiler/reproducibility.test.ts`
 - [ ] T078 [US2] Add a failing browser journey for editing every M1 override, validation errors, stale preview, publish progress, successful cutover and failed-build old-version continuity in `tests/e2e/configure-publish.spec.ts`
 
 ### Implementation for User Story 2
@@ -171,8 +171,8 @@ unchanged.
 - [x] T085 [US2] Implement the semantic HAST renderer, numbering, internal/footnote link repair and final post-render invariants in `src/compiler/render/document.ts`
 - [x] T086 [US2] Implement deterministic page splitting, version-pinned asset output and canonical `document-manifest.json` generation in `src/compiler/document/pages.ts` and `src/compiler/document/manifest.ts`
 - [x] T087 [US2] Implement canonical `version.json`, authoritative-input copies, file/hash validation, recursive fsync and same-filesystem immutable rename in `src/compiler/version-builder.ts` and `src/storage/finalize-version.ts`
-- [ ] T088 [P] [US2] Implement deterministic FTS5 trigram and short-field search-row spool generation from normalized visible text in `src/compiler/search/build-spool.ts`
-- [ ] T089 [US2] Implement one ready-version plus version-scoped FTS/short-field transaction with count and referential ID validation in `src/db/repositories/versions.ts` and `src/db/repositories/search-index.ts`
+- [x] T088 [P] [US2] Implement deterministic FTS5 trigram and short-field search-row spool generation from normalized visible text in `src/compiler/search/build-spool.ts`
+- [x] T089 [US2] Implement one ready-version plus version-scoped FTS/short-field transaction with count and referential ID validation in `src/db/repositories/versions.ts` and `src/db/repositories/search-index.ts`
 - [ ] T090 [P] [US2] Implement the publication policy extension interface with the M1 allow policy and no fabricated confirmation record in `src/policy/publish-policy.ts`
 - [ ] T091 [US2] Implement guarded `BEGIN IMMEDIATE` cutover comparing source/config/base current version and atomically changing `current_version_id`, visibility, version states, audit and job result in `src/services/publication.ts`
 - [ ] T092 [US2] Implement the `build_publish` job handler with named crash-injection points reserved for test builds in `src/jobs/handlers/build-publish.ts` and `src/jobs/crash-points.ts`

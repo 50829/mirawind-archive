@@ -26,6 +26,7 @@ import { validateDocumentConfig } from "./document/validate-config.js";
 import { renderSemanticDocument } from "./render/document.js";
 import { inspectRasterImage } from "./resources/images.js";
 import { resolveDocumentResources } from "./resources/resolver.js";
+import { buildSearchSpool, writeSearchSpool } from "./search/build-spool.js";
 import { toIsoDateTime } from "../domain/time.js";
 import { parseBookConfigYaml } from "../schemas/book-config.js";
 import {
@@ -416,6 +417,25 @@ export async function buildImmutableVersion(input: {
       resolve(versionDirectory, "document-manifest.json"),
       manifestJson,
       { mode: 0o400 },
+    );
+    const metadata = config.metadata as
+      Readonly<Record<string, unknown>> | undefined;
+    const authors = Array.isArray(metadata?.authors)
+      ? metadata.authors.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [];
+    await writeSearchSpool(
+      resolve(versionDirectory, "derived", "search-spool.json"),
+      buildSearchSpool({
+        authors,
+        bookId: input.bookId,
+        document,
+        headings,
+        pages,
+        title: String(config.title),
+        versionId: input.versionId,
+      }),
     );
 
     const files = await describeFiles(versionDirectory);
