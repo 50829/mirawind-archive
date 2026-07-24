@@ -28,6 +28,13 @@ const migrationDefinitions = [
     name: "passkey_last_used",
     version: 3,
   },
+  {
+    checksum:
+      "be75d0b5ff9ff299a626b287b2ed629feab872536542fd7494d31f7e047ce852",
+    file: "0004_job_idempotency.sql",
+    name: "job_idempotency",
+    version: 4,
+  },
 ] as const;
 
 export async function loadMigrationManifest(): Promise<readonly Migration[]> {

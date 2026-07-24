@@ -98,4 +98,161 @@ describe("durable job repository", () => {
     database.close();
     secondDatabase.close();
   });
+
+  it("deduplicates creation by an operation-scoped hashed idempotency key", async () => {
+    const [database, secondDatabase] = await connections();
+    const repository = new JobRepository(database);
+    const input = {
+      idempotency: {
+        key: "client-generated-key-0001",
+        operation: "import.analyze",
+      },
+      kind: "analyze_import" as const,
+      nowMs: 1_000,
+    };
+    const first = repository.create(input);
+    const duplicate = repository.create({ ...input, nowMs: 2_000 });
+
+    expect(duplicate.id).toBe(first.id);
+    expect(
+      database.prepare("SELECT COUNT(*) AS count FROM jobs").get(),
+    ).toEqual({ count: 1 });
+    const stored = database
+      .prepare("SELECT key_sha256 FROM job_idempotency_keys")
+      .get() as { key_sha256: string };
+    expect(stored.key_sha256).toHaveLength(64);
+    expect(stored.key_sha256).not.toContain(input.idempotency.key);
+    database.close();
+    secondDatabase.close();
+  });
+
+  it("cancels queued work immediately and records running cancellation requests", async () => {
+    const [database, secondDatabase] = await connections();
+    const repository = new JobRepository(database);
+    const queued = repository.create({
+      kind: "reconcile",
+      nowMs: 1_000,
+    });
+    expect(repository.requestCancellation(queued.id, 2_000)).toMatchObject({
+      errorClass: "canceled",
+      errorCode: "JOB_CANCELED",
+      finishedAtMs: 2_000,
+      requestedCancelAtMs: 2_000,
+      state: "canceled",
+    });
+
+    const running = repository.create({
+      kind: "build_preview",
+      nowMs: 3_000,
+    });
+    repository.claimNext({ leaseOwner: "worker-a", nowMs: 4_000 });
+    expect(repository.requestCancellation(running.id, 5_000)).toMatchObject({
+      finishedAtMs: null,
+      requestedCancelAtMs: 5_000,
+      state: "running",
+    });
+    expect(
+      repository.completeFailure({
+        errorClass: "canceled",
+        errorCode: "JOB_CANCELED",
+        jobId: running.id,
+        leaseOwner: "worker-a",
+        nowMs: 6_000,
+      }),
+    ).toMatchObject({ finishedAtMs: 6_000, state: "canceled" });
+    database.close();
+    secondDatabase.close();
+  });
+
+  it("persists bounded progress and completes only for the lease owner", async () => {
+    const [database, secondDatabase] = await connections();
+    const repository = new JobRepository(database);
+    const job = repository.create({
+      kind: "verify_version",
+      nowMs: 1_000,
+    });
+    repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
+    expect(
+      repository.heartbeat({
+        jobId: job.id,
+        leaseOwner: "worker-a",
+        nowMs: 12_000,
+        phase: "verify_manifest",
+        progress: { checked: 12 },
+      }),
+    ).toMatchObject({
+      phase: "verify_manifest",
+      progress: { checked: 12 },
+    });
+    expect(() =>
+      repository.completeSuccess({
+        jobId: job.id,
+        leaseOwner: "worker-b",
+        nowMs: 13_000,
+      }),
+    ).toThrow();
+    expect(
+      repository.completeSuccess({
+        jobId: job.id,
+        leaseOwner: "worker-a",
+        nowMs: 14_000,
+        progress: { checked: 20 },
+      }),
+    ).toMatchObject({
+      finishedAtMs: 14_000,
+      leaseOwner: null,
+      progress: { checked: 20 },
+      state: "succeeded",
+    });
+    expect(() =>
+      repository.heartbeat({
+        jobId: job.id,
+        leaseOwner: "worker-a",
+        nowMs: 22_000,
+      }),
+    ).toThrow();
+    database.close();
+    secondDatabase.close();
+  });
+
+  it("allows only one automatic retry across an immutable retry chain", async () => {
+    const [database, secondDatabase] = await connections();
+    const repository = new JobRepository(database);
+    const original = repository.create({
+      kind: "build_publish",
+      nowMs: 1_000,
+    });
+    repository.fail(original.id, {
+      errorClass: "infrastructure",
+      errorCode: "WORKER_EXIT",
+      nowMs: 2_000,
+    });
+    const automatic = repository.retry(original.id, {
+      automatic: true,
+      nowMs: 3_000,
+    });
+    repository.fail(automatic.id, {
+      errorClass: "infrastructure",
+      errorCode: "WORKER_EXIT",
+      nowMs: 4_000,
+    });
+    expect(() =>
+      repository.retry(automatic.id, {
+        automatic: true,
+        nowMs: 5_000,
+      }),
+    ).toThrow("AUTOMATIC_RETRY_LIMIT_EXCEEDED");
+    expect(
+      repository.retry(automatic.id, {
+        automatic: false,
+        nowMs: 6_000,
+      }),
+    ).toMatchObject({
+      attempt: 3,
+      automaticRetryCount: 1,
+      retryOfJobId: automatic.id,
+    });
+    database.close();
+    secondDatabase.close();
+  });
 });

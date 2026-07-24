@@ -99,7 +99,7 @@ describe("checksummed migrations", () => {
   it("applies the locked M1 schema with FTS5 and all authority tables", async () => {
     const database = await openTemporaryDatabase();
     const result = applyMigrations(database, await loadMigrationManifest());
-    expect(result).toEqual({ applied: [1, 2, 3], current: 3 });
+    expect(result).toEqual({ applied: [1, 2, 3, 4], current: 4 });
 
     const names = (
       database
@@ -129,6 +129,7 @@ describe("checksummed migrations", () => {
         "verification",
         "passkey",
         "rateLimit",
+        "job_idempotency_keys",
       ]),
     );
     expect(
@@ -153,13 +154,13 @@ describe("checksummed migrations", () => {
         databasePath,
         nowMs: 1_000,
       }),
-    ).toMatchObject({ applied: [1, 2, 3], backupPath: null, current: 3 });
+    ).toMatchObject({ applied: [1, 2, 3, 4], backupPath: null, current: 4 });
     const second = await runDatabaseMigrations({
       backupDirectory,
       databasePath,
       nowMs: 2_000,
     });
-    expect(second).toMatchObject({ applied: [], current: 3 });
+    expect(second).toMatchObject({ applied: [], current: 4 });
     expect(second.backupPath).not.toBeNull();
     if (!second.backupPath) throw new Error("Expected a pre-migration backup");
     await access(second.backupPath);
