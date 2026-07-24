@@ -2,6 +2,8 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import { SafeApplicationError } from "../domain/errors.js";
 import { analyzeImport } from "../jobs/handlers/analyze-import.js";
+import { buildPreview } from "../jobs/handlers/build-preview.js";
+import { prepareDraft } from "../jobs/handlers/prepare-draft.js";
 import { resolveContainedPath } from "../storage/path-resolver.js";
 import {
   isCancelJobMessage,
@@ -42,47 +44,105 @@ function safeErrorClass(
 
 async function execute(message: RunJobMessage): Promise<void> {
   try {
-    if (
-      message.input.kind !== "analyze_import" ||
-      !message.input.importUploadRelativePath
-    ) {
-      throw new SafeApplicationError(
-        "JOB_HANDLER_NOT_IMPLEMENTED",
-        "The job handler is not implemented.",
-        500,
-      );
-    }
     const root = storageRoot();
-    const archivePath = await resolveContainedPath(
-      root,
-      message.input.importUploadRelativePath,
-    );
     const stagingDirectory = await resolveContainedPath(
       root,
       message.input.stagingRelativePath,
     );
-    const result = await analyzeImport({
-      archivePath,
-      signal: controller.signal,
-      stagingDirectory,
-    });
-    const artifactRelativePath = relative(root, result.artifactPath)
-      .split(sep)
-      .join("/");
-    send({
-      jobId: message.input.jobId,
-      ok: true,
-      protocolVersion: jobChildProtocolVersion,
-      result: {
-        analysisResultRelativePath: artifactRelativePath,
-        candidates: result.artifact.candidates.length,
-        decision: result.artifact.decision,
-        entries: result.entries,
-        files: result.files,
-        totalUncompressedBytes: result.totalUncompressedBytes,
-      },
-      type: "result",
-    });
+    if (
+      message.input.kind === "analyze_import" &&
+      message.input.importUploadRelativePath
+    ) {
+      const archivePath = await resolveContainedPath(
+        root,
+        message.input.importUploadRelativePath,
+      );
+      const result = await analyzeImport({
+        archivePath,
+        signal: controller.signal,
+        stagingDirectory,
+      });
+      send({
+        jobId: message.input.jobId,
+        ok: true,
+        protocolVersion: jobChildProtocolVersion,
+        result: {
+          analysisResultRelativePath: relative(root, result.artifactPath)
+            .split(sep)
+            .join("/"),
+          candidates: result.artifact.candidates.length,
+          decision: result.artifact.decision,
+          entries: result.entries,
+          files: result.files,
+          totalUncompressedBytes: result.totalUncompressedBytes,
+        },
+        type: "result",
+      });
+      return;
+    }
+    if (
+      message.input.kind === "prepare_draft" &&
+      message.input.importUploadRelativePath &&
+      message.input.selectedCandidateRelativePath
+    ) {
+      const result = await prepareDraft({
+        archivePath: await resolveContainedPath(
+          root,
+          message.input.importUploadRelativePath,
+        ),
+        selectedCandidatePath: message.input.selectedCandidateRelativePath,
+        signal: controller.signal,
+        stagingDirectory,
+      });
+      send({
+        jobId: message.input.jobId,
+        ok: true,
+        protocolVersion: jobChildProtocolVersion,
+        result: {
+          preparedDraftRelativePath: relative(root, result.artifactPath)
+            .split(sep)
+            .join("/"),
+        },
+        type: "result",
+      });
+      return;
+    }
+    if (
+      message.input.kind === "build_preview" &&
+      message.input.bookId &&
+      message.input.capturedConfigRevision &&
+      message.input.configYamlRelativePath &&
+      message.input.sourceRootRelativePath
+    ) {
+      await buildPreview({
+        bookId: message.input.bookId,
+        configRevision: message.input.capturedConfigRevision,
+        configYamlPath: await resolveContainedPath(
+          root,
+          message.input.configYamlRelativePath,
+        ),
+        sourceRoot: await resolveContainedPath(
+          root,
+          message.input.sourceRootRelativePath,
+        ),
+        stagingDirectory,
+      });
+      send({
+        jobId: message.input.jobId,
+        ok: true,
+        protocolVersion: jobChildProtocolVersion,
+        result: {
+          previewBuildResultRelativePath: `${message.input.stagingRelativePath}/preview-build-result.json`,
+        },
+        type: "result",
+      });
+      return;
+    }
+    throw new SafeApplicationError(
+      "JOB_HANDLER_NOT_IMPLEMENTED",
+      "The job handler is not implemented.",
+      500,
+    );
   } catch (error) {
     send({
       jobId: message.input.jobId,

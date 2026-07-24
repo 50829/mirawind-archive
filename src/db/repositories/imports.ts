@@ -255,6 +255,23 @@ export class ImportRepository {
     return this.require(input.importId);
   }
 
+  attachBookForPreparation(input: {
+    readonly bookId: number;
+    readonly importId: string;
+    readonly nowMs: number;
+  }): ImportRecord {
+    const result = this.database
+      .prepare(
+        `UPDATE imports
+         SET book_id = ?, updated_at = ?
+         WHERE id = ? AND state = 'preparing'
+           AND (book_id IS NULL OR book_id = ?)`,
+      )
+      .run(input.bookId, input.nowMs, input.importId, input.bookId);
+    if (result.changes !== 1) throw new Error("IMPORT_STATE_CONFLICT");
+    return this.require(input.importId);
+  }
+
   attachPreparedBook(input: {
     readonly bookId: number;
     readonly importId: string;

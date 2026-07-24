@@ -58,7 +58,9 @@ function fingerprint(type: string, visibleText: string): string {
 
 export function normalizeDocumentBlocks(
   document: ParsedDocument,
-  options: { readonly idFactory?: () => string } = {},
+  options: {
+    readonly idFactory?: (node: TransientDocumentNode) => string;
+  } = {},
 ): NormalizedDocument {
   const blocks: TransientDocumentNode[] = [];
   const normalize = (node: TransientDocumentNode): TransientDocumentNode => {
@@ -71,7 +73,7 @@ export function normalizeDocumentBlocks(
     const visibleText = normalizedVisibleText(withChildren);
     const block = Object.freeze({
       ...withChildren,
-      blockId: options.idFactory?.() ?? createOpaqueId("block"),
+      blockId: options.idFactory?.(node) ?? createOpaqueId("block"),
       textFingerprint: fingerprint(node.type, visibleText),
       visibleText,
     });

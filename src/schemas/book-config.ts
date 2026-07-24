@@ -1,4 +1,4 @@
-import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
+import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import { isAlias, isMap, isPair, isSeq, parseDocument } from "yaml";
 
 import bookSchema from "../../docs/schemas/book.schema.json" with { type: "json" };

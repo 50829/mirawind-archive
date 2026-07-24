@@ -9,10 +9,13 @@ export interface FrozenJobInput {
   readonly capturedConfigRevision: number | null;
   readonly capturedCurrentVersionId: string | null;
   readonly capturedSourceId: string | null;
+  readonly configYamlRelativePath: string | null;
   readonly importId: string | null;
   readonly importUploadRelativePath: string | null;
   readonly jobId: string;
   readonly kind: JobKind;
+  readonly selectedCandidateRelativePath: string | null;
+  readonly sourceRootRelativePath: string | null;
   readonly stagingRelativePath: string;
   readonly versionId: string | null;
 }
@@ -103,15 +106,29 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
     isNullablePositiveInteger(input.capturedConfigRevision) &&
     isNullableString(input.capturedCurrentVersionId) &&
     isNullableString(input.capturedSourceId) &&
+    isNullableString(input.configYamlRelativePath) &&
     isNullableString(input.importId) &&
     isNullableString(input.importUploadRelativePath) &&
     isNullableString(input.versionId) &&
+    isNullableString(input.selectedCandidateRelativePath) &&
+    isNullableString(input.sourceRootRelativePath) &&
     input.stagingRelativePath === `staging/${input.jobId}` &&
     (input.kind === "analyze_import" || input.kind === "prepare_draft"
       ? input.importId !== null &&
         input.importUploadRelativePath ===
           `tmp/uploads/${input.importId}/original.zip`
-      : input.importUploadRelativePath === null)
+      : input.importUploadRelativePath === null) &&
+    (input.kind === "prepare_draft"
+      ? input.bookId !== null && input.selectedCandidateRelativePath !== null
+      : input.selectedCandidateRelativePath === null) &&
+    (input.kind === "build_preview"
+      ? input.bookId !== null &&
+        input.capturedConfigRevision !== null &&
+        input.capturedSourceId !== null &&
+        input.sourceRootRelativePath !== null &&
+        input.configYamlRelativePath !== null
+      : input.sourceRootRelativePath === null &&
+        input.configYamlRelativePath === null)
   );
 }
 

@@ -3,14 +3,28 @@ import { hostname } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type Database from "better-sqlite3";
+
 import { parseEnvironment } from "../config/environment.js";
 import { openDatabase } from "../db/connection.js";
+import { DraftRepository } from "../db/repositories/drafts.js";
 import { ImportRepository } from "../db/repositories/imports.js";
 import { JobRepository, type JobRecord } from "../db/repositories/jobs.js";
+import { SourceRepository } from "../db/repositories/sources.js";
 import {
   persistAnalyzeImportArtifact,
   readAnalyzeImportArtifact,
 } from "../jobs/handlers/analyze-import.js";
+import {
+  finalizeBuiltPreview,
+  readPreviewBuildArtifact,
+} from "../jobs/handlers/build-preview.js";
+import {
+  finalizePreparedDraft,
+  preparedDraftArtifactPath,
+  readPreparedDraftArtifact,
+} from "../jobs/handlers/prepare-draft.js";
+import type { StorageLayout } from "../storage/layout.js";
 import { createStorageLayout } from "../storage/layout.js";
 import { resolveContainedPath } from "../storage/path-resolver.js";
 import { runJobChild } from "./child-runner.js";
@@ -41,35 +55,55 @@ function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
 
 function frozenInput(
   job: JobRecord,
+  drafts: DraftRepository,
   imports: ImportRepository,
+  sources: SourceRepository,
 ): FrozenJobInput {
   const imported =
     (job.kind === "analyze_import" || job.kind === "prepare_draft") &&
     job.importId
       ? imports.require(job.importId)
       : null;
+  const selectedCandidate = imported?.selectedCandidateId
+    ? imports
+        .candidates(imported.id)
+        .find((candidate) => candidate.id === imported.selectedCandidateId)
+    : null;
+  const source = job.capturedSourceId
+    ? sources.requireSnapshot(job.capturedSourceId)
+    : null;
+  const config =
+    job.bookId && job.capturedConfigRevision
+      ? drafts.requireConfig(job.bookId, job.capturedConfigRevision)
+      : null;
   return Object.freeze({
     attempt: job.attempt,
-    bookId: job.bookId,
+    bookId: imported?.bookId ?? job.bookId,
     capturedConfigRevision: job.capturedConfigRevision,
     capturedCurrentVersionId: job.capturedCurrentVersionId,
     capturedSourceId: job.capturedSourceId,
+    configYamlRelativePath: config?.yamlRelativePath ?? null,
     importId: job.importId,
     importUploadRelativePath: imported?.uploadRelativePath ?? null,
     jobId: job.id,
     kind: job.kind,
+    selectedCandidateRelativePath: selectedCandidate?.normalizedPath ?? null,
+    sourceRootRelativePath: source?.sourceRootRelativePath ?? null,
     stagingRelativePath: `staging/${job.id}`,
     versionId: job.versionId,
   });
 }
 
 async function executeClaimedJob(input: {
+  readonly database: Database.Database;
   readonly job: JobRecord;
+  readonly drafts: DraftRepository;
   readonly imports: ImportRepository;
   readonly leaseOwner: string;
   readonly repository: JobRepository;
   readonly shutdownSignal: AbortSignal;
-  readonly storageRoot: string;
+  readonly layout: StorageLayout;
+  readonly sources: SourceRepository;
 }): Promise<void> {
   const childController = new AbortController();
   const onShutdown = () => childController.abort("worker-shutdown");
@@ -94,23 +128,40 @@ async function executeClaimedJob(input: {
     if (input.job.kind === "analyze_import" && input.job.importId) {
       input.imports.startAnalysis(input.job.importId, Date.now());
     }
-    const execution = await runJobChild(frozenInput(input.job, input.imports), {
-      onProgress(progress) {
-        try {
-          input.repository.heartbeat({
-            jobId: input.job.id,
-            leaseOwner: input.leaseOwner,
-            nowMs: Date.now(),
-            phase: progress.phase,
-            progress: progress.progress,
-          });
-        } catch {
-          childController.abort("progress-lease-lost");
-        }
+    if (input.job.kind === "prepare_draft" && input.job.importId) {
+      const imported = input.imports.require(input.job.importId);
+      if (imported.bookId === null) {
+        const book = input.drafts.createBook({
+          nowMs: Date.now(),
+          title: "Pending import",
+        });
+        input.imports.attachBookForPreparation({
+          bookId: book.id,
+          importId: imported.id,
+          nowMs: Date.now(),
+        });
+      }
+    }
+    const execution = await runJobChild(
+      frozenInput(input.job, input.drafts, input.imports, input.sources),
+      {
+        onProgress(progress) {
+          try {
+            input.repository.heartbeat({
+              jobId: input.job.id,
+              leaseOwner: input.leaseOwner,
+              nowMs: Date.now(),
+              phase: progress.phase,
+              progress: progress.progress,
+            });
+          } catch {
+            childController.abort("progress-lease-lost");
+          }
+        },
+        signal: childController.signal,
+        storageRoot: input.layout.root,
       },
-      signal: childController.signal,
-      storageRoot: input.storageRoot,
-    });
+    );
     const latest = input.repository.get(input.job.id);
     if (!latest || latest.state !== "running") return;
 
@@ -129,7 +180,7 @@ async function executeClaimedJob(input: {
           throw new Error("IMPORT_ANALYSIS_RESULT_PATH_INVALID");
         }
         const artifact = await readAnalyzeImportArtifact(
-          await resolveContainedPath(input.storageRoot, relativePath),
+          await resolveContainedPath(input.layout.root, relativePath),
         );
         const imported = persistAnalyzeImportArtifact({
           artifact,
@@ -149,6 +200,57 @@ async function executeClaimedJob(input: {
             nowMs: Date.now(),
           });
         }
+      }
+      if (input.job.kind === "prepare_draft" && input.job.importId) {
+        const expected = `staging/${input.job.id}/prepared-draft.json`;
+        if (execution.result.result?.preparedDraftRelativePath !== expected) {
+          throw new Error("PREPARED_DRAFT_RESULT_PATH_INVALID");
+        }
+        const stagingDirectory = await resolveContainedPath(
+          input.layout.root,
+          `staging/${input.job.id}`,
+        );
+        const artifact = await readPreparedDraftArtifact(
+          preparedDraftArtifactPath(stagingDirectory),
+        );
+        const imported = input.imports.require(input.job.importId);
+        await finalizePreparedDraft({
+          artifact,
+          database: input.database,
+          extractedRoot: resolve(stagingDirectory, "extracted"),
+          importId: imported.id,
+          layout: input.layout,
+          nowMs: Date.now(),
+          originalArchivePath: await resolveContainedPath(
+            input.layout.root,
+            imported.uploadRelativePath,
+          ),
+        });
+      }
+      if (
+        input.job.kind === "build_preview" &&
+        input.job.bookId &&
+        input.job.capturedConfigRevision
+      ) {
+        const expected = `staging/${input.job.id}/preview-build-result.json`;
+        if (
+          execution.result.result?.previewBuildResultRelativePath !== expected
+        ) {
+          throw new Error("PREVIEW_BUILD_RESULT_PATH_INVALID");
+        }
+        const stagingDirectory = await resolveContainedPath(
+          input.layout.root,
+          `staging/${input.job.id}`,
+        );
+        await finalizeBuiltPreview({
+          artifact: await readPreviewBuildArtifact(stagingDirectory),
+          bookId: input.job.bookId,
+          configRevision: input.job.capturedConfigRevision,
+          database: input.database,
+          layout: input.layout,
+          nowMs: Date.now(),
+          stagingDirectory,
+        });
       }
       input.repository.completeSuccess({
         jobId: input.job.id,
@@ -198,10 +300,13 @@ async function executeClaimedJob(input: {
 }
 
 export async function runWorkerLoop(input: {
+  readonly database: Database.Database;
+  readonly drafts: DraftRepository;
   readonly imports: ImportRepository;
+  readonly layout: StorageLayout;
   readonly repository: JobRepository;
   readonly shutdownSignal: AbortSignal;
-  readonly storageRoot: string;
+  readonly sources: SourceRepository;
   readonly workerId: string;
 }): Promise<void> {
   while (!input.shutdownSignal.aborted) {
@@ -216,11 +321,14 @@ export async function runWorkerLoop(input: {
     }
     await executeClaimedJob({
       job,
+      database: input.database,
+      drafts: input.drafts,
       imports: input.imports,
       leaseOwner: input.workerId,
       repository: input.repository,
       shutdownSignal: input.shutdownSignal,
-      storageRoot: input.storageRoot,
+      layout: input.layout,
+      sources: input.sources,
     });
   }
 }
@@ -245,10 +353,13 @@ async function main(): Promise<void> {
     const workerId = `worker:${hostname()}:${process.pid}:${randomUUID()}`;
     process.stdout.write("Mirawind worker ready\n");
     await runWorkerLoop({
+      database,
+      drafts: new DraftRepository(database),
       imports: new ImportRepository(database),
+      layout,
       repository: new JobRepository(database),
       shutdownSignal: shutdownController.signal,
-      storageRoot: layout.root,
+      sources: new SourceRepository(database),
       workerId,
     });
   } finally {
