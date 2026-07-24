@@ -104,7 +104,7 @@ non-cacheable response.
 - [X] T044 [P] [US1] Add failing main-document selection tests for nested Cloud/CLI, generic confirmation, missing resources, ambiguous candidates and multi-book rejection in `tests/integration/compiler/candidate-selection.test.ts`
 - [ ] T045 [P] [US1] Add failing Markdown tests for fatal UTF-8, source positions, opaque block IDs, NFC visible text, GFM/math, semantic containers, resource-base containment and malicious raw HTML/URLs in `tests/integration/compiler/document-parse.test.ts`
 - [ ] T046 [P] [US1] Add failing raster tests for magic/format mismatch, corrupt decode, 100M pixels, 32,768-pixel sides, animation/multipage/SVG rejection and bounded real decode in `tests/integration/compiler/image-security.test.ts`
-- [ ] T047 [P] [US1] Add failing strict YAML/JSON Schema tests for aliases, duplicate keys, custom tags, merge keys, unknown fields, unsupported newer versions and non-mutating validation in `tests/contract/book-schema.test.ts`
+- [X] T047 [P] [US1] Add failing strict YAML/JSON Schema tests for aliases, duplicate keys, custom tags, merge keys, unknown fields, unsupported newer versions and non-mutating validation in `tests/contract/book-schema.test.ts`
 - [ ] T048 [P] [US1] Add failing authorization/cache tests proving preview pages/assets, candidates, jobs, sources and diagnostics are administrator-only and anonymous private/missing responses match in `tests/integration/auth/draft-visibility.test.ts`
 - [ ] T049 [US1] Add a failing browser journey covering high-confidence import, generic confirmation, ambiguous rejection, draft preview and source-Markdown immutability in `tests/e2e/import-preview.spec.ts`
 
@@ -117,7 +117,7 @@ non-cacheable response.
 - [X] T054 [US1] Implement exclusive no-follow streaming extraction with actual entry/package byte and expansion-ratio enforcement, cancellation, timeout counters and whole-staging cleanup in `src/compiler/archive/extractor.ts`
 - [X] T055 [P] [US1] Implement recursive Markdown candidate parsing, resource-integrity evidence, high/generic/ambiguous scoring and one-book bundle detection in `src/compiler/document/candidate-discovery.ts`
 - [ ] T056 [US1] Implement the `analyze_import` worker handler and durable candidate state transitions without logging unsafe raw paths in `src/jobs/handlers/analyze-import.ts`
-- [ ] T057 [P] [US1] Implement strict YAML 1.2 JSON-only parsing, Ajv 2020 validation and explicit supported-version dispatch in `src/schemas/book-config.ts` and `src/schemas/versioning.ts`
+- [X] T057 [P] [US1] Implement strict YAML 1.2 JSON-only parsing, Ajv 2020 validation and explicit supported-version dispatch in `src/schemas/book-config.ts` and `src/schemas/versioning.ts`
 - [ ] T058 [US1] Implement immutable accepted source/original snapshot creation, reference-root pruning and rollback cleanup in `src/services/source-snapshot.ts`
 - [ ] T059 [P] [US1] Implement the ordered remark/GFM/math parser with current source spans and transient AST types in `src/compiler/document/parser.ts` and `src/compiler/document/types.ts`
 - [ ] T060 [US1] Implement block normalization, random stable IDs, heading extraction, NFC/newline visible-text normalization and versioned fingerprints in `src/compiler/document/normalize.ts`
