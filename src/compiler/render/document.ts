@@ -41,6 +41,7 @@ interface TreeNode {
 export interface HeadingRenderOverride {
   readonly displayLevel: number;
   readonly displayTitle: string;
+  readonly number?: string | null;
 }
 
 export interface SemanticRenderResult {
@@ -51,6 +52,7 @@ export interface SemanticRenderResult {
 
 export interface RenderSemanticDocumentOptions {
   readonly document: NormalizedDocument;
+  readonly headingHref?: (blockId: string) => string;
   readonly headingOverrides?: ReadonlyMap<string, HeadingRenderOverride>;
   readonly publishedResourceUrl: (resourceId: string) => string;
   readonly resourceResolution: ResourceResolution;
@@ -119,7 +121,21 @@ function rendererTree(
         },
       };
       if (override) {
-        output.children = [{ type: "text", value: override.displayTitle }];
+        output.children = [
+          ...(override.number
+            ? [
+                {
+                  children: [{ type: "text", value: `${override.number} ` }],
+                  data: {
+                    hName: "span",
+                    hProperties: { className: ["heading-number"] },
+                  },
+                  type: "mirawindHeadingNumber",
+                },
+              ]
+            : []),
+          { type: "text", value: override.displayTitle },
+        ];
       }
     } else if (
       (node.type === "inlineMath" || node.type === "math") &&
@@ -265,7 +281,7 @@ function rendererTree(
     node.data = {
       hName: "figure",
       hProperties: {
-        ...(image.blockId ? { dataBlockId: image.blockId } : {}),
+        ...(node.blockId ? { dataBlockId: node.blockId } : {}),
       },
     };
     node.type = "mirawindFigure";
@@ -388,6 +404,71 @@ function repairFootnoteLinks(
   visit(tree);
 }
 
+function headingSlug(value: string): string {
+  return value
+    .normalize("NFC")
+    .trim()
+    .toLocaleLowerCase("en")
+    .replaceAll(/[^\p{Letter}\p{Number}\s_-]/gu, "")
+    .replaceAll(/\s+/gu, "-")
+    .replaceAll(/-+/gu, "-");
+}
+
+function repairInternalHeadingLinks(
+  tree: TreeNode,
+  document: NormalizedDocument,
+  overrides: ReadonlyMap<string, HeadingRenderOverride> | undefined,
+  headingHref: ((blockId: string) => string) | undefined,
+): void {
+  const headingIds = new Set(
+    document.headings.map((heading) => heading.blockId),
+  );
+  const targets = new Map<string, string>();
+  for (const heading of document.headings) {
+    const override = overrides?.get(heading.blockId);
+    for (const title of [
+      heading.sourceTitle,
+      ...(override ? [override.displayTitle] : []),
+    ]) {
+      const slug = headingSlug(title);
+      if (slug && !targets.has(slug)) targets.set(slug, heading.blockId);
+    }
+  }
+  const visit = (node: TreeNode) => {
+    if (
+      node.type === "element" &&
+      node.tagName === "a" &&
+      typeof node.properties?.href === "string" &&
+      node.properties.href.startsWith("#") &&
+      !Object.hasOwn(node.properties, "dataFootnoteRef") &&
+      !Object.hasOwn(node.properties, "dataFootnoteBackref")
+    ) {
+      const rawTarget = node.properties.href.slice(1);
+      let decoded = rawTarget;
+      try {
+        decoded = decodeURIComponent(rawTarget);
+      } catch {
+        // Keep the literal fragment; an unresolved link fails below.
+      }
+      const target = headingIds.has(decoded)
+        ? decoded
+        : targets.get(headingSlug(decoded));
+      if (!target) throw new Error("INTERNAL_HEADING_LINK_UNRESOLVED");
+      const href = headingHref?.(target) ?? `#${target}`;
+      if (
+        !href.startsWith("/") &&
+        !href.startsWith("#") &&
+        !/^[1-9][0-9]*#[A-Za-z0-9_-]+$/u.test(href)
+      ) {
+        throw new TypeError("Heading URL must be a safe publication path");
+      }
+      node.properties.href = href;
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(tree);
+}
+
 function assertPostRenderInvariants(tree: TreeNode): void {
   const ids = new Set<string>();
   const visit = (node: TreeNode) => {
@@ -444,6 +525,12 @@ export async function renderSemanticDocument(
         ? [block.blockId]
         : [],
     ),
+  );
+  repairInternalHeadingLinks(
+    transformed,
+    options.document,
+    options.headingOverrides,
+    options.headingHref,
   );
   const css = await highlightCodeBlocks(
     transformed,

@@ -32,6 +32,11 @@ describe("published semantic document rendering", () => {
     ].join("\n");
     const document = normalized(source);
     const image = document.blocks.find((block) => block.type === "image");
+    const figureParagraph = document.blocks.find(
+      (block) =>
+        block.type === "paragraph" &&
+        block.children?.some((child) => child.type === "image"),
+    );
     const resolution: ResourceResolution = {
       diagnostics: [],
       references: [
@@ -73,10 +78,10 @@ describe("published semantic document rendering", () => {
       /<table[^>]*>[\s\S]*<thead>[\s\S]*<th>[\s\S]*<tbody>/u,
     );
     expect(rendered.html).toContain(
-      `<figure data-block-id="${image?.blockId}">`,
+      `<figure data-block-id="${figureParagraph?.blockId}">`,
     );
     expect(rendered.html).toContain(
-      '<img src="/books/1/versions/ver_test/resources/res_semantic_figure"',
+      `<img src="/books/1/versions/ver_test/resources/res_semantic_figure" alt="Figure caption" data-block-id="${image?.blockId}"`,
     );
     expect(rendered.html).toContain("<figcaption>Figure caption</figcaption>");
     expect(rendered.html).toMatch(
@@ -183,5 +188,25 @@ describe("published semantic document rendering", () => {
       expect(rendered.html).toContain(`aria-label="${kind}"`);
     }
     expect(rendered.html.match(/<aside /gu)).toHaveLength(8);
+  });
+
+  it("repairs source heading fragments to stable publication targets", async () => {
+    const document = normalized(
+      "# First\n\n[Continue](#second-heading)\n\n# Second heading",
+    );
+    const second = document.headings[1];
+    if (!second) throw new Error("Second heading fixture is missing");
+    const rendered = await renderSemanticDocument({
+      document,
+      headingHref: (blockId) => `/books/1/pages/2#${blockId}`,
+      publishedResourceUrl: () => {
+        throw new Error("No resource expected");
+      },
+      resourceResolution: { diagnostics: [], references: [], resources: [] },
+    });
+
+    expect(rendered.html).toContain(
+      `href="/books/1/pages/2#${second.blockId}"`,
+    );
   });
 });

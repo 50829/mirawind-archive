@@ -51,10 +51,18 @@ export const importedHtmlSanitizationSchema: SanitizationSchema = Object.freeze(
       h2: [...(defaultSchema.attributes?.h2 ?? []), "dataBlockId"],
       h3: [...(defaultSchema.attributes?.h3 ?? []), "dataBlockId"],
       h4: [...(defaultSchema.attributes?.h4 ?? []), "dataBlockId"],
-      img: [...(defaultSchema.attributes?.img ?? []), "dataMirawindResource"],
+      img: [
+        ...(defaultSchema.attributes?.img ?? []),
+        "dataBlockId",
+        "dataMirawindResource",
+      ],
       li: [...(defaultSchema.attributes?.li ?? []), "dataBlockId"],
       p: [...(defaultSchema.attributes?.p ?? []), "dataBlockId"],
       pre: [...(defaultSchema.attributes?.pre ?? []), "dataBlockId"],
+      span: [
+        ...(defaultSchema.attributes?.span ?? []),
+        ["className", "heading-number"],
+      ],
       table: [...(defaultSchema.attributes?.table ?? []), "dataBlockId"],
     },
     tagNames: [

@@ -168,9 +168,9 @@ unchanged.
 - [x] T082 [P] [US2] Implement TOC inclusion, display-title/level, four-role and starts-page controls without reorder or page-alias editing in `src/components/preview/StructureEditor.tsx`
 - [x] T083 [P] [US2] Implement trusted KaTeX pre-rendering with bounded options, source-notation fallback and safe diagnostics in `src/compiler/render/math.ts`
 - [x] T084 [P] [US2] Implement approved-language Shiki highlighting with plain-text fallback and deterministic style-to-class CSS extraction in `src/compiler/render/code.ts`
-- [ ] T085 [US2] Implement the semantic HAST renderer, numbering, internal/footnote link repair and final post-render invariants in `src/compiler/render/document.ts`
-- [ ] T086 [US2] Implement deterministic page splitting, version-pinned asset output and canonical `document-manifest.json` generation in `src/compiler/document/pages.ts` and `src/compiler/document/manifest.ts`
-- [ ] T087 [US2] Implement canonical `version.json`, authoritative-input copies, file/hash validation, recursive fsync and same-filesystem immutable rename in `src/compiler/version-builder.ts` and `src/storage/finalize-version.ts`
+- [x] T085 [US2] Implement the semantic HAST renderer, numbering, internal/footnote link repair and final post-render invariants in `src/compiler/render/document.ts`
+- [x] T086 [US2] Implement deterministic page splitting, version-pinned asset output and canonical `document-manifest.json` generation in `src/compiler/document/pages.ts` and `src/compiler/document/manifest.ts`
+- [x] T087 [US2] Implement canonical `version.json`, authoritative-input copies, file/hash validation, recursive fsync and same-filesystem immutable rename in `src/compiler/version-builder.ts` and `src/storage/finalize-version.ts`
 - [ ] T088 [P] [US2] Implement deterministic FTS5 trigram and short-field search-row spool generation from normalized visible text in `src/compiler/search/build-spool.ts`
 - [ ] T089 [US2] Implement one ready-version plus version-scoped FTS/short-field transaction with count and referential ID validation in `src/db/repositories/versions.ts` and `src/db/repositories/search-index.ts`
 - [ ] T090 [P] [US2] Implement the publication policy extension interface with the M1 allow policy and no fabricated confirmation record in `src/policy/publish-policy.ts`
