@@ -1,7 +1,8 @@
 # Quickstart and acceptance guide
 
-This is the implementation target for M1. Commands name the scripts that the implementation
-must provide; they are not expected to work before the implementation tasks are complete.
+This is the implemented M1 acceptance guide. Commands below are release-tested unless a
+step explicitly requires the administrator's interactive credentials or production HTTPS
+origin.
 
 ## 1. Prerequisites
 
@@ -31,15 +32,16 @@ documented localhost development case.
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
-pnpm db:migrate
-pnpm mirawind admin bootstrap --data-dir "$MIRAWIND_DATA_DIR"
+pnpm build
+node dist/processes/cli/index.js db migrate
+node dist/processes/cli/index.js admin bootstrap --data-dir "$MIRAWIND_DATA_DIR"
 ```
 
 The bootstrap command prompts in a TTY. Start one Web and one worker process:
 
 ```bash
-pnpm dev:web
-pnpm dev:worker
+NODE_ENV=production pnpm start
+NODE_ENV=production pnpm worker
 ```
 
 Expected:
@@ -175,11 +177,17 @@ user designated each sample for local testing; the ZIPs are never redistributed,
 or uploaded to public CI.
 
 ```bash
-pnpm benchmark:build --fixture representative
-pnpm benchmark:build --fixture stress
-pnpm benchmark:read --fixture representative
-pnpm benchmark:search --fixture representative
+pnpm benchmark:reference \
+  --real-dir "$PWD/tests/fixtures/mineru/real" \
+  --retain-dir "$MIRAWIND_BENCHMARK_DIR" \
+  --output-json "$PWD/docs/audits/m1-performance-results.json" \
+  --output-markdown "$PWD/docs/audits/m1-performance-report.md"
 ```
+
+`benchmark:reference` drives the production Web and worker artifacts and composes the
+`benchmark:build`, `benchmark:read` and `benchmark:search` modules for every registered real
+fixture plus the generated stress fixture. `MIRAWIND_BENCHMARK_DIR` must be an empty or
+disposable absolute private directory with enough space for all retained data roots.
 
 Record:
 

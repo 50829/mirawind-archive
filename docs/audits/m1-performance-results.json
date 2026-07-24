@@ -1,6 +1,6 @@
 {
   "build": {
-    "captured_at": "2026-07-24T20:13:45.918Z",
+    "captured_at": "2026-07-24T20:43:57.338Z",
     "real_fixture_gate": "required_and_verified",
     "retained_data": true,
     "results": [
@@ -27,15 +27,15 @@
         "fixture_id": "real-mineru-b309a572298b",
         "fixture_type": "real",
         "fts": {
-          "build_ms": 131.741,
+          "build_ms": 124.156,
           "rows": 4069,
           "short_rows": 261,
           "spool_bytes": 1924839
         },
         "memory": {
-          "peak_process_tree_rss_bytes": 1031426048,
+          "peak_process_tree_rss_bytes": 1085091840,
           "sample_interval_ms": 25,
-          "samples": 878
+          "samples": 636
         },
         "mineru_version": "3.4.4",
         "page_count_range": {
@@ -44,28 +44,28 @@
         },
         "phases": {
           "analyze_import:1": {
-            "duration_ms": 3655,
+            "duration_ms": 2263,
             "state": "succeeded"
           },
           "prepare_draft:1": {
-            "duration_ms": 5874,
+            "duration_ms": 3252,
             "state": "succeeded"
           },
           "build_preview:1": {
-            "duration_ms": 3953,
+            "duration_ms": 3269,
             "state": "succeeded"
           },
           "build_publish:1": {
-            "duration_ms": 6472,
+            "duration_ms": 5214,
             "state": "succeeded"
           }
         },
         "status": "passed",
         "timings": {
-          "upload_ms": 137.401,
-          "wall_ms": 22655.411
+          "upload_ms": 111.519,
+          "wall_ms": 16479.905
         },
-        "version_id": "ver_TIQZJZybP3aCKlRjs59se2WO"
+        "version_id": "ver_YVXCvInq6056BhoPzqSHflGG"
       },
       {
         "archive": {
@@ -90,15 +90,15 @@
         "fixture_id": "real-mineru-e80477ff22ac",
         "fixture_type": "real",
         "fts": {
-          "build_ms": 31.664,
+          "build_ms": 22.469,
           "rows": 316,
           "short_rows": 21,
           "spool_bytes": 316351
         },
         "memory": {
-          "peak_process_tree_rss_bytes": 298708992,
+          "peak_process_tree_rss_bytes": 300830720,
           "sample_interval_ms": 25,
-          "samples": 147
+          "samples": 139
         },
         "mineru_version": "3.4.4",
         "page_count_range": {
@@ -107,28 +107,28 @@
         },
         "phases": {
           "analyze_import:1": {
-            "duration_ms": 461,
+            "duration_ms": 414,
             "state": "succeeded"
           },
           "prepare_draft:1": {
-            "duration_ms": 528,
+            "duration_ms": 465,
             "state": "succeeded"
           },
           "build_preview:1": {
-            "duration_ms": 402,
+            "duration_ms": 413,
             "state": "succeeded"
           },
           "build_publish:1": {
-            "duration_ms": 548,
+            "duration_ms": 468,
             "state": "succeeded"
           }
         },
         "status": "passed",
         "timings": {
-          "upload_ms": 12.413,
-          "wall_ms": 3806.886
+          "upload_ms": 5.429,
+          "wall_ms": 3578.734
         },
-        "version_id": "ver_T3TJOLHdRSlzxDGtqd-Cm9r9"
+        "version_id": "ver_doqwdqtbsJykryLF-ET_n-Lg"
       },
       {
         "archive": {
@@ -153,15 +153,15 @@
         "fixture_id": "synthetic-stress-v1",
         "fixture_type": "synthetic",
         "fts": {
-          "build_ms": 211.419,
+          "build_ms": 177.147,
           "rows": 12002,
           "short_rows": 502,
           "spool_bytes": 4592480
         },
         "memory": {
-          "peak_process_tree_rss_bytes": 719667200,
+          "peak_process_tree_rss_bytes": 758218752,
           "sample_interval_ms": 25,
-          "samples": 456
+          "samples": 381
         },
         "mineru_version": "synthetic",
         "page_count_range": {
@@ -170,28 +170,28 @@
         },
         "phases": {
           "analyze_import:1": {
-            "duration_ms": 815,
+            "duration_ms": 811,
             "state": "succeeded"
           },
           "prepare_draft:1": {
-            "duration_ms": 1318,
+            "duration_ms": 1183,
             "state": "succeeded"
           },
           "build_preview:1": {
-            "duration_ms": 1890,
+            "duration_ms": 1771,
             "state": "succeeded"
           },
           "build_publish:1": {
-            "duration_ms": 5392,
+            "duration_ms": 3780,
             "state": "succeeded"
           }
         },
         "status": "passed",
         "timings": {
-          "upload_ms": 4.637,
-          "wall_ms": 11757.758
+          "upload_ms": 1.228,
+          "wall_ms": 9827.623
         },
-        "version_id": "ver_7d4uumBMzYf9LH0P6neJD4Fo"
+        "version_id": "ver_IiD_T_huL7xQXHfBQbPBVfPY"
       }
     ],
     "schema_version": 1,
@@ -202,7 +202,7 @@
       "pages": 500
     }
   },
-  "captured_at": "2026-07-24T20:14:08.886Z",
+  "captured_at": "2026-07-24T20:44:16.431Z",
   "configuration": {
     "concurrency": 8,
     "concurrent_requests": 500,
@@ -215,7 +215,7 @@
     }
   },
   "environment": {
-    "captured_at": "2026-07-24T20:13:07.400Z",
+    "captured_at": "2026-07-24T20:43:27.239Z",
     "compiler_identity": {
       "name": "mirawind-book-compiler",
       "renderer_version": "semantic-html-v1",
@@ -289,7 +289,9 @@
     "host": {
       "architecture": "x64",
       "cpu_count": 18,
-      "cpu_models": ["Intel(R) Core(TM) Ultra 5 125H"],
+      "cpu_models": [
+        "Intel(R) Core(TM) Ultra 5 125H"
+      ],
       "memory_bytes": 32695050240,
       "platform": "linux",
       "release": "7.0.0-28-generic"
@@ -357,7 +359,7 @@
         "pnpm": "11.9.0"
       },
       "lockfile_sha256": "a636e4c3975105855c233a1dfd206a829a0723a0791f4cac2e4b705ed03bd8fd",
-      "package_json_sha256": "e9ccac296f6c9962bebce9ad3faf94065679088e3a75b080266c389f4d639259",
+      "package_json_sha256": "59fefda46837fa8ee1305cdf6ce10841288f0ff6c5d1a46930ef2796ba32900c",
       "package_manager": "pnpm@11.9.0",
       "version": "0.0.0"
     },
@@ -477,12 +479,12 @@
         "status": "passed",
         "summary": {
           "count": 500,
-          "maximum_ms": 16.048,
-          "mean_ms": 5.288,
-          "minimum_ms": 2.588,
-          "p50_ms": 4.2,
-          "p95_ms": 11.058,
-          "p99_ms": 14.589
+          "maximum_ms": 13.47,
+          "mean_ms": 4.268,
+          "minimum_ms": 1.954,
+          "p50_ms": 4.054,
+          "p95_ms": 5.107,
+          "p99_ms": 13.206
         },
         "target_p95_ms": 300,
         "warmups": 0
@@ -497,12 +499,12 @@
         "status": "passed",
         "summary": {
           "count": 200,
-          "maximum_ms": 17.961,
-          "mean_ms": 7.571,
-          "minimum_ms": 2.788,
-          "p50_ms": 6.145,
-          "p95_ms": 14.689,
-          "p99_ms": 16.794
+          "maximum_ms": 10.61,
+          "mean_ms": 5.145,
+          "minimum_ms": 1.593,
+          "p50_ms": 4.758,
+          "p95_ms": 6.897,
+          "p99_ms": 9.803
         },
         "target_p95_ms": 300,
         "warmups": 20
@@ -510,8 +512,8 @@
       "publication": {
         "foreground_requests_succeeded": true,
         "pointer_advanced_after_build": true,
-        "version_before": "ver_TIQZJZybP3aCKlRjs59se2WO",
-        "version_after": "ver_nTsge6OBgsoCK2ITC1YkPAj7"
+        "version_before": "ver_YVXCvInq6056BhoPzqSHflGG",
+        "version_after": "ver_oqknW4yBIqrfHk6VUZ-RNLq6"
       },
       "search": {
         "book_key": "1",
@@ -523,12 +525,12 @@
           "status": "passed",
           "summary": {
             "count": 200,
-            "maximum_ms": 38.063,
-            "mean_ms": 15.981,
-            "minimum_ms": 2.941,
-            "p50_ms": 16.574,
-            "p95_ms": 21.218,
-            "p99_ms": 22.34
+            "maximum_ms": 40.606,
+            "mean_ms": 16.264,
+            "minimum_ms": 2.722,
+            "p50_ms": 16.168,
+            "p95_ms": 27.781,
+            "p99_ms": 28.771
           },
           "target_p95_ms": 1000
         },
@@ -541,12 +543,12 @@
           "status": "passed",
           "summary": {
             "count": 200,
-            "maximum_ms": 58.318,
-            "mean_ms": 16.9,
-            "minimum_ms": 7.287,
-            "p50_ms": 16.807,
-            "p95_ms": 22.263,
-            "p99_ms": 40.518
+            "maximum_ms": 57.471,
+            "mean_ms": 17.371,
+            "minimum_ms": 7.876,
+            "p50_ms": 16.239,
+            "p95_ms": 27.571,
+            "p99_ms": 39.684
           },
           "target_p95_ms": 1000
         },
@@ -567,12 +569,12 @@
         "status": "passed",
         "summary": {
           "count": 500,
-          "maximum_ms": 10.307,
-          "mean_ms": 3.681,
-          "minimum_ms": 1.84,
-          "p50_ms": 3.416,
-          "p95_ms": 4.93,
-          "p99_ms": 10.005
+          "maximum_ms": 11.78,
+          "mean_ms": 3.975,
+          "minimum_ms": 2.479,
+          "p50_ms": 3.292,
+          "p95_ms": 7.926,
+          "p99_ms": 11.009
         },
         "target_p95_ms": 300,
         "warmups": 0
@@ -587,12 +589,12 @@
         "status": "passed",
         "summary": {
           "count": 200,
-          "maximum_ms": 9.991,
-          "mean_ms": 4.864,
-          "minimum_ms": 2.231,
-          "p50_ms": 4.725,
-          "p95_ms": 6.911,
-          "p99_ms": 9.488
+          "maximum_ms": 11.39,
+          "mean_ms": 5.22,
+          "minimum_ms": 1.03,
+          "p50_ms": 4.724,
+          "p95_ms": 8.884,
+          "p99_ms": 10.895
         },
         "target_p95_ms": 300,
         "warmups": 20
@@ -600,8 +602,8 @@
       "publication": {
         "foreground_requests_succeeded": true,
         "pointer_advanced_after_build": true,
-        "version_before": "ver_T3TJOLHdRSlzxDGtqd-Cm9r9",
-        "version_after": "ver_9ldkXFx9YdKI08zMPMjNaBJw"
+        "version_before": "ver_doqwdqtbsJykryLF-ET_n-Lg",
+        "version_after": "ver_pRDl7SDjsjFow9MsDUYPQ88_"
       },
       "search": {
         "book_key": "1",
@@ -613,12 +615,12 @@
           "status": "passed",
           "summary": {
             "count": 200,
-            "maximum_ms": 35.951,
-            "mean_ms": 9.26,
-            "minimum_ms": 2.021,
-            "p50_ms": 9.152,
-            "p95_ms": 14.917,
-            "p99_ms": 25.822
+            "maximum_ms": 15.053,
+            "mean_ms": 9.454,
+            "minimum_ms": 1.609,
+            "p50_ms": 9.297,
+            "p95_ms": 13.439,
+            "p99_ms": 15.038
           },
           "target_p95_ms": 1000
         },
@@ -631,12 +633,12 @@
           "status": "passed",
           "summary": {
             "count": 200,
-            "maximum_ms": 31.724,
-            "mean_ms": 9.593,
-            "minimum_ms": 2.923,
-            "p50_ms": 9.177,
-            "p95_ms": 15.689,
-            "p99_ms": 23.194
+            "maximum_ms": 15.113,
+            "mean_ms": 9.606,
+            "minimum_ms": 4.683,
+            "p50_ms": 9.267,
+            "p95_ms": 13.42,
+            "p99_ms": 15.093
           },
           "target_p95_ms": 1000
         },
@@ -657,12 +659,12 @@
         "status": "passed",
         "summary": {
           "count": 500,
-          "maximum_ms": 16.902,
-          "mean_ms": 4.849,
-          "minimum_ms": 2,
-          "p50_ms": 4.217,
-          "p95_ms": 8.879,
-          "p99_ms": 16.288
+          "maximum_ms": 14.198,
+          "mean_ms": 4.712,
+          "minimum_ms": 2.22,
+          "p50_ms": 4.158,
+          "p95_ms": 8.1,
+          "p99_ms": 13.498
         },
         "target_p95_ms": 300,
         "warmups": 0
@@ -677,12 +679,12 @@
         "status": "passed",
         "summary": {
           "count": 200,
-          "maximum_ms": 14.844,
-          "mean_ms": 6.267,
-          "minimum_ms": 2.532,
-          "p50_ms": 5.85,
-          "p95_ms": 9.616,
-          "p99_ms": 14.51
+          "maximum_ms": 9.809,
+          "mean_ms": 5.902,
+          "minimum_ms": 3.29,
+          "p50_ms": 5.763,
+          "p95_ms": 7.207,
+          "p99_ms": 8.943
         },
         "target_p95_ms": 300,
         "warmups": 20
@@ -690,8 +692,8 @@
       "publication": {
         "foreground_requests_succeeded": true,
         "pointer_advanced_after_build": true,
-        "version_before": "ver_7d4uumBMzYf9LH0P6neJD4Fo",
-        "version_after": "ver_S3fejQmSGbti-8sSOHUv9lSX"
+        "version_before": "ver_IiD_T_huL7xQXHfBQbPBVfPY",
+        "version_after": "ver_7kts0tuGC_rm_QI2spO9-8CZ"
       },
       "search": {
         "book_key": "1",
@@ -703,12 +705,12 @@
           "status": "passed",
           "summary": {
             "count": 200,
-            "maximum_ms": 38.921,
-            "mean_ms": 27.761,
-            "minimum_ms": 4.036,
-            "p50_ms": 28.09,
-            "p95_ms": 34.146,
-            "p99_ms": 38.503
+            "maximum_ms": 36.389,
+            "mean_ms": 26.336,
+            "minimum_ms": 4.789,
+            "p50_ms": 27.637,
+            "p95_ms": 35.788,
+            "p99_ms": 36.327
           },
           "target_p95_ms": 1000
         },
@@ -721,12 +723,12 @@
           "status": "passed",
           "summary": {
             "count": 200,
-            "maximum_ms": 54.596,
-            "mean_ms": 28.333,
-            "minimum_ms": 8.654,
-            "p50_ms": 28.006,
-            "p95_ms": 34.258,
-            "p99_ms": 37.403
+            "maximum_ms": 83.605,
+            "mean_ms": 28.636,
+            "minimum_ms": 8.986,
+            "p50_ms": 28.045,
+            "p95_ms": 35.939,
+            "p99_ms": 57.614
           },
           "target_p95_ms": 1000
         },
