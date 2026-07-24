@@ -163,9 +163,9 @@ unchanged.
 ### Implementation for User Story 2
 
 - [x] T079 [P] [US2] Implement semantic config validation with offending block IDs, role inheritance, continuous levels, alias uniqueness and heading-only page splits in `src/compiler/document/validate-config.ts`
-- [ ] T080 [US2] Implement atomic new `book.yaml` revision writes plus draft-pointer/preview-job transaction and strong config ETags in `src/services/config-revisions.ts`
-- [ ] T081 [US2] Implement the ETag-guarded draft replacement endpoint and structured validation errors in `src/pages/api/manage/books/[bookId]/draft.ts`
-- [ ] T082 [P] [US2] Implement TOC inclusion, display-title/level, four-role and starts-page controls without reorder or page-alias editing in `src/components/preview/StructureEditor.tsx`
+- [x] T080 [US2] Implement atomic new `book.yaml` revision writes plus draft-pointer/preview-job transaction and strong config ETags in `src/services/config-revisions.ts`
+- [x] T081 [US2] Implement the ETag-guarded draft replacement endpoint and structured validation errors in `src/pages/api/manage/books/[bookId]/draft.ts`
+- [x] T082 [P] [US2] Implement TOC inclusion, display-title/level, four-role and starts-page controls without reorder or page-alias editing in `src/components/preview/StructureEditor.tsx`
 - [x] T083 [P] [US2] Implement trusted KaTeX pre-rendering with bounded options, source-notation fallback and safe diagnostics in `src/compiler/render/math.ts`
 - [x] T084 [P] [US2] Implement approved-language Shiki highlighting with plain-text fallback and deterministic style-to-class CSS extraction in `src/compiler/render/code.ts`
 - [ ] T085 [US2] Implement the semantic HAST renderer, numbering, internal/footnote link repair and final post-render invariants in `src/compiler/render/document.ts`

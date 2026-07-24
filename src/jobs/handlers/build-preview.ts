@@ -145,6 +145,7 @@ export async function buildPreview(input: {
         include_in_toc: configured.include_in_toc,
         role: inheritedRole,
         source_level: heading.level,
+        source_title: heading.sourceTitle,
         starts_page: configured.starts_page,
         title: configured.display_title ?? heading.sourceTitle,
       });

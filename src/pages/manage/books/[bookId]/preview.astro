@@ -108,6 +108,61 @@ applyResponsePolicy(Astro.response.headers, "manage");
     padding: 0.5rem;
     font: inherit;
   }
+  :global(input) {
+    min-height: 2.75rem;
+    padding: 0.5rem;
+    border: 1px solid #b9aa97;
+    border-radius: 0.4rem;
+    font: inherit;
+  }
+  :global(input[type="checkbox"]) {
+    min-height: auto;
+  }
+  :global(button) {
+    min-height: 2.75rem;
+    padding: 0.6rem 1rem;
+    border: 0;
+    border-radius: 0.5rem;
+    color: white;
+    background: #54432f;
+    font: inherit;
+    cursor: pointer;
+  }
+  :global(button:disabled) {
+    cursor: wait;
+    opacity: 0.6;
+  }
+  :global(.structure-editor) {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #ded6ca;
+  }
+  :global(.structure-edit-list) {
+    display: grid;
+    gap: 1rem;
+    padding: 0;
+    list-style: none;
+  }
+  :global(.structure-edit-list > li) {
+    padding: 0.75rem;
+    border: 1px solid #e5dccf;
+    border-radius: 0.5rem;
+  }
+  :global(.source-heading) {
+    margin: 0;
+    font-weight: 600;
+  }
+  :global(.structure-fields),
+  :global(.structure-checks) {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  :global(.structure-checks label) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
   :global(iframe) {
     width: 100%;
     min-height: 70vh;

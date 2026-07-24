@@ -7,15 +7,73 @@ import { DraftRepository } from "@/db/repositories/drafts";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
+import { requireMutationOrigin } from "@/http/origin";
 import { parseBookConfigYaml } from "@/schemas/book-config";
+import { replaceDraftConfig } from "@/services/config-revisions";
 import { resolveContainedPath } from "@/storage/path-resolver";
-import { getRuntimeStorageLayout } from "@/storage/runtime";
+import {
+  getRuntimeEnvironment,
+  getRuntimeStorageLayout,
+} from "@/storage/runtime";
 
 export const prerender = false;
 
 function positiveInteger(value: string | undefined): number | null {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null;
+}
+
+async function readBoundedJson(request: Request): Promise<unknown> {
+  if (
+    request.headers.get("content-type")?.split(";", 1)[0]?.trim() !==
+    "application/json"
+  ) {
+    throw new SafeApplicationError(
+      "CONTENT_TYPE_UNSUPPORTED",
+      "The request must contain JSON.",
+      400,
+    );
+  }
+  const maximumBytes = 4 * 1024 * 1024;
+  const reader = request.body?.getReader();
+  if (!reader) {
+    throw new SafeApplicationError(
+      "REQUEST_BODY_INVALID",
+      "The request body is required.",
+      400,
+    );
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const result = await reader.read();
+    if (result.done) break;
+    size += result.value.byteLength;
+    if (size > maximumBytes) {
+      await reader.cancel();
+      throw new SafeApplicationError(
+        "REQUEST_BODY_TOO_LARGE",
+        "The request body is too large.",
+        413,
+      );
+    }
+    chunks.push(result.value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    throw new SafeApplicationError(
+      "REQUEST_BODY_INVALID",
+      "The request body is not valid UTF-8 JSON.",
+      400,
+    );
+  }
 }
 
 export const GET: APIRoute = async ({ locals, params }) => {
@@ -100,5 +158,37 @@ export const GET: APIRoute = async ({ locals, params }) => {
       source_id: book.draftSourceId,
     },
     { headers },
+  );
+};
+
+export const PUT: APIRoute = async ({ locals, params, request }) => {
+  const { database } = requireRuntimeAdministrator(locals.session);
+  requireMutationOrigin(request, getRuntimeEnvironment().publicOrigin);
+  const bookId = positiveInteger(params.bookId);
+  if (!bookId) {
+    throw new SafeApplicationError(
+      "NOT_FOUND",
+      "The draft was not found.",
+      404,
+    );
+  }
+  const result = await replaceDraftConfig({
+    bookId,
+    config: await readBoundedJson(request),
+    database,
+    expectedEtag: request.headers.get("if-match"),
+    layout: await getRuntimeStorageLayout(),
+    nowMs: Date.now(),
+  });
+  const headers = new Headers({ ETag: result.etag });
+  applyResponsePolicy(headers, "private-api");
+  return Response.json(
+    {
+      book_id: bookId,
+      config_revision: result.revision,
+      job_id: result.jobId,
+      preview_state: "building",
+    },
+    { headers, status: 202 },
   );
 };

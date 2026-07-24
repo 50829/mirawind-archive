@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import { StructureEditor } from "./StructureEditor";
 
 interface PreviewHeading {
   readonly block_id: string;
@@ -9,6 +10,7 @@ interface PreviewHeading {
   readonly role: "frontmatter" | "body" | "appendix" | "backmatter";
   readonly source_level: number;
   readonly starts_page: boolean;
+  readonly source_title?: string;
   readonly title: string;
 }
 
@@ -19,7 +21,9 @@ interface PreviewPage {
 
 interface DraftView {
   readonly book_id: number;
-  readonly config: { readonly title?: string };
+  readonly config: Readonly<Record<string, unknown>> & {
+    readonly title?: string;
+  };
   readonly config_revision: number;
   readonly diagnostics: readonly string[];
   readonly preview: {
@@ -41,6 +45,7 @@ const roleLabels: Readonly<Record<PreviewHeading["role"], string>> = {
 export function StructurePreview(props: { readonly bookId: number }) {
   const [draft, setDraft] = useState<DraftView | null>(null);
   const [message, setMessage] = useState("");
+  const [etag, setEtag] = useState("");
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
@@ -50,6 +55,7 @@ export function StructurePreview(props: { readonly bookId: number }) {
     });
     if (!response.ok) throw new Error("DRAFT_LOAD_FAILED");
     const next = (await response.json()) as DraftView;
+    setEtag(response.headers.get("etag") ?? "");
     setDraft(next);
     setSelectedPage(
       (current) => current ?? next.preview?.pages.at(0)?.page_id ?? null,
@@ -146,6 +152,16 @@ export function StructurePreview(props: { readonly bookId: number }) {
             </label>
           )}
           <DiagnosticsPanel diagnostics={draft.diagnostics} />
+          {etag && (
+            <StructureEditor
+              key={draft.config_revision}
+              bookId={draft.book_id}
+              config={draft.config}
+              etag={etag}
+              headings={preview?.headings ?? []}
+              onSaved={refresh}
+            />
+          )}
         </aside>
 
         <section className="document-panel" aria-labelledby="document-title">
