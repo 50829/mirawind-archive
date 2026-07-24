@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mirawind.local/schemas/version.schema.json",
+  "title": "Mirawind immutable version marker",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "complete",
+    "book_id",
+    "version_id",
+    "source_id",
+    "config_revision",
+    "predecessor_version_id",
+    "created_at",
+    "compiler",
+    "book_yaml_sha256",
+    "manifest_sha256",
+    "files"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "complete": {
+      "const": true
+    },
+    "book_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "version_id": {
+      "$ref": "#/$defs/versionId"
+    },
+    "source_id": {
+      "$ref": "#/$defs/sourceId"
+    },
+    "config_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "predecessor_version_id": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/versionId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "compiler": {
+      "$ref": "#/$defs/compiler"
+    },
+    "book_yaml_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 1000000,
+      "items": {
+        "$ref": "#/$defs/file"
+      }
+    }
+  },
+  "$defs": {
+    "versionId": {
+      "type": "string",
+      "pattern": "^ver_[A-Za-z0-9_-]{16,80}$"
+    },
+    "sourceId": {
+      "type": "string",
+      "pattern": "^src_[A-Za-z0-9_-]{16,80}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^(?!version\\.json$)(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+    },
+    "compiler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "renderer_version",
+        "text_normalization_version"
+      ],
+      "properties": {
+        "name": {
+          "const": "mirawind-book-compiler"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "renderer_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "text_normalization_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size", "sha256"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8589934592
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  },
+  "x-semantic-validations": [
+    "file paths are unique and sorted by UTF-8 byte order",
+    "files enumerate every regular file except version.json exactly once",
+    "book.yaml and document-manifest.json are required and match their top-level hashes",
+    "all file sizes and hashes match bytes in the immutable version directory",
+    "book, version, source, config and compiler identities match authoritative inputs and the manifest",
+    "unknown properties and unsupported newer schema versions are rejected"
+  ]
+}

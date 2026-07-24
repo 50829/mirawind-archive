@@ -7,7 +7,11 @@ const destinations = [
   resolve(repositoryRoot, "dist", "server", "schemas"),
   resolve(repositoryRoot, "dist", "docs", "schemas"),
 ];
-const schemaNames = ["book.schema.json", "document-manifest.schema.json"];
+const schemaNames = [
+  "book.schema.json",
+  "document-manifest.schema.json",
+  "version.schema.json",
+];
 
 await Promise.all(
   destinations.flatMap((destination) =>

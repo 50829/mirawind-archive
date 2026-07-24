@@ -18,15 +18,15 @@ after its phase prerequisites are satisfied.
 **Purpose**: Establish the pinned TypeScript/Astro project, verification tools and deployable
 process entry points.
 
-- [X] T001 Initialize Git plus the Node.js 24/pnpm/Astro 7 project, exact runtime engines, scripts and locked production/dev dependencies in `.git/`, `package.json`, `pnpm-lock.yaml`, `.node-version`, and `pnpm-workspace.yaml`
-- [X] T002 [P] Configure strict TypeScript, Astro Node standalone output, React integration, import aliases, allowed hosts and server build boundaries in `tsconfig.json`, `astro.config.mjs`, and `src/env.d.ts`
-- [X] T003 [P] Configure ESLint, Prettier, Conventional Commits/commitlint, a repository-managed `commit-msg` hook, contribution/provenance rules and repository ignores without ignoring specification or migration evidence in `eslint.config.js`, `.prettierrc.json`, `.prettierignore`, `.gitignore`, `commitlint.config.mjs`, `.githooks/commit-msg`, `CONTRIBUTING.md`, and `docs/third-party/code-provenance.md`
-- [X] T004 [P] Configure Vitest projects, Playwright production-Web setup and coverage thresholds in `vitest.config.ts`, `playwright.config.ts`, and `tests/helpers/global-setup.ts`
-- [X] T005 [P] Create the Web, worker, job-child and CLI entry-point boundaries in `src/worker/index.ts`, `src/worker/job-child.ts`, `src/cli/index.ts`, and `src/pages/index.astro`
-- [X] T006 [P] Define validated non-secret environment examples and secret-handling guidance in `.env.example` and `docs/operations/configuration.md`
-- [X] T007 [P] Define the production image, one-Web/one-worker Compose topology, persistent volume, health checks and Caddy-only origin exposure in `docker/Dockerfile`, `docker/compose.yaml`, and `docker/Caddyfile`
-- [X] T008 [P] Add Conventional Commit range/final-PR-title validation plus lint, typecheck, unit, integration, contract and production-build jobs using frozen installs in `.github/workflows/commitlint.yml` and `.github/workflows/ci.yml`
-- [X] T009 Wire the canonical `docs/schemas/book.schema.json` and `docs/schemas/document-manifest.schema.json` into the server build without duplicating schema authority in `src/schemas/registry.ts` and `scripts/copy-runtime-schemas.mjs`
+- [x] T001 Initialize Git plus the Node.js 24/pnpm/Astro 7 project, exact runtime engines, scripts and locked production/dev dependencies in `.git/`, `package.json`, `pnpm-lock.yaml`, `.node-version`, and `pnpm-workspace.yaml`
+- [x] T002 [P] Configure strict TypeScript, Astro Node standalone output, React integration, import aliases, allowed hosts and server build boundaries in `tsconfig.json`, `astro.config.mjs`, and `src/env.d.ts`
+- [x] T003 [P] Configure ESLint, Prettier, Conventional Commits/commitlint, a repository-managed `commit-msg` hook, contribution/provenance rules and repository ignores without ignoring specification or migration evidence in `eslint.config.js`, `.prettierrc.json`, `.prettierignore`, `.gitignore`, `commitlint.config.mjs`, `.githooks/commit-msg`, `CONTRIBUTING.md`, and `docs/third-party/code-provenance.md`
+- [x] T004 [P] Configure Vitest projects, Playwright production-Web setup and coverage thresholds in `vitest.config.ts`, `playwright.config.ts`, and `tests/helpers/global-setup.ts`
+- [x] T005 [P] Create the Web, worker, job-child and CLI entry-point boundaries in `src/worker/index.ts`, `src/worker/job-child.ts`, `src/cli/index.ts`, and `src/pages/index.astro`
+- [x] T006 [P] Define validated non-secret environment examples and secret-handling guidance in `.env.example` and `docs/operations/configuration.md`
+- [x] T007 [P] Define the production image, one-Web/one-worker Compose topology, persistent volume, health checks and Caddy-only origin exposure in `docker/Dockerfile`, `docker/compose.yaml`, and `docker/Caddyfile`
+- [x] T008 [P] Add Conventional Commit range/final-PR-title validation plus lint, typecheck, unit, integration, contract and production-build jobs using frozen installs in `.github/workflows/commitlint.yml` and `.github/workflows/ci.yml`
+- [x] T009 Wire the canonical `docs/schemas/book.schema.json` and `docs/schemas/document-manifest.schema.json` into the server build without duplicating schema authority in `src/schemas/registry.ts` and `scripts/copy-runtime-schemas.mjs`
 
 **Checkpoint**: The empty Astro Web process, worker, CLI and test runners build from a frozen
 lockfile on Node.js 24.
@@ -42,39 +42,39 @@ logging and durable-job infrastructure required by every user story.
 
 ### Foundational evidence first
 
-- [X] T010 [P] Add failing environment validation tests for HTTPS production origin, localhost exception, exact RP ID/origin, data-root safety and secret entropy in `tests/unit/config/environment.test.ts`
-- [X] T011 [P] Add failing SQLite capability, WAL-reset version-floor, PRAGMA, busy-bound and FTS5 trigram smoke tests in `tests/integration/storage/sqlite-capabilities.test.ts`
-- [X] T012 [P] Add failing checksummed migration, immutable-history, old-fixture upgrade and backup/restore tests in `tests/integration/storage/migrations.test.ts`
-- [X] T013 [P] Add failing storage-root, same-filesystem, exclusive-create, no-follow, atomic-write, fsync and relative-path containment tests in `tests/integration/storage/filesystem.test.ts`
-- [X] T014 [P] Add failing authentication tests for disabled signup, session middleware, sole-admin enforcement, 299/300/301-second freshness boundaries, final-Passkey password verification and non-cacheable auth failures in `tests/integration/auth/auth-boundary.test.ts`
-- [X] T015 [P] Add failing offline CLI contract tests for 16–128-character TTY-only passwords, one-time bootstrap, full recovery, maintenance locking, session revocation and Passkey deletion in `tests/integration/auth/admin-cli.test.ts`
-- [X] T016 [P] Add failing durable-job repository tests for atomic single claim, immutable attempts, 10-second heartbeat, 60-second expiry and global build concurrency one in `tests/integration/recovery/job-repository.test.ts`
-- [X] T017 [P] Add failing safe-error, request-ID, origin-check, cache-policy and log-redaction tests in `tests/unit/http/response-policy.test.ts` and `tests/unit/observability/redaction.test.ts`
+- [x] T010 [P] Add failing environment validation tests for HTTPS production origin, localhost exception, exact RP ID/origin, data-root safety and secret entropy in `tests/unit/config/environment.test.ts`
+- [x] T011 [P] Add failing SQLite capability, WAL-reset version-floor, PRAGMA, busy-bound and FTS5 trigram smoke tests in `tests/integration/storage/sqlite-capabilities.test.ts`
+- [x] T012 [P] Add failing checksummed migration, immutable-history, old-fixture upgrade and backup/restore tests in `tests/integration/storage/migrations.test.ts`
+- [x] T013 [P] Add failing storage-root, same-filesystem, exclusive-create, no-follow, atomic-write, fsync and relative-path containment tests in `tests/integration/storage/filesystem.test.ts`
+- [x] T014 [P] Add failing authentication tests for disabled signup, session middleware, sole-admin enforcement, 299/300/301-second freshness boundaries, final-Passkey password verification and non-cacheable auth failures in `tests/integration/auth/auth-boundary.test.ts`
+- [x] T015 [P] Add failing offline CLI contract tests for 16–128-character TTY-only passwords, one-time bootstrap, full recovery, maintenance locking, session revocation and Passkey deletion in `tests/integration/auth/admin-cli.test.ts`
+- [x] T016 [P] Add failing durable-job repository tests for atomic single claim, immutable attempts, 10-second heartbeat, 60-second expiry and global build concurrency one in `tests/integration/recovery/job-repository.test.ts`
+- [x] T017 [P] Add failing safe-error, request-ID, origin-check, cache-policy and log-redaction tests in `tests/unit/http/response-policy.test.ts` and `tests/unit/observability/redaction.test.ts`
 
 ### Foundational implementation
 
-- [X] T018 Implement typed environment parsing and production security invariants in `src/config/environment.ts`
-- [X] T019 [P] Implement opaque ID generation, UTC time, stable error codes and bounded diagnostic primitives in `src/domain/ids.ts`, `src/domain/time.ts`, and `src/domain/errors.ts`
-- [X] T020 [P] Implement Pino Web/worker/child loggers with fixed bindings and static credential/content/path redaction in `src/observability/logger.ts`
-- [X] T021 Implement persistent layout creation, permission verification, same-filesystem checks, atomic file writes and safe relative-path resolution in `src/storage/layout.ts`, `src/storage/atomic-file.ts`, and `src/storage/path-resolver.ts`
-- [X] T022 Implement separate Web/worker `better-sqlite3` connections with linked SQLite >=3.51.3, WAL/FTS5 read-back, `foreign_keys=ON`, `trusted_schema=OFF`, `synchronous=FULL`, disabled auto-checkpoint and 250 ms/5 s busy bounds in `src/db/connection.ts` and `src/db/capabilities.ts`
-- [X] T023 Create the checksummed M1 business schema for installation, books, sources, configs, previews, originals, imports, candidates, versions, jobs, short search and audit records plus FTS5 trigram in `src/db/migrations/0001_m1_core.sql`
-- [X] T024 Implement the offline checksummed migration runner, schema lock and backup hook in `src/db/migrate.ts`, `src/db/migration-manifest.ts`, and `src/cli/commands/db-migrate.ts`
-- [X] T025 Generate and commit the locked Better Auth core, Passkey and database-rate-limit tables plus a database-enforced ten-Passkey ceiling as a reviewed migration in `src/db/migrations/0002_better_auth.sql`
-- [X] T026 Configure the HTTP and setup-only Better Auth instances with disabled public signup, 16–128-character password policy, 300-second session freshness, Passkey origin/RP settings and persistent rate limits in `src/auth/server.ts` and `src/auth/setup-server.ts`
-- [X] T027 Mount Better Auth and resolve request-local sessions without exposing dynamic host trust in `src/pages/api/auth/[...all].ts`, `src/middleware.ts`, and `src/auth/session.ts`
-- [X] T028 Implement sole-administrator, server-timed 300-second reauthentication and resource-visibility guards, including indistinguishable anonymous private/missing results in `src/http/authorization/admin-guard.ts`, `src/http/authorization/book-guard.ts`, and `src/http/authorization/reauth-guard.ts`
-- [X] T029 Implement exclusive maintenance locking and service-running detection for offline commands in `src/storage/maintenance-lock.ts`
-- [X] T030 Implement 16–128-character TTY-only `admin bootstrap` and `admin recover` using Better Auth APIs and atomic audit records in `src/cli/commands/admin-bootstrap.ts`, `src/cli/commands/admin-recover.ts`, and `src/cli/index.ts`
-- [X] T031 [P] Implement Passkey-first login with password fallback and no registration/recovery Web surface in `src/pages/login.astro` and `src/components/auth/LoginPanel.tsx`
-- [X] T032 Implement `contracts/passkey-policy.md` with Better Auth mutation hooks, database-enforced ten-key limit, 300-second freshness and password-verified final-key deletion in `src/auth/passkey-policy.ts`, `src/pages/api/manage/security/passkeys/[passkeyId]/delete-final.ts`, `src/pages/manage/security.astro`, and `src/components/auth/PasskeyManager.tsx`
-- [X] T033 Implement short `BEGIN IMMEDIATE` transaction helpers and narrow repositories for installation and audit events in `src/db/transaction/immediate.ts`, `src/db/repositories/installation.ts`, and `src/db/repositories/audit-events.ts`
-- [X] T034 Implement durable job creation, idempotency, claim, heartbeat, cancellation request, terminal completion and retry-chain repositories in `src/db/repositories/jobs.ts` and `src/jobs/state-machine.ts`
-- [X] T035 Implement the worker poll loop and IPC-only job-child protocol without child SQLite access or shell invocation in `src/worker/index.ts`, `src/worker/child-runner.ts`, and `src/worker/protocol.ts`
-- [X] T036 Implement request IDs, JSON/HTML safe errors, exact-origin checks and centralized cache/indexing policy builders in `src/http/request-context.ts`, `src/http/errors/responses.ts`, `src/http/origin.ts`, and `src/http/cache/policies.ts`
-- [X] T037 [P] Build isolated temporary data-root, real SQLite, Web/worker process and HTTP test helpers in `tests/helpers/data-root.ts`, `tests/helpers/database.ts`, `tests/helpers/processes.ts`, and `tests/helpers/http.ts`
-- [X] T038 [P] Add minimized Cloud/CLI/generic/ambiguous/multi-book fixtures plus a non-redistributable Git-external usage-scope manifest and size/SHA-256 verifier for the two or three real several-hundred-page MinerU ZIPs supplied during testing in `tests/fixtures/mineru/README.md`, `tests/fixtures/mineru/fixtures.json`, `tests/fixtures/mineru/real-fixtures.example.json`, and `scripts/fixtures/verify-real-mineru.ts`
-- [X] T039 [P] Implement deterministic hostile-ZIP and large-book fixture generators without committing multi-gigabyte binaries in `scripts/fixtures/build-hostile-zips.ts`, `scripts/fixtures/build-stress-book.ts`, and `tests/fixtures/hostile-archives/README.md`
+- [x] T018 Implement typed environment parsing and production security invariants in `src/config/environment.ts`
+- [x] T019 [P] Implement opaque ID generation, UTC time, stable error codes and bounded diagnostic primitives in `src/domain/ids.ts`, `src/domain/time.ts`, and `src/domain/errors.ts`
+- [x] T020 [P] Implement Pino Web/worker/child loggers with fixed bindings and static credential/content/path redaction in `src/observability/logger.ts`
+- [x] T021 Implement persistent layout creation, permission verification, same-filesystem checks, atomic file writes and safe relative-path resolution in `src/storage/layout.ts`, `src/storage/atomic-file.ts`, and `src/storage/path-resolver.ts`
+- [x] T022 Implement separate Web/worker `better-sqlite3` connections with linked SQLite >=3.51.3, WAL/FTS5 read-back, `foreign_keys=ON`, `trusted_schema=OFF`, `synchronous=FULL`, disabled auto-checkpoint and 250 ms/5 s busy bounds in `src/db/connection.ts` and `src/db/capabilities.ts`
+- [x] T023 Create the checksummed M1 business schema for installation, books, sources, configs, previews, originals, imports, candidates, versions, jobs, short search and audit records plus FTS5 trigram in `src/db/migrations/0001_m1_core.sql`
+- [x] T024 Implement the offline checksummed migration runner, schema lock and backup hook in `src/db/migrate.ts`, `src/db/migration-manifest.ts`, and `src/cli/commands/db-migrate.ts`
+- [x] T025 Generate and commit the locked Better Auth core, Passkey and database-rate-limit tables plus a database-enforced ten-Passkey ceiling as a reviewed migration in `src/db/migrations/0002_better_auth.sql`
+- [x] T026 Configure the HTTP and setup-only Better Auth instances with disabled public signup, 16–128-character password policy, 300-second session freshness, Passkey origin/RP settings and persistent rate limits in `src/auth/server.ts` and `src/auth/setup-server.ts`
+- [x] T027 Mount Better Auth and resolve request-local sessions without exposing dynamic host trust in `src/pages/api/auth/[...all].ts`, `src/middleware.ts`, and `src/auth/session.ts`
+- [x] T028 Implement sole-administrator, server-timed 300-second reauthentication and resource-visibility guards, including indistinguishable anonymous private/missing results in `src/http/authorization/admin-guard.ts`, `src/http/authorization/book-guard.ts`, and `src/http/authorization/reauth-guard.ts`
+- [x] T029 Implement exclusive maintenance locking and service-running detection for offline commands in `src/storage/maintenance-lock.ts`
+- [x] T030 Implement 16–128-character TTY-only `admin bootstrap` and `admin recover` using Better Auth APIs and atomic audit records in `src/cli/commands/admin-bootstrap.ts`, `src/cli/commands/admin-recover.ts`, and `src/cli/index.ts`
+- [x] T031 [P] Implement Passkey-first login with password fallback and no registration/recovery Web surface in `src/pages/login.astro` and `src/components/auth/LoginPanel.tsx`
+- [x] T032 Implement `contracts/passkey-policy.md` with Better Auth mutation hooks, database-enforced ten-key limit, 300-second freshness and password-verified final-key deletion in `src/auth/passkey-policy.ts`, `src/pages/api/manage/security/passkeys/[passkeyId]/delete-final.ts`, `src/pages/manage/security.astro`, and `src/components/auth/PasskeyManager.tsx`
+- [x] T033 Implement short `BEGIN IMMEDIATE` transaction helpers and narrow repositories for installation and audit events in `src/db/transaction/immediate.ts`, `src/db/repositories/installation.ts`, and `src/db/repositories/audit-events.ts`
+- [x] T034 Implement durable job creation, idempotency, claim, heartbeat, cancellation request, terminal completion and retry-chain repositories in `src/db/repositories/jobs.ts` and `src/jobs/state-machine.ts`
+- [x] T035 Implement the worker poll loop and IPC-only job-child protocol without child SQLite access or shell invocation in `src/worker/index.ts`, `src/worker/child-runner.ts`, and `src/worker/protocol.ts`
+- [x] T036 Implement request IDs, JSON/HTML safe errors, exact-origin checks and centralized cache/indexing policy builders in `src/http/request-context.ts`, `src/http/errors/responses.ts`, `src/http/origin.ts`, and `src/http/cache/policies.ts`
+- [x] T037 [P] Build isolated temporary data-root, real SQLite, Web/worker process and HTTP test helpers in `tests/helpers/data-root.ts`, `tests/helpers/database.ts`, `tests/helpers/processes.ts`, and `tests/helpers/http.ts`
+- [x] T038 [P] Add minimized Cloud/CLI/generic/ambiguous/multi-book fixtures plus a non-redistributable Git-external usage-scope manifest and size/SHA-256 verifier for the two or three real several-hundred-page MinerU ZIPs supplied during testing in `tests/fixtures/mineru/README.md`, `tests/fixtures/mineru/fixtures.json`, `tests/fixtures/mineru/real-fixtures.example.json`, and `scripts/fixtures/verify-real-mineru.ts`
+- [x] T039 [P] Implement deterministic hostile-ZIP and large-book fixture generators without committing multi-gigabyte binaries in `scripts/fixtures/build-hostile-zips.ts`, `scripts/fixtures/build-stress-book.ts`, and `tests/fixtures/hostile-archives/README.md`
 
 **Checkpoint**: Authentication, persistent storage, migrations, safe HTTP behavior and a
 single durable worker queue pass their evidence tests. User-story work may begin.
@@ -97,39 +97,39 @@ non-cacheable response.
 
 ### Evidence tests for User Story 1
 
-- [X] T040 [P] [US1] Add failing OpenAPI contract tests for import creation/status/confirmation, draft retrieval/update and revision-pinned preview routes in `tests/contract/import-preview.contract.test.ts`
-- [X] T041 [P] [US1] Add failing archive path tests for absolute/drive/UNC/traversal/NUL/empty/dot paths, Windows separators, NFC collisions, duplicates and file-directory prefix conflicts in `tests/integration/archive/path-security.test.ts`
-- [X] T042 [P] [US1] Add failing archive format tests for malformed headers, local/central ambiguity, overlaps, CRC, encryption, multi-disk, methods other than 0/8, links and special files in `tests/integration/archive/format-security.test.ts`
-- [X] T043 [P] [US1] Add failing actual-stream limit tests for 2 GiB upload/entry, 8 GiB package, 20,000 entries, 64 MiB ratio threshold, 200:1 entry/package ratio, depth/path limits, cancellation and cleanup in `tests/integration/archive/resource-limits.test.ts`
-- [X] T044 [P] [US1] Add failing main-document selection tests for nested Cloud/CLI, generic confirmation, missing resources, ambiguous candidates and multi-book rejection in `tests/integration/compiler/candidate-selection.test.ts`
-- [X] T045 [P] [US1] Add failing Markdown tests for fatal UTF-8, source positions, opaque block IDs, NFC visible text, GFM/math, semantic containers, resource-base containment and malicious raw HTML/URLs in `tests/integration/compiler/document-parse.test.ts`
-- [X] T046 [P] [US1] Add failing raster tests for magic/format mismatch, corrupt decode, 100M pixels, 32,768-pixel sides, animation/multipage/SVG rejection and bounded real decode in `tests/integration/compiler/image-security.test.ts`
-- [X] T047 [P] [US1] Add failing strict YAML/JSON Schema tests for aliases, duplicate keys, custom tags, merge keys, unknown fields, unsupported newer versions and non-mutating validation in `tests/contract/book-schema.test.ts`
-- [X] T048 [P] [US1] Add failing authorization/cache tests proving preview pages/assets, candidates, jobs, sources and diagnostics are administrator-only and anonymous private/missing responses match in `tests/integration/auth/draft-visibility.test.ts`
-- [X] T049 [US1] Add a failing browser journey covering high-confidence import, generic confirmation, ambiguous rejection, draft preview and source-Markdown immutability in `tests/e2e/import-preview.spec.ts`
+- [x] T040 [P] [US1] Add failing OpenAPI contract tests for import creation/status/confirmation, draft retrieval/update and revision-pinned preview routes in `tests/contract/import-preview.contract.test.ts`
+- [x] T041 [P] [US1] Add failing archive path tests for absolute/drive/UNC/traversal/NUL/empty/dot paths, Windows separators, NFC collisions, duplicates and file-directory prefix conflicts in `tests/integration/archive/path-security.test.ts`
+- [x] T042 [P] [US1] Add failing archive format tests for malformed headers, local/central ambiguity, overlaps, CRC, encryption, multi-disk, methods other than 0/8, links and special files in `tests/integration/archive/format-security.test.ts`
+- [x] T043 [P] [US1] Add failing actual-stream limit tests for 2 GiB upload/entry, 8 GiB package, 20,000 entries, 64 MiB ratio threshold, 200:1 entry/package ratio, depth/path limits, cancellation and cleanup in `tests/integration/archive/resource-limits.test.ts`
+- [x] T044 [P] [US1] Add failing main-document selection tests for nested Cloud/CLI, generic confirmation, missing resources, ambiguous candidates and multi-book rejection in `tests/integration/compiler/candidate-selection.test.ts`
+- [x] T045 [P] [US1] Add failing Markdown tests for fatal UTF-8, source positions, opaque block IDs, NFC visible text, GFM/math, semantic containers, resource-base containment and malicious raw HTML/URLs in `tests/integration/compiler/document-parse.test.ts`
+- [x] T046 [P] [US1] Add failing raster tests for magic/format mismatch, corrupt decode, 100M pixels, 32,768-pixel sides, animation/multipage/SVG rejection and bounded real decode in `tests/integration/compiler/image-security.test.ts`
+- [x] T047 [P] [US1] Add failing strict YAML/JSON Schema tests for aliases, duplicate keys, custom tags, merge keys, unknown fields, unsupported newer versions and non-mutating validation in `tests/contract/book-schema.test.ts`
+- [x] T048 [P] [US1] Add failing authorization/cache tests proving preview pages/assets, candidates, jobs, sources and diagnostics are administrator-only and anonymous private/missing responses match in `tests/integration/auth/draft-visibility.test.ts`
+- [x] T049 [US1] Add a failing browser journey covering high-confidence import, generic confirmation, ambiguous rejection, draft preview and source-Markdown immutability in `tests/e2e/import-preview.spec.ts`
 
 ### Implementation for User Story 1
 
-- [X] T050 [P] [US1] Implement import, candidate, source-snapshot, config-revision, original-file and draft-preview repositories in `src/db/repositories/imports.ts`, `src/db/repositories/sources.ts`, and `src/db/repositories/drafts.ts`
-- [X] T051 [US1] Implement authenticated multipart upload streaming to exclusive `.part` files with actual byte counting, SHA-256, fsync, durable rename and idempotent job enqueue in `src/services/import-upload.ts`
-- [X] T052 [P] [US1] Implement ZIP entry-name decoding, POSIX/NFC normalization, collision detection and byte/depth limit policy in `src/compiler/archive/path-policy.ts`
-- [X] T053 [US1] Implement strict zip.js enumeration and raw compressed-byte pass with ambiguity, overlap, CRC, method, disk, encryption and Unix-type validation in `src/compiler/archive/zip-reader.ts`
-- [X] T054 [US1] Implement exclusive no-follow streaming extraction with actual entry/package byte and expansion-ratio enforcement, cancellation, timeout counters and whole-staging cleanup in `src/compiler/archive/extractor.ts`
-- [X] T055 [P] [US1] Implement recursive Markdown candidate parsing, resource-integrity evidence, high/generic/ambiguous scoring and one-book bundle detection in `src/compiler/document/candidate-discovery.ts`
-- [X] T056 [US1] Implement the `analyze_import` worker handler and durable candidate state transitions without logging unsafe raw paths in `src/jobs/handlers/analyze-import.ts`
-- [X] T057 [P] [US1] Implement strict YAML 1.2 JSON-only parsing, Ajv 2020 validation and explicit supported-version dispatch in `src/schemas/book-config.ts` and `src/schemas/versioning.ts`
-- [X] T058 [US1] Implement immutable accepted source/original snapshot creation, reference-root pruning and rollback cleanup in `src/services/source-snapshot.ts`
-- [X] T059 [P] [US1] Implement the ordered remark/GFM/math parser with current source spans and transient AST types in `src/compiler/document/parser.ts` and `src/compiler/document/types.ts`
-- [X] T060 [US1] Implement block normalization, random stable IDs, heading extraction, NFC/newline visible-text normalization and versioned fingerprints in `src/compiler/document/normalize.ts`
-- [X] T061 [P] [US1] Implement contained local-resource resolution, missing/cross-root diagnostics and opaque resource mapping in `src/compiler/resources/resolver.ts`
-- [X] T062 [P] [US1] Implement bounded Sharp raster inspection and forced single-frame JPEG/PNG/WebP/GIF decode in `src/compiler/resources/images.ts`
-- [X] T063 [US1] Implement default TOC inclusion, four-role, continuous-level and heading-only page-boundary proposals without changing source order in `src/compiler/document/structure-proposal.ts`
-- [X] T064 [US1] Implement sanitized raw-HTML HAST conversion and the authenticated draft-preview rendering pipeline in `src/compiler/render/sanitize.ts` and `src/compiler/render/preview.ts`
-- [X] T065 [US1] Implement `prepare_draft` and `build_preview` job handlers that create immutable config revisions and revision-pinned derived preview directories in `src/jobs/handlers/prepare-draft.ts` and `src/jobs/handlers/build-preview.ts`
-- [X] T066 [US1] Implement import create/status/main-Markdown confirmation endpoints according to OpenAPI in `src/pages/api/manage/imports/index.ts`, `src/pages/api/manage/imports/[importId]/index.ts`, and `src/pages/api/manage/imports/[importId]/main-markdown.ts`
-- [X] T067 [US1] Implement draft metadata and the exact revision-pinned preview page/asset routes from OpenAPI with no-store/noindex authorization in `src/pages/api/manage/books/[bookId]/draft.ts`, `src/pages/api/manage/books/[bookId]/preview/[configRevision]/pages/[pageId].ts`, and `src/pages/api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].ts`
-- [X] T068 [P] [US1] Implement the import uploader, durable job progress and candidate-confirmation management interface in `src/pages/manage/index.astro`, `src/components/import/ImportUploader.tsx`, and `src/components/import/CandidateReview.tsx`
-- [X] T069 [US1] Implement the structure/diagnostic preview interface with stale-revision labeling and authenticated resource URLs in `src/components/preview/StructurePreview.tsx`, `src/components/preview/DiagnosticsPanel.tsx`, and `src/pages/manage/books/[bookId]/preview.astro`
+- [x] T050 [P] [US1] Implement import, candidate, source-snapshot, config-revision, original-file and draft-preview repositories in `src/db/repositories/imports.ts`, `src/db/repositories/sources.ts`, and `src/db/repositories/drafts.ts`
+- [x] T051 [US1] Implement authenticated multipart upload streaming to exclusive `.part` files with actual byte counting, SHA-256, fsync, durable rename and idempotent job enqueue in `src/services/import-upload.ts`
+- [x] T052 [P] [US1] Implement ZIP entry-name decoding, POSIX/NFC normalization, collision detection and byte/depth limit policy in `src/compiler/archive/path-policy.ts`
+- [x] T053 [US1] Implement strict zip.js enumeration and raw compressed-byte pass with ambiguity, overlap, CRC, method, disk, encryption and Unix-type validation in `src/compiler/archive/zip-reader.ts`
+- [x] T054 [US1] Implement exclusive no-follow streaming extraction with actual entry/package byte and expansion-ratio enforcement, cancellation, timeout counters and whole-staging cleanup in `src/compiler/archive/extractor.ts`
+- [x] T055 [P] [US1] Implement recursive Markdown candidate parsing, resource-integrity evidence, high/generic/ambiguous scoring and one-book bundle detection in `src/compiler/document/candidate-discovery.ts`
+- [x] T056 [US1] Implement the `analyze_import` worker handler and durable candidate state transitions without logging unsafe raw paths in `src/jobs/handlers/analyze-import.ts`
+- [x] T057 [P] [US1] Implement strict YAML 1.2 JSON-only parsing, Ajv 2020 validation and explicit supported-version dispatch in `src/schemas/book-config.ts` and `src/schemas/versioning.ts`
+- [x] T058 [US1] Implement immutable accepted source/original snapshot creation, reference-root pruning and rollback cleanup in `src/services/source-snapshot.ts`
+- [x] T059 [P] [US1] Implement the ordered remark/GFM/math parser with current source spans and transient AST types in `src/compiler/document/parser.ts` and `src/compiler/document/types.ts`
+- [x] T060 [US1] Implement block normalization, random stable IDs, heading extraction, NFC/newline visible-text normalization and versioned fingerprints in `src/compiler/document/normalize.ts`
+- [x] T061 [P] [US1] Implement contained local-resource resolution, missing/cross-root diagnostics and opaque resource mapping in `src/compiler/resources/resolver.ts`
+- [x] T062 [P] [US1] Implement bounded Sharp raster inspection and forced single-frame JPEG/PNG/WebP/GIF decode in `src/compiler/resources/images.ts`
+- [x] T063 [US1] Implement default TOC inclusion, four-role, continuous-level and heading-only page-boundary proposals without changing source order in `src/compiler/document/structure-proposal.ts`
+- [x] T064 [US1] Implement sanitized raw-HTML HAST conversion and the authenticated draft-preview rendering pipeline in `src/compiler/render/sanitize.ts` and `src/compiler/render/preview.ts`
+- [x] T065 [US1] Implement `prepare_draft` and `build_preview` job handlers that create immutable config revisions and revision-pinned derived preview directories in `src/jobs/handlers/prepare-draft.ts` and `src/jobs/handlers/build-preview.ts`
+- [x] T066 [US1] Implement import create/status/main-Markdown confirmation endpoints according to OpenAPI in `src/pages/api/manage/imports/index.ts`, `src/pages/api/manage/imports/[importId]/index.ts`, and `src/pages/api/manage/imports/[importId]/main-markdown.ts`
+- [x] T067 [US1] Implement draft metadata and the exact revision-pinned preview page/asset routes from OpenAPI with no-store/noindex authorization in `src/pages/api/manage/books/[bookId]/draft.ts`, `src/pages/api/manage/books/[bookId]/preview/[configRevision]/pages/[pageId].ts`, and `src/pages/api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].ts`
+- [x] T068 [P] [US1] Implement the import uploader, durable job progress and candidate-confirmation management interface in `src/pages/manage/index.astro`, `src/components/import/ImportUploader.tsx`, and `src/components/import/CandidateReview.tsx`
+- [x] T069 [US1] Implement the structure/diagnostic preview interface with stale-revision labeling and authenticated resource URLs in `src/components/preview/StructurePreview.tsx`, `src/components/preview/DiagnosticsPanel.tsx`, and `src/pages/manage/books/[bookId]/preview.astro`
 
 **Checkpoint**: User Story 1 passes independently. No import has become public.
 
@@ -151,9 +151,9 @@ unchanged.
 ### Evidence tests for User Story 2
 
 - [ ] T070 [P] [US2] Add failing OpenAPI contract tests for ETag-guarded draft replacement, publish enqueue and immediate non-public visibility change in `tests/contract/config-publish.contract.test.ts`
-- [ ] T071 [P] [US2] Add failing structure tests for TOC-only exclusion, display titles, continuous h1–h4 levels, role inheritance, page starts only before headings and no body reorder in `tests/integration/compiler/structure-validation.test.ts`
-- [ ] T072 [P] [US2] Add failing semantic renderer tests for headings, lists, tables, figures/captions, formulas/fallback, code/plain fallback, footnotes and all eight教材 containers in `tests/integration/compiler/semantic-render.test.ts`
-- [ ] T073 [P] [US2] Add failing manifest/version tests for strict schema, link/resource closure, source spans, stable IDs, hashes, complete marker and unsupported newer schema rejection in `tests/contract/document-manifest.test.ts`
+- [x] T071 [P] [US2] Add failing structure tests for TOC-only exclusion, display titles, continuous h1–h4 levels, role inheritance, page starts only before headings and no body reorder in `tests/integration/compiler/structure-validation.test.ts`
+- [x] T072 [P] [US2] Add failing semantic renderer tests for headings, lists, tables, figures/captions, formulas/fallback, code/plain fallback, footnotes and all eight教材 containers in `tests/integration/compiler/semantic-render.test.ts`
+- [x] T073 [P] [US2] Add failing manifest/version tests for strict schema, link/resource closure, source spans, stable IDs, hashes, complete marker and unsupported newer schema rejection in `tests/contract/document-manifest.test.ts`
 - [ ] T074 [P] [US2] Add failing publication crash-matrix tests before/after fsync, rename, ready/search transaction and current-pointer transaction in `tests/integration/publication/crash-boundaries.test.ts`
 - [ ] T075 [P] [US2] Add failing stale-source/config/current-version compare-and-swap and competing-publish tests in `tests/integration/publication/stale-build.test.ts`
 - [ ] T076 [P] [US2] Add failing FTS row-count/ID-set validation and index-failure rollback tests in `tests/integration/publication/search-index-validation.test.ts`
@@ -162,12 +162,12 @@ unchanged.
 
 ### Implementation for User Story 2
 
-- [ ] T079 [P] [US2] Implement semantic config validation with offending block IDs, role inheritance, continuous levels, alias uniqueness and heading-only page splits in `src/compiler/document/validate-config.ts`
+- [x] T079 [P] [US2] Implement semantic config validation with offending block IDs, role inheritance, continuous levels, alias uniqueness and heading-only page splits in `src/compiler/document/validate-config.ts`
 - [ ] T080 [US2] Implement atomic new `book.yaml` revision writes plus draft-pointer/preview-job transaction and strong config ETags in `src/services/config-revisions.ts`
 - [ ] T081 [US2] Implement the ETag-guarded draft replacement endpoint and structured validation errors in `src/pages/api/manage/books/[bookId]/draft.ts`
 - [ ] T082 [P] [US2] Implement TOC inclusion, display-title/level, four-role and starts-page controls without reorder or page-alias editing in `src/components/preview/StructureEditor.tsx`
-- [ ] T083 [P] [US2] Implement trusted KaTeX pre-rendering with bounded options, source-notation fallback and safe diagnostics in `src/compiler/render/math.ts`
-- [ ] T084 [P] [US2] Implement approved-language Shiki highlighting with plain-text fallback and deterministic style-to-class CSS extraction in `src/compiler/render/code.ts`
+- [x] T083 [P] [US2] Implement trusted KaTeX pre-rendering with bounded options, source-notation fallback and safe diagnostics in `src/compiler/render/math.ts`
+- [x] T084 [P] [US2] Implement approved-language Shiki highlighting with plain-text fallback and deterministic style-to-class CSS extraction in `src/compiler/render/code.ts`
 - [ ] T085 [US2] Implement the semantic HAST renderer, numbering, internal/footnote link repair and final post-render invariants in `src/compiler/render/document.ts`
 - [ ] T086 [US2] Implement deterministic page splitting, version-pinned asset output and canonical `document-manifest.json` generation in `src/compiler/document/pages.ts` and `src/compiler/document/manifest.ts`
 - [ ] T087 [US2] Implement canonical `version.json`, authoritative-input copies, file/hash validation, recursive fsync and same-filesystem immutable rename in `src/compiler/version-builder.ts` and `src/storage/finalize-version.ts`
@@ -254,7 +254,7 @@ continued availability of unrelated/current books.
 
 ### Implementation for User Story 4
 
-- [X] T125 [P] [US4] Implement authorized job status serialization with safe phase/progress/error categories in `src/services/job-status.ts` and `src/pages/api/manage/jobs/[jobId]/index.ts`
+- [x] T125 [P] [US4] Implement authorized job status serialization with safe phase/progress/error categories in `src/services/job-status.ts` and `src/pages/api/manage/jobs/[jobId]/index.ts`
 - [ ] T126 [US4] Implement cancel and explicit-retry endpoints with origin/idempotency checks and new immutable attempt rows in `src/pages/api/manage/jobs/[jobId]/cancel.ts` and `src/pages/api/manage/jobs/[jobId]/retry.ts`
 - [ ] T127 [P] [US4] Implement the task list/detail, phase progress, cancellation, failure-category and retry interface in `src/components/import/TaskMonitor.tsx` and `src/pages/manage/tasks.astro`
 - [ ] T128 [US4] Implement cooperative cancellation followed by a fixed 10-second SIGTERM grace, whole-process-group SIGKILL escalation and close-confirmed terminal state in `src/worker/child-runner.ts`

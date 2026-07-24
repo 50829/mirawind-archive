@@ -26,6 +26,9 @@ importers:
       '@inquirer/prompts':
         specifier: 8.5.2
         version: 8.5.2(@types/node@24.13.3)
+      '@shikijs/transformers':
+        specifier: 4.3.1
+        version: 4.3.1
       '@zip.js/zip.js':
         specifier: 2.8.34
         version: 2.8.34
@@ -1399,6 +1402,10 @@ packages:
 
   '@shikijs/themes@4.3.1':
     resolution: {integrity: sha512-dgpoJ4WqNi2yTmizQHBJ5zcX6j2lE6icN/0yt4l1kkf16jrY/pwPLoTb1ETsWMz0OBLf9ZNvwmxft+cH+N9qSA==}
+    engines: {node: '>=20'}
+
+  '@shikijs/transformers@4.3.1':
+    resolution: {integrity: sha512-z6ir0bGDgWcF2FduktEfPgIsdOtIlDiLAjFBgBzE42Q9xHbkkIXZtORHzlLVB71iZP9elEcqKg6keajvOUwE2A==}
     engines: {node: '>=20'}
 
   '@shikijs/types@4.3.1':
@@ -5511,6 +5518,11 @@ snapshots:
 
   '@shikijs/themes@4.3.1':
     dependencies:
+      '@shikijs/types': 4.3.1
+
+  '@shikijs/transformers@4.3.1':
+    dependencies:
+      '@shikijs/core': 4.3.1
       '@shikijs/types': 4.3.1
 
   '@shikijs/types@4.3.1':

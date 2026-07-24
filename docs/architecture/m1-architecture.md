@@ -33,20 +33,20 @@ second database, or multiple Web/worker instances.
 
 ## 2. Authority and derived data
 
-| Data | Authority | Mutable? | Rebuildable? |
-|---|---|---:|---:|
-| Markdown | Imported source | Only by a new import/version | No |
-| `book.yaml` | Portable publishing configuration | Through atomic config revision | No |
-| Original MinerU ZIP | Registered original file | No, replace with a new version | No |
-| AST | Compiler memory | No persisted copy | Yes |
-| `document-manifest.json` | Derived version manifest | Immutable | Yes |
-| HTML and reading assets | Derived version output | Immutable | Yes |
-| FTS5 rows | Derived version index | Version-scoped | Yes |
-| Job/session/book state | SQLite | Transactional | Not solely from books |
+| Data                     | Authority                         |                       Mutable? |          Rebuildable? |
+| ------------------------ | --------------------------------- | -----------------------------: | --------------------: |
+| Markdown                 | Imported source                   |   Only by a new import/version |                    No |
+| `book.yaml`              | Portable publishing configuration | Through atomic config revision |                    No |
+| Original MinerU ZIP      | Registered original file          | No, replace with a new version |                    No |
+| AST                      | Compiler memory                   |              No persisted copy |                   Yes |
+| `document-manifest.json` | Derived version manifest          |                      Immutable |                   Yes |
+| HTML and reading assets  | Derived version output            |                      Immutable |                   Yes |
+| FTS5 rows                | Derived version index             |                 Version-scoped |                   Yes |
+| Job/session/book state   | SQLite                            |                  Transactional | Not solely from books |
 
-`book.yaml` and manifest use the independent schemas in `docs/schemas/`. SQLite may cache
-metadata needed for routing and queries, but it must not become a second editable copy of
-publishing configuration.
+`book.yaml`, manifest and the internal `version.json` complete marker use independent
+schemas in `docs/schemas/`. SQLite may cache metadata needed for routing and queries, but it
+must not become a second editable copy of publishing configuration.
 
 ## 3. Persistent layout
 
@@ -56,6 +56,11 @@ data/
 │   └── mirawind.sqlite
 ├── books/
 │   └── <book_id>/
+│       ├── draft/
+│       │   ├── source/<source_id>/
+│       │   ├── originals/<file_id>
+│       │   ├── configs/<revision>/book.yaml
+│       │   └── previews/<revision>/{pages,assets,diagnostics}/
 │       ├── staging/
 │       │   └── <job_id>/
 │       ├── quarantine/
@@ -89,8 +94,8 @@ The concrete schema belongs in the M1 data model, but it must represent:
 
 - the unique administrator identity and authentication library tables;
 - books and the sole `current_version_id`;
-- immutable book versions with `building`, `ready`, `published`, `superseded`, `failed`, and
-  `corrupt` lifecycle states;
+- immutable book versions with `ready`, `published`, `superseded`, `failed`, and `corrupt`
+  lifecycle states; active builds exist only as jobs plus staging directories;
 - durable jobs, leases, heartbeat, attempt count, error category, and captured base/config
   revision;
 - FTS5 trigram rows scoped by book, version, page, and block;
@@ -247,16 +252,16 @@ private.
 
 ## 12. Response policy matrix
 
-| Response | Anonymous | Cache-Control | Search indexing |
-|---|---:|---|---:|
-| Public HTML | Allowed | `public, max-age=0, must-revalidate` + strong ETag | Allowed |
-| Public versioned reading asset | Allowed | `private, max-age=31536000, immutable` | Via page |
-| Public original download | Allowed | `private, no-store` | `X-Robots-Tag: noindex...` |
-| Draft/private resource | Hidden as `404` | `private, no-store` | Forbidden |
-| Login/manage/private API | Admin or auth flow | `private, no-store` | Forbidden |
-| Alias redirect | As target permits | `no-store` | Canonical target only |
-| Missing/hidden route | `404` | `no-store` | Forbidden |
-| Hashed site JS/CSS/font | Allowed | public one-year immutable | Not content |
+| Response                       |          Anonymous | Cache-Control                                      |            Search indexing |
+| ------------------------------ | -----------------: | -------------------------------------------------- | -------------------------: |
+| Public HTML                    |            Allowed | `public, max-age=0, must-revalidate` + strong ETag |                    Allowed |
+| Public versioned reading asset |            Allowed | `private, max-age=31536000, immutable`             |                   Via page |
+| Public original download       |            Allowed | `private, no-store`                                | `X-Robots-Tag: noindex...` |
+| Draft/private resource         |    Hidden as `404` | `private, no-store`                                |                  Forbidden |
+| Login/manage/private API       | Admin or auth flow | `private, no-store`                                |                  Forbidden |
+| Alias redirect                 |  As target permits | `no-store`                                         |      Canonical target only |
+| Missing/hidden route           |              `404` | `no-store`                                         |                  Forbidden |
+| Hashed site JS/CSS/font        |            Allowed | public one-year immutable                          |                Not content |
 
 Authorization runs before conditional ETag or Range handling. Public HTML cannot vary by
 administrator session; private controls load through non-cacheable authenticated endpoints.

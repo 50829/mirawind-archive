@@ -1,17 +1,18 @@
 # Mirawind M1 schemas
 
-本目录冻结 M1 的两个独立版本化格式：
+本目录冻结 M1 的三个独立版本化格式：
 
 - `book.schema.json`：长期保存、可导入导出的 `book.yaml` 权威配置
 - `document-manifest.schema.json`：每个不可变发布版本的派生 manifest
+- `version.schema.json`：内部不可变版本的完整性和文件哈希标记
 
-两者均使用 JSON Schema Draft 2020-12。YAML 在验证前必须解析为 JSON
+三者均使用 JSON Schema Draft 2020-12。YAML 在验证前必须解析为 JSON
 兼容数据模型；不得使用 YAML 自定义 tag、对象构造器、锚点合并造成的重复
 键或其他可执行扩展。
 
 ## 版本与未知字段
 
-- M1 的两个 `schema_version` 均从整数 `1` 开始，但彼此独立。
+- M1 的三个 `schema_version` 均从整数 `1` 开始，但彼此独立。
 - schema 版本只在格式语义变化时增加，不随书籍内容修改增加。
 - `book.yaml.revision` 在每次接受的出版配置修改后单调递增。
 - 已知版本中的未知字段一律拒绝，不静默忽略。

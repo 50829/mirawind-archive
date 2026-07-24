@@ -26,18 +26,43 @@ export const importedHtmlSanitizationSchema: SanitizationSchema = Object.freeze(
     ...defaultSchema,
     attributes: {
       ...defaultSchema.attributes,
-      aside: ["className", ["dataContainerKind", ...allowedSemanticKinds]],
+      aside: [
+        "ariaLabel",
+        "className",
+        "dataBlockId",
+        ["dataContainerKind", ...allowedSemanticKinds],
+      ],
       code: [
         [
           "className",
           /^language-[A-Za-z0-9_-]+$/u,
           "math-inline",
           "math-display",
+          "math-fallback",
         ],
       ],
+      div: [
+        ...(defaultSchema.attributes?.div ?? []),
+        "className",
+        "dataBlockId",
+      ],
+      figure: ["dataBlockId"],
+      h1: [...(defaultSchema.attributes?.h1 ?? []), "dataBlockId"],
+      h2: [...(defaultSchema.attributes?.h2 ?? []), "dataBlockId"],
+      h3: [...(defaultSchema.attributes?.h3 ?? []), "dataBlockId"],
+      h4: [...(defaultSchema.attributes?.h4 ?? []), "dataBlockId"],
       img: [...(defaultSchema.attributes?.img ?? []), "dataMirawindResource"],
+      li: [...(defaultSchema.attributes?.li ?? []), "dataBlockId"],
+      p: [...(defaultSchema.attributes?.p ?? []), "dataBlockId"],
+      pre: [...(defaultSchema.attributes?.pre ?? []), "dataBlockId"],
+      table: [...(defaultSchema.attributes?.table ?? []), "dataBlockId"],
     },
-    tagNames: [...(defaultSchema.tagNames ?? []), "aside"],
+    tagNames: [
+      ...(defaultSchema.tagNames ?? []),
+      "aside",
+      "figcaption",
+      "figure",
+    ],
   } as SanitizationSchema,
 );
 
