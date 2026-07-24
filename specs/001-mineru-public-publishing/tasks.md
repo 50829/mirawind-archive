@@ -42,22 +42,22 @@ logging and durable-job infrastructure required by every user story.
 
 ### Foundational evidence first
 
-- [ ] T010 [P] Add failing environment validation tests for HTTPS production origin, localhost exception, exact RP ID/origin, data-root safety and secret entropy in `tests/unit/config/environment.test.ts`
-- [ ] T011 [P] Add failing SQLite capability, WAL-reset version-floor, PRAGMA, busy-bound and FTS5 trigram smoke tests in `tests/integration/storage/sqlite-capabilities.test.ts`
-- [ ] T012 [P] Add failing checksummed migration, immutable-history, old-fixture upgrade and backup/restore tests in `tests/integration/storage/migrations.test.ts`
-- [ ] T013 [P] Add failing storage-root, same-filesystem, exclusive-create, no-follow, atomic-write, fsync and relative-path containment tests in `tests/integration/storage/filesystem.test.ts`
-- [ ] T014 [P] Add failing authentication tests for disabled signup, session middleware, sole-admin enforcement, 299/300/301-second freshness boundaries, final-Passkey password verification and non-cacheable auth failures in `tests/integration/auth/auth-boundary.test.ts`
-- [ ] T015 [P] Add failing offline CLI contract tests for 16–128-character TTY-only passwords, one-time bootstrap, full recovery, maintenance locking, session revocation and Passkey deletion in `tests/integration/auth/admin-cli.test.ts`
-- [ ] T016 [P] Add failing durable-job repository tests for atomic single claim, immutable attempts, 10-second heartbeat, 60-second expiry and global build concurrency one in `tests/integration/recovery/job-repository.test.ts`
-- [ ] T017 [P] Add failing safe-error, request-ID, origin-check, cache-policy and log-redaction tests in `tests/unit/http/response-policy.test.ts` and `tests/unit/observability/redaction.test.ts`
+- [X] T010 [P] Add failing environment validation tests for HTTPS production origin, localhost exception, exact RP ID/origin, data-root safety and secret entropy in `tests/unit/config/environment.test.ts`
+- [X] T011 [P] Add failing SQLite capability, WAL-reset version-floor, PRAGMA, busy-bound and FTS5 trigram smoke tests in `tests/integration/storage/sqlite-capabilities.test.ts`
+- [X] T012 [P] Add failing checksummed migration, immutable-history, old-fixture upgrade and backup/restore tests in `tests/integration/storage/migrations.test.ts`
+- [X] T013 [P] Add failing storage-root, same-filesystem, exclusive-create, no-follow, atomic-write, fsync and relative-path containment tests in `tests/integration/storage/filesystem.test.ts`
+- [X] T014 [P] Add failing authentication tests for disabled signup, session middleware, sole-admin enforcement, 299/300/301-second freshness boundaries, final-Passkey password verification and non-cacheable auth failures in `tests/integration/auth/auth-boundary.test.ts`
+- [X] T015 [P] Add failing offline CLI contract tests for 16–128-character TTY-only passwords, one-time bootstrap, full recovery, maintenance locking, session revocation and Passkey deletion in `tests/integration/auth/admin-cli.test.ts`
+- [X] T016 [P] Add failing durable-job repository tests for atomic single claim, immutable attempts, 10-second heartbeat, 60-second expiry and global build concurrency one in `tests/integration/recovery/job-repository.test.ts`
+- [X] T017 [P] Add failing safe-error, request-ID, origin-check, cache-policy and log-redaction tests in `tests/unit/http/response-policy.test.ts` and `tests/unit/observability/redaction.test.ts`
 
 ### Foundational implementation
 
-- [ ] T018 Implement typed environment parsing and production security invariants in `src/config/environment.ts`
-- [ ] T019 [P] Implement opaque ID generation, UTC time, stable error codes and bounded diagnostic primitives in `src/domain/ids.ts`, `src/domain/time.ts`, and `src/domain/errors.ts`
-- [ ] T020 [P] Implement Pino Web/worker/child loggers with fixed bindings and static credential/content/path redaction in `src/observability/logger.ts`
-- [ ] T021 Implement persistent layout creation, permission verification, same-filesystem checks, atomic file writes and safe relative-path resolution in `src/storage/layout.ts`, `src/storage/atomic-file.ts`, and `src/storage/path-resolver.ts`
-- [ ] T022 Implement separate Web/worker `better-sqlite3` connections with linked SQLite >=3.51.3, WAL/FTS5 read-back, `foreign_keys=ON`, `trusted_schema=OFF`, `synchronous=FULL`, disabled auto-checkpoint and 250 ms/5 s busy bounds in `src/db/connection.ts` and `src/db/capabilities.ts`
+- [X] T018 Implement typed environment parsing and production security invariants in `src/config/environment.ts`
+- [X] T019 [P] Implement opaque ID generation, UTC time, stable error codes and bounded diagnostic primitives in `src/domain/ids.ts`, `src/domain/time.ts`, and `src/domain/errors.ts`
+- [X] T020 [P] Implement Pino Web/worker/child loggers with fixed bindings and static credential/content/path redaction in `src/observability/logger.ts`
+- [X] T021 Implement persistent layout creation, permission verification, same-filesystem checks, atomic file writes and safe relative-path resolution in `src/storage/layout.ts`, `src/storage/atomic-file.ts`, and `src/storage/path-resolver.ts`
+- [X] T022 Implement separate Web/worker `better-sqlite3` connections with linked SQLite >=3.51.3, WAL/FTS5 read-back, `foreign_keys=ON`, `trusted_schema=OFF`, `synchronous=FULL`, disabled auto-checkpoint and 250 ms/5 s busy bounds in `src/db/connection.ts` and `src/db/capabilities.ts`
 - [ ] T023 Create the checksummed M1 business schema for installation, books, sources, configs, previews, originals, imports, candidates, versions, jobs, short search and audit records plus FTS5 trigram in `src/db/migrations/0001_m1_core.sql`
 - [ ] T024 Implement the offline checksummed migration runner, schema lock and backup hook in `src/db/migrate.ts`, `src/db/migration-manifest.ts`, and `src/cli/commands/db-migrate.ts`
 - [ ] T025 Generate and commit the locked Better Auth core, Passkey and database-rate-limit tables plus a database-enforced ten-Passkey ceiling as a reviewed migration in `src/db/migrations/0002_better_auth.sql`

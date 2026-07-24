@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import { defineConfig } from "vitest/config";
 
 const shared = {
@@ -8,6 +10,11 @@ const shared = {
 };
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   test: {
     coverage: {
       provider: "v8",
@@ -21,6 +28,7 @@ export default defineConfig({
     },
     projects: [
       {
+        extends: true,
         test: {
           ...shared,
           include: ["tests/unit/**/*.test.ts"],
@@ -28,6 +36,7 @@ export default defineConfig({
         },
       },
       {
+        extends: true,
         test: {
           ...shared,
           include: ["tests/integration/**/*.test.ts"],
@@ -36,6 +45,7 @@ export default defineConfig({
         },
       },
       {
+        extends: true,
         test: {
           ...shared,
           include: ["tests/contract/**/*.test.ts"],
