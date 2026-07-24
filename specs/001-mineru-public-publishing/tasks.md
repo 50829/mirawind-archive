@@ -118,7 +118,7 @@ non-cacheable response.
 - [X] T055 [P] [US1] Implement recursive Markdown candidate parsing, resource-integrity evidence, high/generic/ambiguous scoring and one-book bundle detection in `src/compiler/document/candidate-discovery.ts`
 - [ ] T056 [US1] Implement the `analyze_import` worker handler and durable candidate state transitions without logging unsafe raw paths in `src/jobs/handlers/analyze-import.ts`
 - [X] T057 [P] [US1] Implement strict YAML 1.2 JSON-only parsing, Ajv 2020 validation and explicit supported-version dispatch in `src/schemas/book-config.ts` and `src/schemas/versioning.ts`
-- [ ] T058 [US1] Implement immutable accepted source/original snapshot creation, reference-root pruning and rollback cleanup in `src/services/source-snapshot.ts`
+- [X] T058 [US1] Implement immutable accepted source/original snapshot creation, reference-root pruning and rollback cleanup in `src/services/source-snapshot.ts`
 - [X] T059 [P] [US1] Implement the ordered remark/GFM/math parser with current source spans and transient AST types in `src/compiler/document/parser.ts` and `src/compiler/document/types.ts`
 - [X] T060 [US1] Implement block normalization, random stable IDs, heading extraction, NFC/newline visible-text normalization and versioned fingerprints in `src/compiler/document/normalize.ts`
 - [X] T061 [P] [US1] Implement contained local-resource resolution, missing/cross-root diagnostics and opaque resource mapping in `src/compiler/resources/resolver.ts`

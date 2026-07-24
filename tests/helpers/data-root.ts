@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, realpath, rm } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
@@ -11,6 +11,16 @@ export interface TemporaryDataRoot {
 }
 
 const prefix = "mirawind-test-";
+
+async function makeDirectoriesRemovable(path: string): Promise<void> {
+  const metadata = await lstat(path).catch(() => undefined);
+  if (!metadata || !metadata.isDirectory() || metadata.isSymbolicLink()) return;
+  await chmod(path, 0o700);
+  const entries = await readdir(path);
+  await Promise.all(
+    entries.map((entry) => makeDirectoriesRemovable(resolve(path, entry))),
+  );
+}
 
 export async function createTemporaryDataRoot(
   label = "runtime",
@@ -35,6 +45,7 @@ export async function createTemporaryDataRoot(
       ) {
         throw new Error("Refusing to remove an unowned test data root");
       }
+      await makeDirectoriesRemovable(resolved);
       await rm(resolved, { force: true, recursive: true });
     },
     layout,
