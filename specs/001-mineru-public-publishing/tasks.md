@@ -123,7 +123,7 @@ non-cacheable response.
 - [X] T060 [US1] Implement block normalization, random stable IDs, heading extraction, NFC/newline visible-text normalization and versioned fingerprints in `src/compiler/document/normalize.ts`
 - [X] T061 [P] [US1] Implement contained local-resource resolution, missing/cross-root diagnostics and opaque resource mapping in `src/compiler/resources/resolver.ts`
 - [X] T062 [P] [US1] Implement bounded Sharp raster inspection and forced single-frame JPEG/PNG/WebP/GIF decode in `src/compiler/resources/images.ts`
-- [ ] T063 [US1] Implement default TOC inclusion, four-role, continuous-level and heading-only page-boundary proposals without changing source order in `src/compiler/document/structure-proposal.ts`
+- [X] T063 [US1] Implement default TOC inclusion, four-role, continuous-level and heading-only page-boundary proposals without changing source order in `src/compiler/document/structure-proposal.ts`
 - [X] T064 [US1] Implement sanitized raw-HTML HAST conversion and the authenticated draft-preview rendering pipeline in `src/compiler/render/sanitize.ts` and `src/compiler/render/preview.ts`
 - [ ] T065 [US1] Implement `prepare_draft` and `build_preview` job handlers that create immutable config revisions and revision-pinned derived preview directories in `src/jobs/handlers/prepare-draft.ts` and `src/jobs/handlers/build-preview.ts`
 - [ ] T066 [US1] Implement import create/status/main-Markdown confirmation endpoints according to OpenAPI in `src/pages/api/manage/imports/index.ts`, `src/pages/api/manage/imports/[importId]/index.ts`, and `src/pages/api/manage/imports/[importId]/main-markdown.ts`
