@@ -11,7 +11,7 @@ lets the sole administrator confirm its publishing structure, builds a complete 
 version in the background, atomically publishes semantic Web pages, supports public reading
 and Chinese search, and offers the uploaded ZIP as a controlled original download.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Import and prepare one book (Priority: P1)
 
@@ -161,7 +161,7 @@ application, and verify durable status, bounded retry, cleanup, and unchanged pu
 - Recovery finds incomplete staging, an unreferenced complete directory, a database version
   without files, or a corrupt current manifest.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -276,7 +276,7 @@ application, and verify durable status, bounded retry, cleanup, and unchanged pu
   incompatible or unapproved license MUST remain behavior-only reference material unless a
   later explicit licensing decision permits reuse.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **Book**: Stable identity, title, visibility, and current published-version reference.
 - **Book Version**: Immutable source, configuration revision, generated representation,
@@ -294,7 +294,7 @@ application, and verify durable status, bounded retry, cleanup, and unchanged pu
 - **Administrator Credential**: Sole administrator session, fallback password account, and
   one or more named Passkeys.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 
@@ -337,9 +337,10 @@ application, and verify durable status, bounded retry, cleanup, and unchanged pu
   anonymous requests stop immediately when a book becomes private.
 - Formula failures may be diagnosed and displayed as source notation without blocking an
   otherwise valid publication.
-- During the M1 test stage, the administrator will provide two or three real MinerU output
-  ZIPs of several hundred pages each. They remain outside Git and are registered by opaque
-  fixture ID, MinerU version, size, and SHA-256 before use.
+- During the M1 test stage, the administrator will provide two or three real MinerU 3.4.4
+  output ZIPs of several hundred pages each. They remain outside Git and are registered by
+  opaque fixture ID, MinerU version, size, and SHA-256 before use. Formal M1 compatibility
+  and performance claims do not extend to other MinerU versions.
 - Conventional Commits are adopted for reviewable history only; M1 does not infer automatic
   releases or version numbers from commit messages.
 

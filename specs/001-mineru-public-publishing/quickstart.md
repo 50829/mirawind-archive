@@ -10,8 +10,8 @@ must provide; they are not expected to work before the implementation tasks are 
 - HTTPS origin for production Passkeys
 - One persistent directory whose `staging` and `versions` paths share a filesystem
 - Representative and hostile fixtures under `tests/fixtures/`
-- During final testing, the two or three real several-hundred-page MinerU ZIPs supplied by
-  the administrator under a Git-external directory such as
+- During final testing, the two or three real several-hundred-page MinerU 3.4.4 ZIPs supplied
+  by the administrator under a Git-external directory such as
   `/srv/mirawind-test-fixtures/real-mineru/`
 
 Create local configuration from the committed example and set at least:

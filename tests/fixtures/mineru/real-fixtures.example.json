@@ -4,7 +4,7 @@
     {
       "id": "real-mineru-a7f31c",
       "file_name": "real-mineru-a7f31c.zip",
-      "mineru_version": "REPLACE_WITH_EXACT_VERSION",
+      "mineru_version": "3.4.4",
       "page_count_range": {
         "minimum": 200,
         "maximum": 600
@@ -23,7 +23,7 @@
     {
       "id": "real-mineru-b9d204",
       "file_name": "real-mineru-b9d204.zip",
-      "mineru_version": "REPLACE_WITH_EXACT_VERSION",
+      "mineru_version": "3.4.4",
       "page_count_range": {
         "minimum": 200,
         "maximum": 600

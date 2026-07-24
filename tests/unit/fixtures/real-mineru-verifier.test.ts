@@ -121,4 +121,15 @@ describe("real MinerU fixture verifier", () => {
       parseRealFixtureManifest({ fixtures: [first], schema_version: 1 }),
     ).toThrow(/two or three/);
   });
+
+  it("rejects fixtures produced by a different MinerU version", () => {
+    const first = fixture("real-mineru-a7f31c", "first");
+    const second = fixture("real-mineru-b9d204", "second");
+    expect(() =>
+      parseRealFixtureManifest({
+        fixtures: [{ ...first, mineru_version: "3.4.3" }, second],
+        schema_version: 1,
+      }),
+    ).toThrow(/must be 3\.4\.4/);
+  });
 });

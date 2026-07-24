@@ -18,9 +18,9 @@ enumeration order.
 
 ## Real several-hundred-page fixtures
 
-The administrator will provide two or three real MinerU ZIPs during final testing. They are
-non-redistributable test inputs and must remain outside this repository, outside public CI
-artifacts, and outside logs. A recommended directory is:
+The administrator will provide two or three real MinerU 3.4.4 ZIPs during final testing.
+They are non-redistributable test inputs and must remain outside this repository, outside
+public CI artifacts, and outside logs. A recommended directory is:
 
 ```text
 /srv/mirawind-test-fixtures/real-mineru/
@@ -30,9 +30,10 @@ artifacts, and outside logs. A recommended directory is:
 ```
 
 Copy `real-fixtures.example.json` to that external directory as `real-fixtures.json`, replace
-all placeholders with measured values, and keep opaque filenames. The manifest records only
-an opaque ID, filename, MinerU version, approximate page range, byte size, SHA-256 and the
-administrator-approved usage scope. Do not record book titles, authors or extracted content.
+the size, hash and page-range placeholders with measured values, and keep opaque filenames.
+The manifest records only an opaque ID, filename, the frozen MinerU 3.4.4 version,
+approximate page range, byte size, SHA-256 and the administrator-approved usage scope. Do not
+record book titles, authors or extracted content.
 
 Verify before any compatibility or performance run:
 
@@ -40,7 +41,7 @@ Verify before any compatibility or performance run:
 pnpm fixtures:verify-real --dir /srv/mirawind-test-fixtures/real-mineru
 ```
 
-The verifier rejects symlinks, paths, unexpected fields, duplicate IDs, wrong usage scope,
-wrong sizes and wrong hashes. A missing external manifest is an explicit missing-fixture
-condition, not a passing real-fixture test. Final M1 acceptance requires all registered real
-fixtures; the synthetic fixtures cannot substitute for them.
+The verifier rejects other MinerU versions, symlinks, paths, unexpected fields, duplicate
+IDs, wrong usage scope, wrong sizes and wrong hashes. A missing external manifest is an
+explicit missing-fixture condition, not a passing real-fixture test. Final M1 acceptance
+requires all registered real fixtures; the synthetic fixtures cannot substitute for them.

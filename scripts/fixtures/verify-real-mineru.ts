@@ -98,13 +98,8 @@ function parseFixture(value: unknown, index: number): RealFixture {
   ) {
     throw new Error(`${label}.file_name must be the opaque ID plus .zip`);
   }
-  if (
-    typeof input.mineru_version !== "string" ||
-    input.mineru_version.length < 1 ||
-    input.mineru_version.length > 80 ||
-    /[\r\n\0]/.test(input.mineru_version)
-  ) {
-    throw new Error(`${label}.mineru_version is invalid`);
+  if (input.mineru_version !== "3.4.4") {
+    throw new Error(`${label}.mineru_version must be 3.4.4`);
   }
   const sizeBytes = positiveInteger(input.size_bytes, `${label}.size_bytes`);
   if (sizeBytes > maximumSupportedZipBytes) {
