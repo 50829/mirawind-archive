@@ -10,6 +10,7 @@ export interface FrozenJobInput {
   readonly capturedCurrentVersionId: string | null;
   readonly capturedSourceId: string | null;
   readonly configYamlRelativePath: string | null;
+  readonly createdAtMs: number;
   readonly importId: string | null;
   readonly importUploadRelativePath: string | null;
   readonly jobId: string;
@@ -102,6 +103,8 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
     jobKinds.includes(input.kind as JobKind) &&
     Number.isSafeInteger(input.attempt) &&
     Number(input.attempt) >= 1 &&
+    Number.isSafeInteger(input.createdAtMs) &&
+    Number(input.createdAtMs) >= 0 &&
     isNullablePositiveInteger(input.bookId) &&
     isNullablePositiveInteger(input.capturedConfigRevision) &&
     isNullableString(input.capturedCurrentVersionId) &&
@@ -121,7 +124,7 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
     (input.kind === "prepare_draft"
       ? input.bookId !== null && input.selectedCandidateRelativePath !== null
       : input.selectedCandidateRelativePath === null) &&
-    (input.kind === "build_preview"
+    (input.kind === "build_preview" || input.kind === "build_publish"
       ? input.bookId !== null &&
         input.capturedConfigRevision !== null &&
         input.capturedSourceId !== null &&

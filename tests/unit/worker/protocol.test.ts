@@ -18,6 +18,7 @@ describe("job child IPC protocol", () => {
         capturedCurrentVersionId: null,
         capturedSourceId: null,
         configYamlRelativePath: null,
+        createdAtMs: 1,
         importId: null,
         importUploadRelativePath: null,
         jobId,
@@ -50,6 +51,7 @@ describe("job child IPC protocol", () => {
         capturedCurrentVersionId: null,
         capturedSourceId: null,
         configYamlRelativePath: null,
+        createdAtMs: 1,
         importId,
         importUploadRelativePath: `tmp/uploads/${importId}/original.zip`,
         jobId,
@@ -71,6 +73,39 @@ describe("job child IPC protocol", () => {
           ...message.input,
           importUploadRelativePath: "tmp/uploads/other/original.zip",
         },
+      }),
+    ).toBe(false);
+  });
+
+  it("requires frozen config and source captures for publish jobs", () => {
+    const jobId = createOpaqueId("job");
+    const message = {
+      input: {
+        attempt: 1,
+        bookId: 1,
+        capturedConfigRevision: 2,
+        capturedCurrentVersionId: null,
+        capturedSourceId: createOpaqueId("source"),
+        configYamlRelativePath: "books/1/draft/configs/2/book.yaml",
+        createdAtMs: 1,
+        importId: null,
+        importUploadRelativePath: null,
+        jobId,
+        kind: "build_publish",
+        selectedCandidateRelativePath: null,
+        sourceRootRelativePath: "books/1/draft/sources/source",
+        stagingRelativePath: `staging/${jobId}`,
+        versionId: null,
+      },
+      protocolVersion: jobChildProtocolVersion,
+      type: "run",
+    };
+
+    expect(isRunJobMessage(message)).toBe(true);
+    expect(
+      isRunJobMessage({
+        ...message,
+        input: { ...message.input, sourceRootRelativePath: null },
       }),
     ).toBe(false);
   });

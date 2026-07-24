@@ -120,6 +120,38 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         ],
       }),
     ),
+    writeFile(
+      resolve(e2eFixtureRoot, "publish.zip"),
+      buildZip({
+        entries: [
+          {
+            data: [
+              "# Front",
+              "",
+              "Opening.",
+              "",
+              "# Main",
+              "",
+              "Published body.",
+              "",
+              "## Details",
+              "",
+              "Detail body.",
+              "",
+              "# Appendix",
+              "",
+              "Appendix body.",
+              "",
+              "# Back",
+              "",
+              "Closing.",
+            ].join("\n"),
+            name: "wrapper/result/full.md",
+          },
+          { data: '{"pages":[]}', name: "wrapper/result/layout.json" },
+        ],
+      }),
+    ),
   ]);
 
   const worker = await startWorkerProcess({

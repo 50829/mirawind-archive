@@ -19,6 +19,7 @@ import {
   finalizeBuiltPreview,
   readPreviewBuildArtifact,
 } from "../jobs/handlers/build-preview.js";
+import { finalizeBuiltPublication } from "../jobs/handlers/build-publish.js";
 import {
   finalizePreparedDraft,
   preparedDraftArtifactPath,
@@ -83,6 +84,7 @@ function frozenInput(
     capturedCurrentVersionId: job.capturedCurrentVersionId,
     capturedSourceId: job.capturedSourceId,
     configYamlRelativePath: config?.yamlRelativePath ?? null,
+    createdAtMs: job.createdAtMs,
     importId: job.importId,
     importUploadRelativePath: imported?.uploadRelativePath ?? null,
     jobId: job.id,
@@ -251,6 +253,31 @@ async function executeClaimedJob(input: {
           nowMs: Date.now(),
           stagingDirectory,
         });
+      }
+      if (
+        input.job.kind === "build_publish" &&
+        input.job.bookId &&
+        input.job.capturedConfigRevision
+      ) {
+        const expected = `staging/${input.job.id}/version-build-result.json`;
+        if (
+          execution.result.result?.versionBuildResultRelativePath !== expected
+        ) {
+          throw new Error("VERSION_BUILD_RESULT_PATH_INVALID");
+        }
+        await finalizeBuiltPublication({
+          actorUserId: null,
+          database: input.database,
+          jobId: input.job.id,
+          layout: input.layout,
+          leaseOwner: input.leaseOwner,
+          nowMs: Date.now(),
+          stagingDirectory: await resolveContainedPath(
+            input.layout.root,
+            `staging/${input.job.id}`,
+          ),
+        });
+        return;
       }
       input.repository.completeSuccess({
         jobId: input.job.id,

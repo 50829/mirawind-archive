@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import { PublishPanel } from "./PublishPanel";
 import { StructureEditor } from "./StructureEditor";
 
 interface PreviewHeading {
@@ -152,6 +153,15 @@ export function StructurePreview(props: { readonly bookId: number }) {
             </label>
           )}
           <DiagnosticsPanel diagnostics={draft.diagnostics} />
+          <PublishPanel
+            bookId={draft.book_id}
+            configRevision={draft.config_revision}
+            previewReady={
+              draft.preview_state === "ready" &&
+              preview?.config_revision === draft.config_revision
+            }
+            previewStale={preview?.is_stale ?? false}
+          />
           {etag && (
             <StructureEditor
               key={draft.config_revision}

@@ -48,9 +48,12 @@ test("imports high-confidence and generic books, rejects ambiguity, and preserve
   try {
     const source = database
       .prepare(
-        `SELECT source_root_rel_path, main_markdown_path
+        `SELECT source_snapshots.source_root_rel_path,
+                source_snapshots.main_markdown_path
          FROM source_snapshots
-         ORDER BY created_at, id
+         JOIN books ON books.draft_source_id = source_snapshots.id
+         WHERE books.title_cache = 'E2E Cloud Book'
+         ORDER BY source_snapshots.created_at DESC, source_snapshots.id DESC
          LIMIT 1`,
       )
       .get() as {

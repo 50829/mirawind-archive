@@ -62,7 +62,7 @@ const ajv = new Ajv2020({
   strict: true,
   useDefaults: false,
 });
-addFormats(ajv);
+(addFormats as unknown as (instance: Ajv2020) => void)(ajv);
 ajv.addKeyword({
   keyword: "x-semantic-validations",
   schemaType: "array",

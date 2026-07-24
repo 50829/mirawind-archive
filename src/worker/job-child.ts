@@ -3,6 +3,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import { SafeApplicationError } from "../domain/errors.js";
 import { analyzeImport } from "../jobs/handlers/analyze-import.js";
 import { buildPreview } from "../jobs/handlers/build-preview.js";
+import { buildPublish } from "../jobs/handlers/build-publish.js";
 import { prepareDraft } from "../jobs/handlers/prepare-draft.js";
 import { resolveContainedPath } from "../storage/path-resolver.js";
 import {
@@ -133,6 +134,46 @@ async function execute(message: RunJobMessage): Promise<void> {
         protocolVersion: jobChildProtocolVersion,
         result: {
           previewBuildResultRelativePath: `${message.input.stagingRelativePath}/preview-build-result.json`,
+        },
+        type: "result",
+      });
+      return;
+    }
+    if (
+      message.input.kind === "build_publish" &&
+      message.input.bookId &&
+      message.input.capturedConfigRevision &&
+      message.input.capturedSourceId &&
+      message.input.configYamlRelativePath &&
+      message.input.sourceRootRelativePath
+    ) {
+      await buildPublish({
+        bookId: message.input.bookId,
+        configRevision: message.input.capturedConfigRevision,
+        configYamlPath: await resolveContainedPath(
+          root,
+          message.input.configYamlRelativePath,
+        ),
+        createdAtMs: message.input.createdAtMs,
+        draftRoot: await resolveContainedPath(
+          root,
+          `books/${message.input.bookId}/draft`,
+        ),
+        jobId: message.input.jobId,
+        predecessorVersionId: message.input.capturedCurrentVersionId,
+        sourceId: message.input.capturedSourceId,
+        sourceRoot: await resolveContainedPath(
+          root,
+          message.input.sourceRootRelativePath,
+        ),
+        stagingDirectory,
+      });
+      send({
+        jobId: message.input.jobId,
+        ok: true,
+        protocolVersion: jobChildProtocolVersion,
+        result: {
+          versionBuildResultRelativePath: `${message.input.stagingRelativePath}/version-build-result.json`,
         },
         type: "result",
       });

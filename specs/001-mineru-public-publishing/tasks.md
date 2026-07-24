@@ -150,15 +150,15 @@ unchanged.
 
 ### Evidence tests for User Story 2
 
-- [ ] T070 [P] [US2] Add failing OpenAPI contract tests for ETag-guarded draft replacement, publish enqueue and immediate non-public visibility change in `tests/contract/config-publish.contract.test.ts`
+- [x] T070 [P] [US2] Add failing OpenAPI contract tests for ETag-guarded draft replacement, publish enqueue and immediate non-public visibility change in `tests/contract/config-publish.contract.test.ts`
 - [x] T071 [P] [US2] Add failing structure tests for TOC-only exclusion, display titles, continuous h1–h4 levels, role inheritance, page starts only before headings and no body reorder in `tests/integration/compiler/structure-validation.test.ts`
 - [x] T072 [P] [US2] Add failing semantic renderer tests for headings, lists, tables, figures/captions, formulas/fallback, code/plain fallback, footnotes and all eight教材 containers in `tests/integration/compiler/semantic-render.test.ts`
 - [x] T073 [P] [US2] Add failing manifest/version tests for strict schema, link/resource closure, source spans, stable IDs, hashes, complete marker and unsupported newer schema rejection in `tests/contract/document-manifest.test.ts`
-- [ ] T074 [P] [US2] Add failing publication crash-matrix tests before/after fsync, rename, ready/search transaction and current-pointer transaction in `tests/integration/publication/crash-boundaries.test.ts`
-- [ ] T075 [P] [US2] Add failing stale-source/config/current-version compare-and-swap and competing-publish tests in `tests/integration/publication/stale-build.test.ts`
+- [x] T074 [P] [US2] Add failing publication crash-matrix tests before/after fsync, rename, ready/search transaction and current-pointer transaction in `tests/integration/publication/crash-boundaries.test.ts`
+- [x] T075 [P] [US2] Add failing stale-source/config/current-version compare-and-swap and competing-publish tests in `tests/integration/publication/stale-build.test.ts`
 - [x] T076 [P] [US2] Add failing FTS row-count/ID-set validation and index-failure rollback tests in `tests/integration/publication/search-index-validation.test.ts`
 - [x] T077 [P] [US2] Add failing same-version canonical manifest and unchanged-content page/resource/search reproducibility tests in `tests/integration/compiler/reproducibility.test.ts`
-- [ ] T078 [US2] Add a failing browser journey for editing every M1 override, validation errors, stale preview, publish progress, successful cutover and failed-build old-version continuity in `tests/e2e/configure-publish.spec.ts`
+- [x] T078 [US2] Add a failing browser journey for editing every M1 override, validation errors, stale preview, publish progress, successful cutover and failed-build old-version continuity in `tests/e2e/configure-publish.spec.ts`
 
 ### Implementation for User Story 2
 
@@ -173,12 +173,12 @@ unchanged.
 - [x] T087 [US2] Implement canonical `version.json`, authoritative-input copies, file/hash validation, recursive fsync and same-filesystem immutable rename in `src/compiler/version-builder.ts` and `src/storage/finalize-version.ts`
 - [x] T088 [P] [US2] Implement deterministic FTS5 trigram and short-field search-row spool generation from normalized visible text in `src/compiler/search/build-spool.ts`
 - [x] T089 [US2] Implement one ready-version plus version-scoped FTS/short-field transaction with count and referential ID validation in `src/db/repositories/versions.ts` and `src/db/repositories/search-index.ts`
-- [ ] T090 [P] [US2] Implement the publication policy extension interface with the M1 allow policy and no fabricated confirmation record in `src/policy/publish-policy.ts`
-- [ ] T091 [US2] Implement guarded `BEGIN IMMEDIATE` cutover comparing source/config/base current version and atomically changing `current_version_id`, visibility, version states, audit and job result in `src/services/publication.ts`
-- [ ] T092 [US2] Implement the `build_publish` job handler with named crash-injection points reserved for test builds in `src/jobs/handlers/build-publish.ts` and `src/jobs/crash-points.ts`
-- [ ] T093 [US2] Implement publish enqueue and immediate draft/private visibility endpoints with idempotency and origin checks in `src/pages/api/manage/books/[bookId]/publish.ts` and `src/pages/api/manage/books/[bookId]/visibility.ts`
-- [ ] T094 [US2] Implement publish validation/progress/failure UI while continuing to show the previous published version in `src/components/preview/PublishPanel.tsx` and `src/pages/manage/books/[bookId]/preview.astro`
-- [ ] T095 [US2] Run the complete User Story 2 contract, compiler, crash, stale-build, reproducibility and browser suites and record the passing command evidence in `docs/audits/m1-us2-publication-evidence.md`
+- [x] T090 [P] [US2] Implement the publication policy extension interface with the M1 allow policy and no fabricated confirmation record in `src/policy/publish-policy.ts`
+- [x] T091 [US2] Implement guarded `BEGIN IMMEDIATE` cutover comparing source/config/base current version and atomically changing `current_version_id`, visibility, version states, audit and job result in `src/services/publication.ts`
+- [x] T092 [US2] Implement the `build_publish` job handler with named crash-injection points reserved for test builds in `src/jobs/handlers/build-publish.ts` and `src/jobs/crash-points.ts`
+- [x] T093 [US2] Implement publish enqueue and immediate draft/private visibility endpoints with idempotency and origin checks in `src/pages/api/manage/books/[bookId]/publish.ts` and `src/pages/api/manage/books/[bookId]/visibility.ts`
+- [x] T094 [US2] Implement publish validation/progress/failure UI while continuing to show the previous published version in `src/components/preview/PublishPanel.tsx` and `src/pages/manage/books/[bookId]/preview.astro`
+- [x] T095 [US2] Run the complete User Story 2 contract, compiler, crash, stale-build, reproducibility and browser suites and record the passing command evidence in `docs/audits/m1-us2-publication-evidence.md`
 
 **Checkpoint**: User Stories 1 and 2 pass. A prepared book can become public atomically, but
 reader search/download UX is not yet considered complete.

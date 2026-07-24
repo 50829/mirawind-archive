@@ -14,6 +14,8 @@ import {
 import { dirname, relative, resolve, sep } from "node:path";
 
 import { validateVersionMarker } from "../schemas/document-manifest.js";
+import type { CrashPointInjector } from "../jobs/crash-points.js";
+import { injectCrashPoint } from "../jobs/crash-points.js";
 import { resolveContainedPath, type StorageLayout } from "./layout.js";
 
 async function syncDirectory(path: string): Promise<void> {
@@ -102,6 +104,7 @@ export async function finalizeImmutableVersion(input: {
     readonly versionDirectory: "version";
     readonly versionId: string;
   };
+  readonly crashPoint?: CrashPointInjector;
   readonly layout: StorageLayout;
   readonly stagingDirectory: string;
 }): Promise<string> {
@@ -139,12 +142,15 @@ export async function finalizeImmutableVersion(input: {
   ) {
     throw new Error("VERSION_DIRECTORY_EXISTS");
   }
+  await injectCrashPoint(input.crashPoint, "before_fsync");
   await syncTree(stagedVersion);
+  await injectCrashPoint(input.crashPoint, "after_fsync_before_rename");
   await chmod(stagedVersion, 0o700);
   try {
     await rename(stagedVersion, finalDirectory);
     await chmod(finalDirectory, 0o500);
     await syncDirectory(dirname(finalDirectory));
+    await injectCrashPoint(input.crashPoint, "after_rename");
     await rm(input.stagingDirectory, { force: true, recursive: true });
     return finalDirectory;
   } catch (error) {
