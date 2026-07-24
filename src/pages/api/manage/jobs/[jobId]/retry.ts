@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { APIRoute } from "astro";
 
 import { JobRepository } from "@/db/repositories/jobs";
@@ -59,8 +61,12 @@ export const POST: APIRoute = ({ locals, params, request }) => {
   const retry = repository.retry(jobId, {
     automatic: false,
     idempotency: {
-      key: idempotencyKey,
-      operation: `job.retry:${jobId}`,
+      key: createHash("sha256")
+        .update(jobId, "utf8")
+        .update("\0")
+        .update(idempotencyKey, "utf8")
+        .digest("hex"),
+      operation: "job.retry",
     },
     nowMs: Date.now(),
   });

@@ -278,18 +278,22 @@ describe("startup storage and current-version reconciliation", () => {
           readyJob.id,
         );
       expect(
-        (await stat(
-          resolve(root.layout.bookDirectory, String(fixture.book.id)),
-        )).mode & 0o777,
+        (
+          await stat(
+            resolve(root.layout.bookDirectory, String(fixture.book.id)),
+          )
+        ).mode & 0o777,
       ).toBe(0o700);
       expect(
-        (await stat(
-          resolve(
-            root.layout.bookDirectory,
-            String(fixture.book.id),
-            "versions",
-          ),
-        )).mode & 0o777,
+        (
+          await stat(
+            resolve(
+              root.layout.bookDirectory,
+              String(fixture.book.id),
+              "versions",
+            ),
+          )
+        ).mode & 0o777,
       ).toBe(0o700);
 
       const result = await reconcileStorage({

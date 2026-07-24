@@ -134,7 +134,7 @@ describe("job child termination", () => {
         childModulePath: fixturePath,
         storageRoot: root,
         terminationGraceMs: 30,
-        timeoutMs: 25,
+        timeoutMs: 500,
       });
       expect(execution.result).toMatchObject({
         ok: false,

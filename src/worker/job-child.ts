@@ -1,11 +1,16 @@
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import { openDatabase } from "../db/connection.js";
 import { SafeApplicationError } from "../domain/errors.js";
 import { analyzeImport } from "../jobs/handlers/analyze-import.js";
 import { buildPreview } from "../jobs/handlers/build-preview.js";
 import { buildPublish } from "../jobs/handlers/build-publish.js";
 import { prepareDraft } from "../jobs/handlers/prepare-draft.js";
+import { reclaimRetainedStorage } from "../jobs/handlers/reclaim.js";
+import { reconcileRuntimeStorage } from "../jobs/handlers/reconcile.js";
+import { verifyVersion } from "../jobs/handlers/verify-version.js";
 import { resolveContainedPath } from "../storage/path-resolver.js";
+import { createStorageLayout } from "../storage/layout.js";
 import {
   isCancelJobMessage,
   isRunJobMessage,
@@ -79,6 +84,101 @@ async function execute(message: RunJobMessage): Promise<void> {
         },
         type: "result",
       });
+      return;
+    }
+    if (
+      message.input.kind === "verify_version" &&
+      message.input.versionId !== null
+    ) {
+      const database = openDatabase(join(root, "db", "mirawind.sqlite"), {
+        role: "worker",
+      });
+      try {
+        const outcome = await verifyVersion({
+          database,
+          layout: await createStorageLayout(root),
+          nowMs: Date.now(),
+          versionId: message.input.versionId,
+        });
+        send({
+          jobId: message.input.jobId,
+          ok: outcome.result.ok,
+          protocolVersion: jobChildProtocolVersion,
+          ...(outcome.result.ok
+            ? {
+                result: {
+                  recovered: outcome.recovery !== null,
+                  version_id: outcome.versionId,
+                },
+              }
+            : {
+                safeErrorClass: "content",
+                safeErrorCode: outcome.result.code,
+              }),
+          type: "result",
+        });
+      } finally {
+        database.close();
+      }
+      return;
+    }
+    if (message.input.kind === "reconcile") {
+      const database = openDatabase(join(root, "db", "mirawind.sqlite"), {
+        role: "worker",
+      });
+      try {
+        const outcome = await reconcileRuntimeStorage({
+          database,
+          layout: await createStorageLayout(root),
+          nowMs: Date.now(),
+        });
+        send({
+          jobId: message.input.jobId,
+          ok: true,
+          protocolVersion: jobChildProtocolVersion,
+          result: {
+            corrupt_versions: outcome.corruptDatabaseVersions.length,
+            quarantined: outcome.quarantinedDirectories.length,
+            recovered_current: outcome.recoveredCurrentVersions.length,
+            removed_staging: outcome.removedStagingDirectories.length,
+          },
+          type: "result",
+        });
+      } finally {
+        database.close();
+      }
+      return;
+    }
+    if (message.input.kind === "reclaim") {
+      const database = openDatabase(join(root, "db", "mirawind.sqlite"), {
+        role: "worker",
+      });
+      try {
+        const outcome = await reclaimRetainedStorage({
+          database,
+          layout: await createStorageLayout(root),
+          nowMs: Date.now(),
+        });
+        send({
+          jobId: message.input.jobId,
+          ok: outcome.failedPaths.length === 0,
+          protocolVersion: jobChildProtocolVersion,
+          ...(outcome.failedPaths.length === 0
+            ? {
+                result: {
+                  reclaimed_versions: outcome.reclaimedVersionIds.length,
+                  removed_quarantine: outcome.removedQuarantinePaths.length,
+                },
+              }
+            : {
+                safeErrorClass: "infrastructure",
+                safeErrorCode: "RECLAIM_CLEANUP_INCOMPLETE",
+              }),
+          type: "result",
+        });
+      } finally {
+        database.close();
+      }
       return;
     }
     if (

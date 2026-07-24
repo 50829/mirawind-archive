@@ -8,6 +8,7 @@ import {
 } from "@/http/errors/responses";
 import { errorPolicyForRequest } from "@/http/errors/error-policy";
 import { createRequestContext } from "@/http/request-context";
+import { operationalMetrics } from "@/observability/metrics";
 
 export const onRequest = defineMiddleware(async ({ locals, request }, next) => {
   const requestContext = createRequestContext(request);
@@ -31,6 +32,12 @@ export const onRequest = defineMiddleware(async ({ locals, request }, next) => {
       request.headers.get("accept")?.includes("application/json")
         ? createSafeJsonError(input)
         : createSafeHtmlError(input);
+  }
+  const elapsedMs = Date.now() - requestContext.startedAtMs;
+  if (requestPath.startsWith("/read/")) {
+    operationalMetrics.recordRequest("read", elapsedMs);
+  } else if (requestPath.includes("/search")) {
+    operationalMetrics.recordRequest("search", elapsedMs);
   }
   response.headers.set("X-Request-ID", requestContext.id);
   return response;

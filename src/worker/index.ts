@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,7 @@ import { DraftRepository } from "../db/repositories/drafts.js";
 import { ImportRepository } from "../db/repositories/imports.js";
 import { JobRepository, type JobRecord } from "../db/repositories/jobs.js";
 import { SourceRepository } from "../db/repositories/sources.js";
+import { recoverExpiredJobLeases } from "../jobs/recovery.js";
 import {
   persistAnalyzeImportArtifact,
   readAnalyzeImportArtifact,
@@ -26,8 +28,11 @@ import {
   readPreparedDraftArtifact,
 } from "../jobs/handlers/prepare-draft.js";
 import type { StorageLayout } from "../storage/layout.js";
-import { createStorageLayout } from "../storage/layout.js";
+import { atomicWriteFile, createStorageLayout } from "../storage/layout.js";
 import { resolveContainedPath } from "../storage/path-resolver.js";
+import { operationalMetrics } from "../observability/metrics.js";
+import { reconcileStorage } from "../storage/reconcile.js";
+import { WorkerCheckpointScheduler } from "./checkpoint.js";
 import { runJobChild } from "./child-runner.js";
 import type { FrozenJobInput } from "./protocol.js";
 
@@ -332,20 +337,34 @@ export async function runWorkerLoop(input: {
   readonly imports: ImportRepository;
   readonly layout: StorageLayout;
   readonly repository: JobRepository;
+  readonly scheduler: WorkerCheckpointScheduler;
   readonly shutdownSignal: AbortSignal;
   readonly sources: SourceRepository;
   readonly workerId: string;
 }): Promise<void> {
   while (!input.shutdownSignal.aborted) {
-    input.repository.interruptExpired({ nowMs: Date.now() });
+    const loopNowMs = Date.now();
+    const recovered = await recoverExpiredJobLeases({
+      nowMs: loopNowMs,
+      repository: input.repository,
+      storageRoot: input.layout.root,
+    });
+    for (const item of recovered) {
+      operationalMetrics.recordTransition(
+        item.retry ? "recovery.auto_retry" : "recovery.interrupted",
+      );
+    }
+    await input.scheduler.checkpointIfDue(loopNowMs);
     const job = input.repository.claimNext({
       leaseOwner: input.workerId,
-      nowMs: Date.now(),
+      nowMs: loopNowMs,
     });
     if (!job) {
       await delay(pollIntervalMs, input.shutdownSignal);
       continue;
     }
+    operationalMetrics.recordQueueAge(Math.max(0, loopNowMs - job.createdAtMs));
+    const startedAtMs = Date.now();
     await executeClaimedJob({
       job,
       database: input.database,
@@ -357,6 +376,19 @@ export async function runWorkerLoop(input: {
       layout: input.layout,
       sources: input.sources,
     });
+    operationalMetrics.recordPhase(job.kind, Date.now() - startedAtMs);
+    const completed = input.repository.get(job.id);
+    if (completed?.errorClass && completed.errorCode) {
+      operationalMetrics.recordFailure(
+        completed.errorClass,
+        completed.errorCode,
+      );
+    }
+    if (completed) {
+      operationalMetrics.recordTransition(
+        `job.${completed.kind}.${completed.state}`,
+      );
+    }
   }
 }
 
@@ -372,24 +404,96 @@ async function main(): Promise<void> {
 
   const environment = parseEnvironment(process.env, { mode: runtimeMode() });
   const layout = await createStorageLayout(environment.dataDirectory);
-  const database = openDatabase(
-    join(environment.dataDirectory, "db", "mirawind.sqlite"),
-    { role: "worker" },
-  );
+  const databasePath = join(environment.dataDirectory, "db", "mirawind.sqlite");
+  const database = openDatabase(databasePath, { role: "worker" });
+  const pidPath = join(layout.temporaryDirectory, "worker.pid");
   try {
-    const workerId = `worker:${hostname()}:${process.pid}:${randomUUID()}`;
+    const bootId = randomUUID();
+    const workerId = `worker:${hostname()}:${process.pid}:${bootId}`;
+    const repository = new JobRepository(database);
+    const recovered = await recoverExpiredJobLeases({
+      nowMs: Date.now(),
+      repository,
+      storageRoot: layout.root,
+    });
+    for (const item of recovered) {
+      operationalMetrics.recordTransition(
+        item.retry ? "recovery.auto_retry" : "recovery.interrupted",
+      );
+    }
+    const reconciliation = await reconcileStorage({
+      database,
+      layout,
+      nowMs: Date.now(),
+    });
+    if (
+      reconciliation.corruptDatabaseVersions.length > 0 ||
+      reconciliation.quarantinedDirectories.length > 0 ||
+      reconciliation.recoveredCurrentVersions.length > 0 ||
+      reconciliation.removedStagingDirectories.length > 0
+    ) {
+      operationalMetrics.recordTransition("recovery.startup_changed");
+    }
+    const currentVersions = database
+      .prepare(
+        `SELECT book_versions.id, book_versions.book_id,
+                book_versions.source_id, book_versions.config_revision
+         FROM books
+         JOIN book_versions ON book_versions.id = books.current_version_id
+         WHERE book_versions.state = 'published'
+           AND book_versions.reclaimed_at IS NULL
+         ORDER BY books.id`,
+      )
+      .all() as {
+      book_id: number;
+      config_revision: number;
+      id: string;
+      source_id: string;
+    }[];
+    for (const version of currentVersions) {
+      repository.create({
+        bookId: version.book_id,
+        capturedConfigRevision: version.config_revision,
+        capturedSourceId: version.source_id,
+        idempotency: {
+          key: `${bootId}:verify:${version.id}`,
+          operation: "version.verify",
+        },
+        kind: "verify_version",
+        nowMs: Date.now(),
+        versionId: version.id,
+      });
+    }
+    repository.create({
+      idempotency: {
+        key: `${bootId}:storage:reclaim`,
+        operation: "storage.reclaim",
+      },
+      kind: "reclaim",
+      nowMs: Date.now(),
+    });
+    const scheduler = new WorkerCheckpointScheduler({
+      database,
+      databasePath,
+      layout,
+    });
+    await scheduler.checkpointIfDue(Date.now());
+    await operationalMetrics.collectDiskUsage(layout.root);
+    await atomicWriteFile(pidPath, `${process.pid}\n`, { mode: 0o600 });
     process.stdout.write("Mirawind worker ready\n");
     await runWorkerLoop({
       database,
       drafts: new DraftRepository(database),
       imports: new ImportRepository(database),
       layout,
-      repository: new JobRepository(database),
+      repository,
+      scheduler,
       shutdownSignal: shutdownController.signal,
       sources: new SourceRepository(database),
       workerId,
     });
   } finally {
+    await rm(pidPath, { force: true });
     database.close();
   }
 }

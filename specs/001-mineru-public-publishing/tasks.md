@@ -249,8 +249,8 @@ continued availability of unrelated/current books.
 - [x] T120 [P] [US4] Add failing retry-policy tests for one infrastructure auto-retry and manual-only content/limit/timeout/repeat-interruption retries in `tests/integration/recovery/retry-policy.test.ts`
 - [x] T121 [P] [US4] Add failing startup inventory tests for incomplete staging, orphan complete directory, missing DB/files, corrupt current, ready non-publication, predecessor rollback and book-scoped 503 in `tests/integration/recovery/reconciliation.test.ts`
 - [x] T122 [P] [US4] Add failing retention tests for current/previous preservation, 24-hour quarantine/grace, FTS cleanup and cleanup-failure non-interference in `tests/integration/recovery/retention.test.ts`
-- [ ] T123 [P] [US4] Add failing worker-owned passive checkpoint, WAL-size alert, Web 250 ms busy bound and startup WAL-recovery retry tests in `tests/integration/storage/wal-operations.test.ts`
-- [ ] T124 [US4] Add a failing production-stack browser/process journey for task status, cancellation, restart, retry and unchanged current publication in `tests/e2e/worker-recovery.spec.ts`
+- [x] T123 [P] [US4] Add failing worker-owned passive checkpoint, WAL-size alert, Web 250 ms busy bound and startup WAL-recovery retry tests in `tests/integration/storage/wal-operations.test.ts`
+- [x] T124 [US4] Add a failing production-stack browser/process journey for task status, cancellation, restart, retry and unchanged current publication in `tests/e2e/worker-recovery.spec.ts`
 
 ### Implementation for User Story 4
 
@@ -263,10 +263,10 @@ continued availability of unrelated/current books.
 - [x] T131 [US4] Implement startup inventory and reconciliation for staging, quarantine, version directories, DB rows and current pointers in `src/storage/reconcile.ts`
 - [x] T132 [US4] Implement quick current-version verification, background full-hash verification, corrupt-state marking and atomic verified-predecessor rollback in `src/services/version-verifier.ts` and `src/jobs/handlers/verify-version.ts`
 - [x] T133 [US4] Implement 24-hour orphan quarantine and retention-safe version/FTS reclamation that always preserves current and previous verified versions in `src/jobs/handlers/reconcile.ts` and `src/jobs/handlers/reclaim.ts`
-- [ ] T134 [US4] Implement worker-owned scheduled PASSIVE checkpoints, WAL/lease health reporting and maintenance-only checkpoint controls in `src/worker/checkpoint.ts` and `src/pages/api/manage/health.ts`
-- [ ] T135 [P] [US4] Implement structured phase timings, queue age, disk usage, publication/recovery transitions, read/search percentiles and safe failure counters in `src/observability/metrics.ts`
-- [ ] T136 [US4] Wire reconciliation before worker claims and ensure Web startup contains corruption to one book in `src/worker/index.ts` and `src/middleware.ts`
-- [ ] T137 [US4] Run the complete User Story 4 contract, lease, termination, retry, reconciliation, retention, WAL and production-stack suites and record passing evidence in `docs/audits/m1-us4-recovery-evidence.md`
+- [x] T134 [US4] Implement worker-owned scheduled PASSIVE checkpoints, WAL/lease health reporting and maintenance-only checkpoint controls in `src/worker/checkpoint.ts` and `src/pages/api/manage/health.ts`
+- [x] T135 [P] [US4] Implement structured phase timings, queue age, disk usage, publication/recovery transitions, read/search percentiles and safe failure counters in `src/observability/metrics.ts`
+- [x] T136 [US4] Wire reconciliation before worker claims and ensure Web startup contains corruption to one book in `src/worker/index.ts` and `src/middleware.ts`
+- [x] T137 [US4] Run the complete User Story 4 contract, lease, termination, retry, reconciliation, retention, WAL and production-stack suites and record passing evidence in `docs/audits/m1-us4-recovery-evidence.md`
 
 **Checkpoint**: All four stories and every documented restart/failure class pass.
 
