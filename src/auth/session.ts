@@ -42,6 +42,12 @@ export function getRuntimeAuth(): ReturnType<typeof createHttpAuth> {
   return auth;
 }
 
+export function getRuntimeDatabase(): Database.Database {
+  getRuntimeAuth();
+  if (!runtime) throw new Error("AUTH_RUNTIME_NOT_INITIALIZED");
+  return runtime.database;
+}
+
 export async function resolveRequestSession(
   request: Request,
 ): Promise<RequestSession | null> {

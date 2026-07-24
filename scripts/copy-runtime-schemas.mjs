@@ -26,7 +26,11 @@ const migrationDestination = resolve(
 );
 await mkdir(migrationDestination, { recursive: true });
 await Promise.all(
-  ["0001_m1_core.sql", "0002_better_auth.sql"].map((migrationName) =>
+  [
+    "0001_m1_core.sql",
+    "0002_better_auth.sql",
+    "0003_passkey_last_used.sql",
+  ].map((migrationName) =>
     copyFile(
       resolve(repositoryRoot, "src", "db", "migrations", migrationName),
       resolve(migrationDestination, migrationName),

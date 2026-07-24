@@ -21,6 +21,13 @@ const migrationDefinitions = [
     name: "better_auth",
     version: 2,
   },
+  {
+    checksum:
+      "97defe21c9d481ccdb25f54172b2240631d17e8d158da2da68bed52a5835594b",
+    file: "0003_passkey_last_used.sql",
+    name: "passkey_last_used",
+    version: 3,
+  },
 ] as const;
 
 export async function loadMigrationManifest(): Promise<readonly Migration[]> {

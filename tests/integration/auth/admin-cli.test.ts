@@ -3,12 +3,15 @@ import { PassThrough } from "node:stream";
 import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
 
+import { createHttpAuth } from "@/auth/server";
 import { createSetupAuth } from "@/auth/setup-server";
+import { deleteNonFinalPasskey, recordPasskeyUse } from "@/auth/passkey-policy";
 import { runAdminCli, type AdminCliDependencies } from "@/cli/admin-cli";
 import { bootstrapAdministrator } from "@/cli/commands/admin-bootstrap";
 import { recoverAdministrator } from "@/cli/commands/admin-recover";
 import { applyMigrations } from "@/db/migrate";
 import { loadMigrationManifest } from "@/db/migration-manifest";
+import { deleteFinalPasskey } from "@/services/security/final-passkey";
 
 const environment = {
   allowedHosts: ["library.example.test"],
@@ -148,6 +151,112 @@ describe("offline administrator CLI", () => {
     expect(
       database.prepare("SELECT action FROM audit_events ORDER BY id").all(),
     ).toEqual([{ action: "admin.bootstrap" }, { action: "admin.recover" }]);
+    database.close();
+  });
+
+  it("atomically deletes only the final owned Passkey and records a safe audit", async () => {
+    const database = new Database(":memory:");
+    applyMigrations(database, await loadMigrationManifest());
+    const setupAuth = createSetupAuth({ database, environment });
+    const bootstrap = await bootstrapAdministrator({
+      auth: setupAuth,
+      database,
+      displayName: "Administrator",
+      email: "admin@example.test",
+      nowMs: 1_000,
+      password: "initial-fallback-password-123",
+    });
+    database
+      .prepare(
+        `INSERT INTO passkey
+          (id, publicKey, userId, credentialID, counter, deviceType, backedUp)
+         VALUES ('final-key', 'public-key', ?, 'credential-final', 0, 'singleDevice', 0)`,
+      )
+      .run(bootstrap.userId);
+
+    await expect(
+      deleteFinalPasskey({
+        auth: createHttpAuth({ database, environment }),
+        database,
+        nowMs: 2_000,
+        passkeyId: "final-key",
+        userId: bootstrap.userId,
+      }),
+    ).resolves.toEqual({ deleted: true });
+    expect(
+      database.prepare("SELECT COUNT(*) AS count FROM passkey").get(),
+    ).toEqual({ count: 0 });
+    expect(
+      database
+        .prepare(
+          "SELECT action, actor_user_id FROM audit_events ORDER BY id DESC LIMIT 1",
+        )
+        .get(),
+    ).toEqual({
+      action: "passkey.delete-final",
+      actor_user_id: bootstrap.userId,
+    });
+    database.close();
+  });
+
+  it("keeps generic deletion from removing the final Passkey", async () => {
+    const database = new Database(":memory:");
+    applyMigrations(database, await loadMigrationManifest());
+    const bootstrap = await bootstrapAdministrator({
+      auth: createSetupAuth({ database, environment }),
+      database,
+      displayName: "Administrator",
+      email: "admin@example.test",
+      nowMs: 1_000,
+      password: "initial-fallback-password-123",
+    });
+    const insertPasskey = database.prepare(
+      `INSERT INTO passkey
+        (id, publicKey, userId, credentialID, counter, deviceType, backedUp)
+       VALUES (?, 'public-key', ?, ?, 0, 'singleDevice', 0)`,
+    );
+    insertPasskey.run("key-one", bootstrap.userId, "credential-one");
+    insertPasskey.run("key-two", bootstrap.userId, "credential-two");
+
+    expect(
+      recordPasskeyUse({
+        credentialId: "credential-two",
+        database,
+        nowMs: 1_500,
+      }),
+    ).toBe(true);
+    expect(
+      database
+        .prepare(
+          "SELECT passkey_id, last_used_at FROM passkey_usage WHERE passkey_id = 'key-two'",
+        )
+        .get(),
+    ).toEqual({ last_used_at: 1_500, passkey_id: "key-two" });
+
+    deleteNonFinalPasskey({
+      database,
+      nowMs: 2_000,
+      passkeyId: "key-one",
+      userId: bootstrap.userId,
+    });
+    expect(() =>
+      deleteNonFinalPasskey({
+        database,
+        nowMs: 3_000,
+        passkeyId: "key-two",
+        userId: bootstrap.userId,
+      }),
+    ).toThrow();
+    expect(
+      database.prepare("SELECT id FROM passkey ORDER BY id").all(),
+    ).toEqual([{ id: "key-two" }]);
+    expect(
+      database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM audit_events WHERE action = 'passkey.delete'",
+        )
+        .get(),
+    ).toEqual({ count: 1 });
     database.close();
   });
 });

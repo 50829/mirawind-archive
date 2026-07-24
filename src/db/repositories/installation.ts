@@ -7,8 +7,8 @@ export class InstallationRepository {
     this.database
       .prepare(
         `INSERT INTO installation
-          (id, admin_user_id, schema_version, created_at, updated_at)
-         VALUES (1, NULL, 2, ?, ?)
+         (id, admin_user_id, schema_version, created_at, updated_at)
+         VALUES (1, NULL, 3, ?, ?)
          ON CONFLICT(id) DO NOTHING`,
       )
       .run(nowMs, nowMs);

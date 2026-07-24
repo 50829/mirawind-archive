@@ -1,0 +1,10 @@
+---
+export const prerender = false;
+return new Response(null, {
+  headers: {
+    "Cache-Control": "private, no-store",
+    Location: "/manage/security",
+  },
+  status: 303,
+});
+---

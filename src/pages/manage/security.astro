@@ -1,0 +1,213 @@
+---
+import type { Passkey } from "@better-auth/passkey";
+
+import { getRuntimeAuth, getRuntimeDatabase } from "@/auth/session";
+import {
+  PasskeyManager,
+  type ManagedPasskey,
+} from "@/components/auth/PasskeyManager";
+import { InstallationRepository } from "@/db/repositories/installation";
+import { cachePolicyFor } from "@/http/response-policy";
+
+export const prerender = false;
+
+Astro.response.headers.set("Cache-Control", cachePolicyFor("manage"));
+Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+
+const session = Astro.locals.session;
+if (!session) {
+  return new Response(null, {
+    headers: {
+      "Cache-Control": cachePolicyFor("manage"),
+      Location: `/login?next=${encodeURIComponent(Astro.url.pathname)}`,
+    },
+    status: 303,
+  });
+}
+
+const adminUserId = new InstallationRepository(
+  getRuntimeDatabase(),
+).adminUserId();
+if (!adminUserId || session.user.id !== adminUserId) {
+  return new Response("Not found", {
+    headers: { "Cache-Control": "private, no-store" },
+    status: 404,
+  });
+}
+
+const passkeys = await getRuntimeAuth().api.listPasskeys({
+  headers: Astro.request.headers,
+});
+const lastUsedByPasskey = new Map(
+  (
+    getRuntimeDatabase()
+      .prepare("SELECT passkey_id, last_used_at FROM passkey_usage")
+      .all() as { passkey_id: string; last_used_at: number }[]
+  ).map((row) => [row.passkey_id, row.last_used_at]),
+);
+function lastUsedIso(passkeyId: string): string | null {
+  const value = lastUsedByPasskey.get(passkeyId);
+  return value === undefined ? null : new Date(value).toISOString();
+}
+const initialPasskeys: ManagedPasskey[] = (passkeys as Passkey[]).map(
+  (passkey) => ({
+    backedUp: passkey.backedUp,
+    createdAt: passkey.createdAt
+      ? new Date(passkey.createdAt).toISOString()
+      : null,
+    deviceType: passkey.deviceType,
+    id: passkey.id,
+    lastUsedAt: lastUsedIso(passkey.id),
+    name: passkey.name ?? null,
+  }),
+);
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Passkey 安全设置 · Mirawind</title>
+  </head>
+  <body>
+    <main>
+      <PasskeyManager client:load initialPasskeys={initialPasskeys} />
+    </main>
+  </body>
+</html>
+
+<style>
+  :global(*) {
+    box-sizing: border-box;
+  }
+
+  :global(body) {
+    min-height: 100vh;
+    margin: 0;
+    color: #24201b;
+    background: #f2ede4;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+
+  main {
+    width: min(58rem, calc(100vw - 2rem));
+    margin: 0 auto;
+    padding: 4rem 0;
+  }
+
+  :global(.heading-row) {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+  }
+
+  :global(.eyebrow) {
+    margin: 0;
+    color: #8b4c19;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+  }
+
+  :global(h1) {
+    margin: 0.2rem 0;
+    font-family: Georgia, serif;
+    font-size: 3rem;
+  }
+
+  :global(.count) {
+    padding: 0.4rem 0.65rem;
+    border-radius: 99rem;
+    color: #fff;
+    background: #493725;
+  }
+
+  :global(.add-form),
+  :global(.passkey-list li) {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    border: 1px solid #c9bcaa;
+    border-radius: 0.75rem;
+    background: #fffaf2;
+  }
+
+  :global(.passkey-list) {
+    padding: 0;
+    list-style: none;
+  }
+
+  :global(.passkey-list li) {
+    display: grid;
+    gap: 1rem;
+  }
+
+  :global(form) {
+    display: flex;
+    gap: 0.75rem;
+    align-items: end;
+  }
+
+  :global(label) {
+    display: grid;
+    flex: 1;
+    gap: 0.35rem;
+  }
+
+  :global(input),
+  :global(button) {
+    min-height: 2.6rem;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid #9f907e;
+    border-radius: 0.4rem;
+    font: inherit;
+  }
+
+  :global(button) {
+    color: #fff;
+    background: #493725;
+    cursor: pointer;
+  }
+
+  :global(button:disabled) {
+    cursor: wait;
+    opacity: 0.55;
+  }
+
+  :global(.danger) {
+    padding-top: 1rem;
+    border-top: 1px solid #d4b5aa;
+  }
+
+  :global(.danger button),
+  :global(.danger-button) {
+    background: #8d2f24;
+  }
+
+  :global(.message),
+  :global(.empty) {
+    padding: 0.8rem 1rem;
+    border-radius: 0.4rem;
+    background: #e5dccd;
+  }
+
+  :global(.sr-only) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 40rem) {
+    :global(form) {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  }
+</style>

@@ -3,6 +3,10 @@ import { betterAuth } from "better-auth";
 import type Database from "better-sqlite3";
 
 import type { EnvironmentConfig } from "../config/environment.js";
+import {
+  createPasskeyPolicyHooks,
+  recordPasskeyUse,
+} from "./passkey-policy.js";
 
 export interface AuthFactoryInput {
   readonly database: Database.Database;
@@ -16,6 +20,15 @@ function sharedOptions(input: AuthFactoryInput) {
     database: input.database,
     plugins: [
       passkey({
+        authentication: {
+          afterVerification({ verification }) {
+            recordPasskeyUse({
+              credentialId: verification.authenticationInfo.credentialID,
+              database: input.database,
+              nowMs: Date.now(),
+            });
+          },
+        },
         origin: input.environment.publicOrigin,
         rpID: input.environment.passkeyRpId,
         rpName: "Mirawind Library",
@@ -32,12 +45,18 @@ function sharedOptions(input: AuthFactoryInput) {
 export function createHttpAuth(input: AuthFactoryInput) {
   return betterAuth({
     ...sharedOptions(input),
+    disabledPaths: [
+      "/request-password-reset",
+      "/reset-password",
+      "/sign-up/email",
+    ],
     emailAndPassword: {
       disableSignUp: true,
       enabled: true,
       maxPasswordLength: 128,
       minPasswordLength: 16,
     },
+    hooks: createPasskeyPolicyHooks(input.database),
     rateLimit: {
       enabled: true,
       storage: "database",

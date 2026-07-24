@@ -99,7 +99,7 @@ describe("checksummed migrations", () => {
   it("applies the locked M1 schema with FTS5 and all authority tables", async () => {
     const database = await openTemporaryDatabase();
     const result = applyMigrations(database, await loadMigrationManifest());
-    expect(result).toEqual({ applied: [1, 2], current: 2 });
+    expect(result).toEqual({ applied: [1, 2, 3], current: 3 });
 
     const names = (
       database
@@ -131,6 +131,13 @@ describe("checksummed migrations", () => {
         "rateLimit",
       ]),
     );
+    expect(
+      database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'passkey_usage'",
+        )
+        .get(),
+    ).toEqual({ count: 1 });
     database.close();
   });
 
@@ -146,13 +153,13 @@ describe("checksummed migrations", () => {
         databasePath,
         nowMs: 1_000,
       }),
-    ).toMatchObject({ applied: [1, 2], backupPath: null, current: 2 });
+    ).toMatchObject({ applied: [1, 2, 3], backupPath: null, current: 3 });
     const second = await runDatabaseMigrations({
       backupDirectory,
       databasePath,
       nowMs: 2_000,
     });
-    expect(second).toMatchObject({ applied: [], current: 2 });
+    expect(second).toMatchObject({ applied: [], current: 3 });
     expect(second.backupPath).not.toBeNull();
     if (!second.backupPath) throw new Error("Expected a pre-migration backup");
     await access(second.backupPath);
