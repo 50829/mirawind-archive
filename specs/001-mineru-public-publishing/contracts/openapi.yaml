@@ -1,0 +1,997 @@
+openapi: 3.1.0
+info:
+  title: Mirawind MinerU Publishing API
+  version: 0.1.0
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+  description: |
+    M1 contract for public reading/search/download and sole-administrator import,
+    preview, job and publication operations. Better Auth owns `/api/auth/*`; those
+    protocol endpoints are intentionally not re-specified here. Application policy around
+    those endpoints is defined in `contracts/passkey-policy.md`.
+servers:
+  - url: https://library.example.test
+tags:
+  - name: Public
+    description: Anonymous current-public reading, search, asset and original-file routes.
+  - name: Imports
+    description: Sole-administrator ZIP upload, analysis and main-document confirmation.
+  - name: Drafts
+    description: Sole-administrator configuration, preview, visibility and publication.
+  - name: Jobs
+    description: Sole-administrator durable task inspection and control.
+
+paths:
+  /read/{bookKey}/{pageKey}:
+    get:
+      tags: [Public]
+      operationId: readPublishedPage
+      summary: Read one pre-generated page from the current visible version
+      security:
+        - {}
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookKey"
+        - $ref: "#/components/parameters/PageKey"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Current public semantic HTML
+          headers:
+            Cache-Control:
+              description: Public books revalidate; administrator-only private books never store.
+              schema:
+                type: string
+                enum: ["public, max-age=0, must-revalidate", "private, no-store"]
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            text/html:
+              schema: { type: string }
+        "304":
+          description: Authorized current representation is unchanged
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "public, max-age=0, must-revalidate" }
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "404":
+          $ref: "#/components/responses/HiddenOrMissingHtml"
+        "503":
+          description: This book has no verified recoverable current version
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
+          content:
+            text/html:
+              schema: { type: string }
+
+  /books/{bookKey}/assets/{versionId}/{resourceId}:
+    get:
+      tags: [Public]
+      operationId: readPublishedAsset
+      summary: Read a version-pinned generated reading asset
+      security:
+        - {}
+        - cookieAuth: []
+      description: |
+        The version must be current or previously published; ready, failed and corrupt
+        versions are never exposed. The book must still be public at request time.
+      parameters:
+        - $ref: "#/components/parameters/BookKey"
+        - $ref: "#/components/parameters/VersionId"
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Authorized immutable resource
+          headers:
+            Cache-Control:
+              description: Public books use private browser-only immutable cache; private books never store.
+              schema:
+                type: string
+                enum: ["private, max-age=31536000, immutable", "private, no-store"]
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Content-Type-Options:
+              schema: { type: string, const: nosniff }
+          content:
+            image/*:
+              schema: { type: string, contentEncoding: binary }
+        "304":
+          description: Authorized immutable representation is unchanged
+        "404":
+          $ref: "#/components/responses/HiddenOrMissingBinary"
+
+  /books/{bookKey}/originals/{fileId}:
+    get:
+      tags: [Public]
+      operationId: downloadOriginal
+      summary: Download or resume one registered original file
+      security:
+        - {}
+        - cookieAuth: []
+      description: Authorization is evaluated before ETag, If-Range or Range processing.
+      parameters:
+        - $ref: "#/components/parameters/BookKey"
+        - $ref: "#/components/parameters/FileId"
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+            pattern: "^bytes=(?:[0-9]+-[0-9]*|-[0-9]+)$"
+        - name: If-Range
+          in: header
+          required: false
+          schema: { type: string }
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          $ref: "#/components/responses/OriginalFile"
+        "206":
+          description: Authorized single byte range
+          headers:
+            Accept-Ranges:
+              schema: { type: string, const: bytes }
+            Content-Range:
+              schema: { type: string }
+            Content-Length:
+              schema: { type: integer, minimum: 0 }
+            Content-Disposition:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Content-Type-Options:
+              schema: { type: string, const: nosniff }
+            X-Robots-Tag:
+              schema:
+                type: string
+                const: "noindex, nofollow, noarchive, nosnippet"
+          content:
+            application/octet-stream:
+              schema: { type: string, contentEncoding: binary }
+        "304":
+          description: Authorized full representation is unchanged
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+        "404":
+          $ref: "#/components/responses/HiddenOrMissingBinary"
+        "416":
+          description: Unsatisfiable or unsupported range
+          headers:
+            Content-Range:
+              schema: { type: string, pattern: "^bytes \\*/[0-9]+$" }
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+
+  /api/books/{bookKey}/search:
+    get:
+      tags: [Public]
+      operationId: searchPublishedBook
+      summary: Search the current visible version of one book
+      security:
+        - {}
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookKey"
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Current-version results only
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ["public, max-age=0, must-revalidate", "private, no-store"]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/HiddenOrMissingJson"
+
+  /api/manage/imports:
+    post:
+      tags: [Imports]
+      operationId: createImport
+      summary: Stream one MinerU ZIP and enqueue analysis
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  contentMediaType: application/zip
+                  contentEncoding: binary
+                target_book_id:
+                  type: integer
+                  minimum: 1
+                  description: Omit for a new book; update-by-title is never inferred.
+      responses:
+        "202":
+          description: Upload is durable and analysis is queued
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          description: Actual streamed upload exceeded 2 GiB
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/manage/imports/{importId}:
+    get:
+      tags: [Imports]
+      operationId: getImport
+      summary: Inspect import state, safe candidates and diagnostics
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ImportId"
+      responses:
+        "200":
+          description: Import state
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Import" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+
+  /api/manage/imports/{importId}/main-markdown:
+    put:
+      tags: [Imports]
+      operationId: confirmMainMarkdown
+      summary: Confirm one offered generic candidate and enqueue draft preparation
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ImportId"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [candidate_id]
+              properties:
+                candidate_id:
+                  type: string
+                  pattern: "^cand_[A-Za-z0-9_-]{16,80}$"
+      responses:
+        "202":
+          description: Confirmation accepted and preparation queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/manage/books/{bookId}/draft:
+    get:
+      tags: [Drafts]
+      operationId: getBookDraft
+      summary: Read the current draft config, preview model and diagnostics
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+      responses:
+        "200":
+          description: Current draft representation
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Draft" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+    put:
+      tags: [Drafts]
+      operationId: replaceDraftConfig
+      summary: Atomically create and select a new validated book.yaml revision
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/Origin"
+        - name: If-Match
+          in: header
+          required: true
+          description: Strong ETag returned by GET; prevents lost updates.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "../../../docs/schemas/book.schema.json"
+      responses:
+        "202":
+          description: New config revision selected and its preview build queued
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DraftUpdateAccepted" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          description: Draft changed since the supplied ETag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/manage/books/{bookId}/preview/{configRevision}/pages/{pageId}:
+    get:
+      tags: [Drafts]
+      operationId: readDraftPreviewPage
+      summary: Read one authenticated non-cacheable draft preview page
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/ConfigRevision"
+        - $ref: "#/components/parameters/PageId"
+      responses:
+        "200":
+          description: Sanitized preview HTML
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+            X-Robots-Tag:
+              schema: { type: string, const: "noindex, nofollow" }
+          content:
+            text/html:
+              schema: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundHtml"
+
+  /api/manage/books/{bookId}/preview/{configRevision}/assets/{resourceId}:
+    get:
+      tags: [Drafts]
+      operationId: readDraftPreviewAsset
+      summary: Read one authenticated revision-pinned draft preview asset
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/ConfigRevision"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Preview resource
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+            X-Content-Type-Options:
+              schema: { type: string, const: nosniff }
+            X-Robots-Tag:
+              schema: { type: string, const: "noindex, nofollow" }
+          content:
+            image/*:
+              schema: { type: string, contentEncoding: binary }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/HiddenOrMissingBinary"
+
+  /api/manage/books/{bookId}/publish:
+    post:
+      tags: [Drafts]
+      operationId: publishBook
+      summary: Enqueue a guarded build and public cutover
+      description: |
+        M1 runs the publish policy hook but does not accept or fabricate a rights
+        confirmation field. Successful completion sets visibility to public.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/Origin"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_config_revision]
+              properties:
+                expected_config_revision: { type: integer, minimum: 1 }
+      responses:
+        "202":
+          description: Build/publish job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/manage/books/{bookId}/visibility:
+    patch:
+      tags: [Drafts]
+      operationId: makeBookNonPublic
+      summary: Immediately remove a published book from anonymous access
+      description: Publishing or re-publishing as public uses the publish operation.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [visibility]
+              properties:
+                visibility:
+                  type: string
+                  enum: [draft, private]
+      responses:
+        "200":
+          description: Visibility changed atomically
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [book_id, visibility]
+                properties:
+                  book_id: { type: integer }
+                  visibility: { type: string, enum: [draft, private] }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+
+  /api/manage/jobs/{jobId}:
+    get:
+      tags: [Jobs]
+      operationId: getJob
+      summary: Inspect durable task status and safe diagnostics
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Task state
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+
+  /api/manage/jobs/{jobId}/cancel:
+    post:
+      tags: [Jobs]
+      operationId: cancelJob
+      summary: Request cancellation of queued or running work
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/Origin"
+      responses:
+        "202":
+          description: Cancellation recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/manage/jobs/{jobId}/retry:
+    post:
+      tags: [Jobs]
+      operationId: retryJob
+      summary: Explicitly enqueue an eligible terminal job as a new attempt
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/Origin"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16, maxLength: 200 }
+      responses:
+        "202":
+          description: New attempt queued; prior history is retained
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobAccepted" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: better-auth.session_token
+      description: |
+        Better Auth database session cookie. Production may add the standard Secure
+        cookie prefix; clients should use the Set-Cookie value rather than hard-code it.
+
+  parameters:
+    BookKey:
+      name: bookKey
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^(?:[1-9][0-9]*|[a-z0-9]+(?:-[a-z0-9]+)*)$"
+    PageKey:
+      name: pageKey
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^(?:[1-9][0-9]*|[a-z0-9]+(?:-[a-z0-9]+)*)$"
+    BookId:
+      name: bookId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    PageId:
+      name: pageId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    ConfigRevision:
+      name: configRevision
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^ver_[A-Za-z0-9_-]{16,80}$" }
+    ResourceId:
+      name: resourceId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^res_[A-Za-z0-9_-]{16,80}$" }
+    FileId:
+      name: fileId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^file_[A-Za-z0-9_-]{16,80}$" }
+    ImportId:
+      name: importId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^imp_[A-Za-z0-9_-]{16,80}$" }
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      schema: { type: string }
+    Origin:
+      name: Origin
+      in: header
+      required: true
+      description: Exact configured Web origin; state-changing browser requests are origin checked.
+      schema: { type: string, format: uri }
+
+  headers:
+    ETag:
+      schema: { type: string }
+
+  responses:
+    OriginalFile:
+      description: Authorized complete registered original
+      headers:
+        Accept-Ranges:
+          schema: { type: string, const: bytes }
+        Content-Length:
+          schema: { type: integer, minimum: 0 }
+        Content-Disposition:
+          schema: { type: string }
+        Cache-Control:
+          schema: { type: string, const: "private, no-store" }
+        ETag:
+          $ref: "#/components/headers/ETag"
+        X-Content-Type-Options:
+          schema: { type: string, const: nosniff }
+        X-Robots-Tag:
+          schema:
+            type: string
+            const: "noindex, nofollow, noarchive, nosnippet"
+      content:
+        application/zip:
+          schema: { type: string, contentEncoding: binary }
+    BadRequest:
+      description: Invalid input or semantic validation failure
+      headers:
+        Cache-Control:
+          schema: { type: string, const: "private, no-store" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: No valid administrator session
+      headers:
+        Cache-Control:
+          schema: { type: string, const: "private, no-store" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Valid session is not the sole administrator or the required 300-second freshness/password reauthentication policy is not satisfied
+      headers:
+        Cache-Control:
+          schema: { type: string, const: "private, no-store" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: State, revision, active-job or idempotency conflict
+      headers:
+        Cache-Control:
+          schema: { type: string, const: "private, no-store" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFoundJson:
+      description: Management resource does not exist
+      headers:
+        Cache-Control:
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFoundHtml:
+      description: Management representation does not exist
+      headers:
+        Cache-Control:
+          schema: { type: string, const: no-store }
+      content:
+        text/html:
+          schema: { type: string }
+    HiddenOrMissingJson:
+      description: Public resource is missing or not anonymously visible
+      headers:
+        Cache-Control:
+          schema: { type: string, const: no-store }
+        X-Robots-Tag:
+          schema: { type: string, const: "noindex, nofollow" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    HiddenOrMissingHtml:
+      description: Public resource is missing or not anonymously visible
+      headers:
+        Cache-Control:
+          schema: { type: string, const: no-store }
+        X-Robots-Tag:
+          schema: { type: string, const: "noindex, nofollow" }
+      content:
+        text/html:
+          schema: { type: string }
+    HiddenOrMissingBinary:
+      description: Binary resource is missing or not anonymously visible
+      headers:
+        Cache-Control:
+          schema: { type: string, const: no-store }
+        X-Robots-Tag:
+          schema: { type: string, const: "noindex, nofollow" }
+
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id]
+      properties:
+        code:
+          type: string
+          pattern: "^[A-Z][A-Z0-9_]{2,80}$"
+        message:
+          type: string
+          maxLength: 500
+        request_id:
+          type: string
+          maxLength: 100
+        details:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [code]
+            properties:
+              code: { type: string, maxLength: 80 }
+              block_id: { type: string, maxLength: 100 }
+              candidate_id: { type: string, maxLength: 100 }
+              field: { type: string, maxLength: 200 }
+              message: { type: string, maxLength: 500 }
+    ImportAccepted:
+      type: object
+      additionalProperties: false
+      required: [import_id, job_id, state]
+      properties:
+        import_id: { type: string, pattern: "^imp_[A-Za-z0-9_-]{16,80}$" }
+        job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
+        state: { type: string, const: uploaded }
+    JobAccepted:
+      type: object
+      additionalProperties: false
+      required: [job_id, state]
+      properties:
+        job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
+        state: { type: string, const: queued }
+    Candidate:
+      type: object
+      additionalProperties: false
+      required: [candidate_id, display_path, confidence, evidence, diagnostics]
+      properties:
+        candidate_id: { type: string, pattern: "^cand_[A-Za-z0-9_-]{16,80}$" }
+        display_path: { type: string, maxLength: 2048 }
+        confidence: { type: string, enum: [high, generic, ambiguous] }
+        evidence:
+          type: array
+          maxItems: 100
+          items: { type: string, maxLength: 500 }
+        diagnostics:
+          type: array
+          maxItems: 1000
+          items: { type: string, maxLength: 500 }
+    Import:
+      type: object
+      additionalProperties: false
+      required: [import_id, state, candidates, created_at, updated_at]
+      properties:
+        import_id: { type: string, pattern: "^imp_[A-Za-z0-9_-]{16,80}$" }
+        state:
+          type: string
+          enum: [uploading, uploaded, analyzing, needs_main_confirmation, preparing, draft_ready, rejected, canceled, expired]
+        candidates:
+          type: array
+          maxItems: 20000
+          items: { $ref: "#/components/schemas/Candidate" }
+        selected_candidate_id: { type: [string, "null"] }
+        book_id: { type: [integer, "null"], minimum: 1 }
+        error_code: { type: [string, "null"], maxLength: 80 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Draft:
+      type: object
+      additionalProperties: false
+      required: [book_id, source_id, config_revision, config, diagnostics, preview, preview_state]
+      properties:
+        book_id: { type: integer, minimum: 1 }
+        source_id: { type: string, pattern: "^src_[A-Za-z0-9_-]{16,80}$" }
+        config_revision: { type: integer, minimum: 1 }
+        config:
+          $ref: "../../../docs/schemas/book.schema.json"
+        diagnostics:
+          type: array
+          maxItems: 10000
+          items: { type: string, maxLength: 1000 }
+        preview:
+          type: [object, "null"]
+          additionalProperties: false
+          required: [config_revision, is_stale, pages, headings]
+          properties:
+            config_revision: { type: integer, minimum: 1 }
+            is_stale: { type: boolean }
+            pages:
+              type: array
+              maxItems: 20000
+              items:
+                type: object
+                required: [page_id, title]
+                properties:
+                  page_id: { type: integer, minimum: 1 }
+                  title: { type: string, maxLength: 500 }
+            headings:
+              type: array
+              maxItems: 20000
+              items:
+                type: object
+                required: [block_id, title, source_level, display_level, include_in_toc, starts_page, role]
+                properties:
+                  block_id: { type: string }
+                  title: { type: string, maxLength: 500 }
+                  source_level: { type: integer, minimum: 1, maximum: 6 }
+                  display_level: { type: integer, minimum: 1, maximum: 4 }
+                  include_in_toc: { type: boolean }
+                  starts_page: { type: boolean }
+                  role: { type: string, enum: [frontmatter, body, appendix, backmatter] }
+        preview_state:
+          type: string
+          enum: [building, ready, failed]
+    DraftUpdateAccepted:
+      type: object
+      additionalProperties: false
+      required: [book_id, config_revision, job_id, preview_state]
+      properties:
+        book_id: { type: integer, minimum: 1 }
+        config_revision: { type: integer, minimum: 1 }
+        job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
+        preview_state: { type: string, const: building }
+    Job:
+      type: object
+      additionalProperties: false
+      required: [job_id, kind, state, attempt, phase, created_at]
+      properties:
+        job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
+        kind:
+          type: string
+          enum: [analyze_import, prepare_draft, build_preview, build_publish, verify_version, reconcile, reclaim]
+        state:
+          type: string
+          enum: [queued, running, succeeded, failed, canceled, interrupted]
+        attempt: { type: integer, minimum: 1 }
+        automatic_retry_count: { type: integer, minimum: 0, maximum: 1 }
+        phase: { type: string, maxLength: 80 }
+        progress:
+          type: object
+          additionalProperties:
+            type: [integer, number, string, boolean, "null"]
+        error_code: { type: [string, "null"], maxLength: 80 }
+        error_class:
+          type: [string, "null"]
+          enum: [null, infrastructure, content, validation, security_limit, timeout, canceled]
+        created_at: { type: string, format: date-time }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+    SearchResponse:
+      type: object
+      additionalProperties: false
+      required: [query, scope, results]
+      properties:
+        query: { type: string }
+        scope:
+          type: string
+          enum: [metadata_heading_body, metadata_heading_only]
+        notice:
+          type: [string, "null"]
+          description: Explains the short-query limitation when scope is metadata_heading_only.
+        results:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required: [book_id, page_id, block_id, kind, title, snippet, href]
+            properties:
+              book_id: { type: integer, minimum: 1 }
+              page_id: { type: integer, minimum: 1 }
+              block_id: { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
+              kind: { type: string, enum: [title, author, heading, body] }
+              title: { type: string, maxLength: 500 }
+              snippet: { type: string, maxLength: 1000 }
+              href: { type: string, format: uri-reference }
+        next_cursor: { type: [string, "null"] }

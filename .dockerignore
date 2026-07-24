@@ -1,0 +1,14 @@
+.git/
+.github/
+.astro/
+.dockerignore
+.env*
+coverage/
+data/
+dist/
+Dockerfile*
+node_modules/
+playwright-report/
+test-results/
+tests/fixtures/mineru/real/
+*.log*

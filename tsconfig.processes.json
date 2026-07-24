@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/cli/**/*.ts", "src/worker/**/*.ts"],
+  "exclude": ["dist", "node_modules", "tests"],
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "outDir": "dist/processes",
+    "rootDir": "src",
+    "types": ["node"]
+  }
+}

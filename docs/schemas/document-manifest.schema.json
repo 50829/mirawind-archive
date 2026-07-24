@@ -1,0 +1,432 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mirawind.local/schemas/document-manifest.schema.json",
+  "title": "Mirawind document-manifest.json schema",
+  "description": "Immutable derived publication manifest for one book version.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "book_id",
+    "version_id",
+    "config_revision",
+    "created_at",
+    "compiler",
+    "source_files",
+    "pages",
+    "toc",
+    "blocks",
+    "resources"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "book_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "version_id": {
+      "$ref": "#/$defs/versionId"
+    },
+    "config_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "compiler": {
+      "$ref": "#/$defs/compiler"
+    },
+    "source_files": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceFile"
+      },
+      "minItems": 1,
+      "maxItems": 20000
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/page"
+      },
+      "minItems": 1,
+      "maxItems": 20000
+    },
+    "toc": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tocNode"
+      },
+      "maxItems": 20000
+    },
+    "blocks": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/blockId"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/block"
+      },
+      "maxProperties": 1000000
+    },
+    "resources": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/resourceId"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/resource"
+      },
+      "maxProperties": 20000
+    }
+  },
+  "$defs": {
+    "versionId": {
+      "type": "string",
+      "pattern": "^ver_[A-Za-z0-9_-]{16,80}$"
+    },
+    "pageId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "blockId": {
+      "type": "string",
+      "pattern": "^blk_[A-Za-z0-9_-]{16,80}$"
+    },
+    "resourceId": {
+      "type": "string",
+      "pattern": "^res_[A-Za-z0-9_-]{16,80}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "compiler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "renderer_version",
+        "text_normalization_version"
+      ],
+      "properties": {
+        "name": {
+          "const": "mirawind-book-compiler"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "renderer_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "text_normalization_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "sourceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "size",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483648
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page_id",
+        "title",
+        "output_path",
+        "first_block_id",
+        "block_ids"
+      ],
+      "properties": {
+        "page_id": {
+          "$ref": "#/$defs/pageId"
+        },
+        "alias": {
+          "type": "string",
+          "pattern": "^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "maxLength": 120
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "output_path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "first_block_id": {
+          "$ref": "#/$defs/blockId"
+        },
+        "block_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/blockId"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "tocNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "page_id",
+        "title",
+        "level",
+        "role",
+        "number"
+      ],
+      "properties": {
+        "block_id": {
+          "$ref": "#/$defs/blockId"
+        },
+        "page_id": {
+          "$ref": "#/$defs/pageId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "role": {
+          "enum": [
+            "frontmatter",
+            "body",
+            "appendix",
+            "backmatter"
+          ]
+        },
+        "number": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        }
+      }
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "line",
+        "column"
+      ],
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "sourceSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "start",
+        "end"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "start": {
+          "$ref": "#/$defs/position"
+        },
+        "end": {
+          "$ref": "#/$defs/position"
+        }
+      }
+    },
+    "textFingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "normalization_version",
+        "algorithm",
+        "value"
+      ],
+      "properties": {
+        "normalization_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "algorithm": {
+          "const": "sha256"
+        },
+        "value": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "page_id",
+        "source",
+        "normalized_visible_text",
+        "text_fingerprint",
+        "resource_ids"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "heading",
+            "paragraph",
+            "list_item",
+            "blockquote",
+            "code",
+            "math",
+            "image",
+            "table",
+            "footnote",
+            "semantic_container"
+          ]
+        },
+        "page_id": {
+          "$ref": "#/$defs/pageId"
+        },
+        "source": {
+          "$ref": "#/$defs/sourceSpan"
+        },
+        "normalized_visible_text": {
+          "type": "string"
+        },
+        "text_fingerprint": {
+          "$ref": "#/$defs/textFingerprint"
+        },
+        "previous_text_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "next_text_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resource_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resourceId"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_path",
+        "output_path",
+        "media_type",
+        "size",
+        "sha256"
+      ],
+      "properties": {
+        "source_path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "output_path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483648
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32768
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32768
+        }
+      }
+    }
+  },
+  "x-semantic-validations": [
+    "book_id, version_id, and config_revision must match the owning immutable version",
+    "source file paths, page output paths, and resource paths must stay inside the version root",
+    "source file, page, block, and resource identifiers must be unique in their scopes",
+    "every page block id must exist and every current block must belong to exactly one page",
+    "first_block_id must be the first entry in block_ids",
+    "toc nodes must reference heading blocks and valid pages",
+    "block source end must not precede source start",
+    "resource ids referenced by blocks must exist",
+    "image width multiplied by height must not exceed 100000000",
+    "normalized_visible_text uses Unicode NFC and normalized newlines for normalization version 1",
+    "unknown properties are rejected for schema_version 1",
+    "the manifest is derived and must never be edited as an authoritative body source"
+  ]
+}

@@ -1,0 +1,67 @@
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["node", "dist/server/entry.mjs"]
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      HOST: 0.0.0.0
+      MIRAWIND_DATA_DIR: /var/lib/mirawind
+      PORT: 4321
+    expose:
+      - "4321"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4321/').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    volumes:
+      - mirawind-data:/var/lib/mirawind
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["node", "dist/processes/worker/index.js"]
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      MIRAWIND_DATA_DIR: /var/lib/mirawind
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - mirawind-data:/var/lib/mirawind
+
+  caddy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      MIRAWIND_PUBLIC_HOST: ${MIRAWIND_PUBLIC_HOST:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-config:
+  caddy-data:
+  mirawind-data:

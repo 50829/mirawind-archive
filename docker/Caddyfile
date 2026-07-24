@@ -1,0 +1,12 @@
+{$MIRAWIND_PUBLIC_HOST:localhost} {
+	encode zstd gzip
+
+	header {
+		-Server
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+
+	reverse_proxy web:4321
+}

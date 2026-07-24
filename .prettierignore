@@ -1,0 +1,10 @@
+.astro/
+coverage/
+dist/
+node_modules/
+playwright-report/
+test-results/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+tests/fixtures/mineru/real/
