@@ -48,7 +48,7 @@ export interface InspectedArchive {
   readonly entries: readonly InspectedArchiveEntry[];
 }
 
-class NodeFileReader extends Reader<string> {
+export class NodeFileReader extends Reader<string> {
   #handle: FileHandle | undefined;
   readonly #path: string;
 
@@ -58,9 +58,9 @@ class NodeFileReader extends Reader<string> {
   }
 
   override async init(): Promise<void> {
+    await super.init?.();
     this.#handle = await open(this.#path, "r");
     this.size = (await this.#handle.stat()).size;
-    await super.init?.();
   }
 
   override async readUint8Array(
@@ -75,7 +75,9 @@ class NodeFileReader extends Reader<string> {
       buffer.length,
       index,
     );
-    return buffer.subarray(0, bytesRead);
+    const result = new Uint8Array(bytesRead);
+    result.set(buffer.subarray(0, bytesRead));
+    return result;
   }
 
   async dispose(): Promise<void> {
@@ -84,7 +86,7 @@ class NodeFileReader extends Reader<string> {
   }
 }
 
-function safeFormatError(error: unknown): ArchiveFormatError {
+export function toArchiveFormatError(error: unknown): ArchiveFormatError {
   if (error instanceof ArchiveFormatError) return error;
   const message = error instanceof Error ? error.message : "";
   if (/overlap/i.test(message)) {
@@ -149,14 +151,23 @@ function discardStream(counter?: {
 
 async function rawOverlapAndHeaderPass(
   entries: readonly Entry[],
+  signal?: AbortSignal,
 ): Promise<void> {
   for (const entry of entries) {
     if (entry.directory) continue;
-    await entry.getData(discardStream(), {
+    const actual = { value: 0 };
+    await entry.getData(discardStream(actual), {
       checkAmbiguity: true,
-      checkOverlappingEntryOnly: true,
+      checkOverlappingEntry: true,
       passThrough: true,
+      ...(signal ? { signal } : {}),
     });
+    if (actual.value !== entry.compressedSize) {
+      throw new ArchiveFormatError(
+        "ARCHIVE_SIZE_MISMATCH",
+        "An archive compressed size does not match its metadata.",
+      );
+    }
   }
 }
 
@@ -179,6 +190,10 @@ async function crcAndActualSizePass(entries: readonly Entry[]): Promise<void> {
 
 async function inspectReader<Type>(
   source: Reader<Type>,
+  options: {
+    readonly signal?: AbortSignal;
+    readonly verifyData: boolean;
+  },
 ): Promise<InspectedArchive> {
   const reader = new ZipReader(source, {
     checkAmbiguity: true,
@@ -232,24 +247,42 @@ async function inspectReader<Type>(
       });
     });
 
-    await rawOverlapAndHeaderPass(entries);
-    await crcAndActualSizePass(entries);
+    await rawOverlapAndHeaderPass(entries, options.signal);
+    if (options.verifyData) await crcAndActualSizePass(entries);
     return Object.freeze({ entries: Object.freeze(inspected) });
   } catch (error) {
-    throw safeFormatError(error);
+    throw toArchiveFormatError(error);
   } finally {
     await reader.close();
   }
 }
 
-export function inspectZipBytes(input: Uint8Array): Promise<InspectedArchive> {
-  return inspectReader(new Uint8ArrayReader(input));
+export function inspectZipBytes(
+  input: Uint8Array,
+  options: {
+    readonly signal?: AbortSignal;
+    readonly verifyData?: boolean;
+  } = {},
+): Promise<InspectedArchive> {
+  return inspectReader(new Uint8ArrayReader(input), {
+    ...(options.signal ? { signal: options.signal } : {}),
+    verifyData: options.verifyData ?? true,
+  });
 }
 
-export async function inspectZipFile(path: string): Promise<InspectedArchive> {
+export async function inspectZipFile(
+  path: string,
+  options: {
+    readonly signal?: AbortSignal;
+    readonly verifyData?: boolean;
+  } = {},
+): Promise<InspectedArchive> {
   const source = new NodeFileReader(path);
   try {
-    return await inspectReader(source);
+    return await inspectReader(source, {
+      ...(options.signal ? { signal: options.signal } : {}),
+      verifyData: options.verifyData ?? false,
+    });
   } finally {
     await source.dispose();
   }
