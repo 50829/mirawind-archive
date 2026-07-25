@@ -125,8 +125,7 @@ export function validateDocumentConfig(input: {
     if (
       active &&
       ((headings.length === 0 && configured.display_level !== 1) ||
-        (headings.length > 0 &&
-          configured.display_level > previousLevel + 1))
+        (headings.length > 0 && configured.display_level > previousLevel + 1))
     ) {
       diagnostics.push(
         diagnostic(

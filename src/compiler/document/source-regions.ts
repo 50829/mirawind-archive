@@ -94,9 +94,7 @@ function validateRangeDigest(
     diagnostics.push(diagnostic("SOURCE_REGION_RANGE_INVALID", path));
     return;
   }
-  if (
-    hash(bytes.subarray(range.start_byte, range.end_byte)) !== range.sha256
-  ) {
+  if (hash(bytes.subarray(range.start_byte, range.end_byte)) !== range.sha256) {
     diagnostics.push(diagnostic("SOURCE_REGION_DIGEST_MISMATCH", path));
   }
 }
@@ -155,7 +153,10 @@ export function applySourceRegions(input: {
   const sourceBytes = Buffer.from(input.document.source, "utf8");
   if (hash(sourceBytes) !== input.mainMarkdownSha256) {
     diagnostics.push(
-      diagnostic("SOURCE_REGION_SOURCE_MISMATCH", "source/main_markdown_sha256"),
+      diagnostic(
+        "SOURCE_REGION_SOURCE_MISMATCH",
+        "source/main_markdown_sha256",
+      ),
     );
   }
   const children = input.document.root.children ?? [];
@@ -170,9 +171,7 @@ export function applySourceRegions(input: {
       region.source_path !== input.mainMarkdownPath ||
       region.source_sha256 !== input.mainMarkdownSha256
     ) {
-      diagnostics.push(
-        diagnostic("SOURCE_REGION_SOURCE_MISMATCH", regionPath),
-      );
+      diagnostics.push(diagnostic("SOURCE_REGION_SOURCE_MISMATCH", regionPath));
     }
     validateRangeDigest(
       sourceBytes,
@@ -213,9 +212,7 @@ export function applySourceRegions(input: {
         entry.range.start_byte < region.range.start_byte ||
         entry.range.end_byte > region.range.end_byte
       ) {
-        diagnostics.push(
-          diagnostic("SOURCE_REGION_ENTRY_INVALID", entryPath),
-        );
+        diagnostics.push(diagnostic("SOURCE_REGION_ENTRY_INVALID", entryPath));
       }
       previousEntryEnd = entry.range.end_byte;
     }

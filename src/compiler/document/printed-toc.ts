@@ -44,8 +44,7 @@ interface ExtractedEntry {
   readonly referenceLevel: number;
 }
 
-const contentsTitle =
-  /^(?:目\s*录|contents|table\s+of\s+contents)$/iu;
+const contentsTitle = /^(?:目\s*录|contents|table\s+of\s+contents)$/iu;
 const trailingPage =
   /(?:\.{2,}|…{2,}|·{2,}|_{2,}|\s{2,})\s*(?:\d+|[ivxlcdm]+)\s*$/iu;
 const richTypes = new Set([
@@ -79,9 +78,7 @@ function normalizedTitle(value: string): string {
     .toLocaleLowerCase("und");
 }
 
-export function inferPrintedReferenceLevel(
-  value: string,
-): number | undefined {
+export function inferPrintedReferenceLevel(value: string): number | undefined {
   const plain = value.replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "").trim();
   if (
     /^(?:第\s*[0-9一二三四五六七八九十百]+\s*章|(?:chapter|chap\.?)\s*[0-9ivxlcdm]+|附录(?:\s|[A-Za-z0-9一二三四五六七八九十]|$))/iu.test(
@@ -237,7 +234,10 @@ export function detectPrintedContents(input: {
         continue;
       }
       const match = matches[0];
-      if (!match?.position || match.position.start.offset <= previousHeadingOffset) {
+      if (
+        !match?.position ||
+        match.position.start.offset <= previousHeadingOffset
+      ) {
         diagnostics.push(
           diagnostic(
             "PRINTED_TOC_UNMATCHED_ENTRY",
@@ -275,10 +275,7 @@ export function detectPrintedContents(input: {
       })
     ) {
       diagnostics.push(
-        diagnostic(
-          "PRINTED_TOC_LEVEL_GAP",
-          `candidates/${candidates.length}`,
-        ),
+        diagnostic("PRINTED_TOC_LEVEL_GAP", `candidates/${candidates.length}`),
       );
     }
     if (richContent) {
@@ -307,10 +304,9 @@ export function detectPrintedContents(input: {
       coverage >= 0.8 &&
       !richContent &&
       !diagnostics.some((item) =>
-        [
-          "PRINTED_TOC_AMBIGUOUS_MATCH",
-          "PRINTED_TOC_LEVEL_GAP",
-        ].includes(item.code),
+        ["PRINTED_TOC_AMBIGUOUS_MATCH", "PRINTED_TOC_LEVEL_GAP"].includes(
+          item.code,
+        ),
       );
     const startByte = utf8ByteOffset(
       input.document.source,
@@ -341,8 +337,7 @@ export function detectPrintedContents(input: {
             sha256: hash(sourceBytes.subarray(startByte, endByte)),
             start_byte: startByte,
           }),
-          region_id:
-            input.idFactory?.() ?? createOpaqueId("region"),
+          region_id: input.idFactory?.() ?? createOpaqueId("region"),
           source_path: input.sourcePath,
           source_sha256: input.sourceSha256,
         })

@@ -9,10 +9,7 @@ import { parseMarkdownDocument } from "@/compiler/document/parser";
 import { detectPrintedContents } from "@/compiler/document/printed-toc";
 
 const fixturePath = fileURLToPath(
-  new URL(
-    "../../fixtures/publishing-quality/printed-toc.md",
-    import.meta.url,
-  ),
+  new URL("../../fixtures/publishing-quality/printed-toc.md", import.meta.url),
 );
 const ambiguousPath = fileURLToPath(
   new URL(
@@ -58,12 +55,12 @@ describe("printed contents detection", () => {
         source_sha256: digest,
       },
     });
-    expect(
-      JSON.stringify(result.candidates[0]?.proposedRegion),
-    ).not.toContain("绪论");
-    expect(
-      result.candidates[0]?.proposedRegion?.range.start_byte,
-    ).toBe(Buffer.byteLength(source.slice(0, source.indexOf("# 目录")), "utf8"));
+    expect(JSON.stringify(result.candidates[0]?.proposedRegion)).not.toContain(
+      "绪论",
+    );
+    expect(result.candidates[0]?.proposedRegion?.range.start_byte).toBe(
+      Buffer.byteLength(source.slice(0, source.indexOf("# 目录")), "utf8"),
+    );
   });
 
   it("leaves repeated ambiguous labels unapplied", async () => {
@@ -91,9 +88,9 @@ describe("printed contents detection", () => {
       sourcePath: "source/full.md",
       sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
-    expect(result.candidates.every((candidate) => !candidate.proposedRegion)).toBe(
-      true,
-    );
+    expect(
+      result.candidates.every((candidate) => !candidate.proposedRegion),
+    ).toBe(true);
   });
 
   it("refuses automatic application when the candidate contains rich content", () => {

@@ -55,9 +55,9 @@ describe("reference-only source regions", () => {
       mainMarkdownSha256: sha(source),
       regions: [region],
     });
-    expect(result.document.headings.map((heading) => heading.sourceTitle)).toEqual([
-      "第一章 中文",
-    ]);
+    expect(
+      result.document.headings.map((heading) => heading.sourceTitle),
+    ).toEqual(["第一章 中文"]);
     expect(result.excludedBlockIds.size).toBeGreaterThan(0);
     expect(document.headings).toHaveLength(3);
 
@@ -71,21 +71,30 @@ describe("reference-only source regions", () => {
   });
 
   it.each([
-    ["digest", (region: ConfirmedSourceRegion) => ({
-      ...region,
-      range: { ...region.range, sha256: "f".repeat(64) },
-    })],
-    ["partial", (region: ConfirmedSourceRegion) => ({
-      ...region,
-      range: { ...region.range, start_byte: region.range.start_byte + 1 },
-    })],
-    ["reversed", (region: ConfirmedSourceRegion) => ({
-      ...region,
-      range: {
-        ...region.range,
-        end_byte: region.range.start_byte,
-      },
-    })],
+    [
+      "digest",
+      (region: ConfirmedSourceRegion) => ({
+        ...region,
+        range: { ...region.range, sha256: "f".repeat(64) },
+      }),
+    ],
+    [
+      "partial",
+      (region: ConfirmedSourceRegion) => ({
+        ...region,
+        range: { ...region.range, start_byte: region.range.start_byte + 1 },
+      }),
+    ],
+    [
+      "reversed",
+      (region: ConfirmedSourceRegion) => ({
+        ...region,
+        range: {
+          ...region.range,
+          end_byte: region.range.start_byte,
+        },
+      }),
+    ],
   ])("rejects %s ranges", (_label, mutate) => {
     const { document, region, source } = setup();
     expect(() =>
@@ -105,10 +114,7 @@ describe("reference-only source regions", () => {
         document,
         mainMarkdownPath: "source/full.md",
         mainMarkdownSha256: sha(source),
-        regions: [
-          region,
-          { ...region, region_id: "region_qrstuvwxyzabcdef" },
-        ],
+        regions: [region, { ...region, region_id: "region_qrstuvwxyzabcdef" }],
       }),
     ).toThrow(expect.objectContaining({ code: "SOURCE_REGION_INVALID" }));
   });
@@ -133,9 +139,7 @@ describe("reference-only source regions", () => {
             range: {
               end_byte: endByte,
               sha256: sha(
-                Buffer.from(source)
-                  .subarray(startByte, endByte)
-                  .toString(),
+                Buffer.from(source).subarray(startByte, endByte).toString(),
               ),
               start_byte: startByte,
             },

@@ -227,7 +227,10 @@ function normalizePunctuation(value: string): {
     value: withPeriods
       .join("")
       .replace(
-        new RegExp(`${horizontalWhitespace}+(?=[，。；：？！）》」』】])`, "gu"),
+        new RegExp(
+          `${horizontalWhitespace}+(?=[，。；：？！）》」』】])`,
+          "gu",
+        ),
         "",
       )
       .replace(
@@ -334,7 +337,9 @@ function collectInlineLeaves(
   if (
     node.type === "link" &&
     node.position &&
-    !source.slice(node.position.start.offset, node.position.end.offset).includes("[")
+    !source
+      .slice(node.position.start.offset, node.position.end.offset)
+      .includes("[")
   ) {
     const visible = (node.children ?? [])
       .filter((child) => child.type === "text")

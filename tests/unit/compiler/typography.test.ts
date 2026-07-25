@@ -61,8 +61,7 @@ describe("persisted Markdown typography preprocessing", () => {
   });
 
   it("handles transparent emphasis and link-label boundaries without changing destinations", () => {
-    const input =
-      "中文**English**中文与[API](https://example.com/a,b)中文\n";
+    const input = "中文**English**中文与[API](https://example.com/a,b)中文\n";
     const result = preprocessMarkdownTypography(input, "zh-smart-v1");
     expect(result.markdown).toBe(
       "中文 **English** 中文与 [API](https://example.com/a,b) 中文\n",
@@ -71,10 +70,10 @@ describe("persisted Markdown typography preprocessing", () => {
 
   it("preserves line breaks and every non-target Markdown byte", () => {
     const input =
-      "> 中文English  \n> 下一行\n\n![中文API](images/a,b.png \"标题\")\n";
+      '> 中文English  \n> 下一行\n\n![中文API](images/a,b.png "标题")\n';
     const result = preprocessMarkdownTypography(input, "zh-smart-v1");
     expect(result.markdown).toBe(
-      "> 中文 English  \n> 下一行\n\n![中文API](images/a,b.png \"标题\")\n",
+      '> 中文 English  \n> 下一行\n\n![中文API](images/a,b.png "标题")\n',
     );
   });
 
