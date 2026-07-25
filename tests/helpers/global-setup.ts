@@ -384,6 +384,30 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         ],
       }),
     ),
+    writeFile(
+      resolve(e2eFixtureRoot, "publishing-quality.zip"),
+      buildZip({
+        entries: [
+          {
+            data: [
+              "# 排版质量",
+              "",
+              "中文English123测试,继续:结束?",
+              "",
+              "URL https://example.com/a?x=1&y=2 和 `v1.2.3` 不改。",
+              "",
+              "公式 $x+y$ 保持。",
+              "",
+              "$$",
+              "\\notacommand{",
+              "$$",
+            ].join("\n"),
+            name: "wrapper/result/full.md",
+          },
+          { data: '{"pages":[]}', name: "wrapper/result/layout.json" },
+        ],
+      }),
+    ),
   ]);
 
   const worker = await startWorkerProcess({

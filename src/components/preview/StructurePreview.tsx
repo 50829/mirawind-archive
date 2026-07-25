@@ -258,7 +258,7 @@ export function StructurePreview(props: { readonly bookId: number }) {
           {preview && pageId !== null ? (
             <iframe
               key={`${preview.config_revision}:${pageId}`}
-              sandbox=""
+              sandbox="allow-same-origin"
               src={`/api/manage/books/${draft.book_id}/preview/${preview.config_revision}/pages/${pageId}`}
               title={`修订 ${preview.config_revision}：${preview.pages.find((page) => page.page_id === pageId)?.title ?? "正文预览"}`}
             />

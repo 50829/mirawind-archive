@@ -50,7 +50,7 @@ function previewHtmlDocument(body: string, css: string): string {
 <link rel="stylesheet" href="${readerStylesheetUrl}">
 ${css ? `<style>${css}</style>` : ""}
 </head>
-<body>${body}</body>
+<body><article class="reader-document">${body}</article></body>
 </html>
 `;
 }
