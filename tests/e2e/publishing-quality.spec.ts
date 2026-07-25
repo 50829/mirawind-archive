@@ -187,3 +187,140 @@ test("keeps typography, KaTeX accessibility and local assets equal in preview an
 
   expectRendererClosure(rendererResponses, rendererFailures);
 });
+
+test("reviews, reverses, reapplies and republishes a printed contents proposal", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.goto("/login");
+  await page.getByText("使用备用密码", { exact: true }).click();
+  await page.getByLabel("管理员邮箱").fill(e2eAdministrator.email);
+  await page.getByLabel("备用密码").fill(e2eAdministrator.password);
+  await page.getByRole("button", { name: "使用备用密码登录" }).click();
+  await expect(page).toHaveURL(/\/manage$/u);
+
+  await page
+    .getByLabel("MinerU ZIP")
+    .setInputFiles(resolve(e2eFixtureRoot, "printed-toc.zip"));
+  await page.getByRole("button", { name: "上传并分析" }).click();
+  await expect(page.getByText(/draft_ready/u)).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.getByRole("link", { name: "打开结构预览" }).click();
+  await expect(page.getByText("预览已就绪")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(
+    page.getByRole("heading", { name: "印刷目录区域" }),
+  ).toBeVisible();
+  await expect(page.getByText(/已排除正文.*6\/6 条目匹配/u)).toBeVisible();
+  await expect(page.getByLabel(/排除印刷目录区域/u)).toBeChecked();
+  await expect(
+    page.getByRole("heading", { name: "Markdown 预处理" }),
+  ).toBeVisible();
+
+  const preview = page.frameLocator("iframe");
+  await expect(preview.getByRole("heading", { name: "目录" })).toHaveCount(0);
+  await expect(preview.locator(".reader-document")).not.toContainText(
+    "...... 1",
+  );
+  await expect(
+    preview.getByRole("heading", { name: "第 1 章 绪论" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "全部恢复到正文" }).click();
+  await expect(page.getByLabel(/排除印刷目录区域/u)).not.toBeChecked();
+  await page.getByRole("button", { name: "应用全部建议" }).click();
+  await expect(page.getByLabel(/排除印刷目录区域/u)).toBeChecked();
+  await page.getByRole("button", { name: "保存并重建预览" }).click();
+  await expect(page.getByText(/配置修订 2/u)).toBeVisible();
+  await expect(page.getByText("预览已就绪")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(preview.getByRole("heading", { name: "目录" })).toHaveCount(0);
+  await expect(preview.locator(".reader-document")).not.toContainText(
+    "...... 1",
+  );
+
+  const databasePath = resolve(e2eDataRoot, "db", "mirawind.sqlite");
+  const beforePublish = new Database(databasePath, { readonly: true });
+  const book = (() => {
+    try {
+      return beforePublish
+        .prepare(
+          `SELECT books.id, source_snapshots.source_root_rel_path,
+                  source_snapshots.main_markdown_path
+           FROM books
+           JOIN source_snapshots ON source_snapshots.id = books.draft_source_id
+           WHERE books.title_cache = '第 1 章 绪论'
+           ORDER BY books.id DESC LIMIT 1`,
+        )
+        .get() as {
+        id: number;
+        main_markdown_path: string;
+        source_root_rel_path: string;
+      };
+    } finally {
+      beforePublish.close();
+    }
+  })();
+  const retainedMarkdown = await readFile(
+    resolve(e2eDataRoot, book.source_root_rel_path, book.main_markdown_path),
+    "utf8",
+  );
+  expect(retainedMarkdown).toContain("# 目录");
+  expect(retainedMarkdown).toContain("# 第 1 章 绪论 ...... 1");
+
+  await page.getByRole("button", { name: "发布当前修订" }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "发布完成；新请求现在读取完整的新版本。" }),
+  ).toBeVisible({ timeout: 60_000 });
+  const firstVersion = new Database(databasePath, { readonly: true });
+  const firstVersionId = (() => {
+    try {
+      return (
+        firstVersion
+          .prepare("SELECT current_version_id FROM books WHERE id = ?")
+          .get(book.id) as { current_version_id: string }
+      ).current_version_id;
+    } finally {
+      firstVersion.close();
+    }
+  })();
+
+  const readingHref = await page
+    .getByRole("link", { name: "开始阅读" })
+    .getAttribute("href");
+  await page.goto(readingHref ?? "");
+  await expect(page.locator(".reader-document")).not.toContainText("...... 1");
+  await expect(
+    page.getByRole("navigation", { name: "全书目录" }),
+  ).toContainText("中文与 English 排版");
+
+  await page.goBack();
+  await page.getByRole("button", { name: "发布当前修订" }).click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "发布完成；新请求现在读取完整的新版本。" }),
+  ).toBeVisible({ timeout: 60_000 });
+  const republished = new Database(databasePath, { readonly: true });
+  try {
+    const state = republished
+      .prepare(
+        `SELECT current_version_id,
+                (SELECT COUNT(*) FROM book_versions WHERE book_id = books.id) AS version_count
+         FROM books WHERE id = ?`,
+      )
+      .get(book.id) as {
+      current_version_id: string;
+      version_count: number;
+    };
+    expect(state.current_version_id).not.toBe(firstVersionId);
+    expect(state.version_count).toBe(2);
+  } finally {
+    republished.close();
+  }
+});
