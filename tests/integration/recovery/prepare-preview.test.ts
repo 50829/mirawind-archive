@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
@@ -20,6 +21,9 @@ import { buildZip } from "../../../scripts/fixtures/zip-builder";
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 
 const sha256 = "a".repeat(64);
+const printedTocFixturePath = fileURLToPath(
+  new URL("../../fixtures/publishing-quality/printed-toc.md", import.meta.url),
+);
 
 function candidate(): MarkdownCandidate {
   return Object.freeze({
@@ -36,6 +40,135 @@ function candidate(): MarkdownCandidate {
 }
 
 describe("prepare_draft and build_preview handlers", () => {
+  it("persists normalized Markdown and a bounded high-confidence printed-contents proposal", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const source = await readFile(printedTocFixturePath, "utf8");
+      const archivePath = resolve(dataRoot.path, "printed-toc.zip");
+      await writeFile(
+        archivePath,
+        buildZip({
+          entries: [
+            { data: source, name: "wrapper/full.md" },
+            { data: "{}", name: "wrapper/layout.json" },
+          ],
+        }),
+      );
+      const drafts = new DraftRepository(database);
+      const imports = new ImportRepository(database);
+      const book = drafts.createBook({ nowMs: 1, title: "Pending import" });
+      const imported = imports.createUploaded({
+        bookId: book.id,
+        expiresAtMs: 10_000,
+        id: "imp_abcdefghijklmnop",
+        nowMs: 2,
+        uploadRelativePath: "tmp/uploads/imp_abcdefghijklmnop/original.zip",
+        uploadSha256: sha256,
+        uploadSizeBytes: (await readFile(archivePath)).byteLength,
+      });
+      imports.startAnalysis(imported.id, 3);
+      imports.saveCandidates({
+        candidates: [candidate()],
+        importId: imported.id,
+        nextState: "preparing",
+        nowMs: 4,
+        selectedCandidateId: candidate().id,
+      });
+
+      const prepared = await prepareDraft({
+        archivePath,
+        selectedCandidatePath: candidate().normalizedPath,
+        stagingDirectory: resolve(
+          dataRoot.path,
+          "staging/job_prepare_abcdefghijklmnop",
+        ),
+      });
+
+      expect(prepared.artifact).toMatchObject({
+        printedContents: [
+          {
+            confidence: "high",
+            diagnosticCodes: [],
+            entryCount: 6,
+            matchedHeadingCount: 6,
+            regionId: expect.stringMatching(/^region_/u),
+          },
+        ],
+        sourceRegions: [
+          {
+            disposition: "reference_only",
+            entries: expect.arrayContaining([
+              expect.objectContaining({ reference_level: 1 }),
+              expect.objectContaining({ reference_level: 2 }),
+            ]),
+            kind: "printed_toc",
+          },
+        ],
+        title: "第 1 章 绪论",
+        typography: expect.objectContaining({
+          profile: "zh-smart-v1",
+        }),
+      });
+      expect(
+        Object.keys(prepared.artifact.printedContents[0] ?? {}).sort(),
+      ).toEqual([
+        "confidence",
+        "diagnosticCodes",
+        "endByte",
+        "entryCount",
+        "matchedHeadingCount",
+        "regionId",
+        "startByte",
+      ]);
+
+      const finalized = await finalizePreparedDraft({
+        artifact: prepared.artifact,
+        database,
+        extractedRoot: prepared.extractedRoot,
+        importId: imported.id,
+        layout: dataRoot.layout,
+        nowMs: 5,
+        originalArchivePath: archivePath,
+      });
+      const config = drafts.requireConfig(book.id, 1);
+      const parsedConfig = parseBookConfigYaml(
+        await readFile(
+          resolve(dataRoot.layout.root, config.yamlRelativePath),
+          "utf8",
+        ),
+      );
+      const acceptedMarkdown = await readFile(
+        resolve(
+          dataRoot.layout.root,
+          finalized.snapshot.source.sourceRootRelativePath,
+          finalized.snapshot.source.mainMarkdownPath,
+        ),
+        "utf8",
+      );
+
+      expect(acceptedMarkdown).toContain("中文与 English 排版");
+      expect(parsedConfig).toMatchObject({
+        schema_version: 2,
+        source: {
+          main_markdown_sha256: finalized.snapshot.source.mainMarkdownSha256,
+          preprocessing: {
+            typography: {
+              output_sha256: finalized.snapshot.source.mainMarkdownSha256,
+              profile: "zh-smart-v1",
+            },
+          },
+        },
+        source_regions: [
+          {
+            disposition: "reference_only",
+            kind: "printed_toc",
+            source_path: finalized.snapshot.source.mainMarkdownPath,
+            source_sha256: finalized.snapshot.source.mainMarkdownSha256,
+          },
+        ],
+        title: "第 1 章 绪论",
+      });
+    }));
+
   it("creates an immutable initial config and a revision-pinned ready preview", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const image = await sharp({
@@ -117,7 +250,15 @@ describe("prepare_draft and build_preview handlers", () => {
       expect(parsedConfig).toMatchObject({
         book_id: book.id,
         revision: 1,
-        schema_version: 1,
+        schema_version: 2,
+        source: expect.objectContaining({
+          preprocessing: {
+            typography: expect.objectContaining({
+              profile: "zh-smart-v1",
+            }),
+          },
+        }),
+        source_regions: [],
         structure: [
           expect.objectContaining({
             display_level: 1,

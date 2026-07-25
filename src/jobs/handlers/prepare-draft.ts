@@ -12,9 +12,19 @@ import {
 import { normalizeDocumentBlocks } from "../../compiler/document/normalize.js";
 import { parseMarkdownDocument } from "../../compiler/document/parser.js";
 import {
+  detectPrintedContents,
+  type PrintedContentsCandidate,
+} from "../../compiler/document/printed-toc.js";
+import { applySourceRegions } from "../../compiler/document/source-regions.js";
+import {
   proposeDocumentStructure,
   type ProposedStructureNode,
 } from "../../compiler/document/structure-proposal.js";
+import type { ConfirmedSourceRegion } from "../../compiler/document/types.js";
+import {
+  preprocessMarkdownTypography,
+  type TypographyProvenance,
+} from "../../compiler/preprocess/typography.js";
 import { inspectRasterImage } from "../../compiler/resources/images.js";
 import { resolveDocumentResources } from "../../compiler/resources/resolver.js";
 import { DraftRepository } from "../../db/repositories/drafts.js";
@@ -28,14 +38,27 @@ import {
   type SourceSnapshotResult,
 } from "../../services/source-snapshot.js";
 
-export const draftPreparationVersion = "prepare-draft-v1";
+export const draftPreparationVersion = "prepare-draft-v2";
 export const preparationArtifactFilename = "prepared-draft.json";
 
 export interface PreparedDraftArtifact {
   readonly mainMarkdownRelativePath: string;
+  readonly printedContents: readonly PreparedPrintedContentsSummary[];
+  readonly sourceRegions: readonly ConfirmedSourceRegion[];
   readonly structure: readonly ProposedStructureNode[];
   readonly title: string;
+  readonly typography: TypographyProvenance;
   readonly version: typeof draftPreparationVersion;
+}
+
+export interface PreparedPrintedContentsSummary {
+  readonly confidence: PrintedContentsCandidate["confidence"];
+  readonly diagnosticCodes: readonly string[];
+  readonly endByte: number;
+  readonly entryCount: number;
+  readonly matchedHeadingCount: number;
+  readonly regionId?: string;
+  readonly startByte: number;
 }
 
 export interface PrepareDraftResult {
@@ -76,7 +99,12 @@ export async function prepareDraft(input: {
       input.selectedCandidatePath,
     );
     const markdownBytes = await readFile(markdownPath);
-    const document = parseMarkdownDocument(markdownBytes);
+    const typography = preprocessMarkdownTypography(
+      markdownBytes,
+      "zh-smart-v1",
+    );
+    await atomicWriteFile(markdownPath, typography.markdown, { mode: 0o600 });
+    const document = parseMarkdownDocument(typography.markdown);
     const normalized = normalizeDocumentBlocks(document);
     const resources = await resolveDocumentResources({
       document,
@@ -92,14 +120,47 @@ export async function prepareDraft(input: {
         filename: resource.relativePath,
       });
     }
-    const proposal = proposeDocumentStructure(normalized);
+    const printedContents = detectPrintedContents({
+      document: normalized,
+      sourcePath: basename(input.selectedCandidatePath),
+      sourceSha256: typography.provenance.output_sha256,
+    });
+    const sourceRegions = printedContents.candidates.flatMap((candidate) =>
+      candidate.proposedRegion ? [candidate.proposedRegion] : [],
+    );
+    const proposal = proposeDocumentStructure(normalized, { sourceRegions });
+    const activeDocument = applySourceRegions({
+      document: normalized,
+      mainMarkdownPath: basename(input.selectedCandidatePath),
+      mainMarkdownSha256: typography.provenance.output_sha256,
+      regions: sourceRegions,
+    }).document;
     const artifact: PreparedDraftArtifact = Object.freeze({
       mainMarkdownRelativePath: input.selectedCandidatePath,
+      printedContents: Object.freeze(
+        printedContents.candidates.map((candidate) =>
+          Object.freeze({
+            confidence: candidate.confidence,
+            diagnosticCodes: Object.freeze(
+              candidate.diagnostics.map((diagnostic) => diagnostic.code),
+            ),
+            endByte: candidate.endByte,
+            entryCount: candidate.entryCount,
+            matchedHeadingCount: candidate.matchedHeadingCount,
+            ...(candidate.proposedRegion
+              ? { regionId: candidate.proposedRegion.region_id }
+              : {}),
+            startByte: candidate.startByte,
+          }),
+        ),
+      ),
+      sourceRegions,
       structure: proposal.nodes,
       title:
-        normalized.headings[0]?.sourceTitle.trim().slice(0, 500) ||
+        activeDocument.headings[0]?.sourceTitle.trim().slice(0, 500) ||
         basename(input.selectedCandidatePath, ".md").slice(0, 500) ||
         "Untitled book",
+      typography: typography.provenance,
       version: draftPreparationVersion,
     });
     await atomicWriteFile(artifactPath, `${JSON.stringify(artifact)}\n`, {
@@ -129,11 +190,33 @@ export async function readPreparedDraftArtifact(
     typeof artifact.title !== "string" ||
     artifact.title.length < 1 ||
     artifact.title.length > 500 ||
+    !validTypographyProvenance(artifact.typography) ||
+    !Array.isArray(artifact.printedContents) ||
+    !Array.isArray(artifact.sourceRegions) ||
     !Array.isArray(artifact.structure)
   ) {
     throw new Error("PREPARED_DRAFT_ARTIFACT_INVALID");
   }
   return parsed as PreparedDraftArtifact;
+}
+
+function validTypographyProvenance(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const provenance = value as Record<string, unknown>;
+  return (
+    (provenance.profile === "preserve-v1" ||
+      provenance.profile === "zh-smart-v1") &&
+    typeof provenance.input_sha256 === "string" &&
+    /^[a-f0-9]{64}$/u.test(provenance.input_sha256) &&
+    typeof provenance.output_sha256 === "string" &&
+    /^[a-f0-9]{64}$/u.test(provenance.output_sha256) &&
+    ["spaces_normalized", "punctuation_converted", "protected_nodes"].every(
+      (key) =>
+        Number.isInteger(provenance[key]) &&
+        Number(provenance[key]) >= 0 &&
+        Number(provenance[key]) <= 2_147_483_647,
+    )
+  );
 }
 
 export function preparedDraftArtifactPath(stagingDirectory: string): string {
@@ -143,9 +226,25 @@ export function preparedDraftArtifactPath(stagingDirectory: string): string {
 function configFor(input: {
   readonly bookId: number;
   readonly snapshot: SourceSnapshotResult;
+  readonly sourceRegions: readonly ConfirmedSourceRegion[];
   readonly structure: readonly ProposedStructureNode[];
   readonly title: string;
+  readonly typography: TypographyProvenance;
 }): Readonly<Record<string, unknown>> {
+  if (
+    input.typography.output_sha256 !== input.snapshot.source.mainMarkdownSha256
+  ) {
+    throw new Error("PREPROCESS_OUTPUT_HASH_MISMATCH");
+  }
+  if (
+    input.sourceRegions.some(
+      (region) =>
+        region.source_path !== input.snapshot.source.mainMarkdownPath ||
+        region.source_sha256 !== input.snapshot.source.mainMarkdownSha256,
+    )
+  ) {
+    throw new Error("SOURCE_REGION_SNAPSHOT_MISMATCH");
+  }
   return validateBookConfig({
     book_id: input.bookId,
     publishing: {
@@ -153,7 +252,7 @@ function configFor(input: {
       numbering: { mode: "normalized" },
     },
     revision: 1,
-    schema_version: 1,
+    schema_version: 2,
     source: {
       main_markdown: input.snapshot.source.mainMarkdownPath,
       main_markdown_sha256: input.snapshot.source.mainMarkdownSha256,
@@ -168,7 +267,11 @@ function configFor(input: {
           size: input.snapshot.original.sizeBytes,
         },
       ],
+      preprocessing: {
+        typography: input.typography,
+      },
     },
+    source_regions: input.sourceRegions,
     structure: input.structure,
     title: input.title,
   });
@@ -206,8 +309,10 @@ export async function finalizePreparedDraft(input: {
   const config = configFor({
     bookId: imported.bookId,
     snapshot,
+    sourceRegions: input.artifact.sourceRegions,
     structure: input.artifact.structure,
     title: input.artifact.title,
+    typography: input.artifact.typography,
   });
   const yaml = stringify(config, { lineWidth: 0 });
   const yamlSha256 = createHash("sha256").update(yaml).digest("hex");
@@ -226,7 +331,7 @@ export async function finalizePreparedDraft(input: {
     bookId: imported.bookId,
     nowMs: input.nowMs,
     revision: 1,
-    schemaVersion: 1,
+    schemaVersion: 2,
     sourceId: snapshot.source.id,
     title: input.artifact.title,
     yamlRelativePath,

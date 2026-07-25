@@ -6,6 +6,7 @@ const prefixes = {
   file: "file",
   import: "imp",
   job: "job",
+  region: "region",
   resource: "res",
   source: "src",
   version: "ver",
