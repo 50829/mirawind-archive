@@ -238,6 +238,7 @@ export async function verifyAndRecoverCurrentVersions(input: {
     .prepare(
       `SELECT id, current_version_id FROM books
        WHERE current_version_id IS NOT NULL
+         AND deletion_requested_at IS NULL
        ORDER BY id`,
     )
     .all() as { id: number; current_version_id: string }[];
@@ -310,7 +311,8 @@ export async function verifyAndRecoverCurrentVersions(input: {
              SET current_version_id = ?, alias = ?,
                  unavailable_reason = NULL,
                  updated_at = ?
-             WHERE id = ? AND current_version_id = ?`,
+             WHERE id = ? AND current_version_id = ?
+               AND deletion_requested_at IS NULL`,
           )
           .run(
             replacement.id,
@@ -325,7 +327,8 @@ export async function verifyAndRecoverCurrentVersions(input: {
             `UPDATE books
              SET unavailable_reason = 'CURRENT_VERSION_CORRUPT',
                  updated_at = ?
-             WHERE id = ? AND current_version_id = ?`,
+             WHERE id = ? AND current_version_id = ?
+               AND deletion_requested_at IS NULL`,
           )
           .run(input.nowMs, book.id, book.current_version_id);
       }

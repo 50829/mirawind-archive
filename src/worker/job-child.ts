@@ -7,6 +7,7 @@ import { buildPreview } from "../jobs/handlers/build-preview.js";
 import { buildPublish } from "../jobs/handlers/build-publish.js";
 import { prepareDraft } from "../jobs/handlers/prepare-draft.js";
 import { reclaimRetainedStorage } from "../jobs/handlers/reclaim.js";
+import { permanentlyCleanupBook } from "../services/permanent-book-cleanup.js";
 import { reconcileRuntimeStorage } from "../jobs/handlers/reconcile.js";
 import { verifyVersion } from "../jobs/handlers/verify-version.js";
 import { resolveContainedPath } from "../storage/path-resolver.js";
@@ -162,26 +163,45 @@ async function execute(message: RunJobMessage): Promise<void> {
         role: "worker",
       });
       try {
-        const outcome = await reclaimRetainedStorage({
-          database,
-          layout: await createStorageLayout(root),
-          nowMs: Date.now(),
-        });
+        const layout = await createStorageLayout(root);
+        const deletionOutcome = message.input.bookId
+          ? await permanentlyCleanupBook({
+              bookId: message.input.bookId,
+              database,
+              jobId: message.input.jobId,
+              layout,
+              nowMs: Date.now(),
+            })
+          : null;
+        const outcome = deletionOutcome
+          ? null
+          : await reclaimRetainedStorage({
+              database,
+              layout,
+              nowMs: Date.now(),
+            });
         send({
           jobId: message.input.jobId,
-          ok: outcome.failedPaths.length === 0,
+          ok: deletionOutcome !== null || outcome?.failedPaths.length === 0,
           protocolVersion: jobChildProtocolVersion,
-          ...(outcome.failedPaths.length === 0
+          ...(deletionOutcome
             ? {
                 result: {
-                  reclaimed_versions: outcome.reclaimedVersionIds.length,
-                  removed_quarantine: outcome.removedQuarantinePaths.length,
+                  removed_staging: deletionOutcome.removedStagingDirectories,
+                  removed_uploads: deletionOutcome.removedUploadDirectories,
                 },
               }
-            : {
-                safeErrorClass: "infrastructure",
-                safeErrorCode: "RECLAIM_CLEANUP_INCOMPLETE",
-              }),
+            : outcome && outcome.failedPaths.length === 0
+              ? {
+                  result: {
+                    reclaimed_versions: outcome.reclaimedVersionIds.length,
+                    removed_quarantine: outcome.removedQuarantinePaths.length,
+                  },
+                }
+              : {
+                  safeErrorClass: "infrastructure",
+                  safeErrorCode: "RECLAIM_CLEANUP_INCOMPLETE",
+                }),
           type: "result",
         });
       } finally {

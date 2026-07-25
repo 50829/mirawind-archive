@@ -99,7 +99,10 @@ describe("checksummed migrations", () => {
   it("applies the locked M1 schema with FTS5 and all authority tables", async () => {
     const database = await openTemporaryDatabase();
     const result = applyMigrations(database, await loadMigrationManifest());
-    expect(result).toEqual({ applied: [1, 2, 3, 4, 5, 6], current: 6 });
+    expect(result).toEqual({
+      applied: [1, 2, 3, 4, 5, 6, 7],
+      current: 7,
+    });
 
     const names = (
       database
@@ -120,6 +123,7 @@ describe("checksummed migrations", () => {
         "import_candidates",
         "book_versions",
         "book_version_presentations",
+        "book_deletions",
         "jobs",
         "search_short_fields",
         "search_fts",
@@ -162,6 +166,60 @@ describe("checksummed migrations", () => {
         )
         .get(),
     ).toEqual({ count: 3 });
+    expect(
+      database
+        .prepare(
+          `SELECT COUNT(*) AS count
+           FROM pragma_table_info('books')
+           WHERE name = 'deletion_requested_at'`,
+        )
+        .get(),
+    ).toEqual({ count: 1 });
+    database.close();
+  });
+
+  it("upgrades a v6 database with active books and a content-free tombstone schema", async () => {
+    const database = await openTemporaryDatabase();
+    const manifest = await loadMigrationManifest();
+    applyMigrations(database, manifest.slice(0, 6));
+    database
+      .prepare(
+        `INSERT INTO books (
+          alias, visibility, title_cache, created_at, updated_at
+        ) VALUES ('fixture', 'private', 'Fixture', 1000, 1000)`,
+      )
+      .run();
+
+    expect(applyMigrations(database, manifest)).toEqual({
+      applied: [7],
+      current: 7,
+    });
+    expect(
+      database
+        .prepare(
+          "SELECT title_cache, deletion_requested_at FROM books WHERE alias = 'fixture'",
+        )
+        .get(),
+    ).toEqual({ deletion_requested_at: null, title_cache: "Fixture" });
+    const tombstoneColumns = (
+      database
+        .prepare("SELECT name FROM pragma_table_info('book_deletions')")
+        .all() as { name: string }[]
+    ).map((row) => row.name);
+    expect(tombstoneColumns).not.toEqual(
+      expect.arrayContaining([
+        "title",
+        "alias",
+        "path",
+        "filename",
+        "metadata_json",
+      ]),
+    );
+    expect(database.pragma("foreign_key_check")).toEqual([]);
+    expect(applyMigrations(database, manifest)).toEqual({
+      applied: [],
+      current: 7,
+    });
     database.close();
   });
 
@@ -178,8 +236,8 @@ describe("checksummed migrations", () => {
       .run();
 
     expect(applyMigrations(database, manifest)).toEqual({
-      applied: [6],
-      current: 6,
+      applied: [6, 7],
+      current: 7,
     });
     expect(
       database.prepare("SELECT * FROM installation WHERE id = 1").get(),
@@ -191,7 +249,7 @@ describe("checksummed migrations", () => {
     ).toEqual({ count: 0 });
     expect(applyMigrations(database, manifest)).toEqual({
       applied: [],
-      current: 6,
+      current: 7,
     });
     database.close();
   });
@@ -209,16 +267,16 @@ describe("checksummed migrations", () => {
         nowMs: 1_000,
       }),
     ).toMatchObject({
-      applied: [1, 2, 3, 4, 5, 6],
+      applied: [1, 2, 3, 4, 5, 6, 7],
       backupPath: null,
-      current: 6,
+      current: 7,
     });
     const second = await runDatabaseMigrations({
       backupDirectory,
       databasePath,
       nowMs: 2_000,
     });
-    expect(second).toMatchObject({ applied: [], current: 6 });
+    expect(second).toMatchObject({ applied: [], current: 7 });
     expect(second.backupPath).not.toBeNull();
     if (!second.backupPath) throw new Error("Expected a pre-migration backup");
     await access(second.backupPath);

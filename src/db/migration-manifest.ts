@@ -49,6 +49,13 @@ const migrationDefinitions = [
     name: "book_version_presentations",
     version: 6,
   },
+  {
+    checksum:
+      "e6078891d4fe2dc96bf00728dce236541275a766ac3fcb4609e129b53b987c77",
+    file: "0007_permanent_book_deletion.sql",
+    name: "permanent_book_deletion",
+    version: 7,
+  },
 ] as const;
 
 export async function loadMigrationManifest(): Promise<readonly Migration[]> {

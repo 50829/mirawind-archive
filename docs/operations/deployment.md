@@ -221,6 +221,12 @@ existing projection digests, repairs the current alias, and excludes invalid pro
 from rollback. Keep the worker running until this pass completes; public `/library` omits a
 temporarily missing projection and shows only a generic partial-availability notice.
 
+Schema migration 7 adds the irreversible `books.deletion_requested_at` barrier and the
+content-free `book_deletions` tombstone table. Web and worker must be upgraded together.
+Deletion acceptance is bounded database work; a book-scoped `reclaim` task removes files
+and then ordinary content rows. Do not start an old worker against schema 7, clear the
+barrier manually, or delete tombstone rows during a failed cleanup.
+
 Do not manually move quarantine entries into `versions`, delete the current version, remove
 the previous verified version, or delete FTS rows. Preserve the volume and follow
 `recovery.md` if reconciliation reports a corrupt current version.

@@ -5,6 +5,7 @@ import type Database from "better-sqlite3";
 import type { AuthorizationDecision } from "../http/authorization/admin-guard.js";
 import { authorizeBookResource } from "../http/authorization/book-guard.js";
 import { SafeApplicationError } from "../domain/errors.js";
+import { createBookDeletionToken } from "./book-deletion-token.js";
 
 const maximumPublicEntries = 5_000;
 const maximumAuthors = 100;
@@ -73,6 +74,7 @@ export interface PublicLibraryView {
 export interface AdministratorLibraryEntry {
   readonly bookId: number;
   readonly currentVersionAvailable: boolean;
+  readonly deletionMutationToken: string;
   readonly previewReady: boolean;
   readonly primaryHref: string;
   readonly statusLabel: string;
@@ -251,6 +253,7 @@ export class LibraryService {
           AND presentation.config_revision = versions.config_revision
          WHERE books.visibility = 'public'
            AND books.unavailable_reason IS NULL
+           AND books.deletion_requested_at IS NULL
          ORDER BY presentation.title COLLATE NOCASE, books.id
          LIMIT ?`,
       )
@@ -278,6 +281,7 @@ export class LibraryService {
           AND presentation.book_id = books.id
           AND presentation.config_revision = versions.config_revision
          WHERE books.visibility = 'public'
+           AND books.deletion_requested_at IS NULL
            AND (
              books.unavailable_reason IS NOT NULL
              OR versions.id IS NULL
@@ -314,6 +318,9 @@ export class LibraryService {
     const rows = this.database
       .prepare(
         `SELECT books.id, books.title_cache, books.visibility,
+                books.alias AS mutable_alias, books.updated_at,
+                books.draft_source_id, books.draft_config_revision,
+                books.current_version_id,
                 books.ready_preview_revision, books.unavailable_reason,
                 presentation.alias, presentation.first_page_id,
                 presentation.first_page_alias,
@@ -330,6 +337,7 @@ export class LibraryService {
            ON presentation.version_id = versions.id
           AND presentation.book_id = books.id
          WHERE books.id > ?
+           AND books.deletion_requested_at IS NULL
          ORDER BY books.id
          LIMIT ?`,
       )
@@ -339,9 +347,14 @@ export class LibraryService {
       first_page_alias: string | null;
       first_page_id: number | null;
       id: number;
+      mutable_alias: string | null;
+      current_version_id: string | null;
+      draft_config_revision: number | null;
+      draft_source_id: string | null;
       ready_preview_revision: number | null;
       title_cache: string;
       unavailable_reason: string | null;
+      updated_at: number;
       visibility: "draft" | "private" | "public";
     }[];
     const page = rows.slice(0, input.limit);
@@ -369,6 +382,16 @@ export class LibraryService {
           return Object.freeze({
             bookId: row.id,
             currentVersionAvailable,
+            deletionMutationToken: createBookDeletionToken({
+              alias: row.mutable_alias,
+              bookId: row.id,
+              currentVersionId: row.current_version_id,
+              draftConfigRevision: row.draft_config_revision,
+              draftSourceId: row.draft_source_id,
+              readyPreviewRevision: row.ready_preview_revision,
+              title: row.title_cache,
+              updatedAtMs: row.updated_at,
+            }),
             previewReady,
             primaryHref,
             statusLabel,
@@ -411,6 +434,7 @@ export class LibraryService {
           AND presentation.book_id = books.id
           AND presentation.config_revision = versions.config_revision
          WHERE ${predicate.sql}
+           AND books.deletion_requested_at IS NULL
          LIMIT 1`,
       )
       .get(predicate.value) as DetailsRow | undefined;

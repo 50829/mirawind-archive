@@ -61,6 +61,7 @@ function publicationOutcome(
          ON presentation.version_id = versions.id
         AND presentation.book_id = books.id
        WHERE books.id = ?
+         AND books.deletion_requested_at IS NULL
        LIMIT 1`,
     )
     .get(job.versionId, job.bookId) as
@@ -89,6 +90,14 @@ export function serializeJobStatus(
   job: JobRecord,
   database?: Database.Database,
 ) {
+  const isDeletionCleanup =
+    database !== undefined &&
+    database
+      .prepare(
+        `SELECT 1 FROM book_deletions
+         WHERE cleanup_job_id = ?`,
+      )
+      .get(job.id) !== undefined;
   return Object.freeze({
     attempt: job.attempt,
     automatic_retry_count: job.automaticRetryCount,
@@ -97,7 +106,7 @@ export function serializeJobStatus(
     error_code: job.errorCode,
     finished_at: timestamp(job.finishedAtMs),
     job_id: job.id,
-    kind: job.kind,
+    kind: isDeletionCleanup ? "permanent_book_deletion" : job.kind,
     phase: job.phase.slice(0, 80),
     ...(database ? { publication: publicationOutcome(job, database) } : {}),
     progress: safeProgress(job.progress),

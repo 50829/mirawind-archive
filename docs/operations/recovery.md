@@ -129,7 +129,33 @@ When automatic rollback occurs:
 
 Never edit the current pointer, version state, `version.json` or manifest manually.
 
-## 7. SQLite corruption or failed migration
+## 7. Failed permanent deletion cleanup
+
+Permanent deletion is irreversible as soon as its request commits. The book is intentionally
+absent from public and administrator book surfaces even when filesystem cleanup later fails.
+There is no recycle bin, restore command, undo endpoint or supported way to clear
+`deletion_requested_at`.
+
+For a failed cleanup:
+
+1. inspect only the bounded task error code on `/manage/tasks`;
+2. correct the host permission, I/O capacity or storage condition without moving remaining
+   book bytes into a public directory;
+3. use the existing explicit task retry action;
+4. verify that the task completes, `PRAGMA foreign_key_check` is empty and the old numeric
+   and alias routes still return non-cacheable missing responses.
+
+Cleanup removes the deterministic book directory, associated retained upload directories and
+associated inactive staging directories before its final database purge. Missing targets are
+normal retry progress. Do not delete `books`, `imports`, `source_snapshots`,
+`book_deletions` or job rows by hand: the database inventory is required until filesystem
+absence has been proven.
+
+Restoring a complete pre-deletion host backup is a disaster-recovery rollback of the whole
+deployment, not a product restore feature. Never merge a deleted book out of such a backup
+into the live database.
+
+## 8. SQLite corruption or failed migration
 
 Stop both writers immediately:
 
@@ -152,7 +178,7 @@ test requires:
 - every current version has a matching presentation digest and current alias;
 - public/private/search/download behavior matches the restored pointer.
 
-## 8. Disk full or WAL growth
+## 9. Disk full or WAL growth
 
 Stop new imports first. Keep the database, current version, previous verified version and
 authoritative originals.
@@ -166,7 +192,7 @@ authoritative originals.
 After space is restored, start Web and worker, wait for reconciliation, verify current reads
 and inspect the health response.
 
-## 9. Suspected hostile archive incident
+## 10. Suspected hostile archive incident
 
 Cancel the job through the management API/UI and preserve only opaque IDs and safe error
 codes in shared reports. The extractor removes failed staging and rejects traversal, links,

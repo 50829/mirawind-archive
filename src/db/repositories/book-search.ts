@@ -90,6 +90,7 @@ export class BookSearchRepository {
            AND CAST(search_fts.book_id AS INTEGER) = ?
            AND search_fts.version_id = ?
            AND books.current_version_id = search_fts.version_id
+           AND books.deletion_requested_at IS NULL
            AND (? = 0 OR books.visibility = 'public')
          ORDER BY rank, CAST(search_fts.ordinal AS INTEGER)
          LIMIT ? OFFSET ?`,
@@ -172,6 +173,7 @@ export class BookSearchRepository {
          WHERE search_short_fields.book_id = ?
            AND search_short_fields.version_id = ?
            AND books.current_version_id = search_short_fields.version_id
+           AND books.deletion_requested_at IS NULL
            AND (? = 0 OR books.visibility = 'public')
            AND instr(
                  lower(search_short_fields.normalized_text),

@@ -185,6 +185,16 @@ async function executeClaimedJob(input: {
     );
     const latest = input.repository.get(input.job.id);
     if (!latest || latest.state !== "running") return;
+    if (latest.requestedCancelAtMs !== null) {
+      input.repository.completeFailure({
+        errorClass: "canceled",
+        errorCode: "JOB_CANCELED",
+        jobId: input.job.id,
+        leaseOwner: input.leaseOwner,
+        nowMs: Date.now(),
+      });
+      return;
+    }
 
     if (
       execution.result.ok &&
@@ -455,6 +465,7 @@ async function main(): Promise<void> {
          FROM books
          JOIN book_versions ON book_versions.id = books.current_version_id
          WHERE book_versions.state = 'published'
+           AND books.deletion_requested_at IS NULL
            AND book_versions.reclaimed_at IS NULL
          ORDER BY books.id`,
       )

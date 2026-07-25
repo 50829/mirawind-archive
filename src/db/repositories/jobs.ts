@@ -204,6 +204,17 @@ export function createJobRepositorySchema(database: Database.Database): void {
 export class JobRepository {
   constructor(private readonly database: Database.Database) {}
 
+  private hasTable(name: string): boolean {
+    return (
+      this.database
+        .prepare(
+          `SELECT 1 FROM sqlite_master
+           WHERE type = 'table' AND name = ?`,
+        )
+        .get(name) !== undefined
+    );
+  }
+
   findByIdempotency(operation: string, key: string): JobRecord | null {
     validateOperation(operation);
     const row = this.database
@@ -397,6 +408,11 @@ export class JobRepository {
              WHERE id = ? AND state = 'queued'`,
             )
             .run(nowMs, nowMs, id);
+          this.markDeletionCleanupFailure(
+            current,
+            "CLEANUP_INTERRUPTED",
+            nowMs,
+          );
         } else {
           this.database
             .prepare(
@@ -437,13 +453,46 @@ export class JobRepository {
     validateSafeCode(input.errorCode);
     const nextState: TerminalJobState =
       input.errorClass === "canceled" ? "canceled" : "failed";
-    return this.completeOwned({
+    const current = this.getRequired(input.jobId);
+    const completed = this.completeOwned({
       ...input,
       errorDetail: input.errorDetail ?? {},
       nextState,
       phase: nextState,
       progress: {},
     });
+    this.markDeletionCleanupFailure(
+      current,
+      input.errorClass === "timeout"
+        ? "CLEANUP_TIMEOUT"
+        : input.errorClass === "infrastructure"
+          ? "CLEANUP_INTERRUPTED"
+          : "CLEANUP_FILESYSTEM_IO",
+      input.nowMs,
+    );
+    return completed;
+  }
+
+  private markDeletionCleanupFailure(
+    job: JobRecord,
+    safeErrorCode: string,
+    nowMs: number,
+  ): void {
+    if (
+      job.kind !== "reclaim" ||
+      job.bookId === null ||
+      !this.hasTable("book_deletions")
+    ) {
+      return;
+    }
+    this.database
+      .prepare(
+        `UPDATE book_deletions
+         SET state = 'failed', safe_error_code = ?, updated_at = ?
+         WHERE cleanup_job_id = ? AND book_id = ?
+           AND state IN ('pending', 'purging')`,
+      )
+      .run(safeErrorCode, nowMs, job.id, job.bookId);
   }
 
   private completeOwned(input: {
@@ -503,7 +552,13 @@ export class JobRepository {
         const interrupted: JobRecord[] = [];
         for (const row of rows) {
           if (update.run(input.nowMs, row.id, input.nowMs).changes === 1) {
-            interrupted.push(this.getRequired(row.id));
+            const job = this.getRequired(row.id);
+            this.markDeletionCleanupFailure(
+              job,
+              "CLEANUP_INTERRUPTED",
+              input.nowMs,
+            );
+            interrupted.push(job);
           }
         }
         return interrupted;
@@ -530,6 +585,13 @@ export class JobRepository {
         )
         .run(input.errorClass, input.errorCode, input.nowMs, id);
       if (result.changes !== 1) throw new Error("JOB_TRANSITION_RACE");
+      this.markDeletionCleanupFailure(
+        current,
+        input.errorClass === "timeout"
+          ? "CLEANUP_TIMEOUT"
+          : "CLEANUP_INTERRUPTED",
+        input.nowMs,
+      );
       return this.getRequired(id);
     }
     if (!current.leaseOwner) throw new Error("JOB_LEASE_NOT_OWNED");
@@ -559,6 +621,52 @@ export class JobRepository {
           !isTerminalJobState(original.state)
         ) {
           throw new Error("JOB_NOT_RETRYABLE");
+        }
+        if (original.errorCode === "JOB_SUBJECT_DELETED") {
+          throw new Error("JOB_SUBJECT_DELETED");
+        }
+        const supportsBookDeletion =
+          this.hasTable("books") && this.hasTable("book_deletions");
+        const currentDeletionCleanup =
+          supportsBookDeletion &&
+          original.kind === "reclaim" &&
+          this.database
+            .prepare(
+              `SELECT 1 FROM book_deletions
+               WHERE cleanup_job_id = ? AND state != 'completed'`,
+            )
+            .get(original.id) !== undefined;
+        const deletedSubject =
+          supportsBookDeletion &&
+          this.database
+            .prepare(
+              `SELECT 1
+               FROM books
+               WHERE deletion_requested_at IS NOT NULL
+                 AND (
+                   id = @bookId
+                   OR id = (
+                     SELECT book_id FROM imports WHERE id = @importId
+                   )
+                   OR id = (
+                     SELECT book_id FROM source_snapshots
+                     WHERE id = @sourceId
+                   )
+                   OR id = (
+                     SELECT book_id FROM book_versions WHERE id = @versionId
+                   )
+                 )
+               LIMIT 1`,
+            )
+            .get({
+              bookId: original.bookId,
+              importId: original.importId,
+              sourceId: original.capturedSourceId,
+              versionId:
+                original.versionId ?? original.capturedCurrentVersionId,
+            }) !== undefined;
+        if (deletedSubject && !currentDeletionCleanup) {
+          throw new Error("JOB_SUBJECT_DELETED");
         }
         const automaticRetryCount =
           original.automaticRetryCount + (input.automatic ? 1 : 0);
@@ -608,6 +716,22 @@ export class JobRepository {
             automaticRetryCount,
             input.nowMs,
           );
+        if (
+          supportsBookDeletion &&
+          original.kind === "reclaim" &&
+          original.bookId !== null
+        ) {
+          this.database
+            .prepare(
+              `UPDATE book_deletions
+               SET cleanup_job_id = ?, state = 'pending',
+                   safe_error_code = NULL, completed_at = NULL,
+                   updated_at = ?
+               WHERE cleanup_job_id = ? AND book_id = ?
+                 AND state != 'completed'`,
+            )
+            .run(retryId, input.nowMs, original.id, original.bookId);
+        }
         if (operation && keySha256) {
           this.database
             .prepare(

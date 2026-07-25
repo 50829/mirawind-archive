@@ -75,6 +75,7 @@ export const GET: APIRoute = ({ locals, request }) => {
       entries: page.entries.map((entry) => ({
         book_id: entry.bookId,
         current_version_available: entry.currentVersionAvailable,
+        deletion_mutation_token: entry.deletionMutationToken,
         preview_ready: entry.previewReady,
         primary_href: entry.primaryHref,
         status_label: entry.statusLabel,

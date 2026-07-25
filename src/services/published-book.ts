@@ -237,6 +237,7 @@ function currentSelect(predicate: string): string {
             ON presentation.version_id = books.current_version_id
            AND presentation.book_id = books.id
           WHERE ${predicate}
+            AND books.deletion_requested_at IS NULL
           LIMIT 1`;
 }
 
@@ -357,6 +358,7 @@ export class PublishedBookService {
           AND requested_version.book_id = books.id
           AND requested_version.reclaimed_at IS NULL
          WHERE ${predicate.sql}
+           AND books.deletion_requested_at IS NULL
          LIMIT 1`,
       )
       .get(input.versionId, predicate.value) as VersionAssetRow | undefined;
@@ -427,6 +429,7 @@ export class PublishedBookService {
           AND original_files.book_id = books.id
           AND original_files.source_id = book_versions.source_id
          WHERE ${predicate.sql}
+           AND books.deletion_requested_at IS NULL
          LIMIT 1`,
       )
       .get(input.fileId, predicate.value) as OriginalRow | undefined;

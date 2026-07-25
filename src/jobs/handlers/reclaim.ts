@@ -108,6 +108,7 @@ export async function reclaimRetainedStorage(input: {
        FROM book_versions AS versions
        JOIN books ON books.id = versions.book_id
        WHERE versions.state = 'superseded'
+         AND books.deletion_requested_at IS NULL
          AND versions.reclaimed_at IS NULL
          AND versions.verified_at IS NOT NULL
          AND versions.published_at IS NOT NULL

@@ -16,7 +16,7 @@ export function makeBookNonPublic(input: {
     const changed = input.database
       .prepare(
         `UPDATE books SET visibility = ?, updated_at = ?
-         WHERE id = ?`,
+         WHERE id = ? AND deletion_requested_at IS NULL`,
       )
       .run(input.visibility, input.nowMs, input.bookId);
     if (changed.changes !== 1) {
@@ -85,7 +85,8 @@ export async function publishReadyVersion(input: {
          LEFT JOIN draft_previews
            ON draft_previews.book_id = books.id
           AND draft_previews.config_revision = books.draft_config_revision
-         WHERE jobs.id = ? AND book_versions.id = ?`,
+         WHERE jobs.id = ? AND book_versions.id = ?
+           AND books.deletion_requested_at IS NULL`,
       )
       .get(input.jobId, input.versionId) as
       | {
@@ -161,7 +162,8 @@ export async function publishReadyVersion(input: {
              alias = ?, unavailable_reason = NULL, updated_at = ?
          WHERE id = ? AND draft_source_id = ?
            AND draft_config_revision = ?
-           AND current_version_id IS ?`,
+           AND current_version_id IS ?
+           AND deletion_requested_at IS NULL`,
       )
       .run(
         input.versionId,

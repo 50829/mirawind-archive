@@ -56,6 +56,18 @@ M2a 的 SQLite schema 6 新增 `book_version_presentations`。它不是第四个
 匹配时才推进 `current_version_id` 和当前别名。迁移本身只建空表，worker 启动
 后离线回填；公开请求禁止退回读取草稿 `title_cache` 或现场解析 YAML。
 
+## SQLite schema 7 永久删除生命周期
+
+schema 7 为 `books` 增加只增不减的 `deletion_requested_at` 屏障，并新增严格的
+`book_deletions` 墓碑表。删除请求提交后，普通书库、详情、阅读、搜索、资源、
+原文件和管理修改都只查询屏障为空的图书。
+
+`book_deletions` 故意不外键关联普通 `books` 行，只保留不透明的删除/书籍/操作者/
+清理任务身份、时间、受限状态和安全错误码。它没有书名、别名、作者、正文、
+文件名、路径或自由 JSON 字段，因此最终删除普通图书行后不构成恢复来源。
+带 `book_id` 的既有 `reclaim` 任务表示永久清理；无 `book_id` 的 `reclaim`
+任务仍表示版本与隔离目录维护。
+
 ## 两层验证
 
 导入和发布必须依次执行：

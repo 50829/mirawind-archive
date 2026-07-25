@@ -348,4 +348,6 @@ percentiles for all three real fixtures and the stress fixture in
 - notes, annotations, bookmarks, progress, and cross-device reading settings
 - chapter body reordering and page alias editing
 - complete library/folder management, recycle bin, homepage, and cover design
+  (historical M1 deferral; D-107 later approved irreversible single-book deletion without a
+  recycle bin)
 - Chinese two-character body search beyond title/author/heading fallback

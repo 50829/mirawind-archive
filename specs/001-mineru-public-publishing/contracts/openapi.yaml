@@ -350,6 +350,67 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /api/manage/books/{bookId}:
+    delete:
+      tags: [Drafts]
+      operationId: permanentlyDeleteBook
+      summary: Irreversibly hide one book and enqueue contained permanent cleanup
+      description: |
+        Uses the existing valid sole-administrator session without a recent-auth
+        requirement. The current displayed title is compared exactly after NFC
+        normalization. Acceptance has no recycle bin, restore, or undo behavior.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/Origin"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16, maxLength: 200 }
+        - name: If-Match
+          in: header
+          required: true
+          description: Strong mutation token returned by the private library API.
+          schema: { type: string, minLength: 20, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirmationTitle]
+              properties:
+                confirmationTitle: { type: string, maxLength: 500 }
+      responses:
+        "202":
+          description: Deletion barrier committed and durable cleanup accepted
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BookDeletionAccepted" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          description: Title, mutation token, or current book state is stale
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "private, no-store" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/manage/books/{bookId}/draft:
     get:
       tags: [Drafts]
@@ -936,6 +997,18 @@ components:
       properties:
         job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
         state: { type: string, const: queued }
+    BookDeletionAccepted:
+      type: object
+      additionalProperties: false
+      required: [deletionId, jobId, state, taskUrl]
+      properties:
+        deletionId:
+          { type: string, pattern: "^del_[A-Za-z0-9_-]{16,80}$" }
+        jobId:
+          { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
+        state:
+          { type: string, enum: [pending, purging, failed, completed] }
+        taskUrl: { type: string, const: "/manage/tasks" }
     Candidate:
       type: object
       additionalProperties: false
@@ -1095,6 +1168,7 @@ components:
               verify_version,
               reconcile,
               reclaim,
+              permanent_book_deletion,
             ]
         state:
           type: string

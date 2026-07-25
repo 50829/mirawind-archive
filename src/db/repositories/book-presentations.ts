@@ -136,7 +136,8 @@ export class BookPresentationRepository {
          JOIN book_version_presentations AS presentation
            ON presentation.version_id = books.current_version_id
           AND presentation.book_id = books.id
-         WHERE books.id = ?`,
+         WHERE books.id = ?
+           AND books.deletion_requested_at IS NULL`,
       )
       .get(bookId) as PresentationRow | undefined;
     if (!row) throw new Error("CURRENT_BOOK_PRESENTATION_NOT_FOUND");
@@ -154,11 +155,14 @@ export class BookPresentationRepository {
   listReconciliationCandidates(): readonly BookVersionRecord[] {
     const rows = this.database
       .prepare(
-        `SELECT *
+        `SELECT book_versions.*
          FROM book_versions
-         WHERE reclaimed_at IS NULL
-           AND state IN ('ready', 'published', 'superseded')
-         ORDER BY book_id, complete_at, id`,
+         JOIN books ON books.id = book_versions.book_id
+         WHERE book_versions.reclaimed_at IS NULL
+           AND books.deletion_requested_at IS NULL
+           AND book_versions.state IN ('ready', 'published', 'superseded')
+         ORDER BY book_versions.book_id, book_versions.complete_at,
+                  book_versions.id`,
       )
       .all() as CandidateRow[];
     return Object.freeze(rows.map(mapCandidate));

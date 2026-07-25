@@ -142,7 +142,9 @@ export class DraftRepository {
 
   findBook(bookId: number): BookRecord | null {
     const row = this.database
-      .prepare("SELECT * FROM books WHERE id = ?")
+      .prepare(
+        "SELECT * FROM books WHERE id = ? AND deletion_requested_at IS NULL",
+      )
       .get(bookId) as BookRow | undefined;
     return row ? mapBook(row) : null;
   }
@@ -188,6 +190,7 @@ export class DraftRepository {
            SET draft_source_id = ?, draft_config_revision = ?,
                title_cache = ?, updated_at = ?
            WHERE id = ?
+             AND deletion_requested_at IS NULL
              AND (
                draft_config_revision IS NULL
                OR draft_config_revision < ?
@@ -238,7 +241,8 @@ export class DraftRepository {
            JOIN config_revisions
              ON config_revisions.book_id = books.id
             AND config_revisions.revision = books.draft_config_revision
-           WHERE books.id = ?`,
+           WHERE books.id = ?
+             AND books.deletion_requested_at IS NULL`,
         )
         .get(input.bookId) as
         | {
@@ -275,7 +279,8 @@ export class DraftRepository {
         .prepare(
           `UPDATE books
            SET draft_config_revision = ?, title_cache = ?, updated_at = ?
-           WHERE id = ? AND draft_config_revision = ? AND draft_source_id = ?`,
+           WHERE id = ? AND draft_config_revision = ? AND draft_source_id = ?
+             AND deletion_requested_at IS NULL`,
         )
         .run(
           input.revision,
@@ -353,7 +358,8 @@ export class DraftRepository {
            JOIN config_revisions
              ON config_revisions.book_id = books.id
             AND config_revisions.revision = books.draft_config_revision
-           WHERE books.id = ?`,
+           WHERE books.id = ?
+             AND books.deletion_requested_at IS NULL`,
         )
         .get(input.bookId) as
         | {
@@ -391,7 +397,8 @@ export class DraftRepository {
           `UPDATE books
            SET draft_source_id = ?, draft_config_revision = ?,
                ready_preview_revision = NULL, title_cache = ?, updated_at = ?
-           WHERE id = ? AND draft_config_revision = ? AND draft_source_id = ?`,
+           WHERE id = ? AND draft_config_revision = ? AND draft_source_id = ?
+             AND deletion_requested_at IS NULL`,
         )
         .run(
           input.newSourceId,
@@ -503,7 +510,8 @@ export class DraftRepository {
         .prepare(
           `UPDATE books
            SET ready_preview_revision = ?, updated_at = ?
-           WHERE id = ? AND draft_config_revision = ?`,
+           WHERE id = ? AND draft_config_revision = ?
+             AND deletion_requested_at IS NULL`,
         )
         .run(
           input.configRevision,

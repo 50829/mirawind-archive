@@ -37,7 +37,8 @@ export async function verifyVersion(input: {
   const current = input.database
     .prepare(
       `SELECT 1 FROM books
-       WHERE id = ? AND current_version_id = ?`,
+       WHERE id = ? AND current_version_id = ?
+         AND deletion_requested_at IS NULL`,
     )
     .get(version.bookId, version.id);
   const recovery = current

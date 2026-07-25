@@ -102,6 +102,11 @@ const routePolicyEvidence: Readonly<Record<string, readonly string[]>> = {
     "applyResponsePolicy",
   ],
   "api/books/[bookKey]/search.ts": ["applyResponsePolicy"],
+  "api/manage/books/[bookId].ts": [
+    "requireRuntimeAdministrator",
+    "requireMutationOrigin",
+    'applyResponsePolicy(headers, "private-api")',
+  ],
   "api/manage/library.ts": ['applyResponsePolicy(headers, "private-api")'],
   "api/manage/books/[bookId]/draft.ts": ["applyResponsePolicy"],
   "api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].ts": [

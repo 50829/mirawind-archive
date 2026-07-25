@@ -143,12 +143,20 @@ async function quarantineOrphanVersions(input: {
 }
 
 async function markMissingDatabaseVersions(input: {
+  readonly database: Database.Database;
   readonly layout: StorageLayout;
   readonly repository: VersionRepository;
 }): Promise<readonly string[]> {
   const corrupt: string[] = [];
   for (const version of input.repository.listAll()) {
     if (version.reclaimedAtMs !== null) continue;
+    const active = input.database
+      .prepare(
+        `SELECT 1 FROM books
+         WHERE id = ? AND deletion_requested_at IS NULL`,
+      )
+      .get(version.bookId);
+    if (!active) continue;
     const expected = `books/${version.bookId}/versions/${version.id}`;
     if (
       version.versionRelativePath !== expected ||
@@ -169,6 +177,7 @@ export async function reconcileStorage(input: {
   const removedStagingDirectories = await reconcileStaging(input);
   const quarantinedDirectories = await quarantineOrphanVersions(input);
   const corruptDatabaseVersions = await markMissingDatabaseVersions({
+    database: input.database,
     layout: input.layout,
     repository: new VersionRepository(input.database),
   });

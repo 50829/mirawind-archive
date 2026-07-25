@@ -247,6 +247,7 @@ export async function reconcileBookVersionPresentations(input: {
          ON presentation.version_id = books.current_version_id
         AND presentation.book_id = books.id
        WHERE books.current_version_id IS NOT NULL
+         AND books.deletion_requested_at IS NULL
        ORDER BY books.id`,
     )
     .all() as {
@@ -265,7 +266,8 @@ export async function reconcileBookVersionPresentations(input: {
     const changed = input.database
       .prepare(
         `UPDATE books SET alias = ?, updated_at = ?
-         WHERE id = ? AND current_version_id = ?`,
+         WHERE id = ? AND current_version_id = ?
+           AND deletion_requested_at IS NULL`,
       )
       .run(row.presentation_alias, input.nowMs, row.id, row.current_version_id);
     if (changed.changes === 1) repairedCurrentBookIds.push(row.id);
