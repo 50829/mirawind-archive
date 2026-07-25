@@ -289,7 +289,7 @@ reproducibility, deployment and documentation gates.
 - [x] T147 Perform a final documentation and external-code provenance consistency check across `docs/decisions/decision-log.md`, `docs/product/product-spec.md`, `docs/architecture/m1-architecture.md`, `docs/third-party/code-provenance.md`, and `specs/001-mineru-public-publishing/`; any decision change discovered earlier must already have paused affected work and updated these authorities before its implementation
 - [x] T148 Run every command and scenario in `specs/001-mineru-public-publishing/quickstart.md` against the production build and record deviations/final evidence in `docs/audits/m1-quickstart-report.md`
 - [x] T149 Run frozen-install commitlint, lint, formatting, typecheck, unit, integration, contract, browser and production-build gates and record the exact passing commands in `docs/audits/m1-release-verification.md`
-- [ ] T150 Perform the final spec/plan/tasks/implementation consistency analysis, resolve every unmitigated CRITICAL finding, and save the final audit in `docs/audits/m1-final-consistency.md`
+- [x] T150 Perform the final spec/plan/tasks/implementation consistency analysis, resolve every unmitigated CRITICAL finding, and save the final audit in `docs/audits/m1-final-consistency.md`
 
 ---
 

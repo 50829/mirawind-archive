@@ -1,7 +1,7 @@
 # M1 release verification
 
 - Verified: 2026-07-25
-- Code commit: `54571507fb0d676b88a007235be4a1b3b2ab9c65`
+- Code commit: `baff029949a7fd7bd39025fae12d3f70ec800b86`
 - Runtime: Node v24.15.0, pnpm 11.9.0
 - Result: **PASSED**
 
@@ -11,7 +11,7 @@ commands below exited zero against the code commit above.
 | Gate                       | Exact command                                                                                                                          | Result                                       |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | Frozen dependency install  | `pnpm install --frozen-lockfile`                                                                                                       | already current; lockfile unchanged          |
-| Commit history             | `for commit_oid in $(git rev-list --reverse HEAD); do git show -s --format=%B "$commit_oid" \| pnpm exec commitlint \|\| exit 1; done` | all 46 commits passed                        |
+| Commit history             | `for commit_oid in $(git rev-list --reverse HEAD); do git show -s --format=%B "$commit_oid" \| pnpm exec commitlint \|\| exit 1; done` | all 51 commits passed                        |
 | Formatting                 | `pnpm format`                                                                                                                          | all configured files matched                 |
 | Lint                       | `pnpm lint`                                                                                                                            | passed                                       |
 | Type and Astro diagnostics | `pnpm typecheck`                                                                                                                       | 233 files; 0 errors, warnings or hints       |
