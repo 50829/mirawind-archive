@@ -20,6 +20,8 @@ export interface SafeDiagnostic {
   readonly blockId?: string;
   readonly code: string;
   readonly message: string;
+  readonly path?: string;
+  readonly severity?: "error" | "info" | "warning";
 }
 
 export function createSafeDiagnostic(input: SafeDiagnostic): SafeDiagnostic {
@@ -30,5 +32,7 @@ export function createSafeDiagnostic(input: SafeDiagnostic): SafeDiagnostic {
     ...(input.blockId ? { blockId: input.blockId.slice(0, 100) } : {}),
     code: input.code,
     message: input.message.slice(0, 500),
+    ...(input.path ? { path: input.path.slice(0, 500) } : {}),
+    ...(input.severity ? { severity: input.severity } : {}),
   });
 }

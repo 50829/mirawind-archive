@@ -11,9 +11,9 @@ import type { CompiledDocumentPage } from "./pages.js";
 
 export const compilerIdentity = Object.freeze({
   name: "mirawind-book-compiler" as const,
-  renderer_version: "semantic-html-v2",
-  text_normalization_version: 1,
-  version: "compiler-v2",
+  renderer_version: "semantic-html-v3-katex-0.18.1",
+  text_normalization_version: 2,
+  version: "compiler-v3",
 });
 
 export interface ManifestSourceFile {
@@ -67,6 +67,13 @@ function canonicalValue(value: unknown): unknown {
 
 export function canonicalJson(value: unknown): string {
   return `${JSON.stringify(canonicalValue(value))}\n`;
+}
+
+export function semanticCompilationDigest(value: unknown): string {
+  return createHash("sha256")
+    .update("mirawind-semantic-compilation-v1\0")
+    .update(canonicalJson(value))
+    .digest("hex");
 }
 
 function resourceIdsFor(
@@ -137,7 +144,7 @@ export function buildDocumentManifest(input: {
           },
           text_fingerprint: {
             algorithm: "sha256",
-            normalization_version: 1,
+            normalization_version: compilerIdentity.text_normalization_version,
             value: fingerprint(block.visibleText ?? ""),
           },
         },
