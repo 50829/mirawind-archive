@@ -111,6 +111,7 @@ const routePolicyEvidence: Readonly<Record<string, readonly string[]>> = {
     "applyResponsePolicy",
   ],
   "api/manage/books/[bookId]/publish.ts": ["applyResponsePolicy"],
+  "api/manage/books/[bookId]/reprocess.ts": ["applyResponsePolicy"],
   "api/manage/books/[bookId]/visibility.ts": ["applyResponsePolicy"],
   "api/manage/health.ts": ["applyResponsePolicy"],
   "api/manage/imports/[importId]/index.ts": ["applyResponsePolicy"],

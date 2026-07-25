@@ -101,7 +101,7 @@ describe("generated OpenAPI validation", () => {
       }
     }
 
-    expect(operationIds.size).toBe(16);
+    expect(operationIds.size).toBe(17);
   });
 
   it("declares cache behavior for every response and required security headers for binaries", async () => {
