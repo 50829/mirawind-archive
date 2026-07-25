@@ -8,23 +8,23 @@
 
 The acceptance run used the pinned Node 24/pnpm 11.9 environment and the production build:
 
-| Command                                                             | Result                                                                        |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `corepack enable`                                                   | passed                                                                        |
-| `pnpm install --frozen-lockfile`                                    | passed; lockfile unchanged                                                    |
-| `pnpm build`                                                        | passed; Astro server, worker and CLI artifacts produced                       |
-| `node dist/processes/cli/index.js db migrate`                       | passed on a new private temporary data root; migrations 1–5 applied           |
-| `pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"` | passed; both registered MinerU 3.4.4 fixture sizes and SHA-256 values matched |
-| `pnpm test:integration -- archive import`                           | passed; 43 files, 190 tests                                                   |
-| `pnpm test:integration -- publication recovery`                     | passed; 43 files, 190 tests                                                   |
-| `pnpm test:integration -- auth cache download`                      | passed; 43 files, 190 tests                                                   |
-| `pnpm test:contract`                                                | passed; 8 files, 33 tests                                                     |
-| `pnpm test:integration -- schema reproducibility`                   | passed; 43 files, 190 tests                                                   |
-| `pnpm benchmark:reference ...`                                      | passed for both real fixtures and the stress fixture                          |
-| `pnpm lint`                                                         | passed                                                                        |
-| `pnpm typecheck`                                                    | passed; 233 Astro/TypeScript files, no diagnostics                            |
-| `pnpm test`                                                         | passed; 63 files, 280 tests                                                   |
-| `pnpm test:e2e`                                                     | passed; 3 Chromium production-stack journeys                                  |
+| Command                                                             | Result                                                                             |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `corepack enable`                                                   | passed                                                                             |
+| `pnpm install --frozen-lockfile`                                    | passed; lockfile unchanged                                                         |
+| `pnpm build`                                                        | passed; Astro server, worker and CLI artifacts produced                            |
+| `node dist/processes/cli/index.js db migrate`                       | passed on a new private temporary data root; migrations 1–5 applied                |
+| `pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"` | passed; all three registered MinerU 3.4.4 fixture sizes and SHA-256 values matched |
+| `pnpm test:integration -- archive import`                           | passed; 43 files, 190 tests                                                        |
+| `pnpm test:integration -- publication recovery`                     | passed; 43 files, 190 tests                                                        |
+| `pnpm test:integration -- auth cache download`                      | passed; 43 files, 190 tests                                                        |
+| `pnpm test:contract`                                                | passed; 8 files, 33 tests                                                          |
+| `pnpm test:integration -- schema reproducibility`                   | passed; 43 files, 190 tests                                                        |
+| `pnpm benchmark:reference ...`                                      | passed for all three real fixtures and the stress fixture                          |
+| `pnpm lint`                                                         | passed                                                                             |
+| `pnpm typecheck`                                                    | passed; 233 Astro/TypeScript files, no diagnostics                                 |
+| `pnpm test`                                                         | passed; 63 files, 280 tests                                                        |
+| `pnpm test:e2e`                                                     | passed; 3 Chromium production-stack journeys                                       |
 
 The integration commands retain their human-readable Quickstart grouping, but Vitest runs
 the complete integration project for each invocation. The resulting coverage is a superset
@@ -46,7 +46,7 @@ of each named group.
   cross-references and deterministic version outputs.
 - Original-download tests cover a sparse 2 GiB file, conditional and byte-range responses,
   interrupted/resumed byte identity and immediate private denial.
-- The reference benchmark drove the built Web and worker artifacts for both registered
+- The reference benchmark drove the built Web and worker artifacts for all three registered
   MinerU 3.4.4 books and the 500-page stress book. All idle/concurrent-build read and
   normal/short search p95 measurements passed. Exact values are in
   `docs/audits/m1-performance-report.md`.

@@ -1,7 +1,7 @@
 # Implementation Plan: MinerU Public Publishing
 
-**Branch**: `[001-mineru-public-publishing]` | **Date**: 2026-07-24 | **Spec**:
-[spec.md](./spec.md)
+**Branch**: `[001-mineru-public-publishing]` | **Date**: 2026-07-25 | **Status**:
+Implemented and verified | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from
 `/specs/001-mineru-public-publishing/spec.md`
@@ -106,10 +106,13 @@ _GATE: Passed before Phase 0 research and passed again after Phase 1 design._
   Chinese/mixed-language queries; crash injection around rename, FTS and pointer commits;
   and a large stress book. Schema migration, authorization, cache, Range, recovery,
   reproducibility and performance evidence are mandatory.
-- **Real fixture handoff — PASS**: The administrator will supply two or three
-  several-hundred-page MinerU ZIPs during testing. Git stores only a non-content manifest
-  with opaque ID, MinerU version, size and SHA-256; ordinary CI reports an explicit skip
-  when absent, while final compatibility and performance gates require them.
+- **Real fixture handoff — PASS**: The administrator supplied and approved 583-page and
+  441-page representative real books plus one 97-page real compatibility book from MinerU
+  3.4.4. Final acceptance runs all three plus one 500-page synthetic stress book. Git stores
+  only non-content fixture instructions; the ignored local manifest uses opaque IDs,
+  version, page range, size and SHA-256. Ordinary CI reports an explicit skip when real
+  samples are absent, while the synthetic book remains its repeatable stress baseline and
+  final compatibility and performance gates require every registered sample.
 - **History & provenance — PASS**: Repository commits use Conventional Commits with local and
   CI validation. Substantive external code reuse records an immutable source revision,
   source path, license and local modifications; GPL, MPL and custom-licensed application

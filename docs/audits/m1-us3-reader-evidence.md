@@ -11,10 +11,11 @@ registered original ZIP. A public-to-private transition denies every new anonymo
 page/resource/search/download request without rebuilding or changing the current pointer.
 
 This story checkpoint originally preceded the administrator's real-fixture handoff. Final
-acceptance subsequently verified both registered MinerU 3.4.4 ZIPs, including the 441-page
-representative book, plus the synthetic stress book. The compatibility and latency evidence
-is recorded in `docs/audits/m1-performance-report.md`; the checkpoint measurements below
-remain the evidence captured when User Story 3 first completed.
+acceptance under D-097 subsequently verified the 583-page and 441-page representative real
+books, the 97-page real compatibility book and the 500-page synthetic stress book. The
+compatibility and latency evidence is recorded in `docs/audits/m1-performance-report.md`;
+the checkpoint measurements below remain the evidence captured when User Story 3 first
+completed.
 
 ## Automated evidence
 

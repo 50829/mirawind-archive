@@ -1,12 +1,12 @@
 # M1 documentation and provenance consistency report
 
 - Reviewed: 2026-07-25
-- Scope: T147
+- Scope: T147, T151 and T152
 - Result: **PASSED**
 
 ## Authority consistency
 
-The constitution, D-001 through D-095, the product specification, feature specification,
+The constitution, D-001 through D-097, the product specification, feature specification,
 plan, contracts, tasks, architecture, operations guidance and implementation were compared.
 No unresolved product-decision conflict was found.
 
@@ -18,8 +18,13 @@ and implemented behavior:
   runtime and same-filesystem publication protocol;
 - operations guidance now uses the implemented `draft/source/<source_id>` path;
 - the early User Story 3 report now points to the later real MinerU 3.4.4 acceptance evidence;
-- performance guidance now records that both registered real fixtures and the stress
+- performance guidance now records that all registered real fixtures and the stress
   fixture passed.
+- D-097, the product specification, NFR-006, the plan, fixture guidance and story evidence
+  now use the accepted 583-page and 441-page real representatives, 97-page real
+  compatibility and 500-page synthetic stress combination;
+- the feature specification and plan now report the implemented-and-verified lifecycle
+  state instead of a future planning or handoff state.
 
 These are documentation corrections, not changes to approved behavior. No implementation
 continued across an unresolved authority conflict.

@@ -334,7 +334,7 @@ contains only title, author and heading strings.
 **Rules**:
 
 - Index and query use identical rendered-text NFC/newline normalization.
-- Encode user input as one FTS5 double-quoted literal phrase *and* bind it as a SQL
+- Encode user input as one FTS5 double-quoted literal phrase _and_ bind it as a SQL
   parameter.
 - Join every query to book visibility and `current_version_id`.
 - Limit one/two-character scans and result counts; never body `LIKE`.
@@ -359,11 +359,14 @@ Passkeys, headers, Range and anonymous/private route behavior.
 
 - Shared-database browser suites run with one test worker, or each test worker receives an
   entirely separate data root.
-- The administrator supplies two or three real, several-hundred-page MinerU ZIPs during the
-  test stage. Store them outside Git tracking, either externally or in the entirely ignored
-  local fixture directory; register only opaque ID, MinerU version, page range, size and
-  SHA-256. Ordinary CI explicitly skips real-fixture tests when absent, but final
-  compatibility and performance reports require all registered samples.
+- Final acceptance uses the administrator-approved MinerU 3.4.4 set: 583-page and 441-page
+  representative real books, one 97-page real compatibility book and one 500-page synthetic
+  stress book. Store real ZIPs outside Git tracking, either externally or in the entirely
+  ignored local fixture directory; register only opaque ID, MinerU version, page range,
+  size and SHA-256. Ordinary CI explicitly skips real-fixture tests when absent, but final
+  compatibility and performance reports require all registered real samples plus the
+  synthetic stress sample. The synthetic sample remains a repeatable CI stress baseline and
+  does not replace the representative real large-book evidence.
 - Crash tests send real `SIGKILL` at named boundaries and restart processes.
 - Performance evidence records hardware, Node/SQLite/compiler versions, fixture hashes,
   warmup, concurrency and raw samples. Test idle and concurrent-build profiles.

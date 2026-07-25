@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-24
 
-**Status**: Ready for planning
+**Status**: Implemented and verified
 
 **Input**: Build the first vertical slice that securely imports one MinerU ZIP for one book,
 lets the sole administrator confirm its publishing structure, builds a complete immutable
@@ -263,9 +263,11 @@ application, and verify durable status, bounded retry, cleanup, and unchanged pu
   subject to all narrower approved file, image, path, count, time, and ratio limits.
 - **NFR-006**: Every security, schema, publication, recovery, cache, download, search, and
   performance requirement MUST have automated fixture-based evidence before M1 completion.
-  Final real-world compatibility and performance evidence MUST use the two or three
-  several-hundred-page MinerU ZIPs supplied by the administrator during testing; small and
-  synthetic fixtures MUST NOT substitute for that final evidence.
+  Final real-world compatibility and performance evidence MUST use the
+  administrator-approved MinerU 3.4.4 fixture set: 583-page and 441-page representative
+  real books, one 97-page real compatibility book, and one 500-page synthetic stress book.
+  The synthetic fixture MUST exercise repeatable CI pressure and resource boundaries but
+  MUST NOT substitute for the two real large-book evidence sets.
 - **NFR-007**: Published artifacts MUST be reproducible from authoritative Markdown,
   publishing configuration, registered original files, and a supported compiler version.
 - **NFR-008**: Every implementation commit after repository initialization MUST satisfy the
@@ -337,12 +339,13 @@ application, and verify durable status, bounded retry, cleanup, and unchanged pu
   anonymous requests stop immediately when a book becomes private.
 - Formula failures may be diagnosed and displayed as source notation without blocking an
   otherwise valid publication.
-- During the M1 test stage, the administrator will provide two or three real MinerU 3.4.4
-  output ZIPs of several hundred pages each. They remain untracked and non-redistributable,
-  either outside the worktree or in the entirely Git-ignored
+- The administrator supplied and approved 583-page and 441-page representative real books
+  and one 97-page real compatibility book, all as MinerU 3.4.4 output ZIPs; final testing
+  also uses one 500-page synthetic stress book. The real ZIPs remain untracked and
+  non-redistributable, either outside the worktree or in the entirely Git-ignored
   `tests/fixtures/mineru/real/` directory, and are registered by opaque fixture ID, MinerU
   version, page range, size, and SHA-256 before use. Formal M1 compatibility and performance
-  claims do not extend to other MinerU versions.
+  claims do not extend to other MinerU versions or to an unregistered local ZIP.
 - Conventional Commits are adopted for reviewable history only; M1 does not infer automatic
   releases or version numbers from commit messages.
 

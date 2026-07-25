@@ -6,8 +6,8 @@
       "file_name": "real-mineru-a7f31c.zip",
       "mineru_version": "3.4.4",
       "page_count_range": {
-        "minimum": 200,
-        "maximum": 600
+        "minimum": 400,
+        "maximum": 500
       },
       "size_bytes": 123456789,
       "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -25,11 +25,30 @@
       "file_name": "real-mineru-b9d204.zip",
       "mineru_version": "3.4.4",
       "page_count_range": {
-        "minimum": 200,
-        "maximum": 600
+        "minimum": 90,
+        "maximum": 110
       },
       "size_bytes": 123456789,
       "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      "usage_scope": {
+        "designated_by": "administrator",
+        "local_compatibility_testing": true,
+        "local_performance_testing": true,
+        "public_ci": false,
+        "redistribution": false,
+        "repository_storage": false
+      }
+    },
+    {
+      "id": "real-mineru-c3e591",
+      "file_name": "real-mineru-c3e591.zip",
+      "mineru_version": "3.4.4",
+      "page_count_range": {
+        "minimum": 550,
+        "maximum": 650
+      },
+      "size_bytes": 123456789,
+      "sha256": "cdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab",
       "usage_scope": {
         "designated_by": "administrator",
         "local_compatibility_testing": true,

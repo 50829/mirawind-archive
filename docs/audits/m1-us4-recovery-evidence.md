@@ -10,9 +10,11 @@ leases recover within the approved one-automatic-retry boundary; task children t
 whole process groups; startup reconciliation preserves the last verified publication; and
 retention, checkpoint and health operations do not move the current-version pointer.
 
-The two registered MinerU 3.4.4 fixtures are available for the Phase 7 compatibility and
-performance gate. This checkpoint establishes worker and recovery behavior but does not
-claim the final real-book latency targets.
+This checkpoint originally established worker and recovery behavior before the final
+latency run. Final acceptance under D-097 subsequently verified the 583-page and 441-page
+representative real books, the 97-page real compatibility book and the 500-page synthetic
+stress book, including concurrent-build reading. The final latency evidence is recorded in
+`docs/audits/m1-performance-report.md`.
 
 ## Automated evidence
 

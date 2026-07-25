@@ -42,10 +42,15 @@ describe("real MinerU fixture verifier", () => {
   it("accepts exactly registered local-only files with matching hashes", async () => {
     const root = await mkdtemp(join(tmpdir(), "real-mineru-verifier-"));
     roots.push(root);
-    const contents = ["first opaque bytes", "second opaque bytes"];
+    const contents = [
+      "first opaque bytes",
+      "second opaque bytes",
+      "third opaque bytes",
+    ];
     const fixtures = [
       fixture("real-mineru-a7f31c", contents[0] ?? ""),
       fixture("real-mineru-b9d204", contents[1] ?? ""),
+      fixture("real-mineru-c3e591", contents[2] ?? ""),
     ];
     await Promise.all(
       fixtures.map((entry, index) =>
@@ -63,6 +68,7 @@ describe("real MinerU fixture verifier", () => {
         sizeBytes: Buffer.byteLength(contents[0] ?? ""),
       }),
       expect.objectContaining({ id: "real-mineru-b9d204" }),
+      expect.objectContaining({ id: "real-mineru-c3e591" }),
     ]);
   });
 
@@ -71,11 +77,13 @@ describe("real MinerU fixture verifier", () => {
     roots.push(root);
     const first = fixture("real-mineru-a7f31c", "expected");
     const second = fixture("real-mineru-b9d204", "second");
+    const third = fixture("real-mineru-c3e591", "third");
     await writeFile(join(root, first.file_name), "altered!");
     await writeFile(join(root, second.file_name), "second");
+    await writeFile(join(root, third.file_name), "third");
     await writeFile(
       join(root, "real-fixtures.json"),
-      JSON.stringify({ fixtures: [first, second], schema_version: 1 }),
+      JSON.stringify({ fixtures: [first, second, third], schema_version: 1 }),
     );
     await expect(verifyRealMineruFixtures(root)).rejects.toThrow(
       /SHA-256 does not match/,
@@ -96,6 +104,7 @@ describe("real MinerU fixture verifier", () => {
               ...second,
               usage_scope: { ...second.usage_scope, public_ci: true },
             },
+            third,
           ],
           schema_version: 1,
         }),
@@ -105,29 +114,43 @@ describe("real MinerU fixture verifier", () => {
 
   it("rejects missing, unknown and duplicate manifest fields", () => {
     const first = fixture("real-mineru-a7f31c", "first");
+    const second = fixture("real-mineru-b9d204", "second");
+    const third = fixture("real-mineru-c3e591", "third");
     expect(() =>
       parseRealFixtureManifest({
-        fixtures: [{ ...first, title: "must not be recorded" }, first],
+        fixtures: [{ ...first, title: "must not be recorded" }, second, third],
         schema_version: 1,
       }),
     ).toThrow(/unexpected fields/);
     expect(() =>
       parseRealFixtureManifest({
-        fixtures: [first, first],
+        fixtures: [first, first, third],
         schema_version: 1,
       }),
     ).toThrow(/must be unique/);
     expect(() =>
       parseRealFixtureManifest({ fixtures: [first], schema_version: 1 }),
-    ).toThrow(/two or three/);
+    ).toThrow(/exactly the three approved real entries/);
+    expect(() =>
+      parseRealFixtureManifest({
+        fixtures: [
+          first,
+          second,
+          third,
+          fixture("real-mineru-d447ea", "fourth"),
+        ],
+        schema_version: 1,
+      }),
+    ).toThrow(/exactly the three approved real entries/);
   });
 
   it("rejects fixtures produced by a different MinerU version", () => {
     const first = fixture("real-mineru-a7f31c", "first");
     const second = fixture("real-mineru-b9d204", "second");
+    const third = fixture("real-mineru-c3e591", "third");
     expect(() =>
       parseRealFixtureManifest({
-        fixtures: [{ ...first, mineru_version: "3.4.3" }, second],
+        fixtures: [{ ...first, mineru_version: "3.4.3" }, second, third],
         schema_version: 1,
       }),
     ).toThrow(/must be 3\.4\.4/);

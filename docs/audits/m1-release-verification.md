@@ -23,7 +23,7 @@ commands below exited zero against the code commit above.
 
 Additional release evidence also passed:
 
-- `pnpm benchmark:reference ...` verified both registered MinerU 3.4.4 fixtures and the
+- `pnpm benchmark:reference ...` verified all three registered MinerU 3.4.4 fixtures and the
   synthetic stress fixture; its sanitized result and p50/p95/p99 values are in
   `docs/audits/m1-performance-results.json` and `docs/audits/m1-performance-report.md`.
 - `pnpm audit:migration-recovery ...` exercised migrations, online backup/restore and

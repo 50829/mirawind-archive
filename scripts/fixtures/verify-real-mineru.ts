@@ -176,12 +176,10 @@ export function parseRealFixtureManifest(value: unknown): RealFixtureManifest {
   if (input.schema_version !== 1) {
     throw new Error("manifest.schema_version must be 1");
   }
-  if (
-    !Array.isArray(input.fixtures) ||
-    input.fixtures.length < 2 ||
-    input.fixtures.length > 3
-  ) {
-    throw new Error("manifest.fixtures must contain two or three entries");
+  if (!Array.isArray(input.fixtures) || input.fixtures.length !== 3) {
+    throw new Error(
+      "manifest.fixtures must contain exactly the three approved real entries",
+    );
   }
   const fixtures = input.fixtures.map(parseFixture);
   if (new Set(fixtures.map((fixture) => fixture.id)).size !== fixtures.length) {

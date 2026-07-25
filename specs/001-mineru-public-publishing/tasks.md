@@ -403,5 +403,5 @@ authorization, archive, publication, recovery, migration or performance evidence
 
 ## Phase 8: Convergence
 
-- [ ] T151 Resolve the final real-fixture acceptance mismatch by either registering enough additional administrator-designated several-hundred-page MinerU 3.4.4 ZIPs and rerunning the reference benchmark, or first obtaining an approved decision and synchronizing D-088, the product specification, NFR-006, the plan, tests and evidence to the actual 441-page plus 97-page set per NFR-006 and Constitution V (partial)
-- [ ] T152 Update the feature lifecycle status and real-fixture handoff wording in `spec.md` and `plan.md` after T151 fixes the governing acceptance boundary per plan: release documentation (partial)
+- [x] T151 Resolve the final real-fixture acceptance mismatch by registering the administrator-designated 583-page third MinerU 3.4.4 ZIP under an opaque ID, running the full reference benchmark for all three real fixtures plus the synthetic stress fixture, and synchronizing D-097, the product specification, NFR-006, the plan, tests and evidence per NFR-006 and Constitution V
+- [x] T152 Update the feature lifecycle status and real-fixture handoff wording in `spec.md` and `plan.md` after T151 fixes the governing acceptance boundary per plan: release documentation

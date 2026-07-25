@@ -11,9 +11,11 @@ origin.
 - HTTPS origin for production Passkeys
 - One persistent directory whose `staging` and `versions` paths share a filesystem
 - Representative and hostile fixtures under `tests/fixtures/`
-- During final testing, the two or three real several-hundred-page MinerU 3.4.4 ZIPs supplied
-  by the administrator under the local Git-ignored `tests/fixtures/mineru/real/` directory
-  or a Git-external directory such as `/srv/mirawind-test-fixtures/real-mineru/`
+- For final testing, the administrator-approved MinerU 3.4.4 set: 583-page and 441-page
+  representative real ZIPs plus one 97-page real compatibility ZIP under the local
+  Git-ignored `tests/fixtures/mineru/real/` directory or a Git-external directory such as
+  `/srv/mirawind-test-fixtures/real-mineru/`, plus the generated 500-page repeatable CI
+  stress fixture
 
 Create local configuration from the committed example and set at least:
 

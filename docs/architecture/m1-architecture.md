@@ -4,7 +4,7 @@
 - Date: 2026-07-25
 - Scope: M0 foundations required by the first MinerU vertical slice, plus M1 import,
   preview, compile, search, publish, read, and original ZIP download
-- Governing decisions: D-019～D-025, D-042～D-095
+- Governing decisions: D-019～D-025, D-042～D-097
 
 ## 1. System boundary
 
@@ -307,9 +307,10 @@ is reported separately and never blocks the published read path.
 
 M1 acceptance uses:
 
-- two registered, Git-ignored local MinerU 3.4.4 ZIP fixtures supplied by the administrator,
-  including one 441-page and one 97-page book, identified in tracked evidence only by opaque
-  ID, MinerU version, size and SHA-256;
+- three registered, Git-ignored local MinerU 3.4.4 ZIP fixtures supplied by the
+  administrator, including 583-page and 441-page representative large books plus one
+  97-page compatibility book, identified in tracked evidence only by opaque ID, MinerU
+  version, size and SHA-256;
 - Cloud `full.md`, CLI `<stem>.md`, generic single Markdown, ambiguous multi-Markdown, and
   multi-book fixtures;
 - missing/cross-directory resources and raw-HTML fixtures;
@@ -317,11 +318,12 @@ M1 acceptance uses:
   count, size, and timeout boundary fixtures;
 - publication crash points before/after rename, FTS transaction, and current pointer commit;
 - Chinese search fixtures from `docs/research/sqlite-fts5-chinese-short-query.md`;
-- a large synthetic stress fixture that reaches meaningful resource and performance budgets.
+- a 500-page synthetic stress fixture that provides a repeatable ordinary-CI pressure
+  baseline without replacing the representative real large-book fixtures.
 
 The final benchmark records import time, peak worker memory, extracted size, index
 size/build time, idle and concurrent-build read percentiles, and normal/short search
-percentiles for both real fixtures and the stress fixture in
+percentiles for all three real fixtures and the stress fixture in
 `docs/audits/m1-performance-report.md`. Every measured p95 passed its release gate.
 
 ## 16. Deferred from M1

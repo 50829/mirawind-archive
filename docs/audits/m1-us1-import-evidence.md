@@ -9,9 +9,12 @@ administrator can stream one ZIP, observe durable worker state, confirm a generi
 inspect a revision-pinned private preview, and receive a complete rejection for an ambiguous
 package. No import becomes public.
 
-The representative several-hundred-page MinerU ZIPs remain intentionally pending under
-D-088 until the administrator supplies them. This checkpoint does not claim real-book
-compatibility or the final 300 ms performance result.
+This story checkpoint originally preceded the real-fixture handoff. Final acceptance under
+D-097 subsequently verified the administrator-approved MinerU 3.4.4 set: 583-page and
+441-page representative real books, a 97-page real compatibility book and a 500-page
+synthetic stress book. The final compatibility and latency evidence is recorded in
+`docs/audits/m1-performance-report.md`; the checkpoint results below remain the evidence
+captured when User Story 1 first completed.
 
 ## Automated evidence
 

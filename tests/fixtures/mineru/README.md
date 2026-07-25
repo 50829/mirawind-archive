@@ -16,17 +16,20 @@ The fixtures deliberately vary wrapper depth. Candidate selection must recurse a
 Markdown directory as its resource base; it must never rely on ZIP root position or archive
 enumeration order.
 
-## Real several-hundred-page fixtures
+## Real acceptance fixtures
 
-The administrator will provide two or three real MinerU 3.4.4 ZIPs during final testing.
-They are non-redistributable test inputs and must remain outside Git tracking, public CI
-artifacts, and logs. For local development, use the entirely ignored directory:
+Final M1 acceptance uses the administrator-approved MinerU 3.4.4 set: 583-page and 441-page
+representative real books, one 97-page real compatibility book, and one generated 500-page
+synthetic stress book. The real ZIPs are non-redistributable test inputs and must remain
+outside Git tracking, public CI artifacts, and logs. For local development, use the entirely
+ignored directory:
 
 ```text
 tests/fixtures/mineru/real/
 ├── real-fixtures.json
 ├── real-mineru-a7f31c.zip
-└── real-mineru-b9d204.zip
+├── real-mineru-b9d204.zip
+└── real-mineru-c3e591.zip
 ```
 
 An external directory such as `/srv/mirawind-test-fixtures/real-mineru/` remains supported
@@ -35,7 +38,11 @@ on a server. Copy `real-fixtures.example.json` to the selected directory as
 values, and keep opaque filenames.
 The manifest records only an opaque ID, filename, the frozen MinerU 3.4.4 version,
 approximate page range, byte size, SHA-256 and the administrator-approved usage scope. Do not
-record book titles, authors or extracted content.
+record book titles, authors or extracted content. The 583-page and 441-page samples carry
+the representative large-book compatibility and performance role; the 97-page sample
+expands real-output compatibility coverage. The generated stress book exercises a
+repeatable ordinary-CI 500-page pressure and resource baseline without replacing either
+representative real sample.
 
 Verify before any compatibility or performance run:
 
@@ -46,4 +53,5 @@ pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"
 The verifier rejects other MinerU versions, symlinks, paths, unexpected fields, duplicate
 IDs, wrong usage scope, wrong sizes and wrong hashes. A missing external manifest is an
 explicit missing-fixture condition, not a passing real-fixture test. Final M1 acceptance
-requires all registered real fixtures; the synthetic fixtures cannot substitute for them.
+requires all three registered real fixtures and the generated stress fixture. An unregistered
+local ZIP is excluded until the administrator explicitly designates and registers it.
