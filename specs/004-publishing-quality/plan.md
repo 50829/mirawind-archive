@@ -14,7 +14,9 @@ for Chinese mixed-script spacing and punctuation while protecting technical toke
 persist its output as the accepted main Markdown. Refactor preview and publication to share
 configured document preparation, pagination and semantic rendering. Deliver pinned local
 KaTeX CSS and font assets under the renderer identity so MathML remains accessible without
-appearing as a second visual formula.
+appearing as a second visual formula. Carry the repaired configured heading hierarchy into
+the published reader as a generated expandable full-book tree, current-location breadcrumb
+and scroll-aware page outline.
 
 ## Technical Context
 
@@ -48,7 +50,7 @@ old current version retained on every failed build
 
 ## Constitution Check
 
-*GATE: Passed before Phase 0 and re-checked after Phase 1.*
+_GATE: Passed before Phase 0 and re-checked after Phase 1._
 
 - **Authority & schemas — PASS**: Post-preprocessing Markdown is the body authority.
   `book.yaml` v2 is the only portable authority for confirmed source-region treatment and
@@ -233,10 +235,26 @@ join Astro's verified static build closure without adding an application request
 - Increase compiler renderer identity to `semantic-html-v3-katex-0.18.1`; old immutable
   HTML remains untouched and can be corrected only by normal republishing.
 
+### Generated reader navigation
+
+- Build a flat bounded reader-navigation input from the same active numbered headings and
+  page map that produce `document-manifest.json`; links use the canonical book key, page
+  alias or ID and stable heading fragment.
+- Convert the flat continuous heading sequence into a semantic nested tree. Native
+  `details` branches on the current page's ancestry are initially open and remain
+  independently keyboard-toggleable without requiring client state.
+- Derive the top breadcrumb from the first active current-page heading and its ancestors.
+  Derive the right outline only from active current-page TOC headings, retaining configured
+  levels and smaller navigation typography.
+- Extend the existing bounded inline progressive-enhancement script only for scroll/hash
+  `aria-current="location"` state. It does not parse source or infer hierarchy, and the
+  complete navigation remains ordinary server-generated links when script execution fails.
+
 ## Post-Design Constitution Check
 
 All six gates remain passed. The design adds one portable schema version and one generated
-public static-asset class, both required by accepted decisions D-101 through D-104. Neither
+public static-asset class, both required by accepted decisions D-101 through D-104, and
+implements D-105 solely inside the existing publication compiler and reader shell. None
 adds another authority, runtime service, reader computation path or mutable publication
 pointer.
 

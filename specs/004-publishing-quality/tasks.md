@@ -10,9 +10,9 @@ atomicity, recovery, search exclusion, renderer assets, preview parity and perfo
 **Purpose**: Establish deterministic fixtures and renderer identity inputs without changing
 runtime behavior.
 
-- [X] T001 Create compact synthetic printed-contents, ambiguous-contents and formula fixtures in `tests/fixtures/publishing-quality/`
-- [X] T002 [P] Record the pinned KaTeX asset adaptation and license obligations in `docs/third-party/code-provenance.md`
-- [X] T003 [P] Add generated renderer asset paths and private evidence outputs to `.gitignore`
+- [x] T001 Create compact synthetic printed-contents, ambiguous-contents and formula fixtures in `tests/fixtures/publishing-quality/`
+- [x] T002 [P] Record the pinned KaTeX asset adaptation and license obligations in `docs/third-party/code-provenance.md`
+- [x] T003 [P] Add generated renderer asset paths and private evidence outputs to `.gitignore`
 
 ---
 
@@ -23,14 +23,14 @@ by every user story.
 
 **Critical**: No story implementation begins until these tasks pass.
 
-- [X] T004 Add failing strict v1/v2 schema, unknown-version, range-bound, preprocessing-provenance and migration-default contract cases in `tests/contract/book-schema.test.ts`
-- [X] T005 Freeze v1 and define strict v2 source-region and typography-provenance schemas/examples in `docs/schemas/book.v1.schema.json`, `docs/schemas/book.schema.json`, `docs/schemas/examples/book.v2.yaml` and `docs/schemas/README.md`
-- [X] T006 Implement schema dispatch, new-import `zh-smart-v1` provenance and deterministic v1-to-v2 `preserve-v1` migration in `src/schemas/book-config.ts` and `src/schemas/versioning.ts`
-- [X] T007 Update runtime schema packaging for both supported versions in `scripts/copy-runtime-schemas.mjs`
-- [X] T008 Define shared source-region, entry-mapping, typography-provenance, structured-diagnostic and semantic-identity types in `src/compiler/document/types.ts` and `src/domain/errors.ts`
-- [X] T009 Add canonical configured-document identity helpers and bump compiler, renderer and text-normalization constants in `src/compiler/document/manifest.ts`
-- [X] T010 Add failing exact mixed-script spacing, punctuation, protected-token, cross-inline-context, non-target-byte preservation and second-pass idempotency cases in `tests/unit/compiler/typography.test.ts`
-- [X] T011 Implement deterministic `preserve-v1` and `zh-smart-v1` source-slice preprocessing, protected-token segmentation, minimal UTF-8 replacements and bounded provenance in `src/compiler/preprocess/typography.ts`
+- [x] T004 Add failing strict v1/v2 schema, unknown-version, range-bound, preprocessing-provenance and migration-default contract cases in `tests/contract/book-schema.test.ts`
+- [x] T005 Freeze v1 and define strict v2 source-region and typography-provenance schemas/examples in `docs/schemas/book.v1.schema.json`, `docs/schemas/book.schema.json`, `docs/schemas/examples/book.v2.yaml` and `docs/schemas/README.md`
+- [x] T006 Implement schema dispatch, new-import `zh-smart-v1` provenance and deterministic v1-to-v2 `preserve-v1` migration in `src/schemas/book-config.ts` and `src/schemas/versioning.ts`
+- [x] T007 Update runtime schema packaging for both supported versions in `scripts/copy-runtime-schemas.mjs`
+- [x] T008 Define shared source-region, entry-mapping, typography-provenance, structured-diagnostic and semantic-identity types in `src/compiler/document/types.ts` and `src/domain/errors.ts`
+- [x] T009 Add canonical configured-document identity helpers and bump compiler, renderer and text-normalization constants in `src/compiler/document/manifest.ts`
+- [x] T010 Add failing exact mixed-script spacing, punctuation, protected-token, cross-inline-context, non-target-byte preservation and second-pass idempotency cases in `tests/unit/compiler/typography.test.ts`
+- [x] T011 Implement deterministic `preserve-v1` and `zh-smart-v1` source-slice preprocessing, protected-token segmentation, minimal UTF-8 replacements and bounded provenance in `src/compiler/preprocess/typography.ts`
 - [ ] T012 Run and atomically persist preprocessing before accepted-source hashing/structure proposal, expose provenance and implement the preconditioned re-preprocess-to-new-revision contract in `src/jobs/handlers/prepare-draft.ts`, `src/services/config-revisions.ts`, `src/pages/api/manage/books/[bookId]/reprocess.ts` and `src/components/preview/StructurePreview.tsx`
 
 **Checkpoint**: Strict v1/v2 validation and migration are available without changing v1
@@ -164,6 +164,9 @@ and normal atomic publication.
 - [ ] T052 Run `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`, fixing all regressions in affected files
 - [ ] T053 Synchronize product, architecture, schema, operations, quickstart and third-party documentation in `docs/` and `specs/004-publishing-quality/`
 - [ ] T054 Run Spec Kit analyze and converge, resolve every unmitigated CRITICAL finding and mark completed tasks in `specs/004-publishing-quality/tasks.md`
+- [ ] T055 [P] Add nested full-book TOC, current-branch, breadcrumb, page-outline and no-script navigation evidence in `tests/unit/library/reader-interaction.test.ts` and `tests/integration/compiler/version-builder.test.ts`
+- [ ] T056 Generate canonical heading navigation inputs and render native collapsible hierarchy, current location and scroll-aware page outline in `src/compiler/version-builder.ts` and `src/components/reader/`
+- [ ] T057 Add desktop/mobile reader navigation acceptance for branch toggling, ordinary links, scroll highlighting and drawer behavior in `tests/e2e/library-reading.spec.ts`
 
 ---
 

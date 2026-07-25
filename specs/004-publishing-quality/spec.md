@@ -108,6 +108,11 @@ content, one visual formula representation, local assets and accessible mathemat
    **Then** Chinese/Latin and Chinese/digit boundaries use one readable space, Chinese
    punctuation is full-width where specified, protected tokens are byte-identical, and a
    second pass makes no further change.
+6. **Given** a published book with nested configured headings, **When** the reader opens a
+   page and moves through its content, **Then** the left full-book contents exposes
+   expandable hierarchy with the current branch open, the fixed top bar identifies the
+   current ancestor path, and the smaller right page outline follows and highlights the
+   current local heading.
 
 ---
 
@@ -266,6 +271,15 @@ version on failure.
   handling and serve as the re-import source. An explicit re-preprocess action MUST create a
   new source/configuration revision and preview, invalidate any older ready preview, and
   MUST NOT rewrite an existing published version or silently process old books on deploy.
+- **FR-034**: Published reading pages MUST generate the full-book table of contents from
+  active `include_in_toc` headings using configured display levels, titles, numbering,
+  stable block fragments and page identities. Nested branches MUST be keyboard-expandable,
+  the current page's ancestor branch MUST initially be open, and every destination MUST
+  remain an ordinary usable link without JavaScript.
+- **FR-035**: Published reading pages MUST expose a bounded current-location breadcrumb and
+  a smaller, hierarchically indented current-page outline. Progressive enhancement MUST
+  update the outline's `aria-current="location"` from scrolling and hash navigation without
+  making navigation, content or heading structure depend on JavaScript.
 
 ### Non-Functional Requirements
 
@@ -293,6 +307,9 @@ version on failure.
   accepted Markdown size and AST limits, require no network service, write atomically, and
   emit at most one aggregate summary whose counters do not exceed 2,147,483,647 rather
   than unbounded per-token diagnostics.
+- **NFR-010**: Full-book hierarchy, breadcrumbs and page outlines MUST be generated in the
+  background preview/publication build and persisted in page HTML. Reader HTTP requests
+  MUST continue to serve immutable files without parsing Markdown, YAML, ASTs or manifests.
 
 ### Key Entities
 

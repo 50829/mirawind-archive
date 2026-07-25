@@ -26,6 +26,12 @@
 
 - Desktop keeps the fixed top bar, left full-book TOC, central document and right page
   outline.
+- The full-book TOC reflects configured heading levels, titles and numbering. Native
+  expandable branches keep the current page's ancestry open while every heading remains an
+  ordinary page-plus-fragment link without JavaScript.
+- The fixed top bar exposes the current heading ancestry. The smaller right outline follows
+  the current page's configured levels and progressive enhancement marks the heading nearest
+  the reading position with `aria-current="location"`.
 - Narrow layouts expose buttons named “目录”, “本文”, “搜索” and “下载”; each names its
   controlled native dialog through `aria-controls` and reports open state.
 - Closing a drawer by its close control or Escape restores the trigger focus and releases
