@@ -11,6 +11,8 @@ import {
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { transform } from "lightningcss";
+
 const rendererVersion = "semantic-html-v3-katex-0.18.1";
 const katexVersion = "0.18.1";
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -52,8 +54,8 @@ function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-function woff2OnlyCss(source) {
-  return source
+function rendererCss(source) {
+  const woff2Only = source
     .replace(/src:\s*([^;]+);/gu, (_match, sources) => {
       const woff2 = String(sources)
         .split(",")
@@ -64,8 +66,13 @@ function woff2OnlyCss(source) {
     })
     .replace(/\/\*[\s\S]*?\*\//gu, "")
     .replace(/\n{3,}/gu, "\n\n")
-    .trim()
-    .concat("\n");
+    .trim();
+  const minified = transform({
+    code: Buffer.from(woff2Only, "utf8"),
+    filename: "katex.css",
+    minify: true,
+  }).code.toString("utf8");
+  return `${minified.trim()}\n`;
 }
 
 await rm(outputDirectory, { force: true, recursive: true });
@@ -77,7 +84,7 @@ const upstreamCss = await readFile(
   resolve(packageRoot, "dist", "katex.css"),
   "utf8",
 );
-const css = woff2OnlyCss(upstreamCss);
+const css = rendererCss(upstreamCss);
 if (/https?:|\.woff(?:["')]|$)|\.ttf/iu.test(css)) {
   throw new Error("RENDERER_CSS_EXTERNAL_OR_LEGACY_ASSET");
 }

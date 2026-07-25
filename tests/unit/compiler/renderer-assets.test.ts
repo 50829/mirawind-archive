@@ -32,10 +32,19 @@ describe("pinned renderer asset closure", () => {
     const root = await mkdtemp(join(tmpdir(), "renderer-assets-"));
     generatedRoots.push(root);
     const output = resolve(root, "semantic-html-v3-katex-0.18.1");
+    const repeatedOutput = resolve(
+      root,
+      "semantic-html-v3-katex-0.18.1-repeated",
+    );
     await execFileAsync(process.execPath, [
       "scripts/prepare-renderer-assets.mjs",
       "--output",
       output,
+    ]);
+    await execFileAsync(process.execPath, [
+      "scripts/prepare-renderer-assets.mjs",
+      "--output",
+      repeatedOutput,
     ]);
 
     const manifest = JSON.parse(
@@ -64,11 +73,22 @@ describe("pinned renderer asset closure", () => {
     ).toHaveLength(20);
     expect(manifest.files.map((file) => file.path)).toContain("LICENSE");
     expect(css).not.toMatch(/https?:|\.woff(?:["')]|$)|\.ttf/iu);
+    expect(css).not.toContain("/*");
+    expect(css.trim().split("\n")).toHaveLength(1);
     expect(css).toContain(".katex .katex-mathml");
-    expect(css).toMatch(
-      /\.katex \.katex-mathml\s*\{[\s\S]*position:\s*absolute;[\s\S]*clip-path:\s*inset\(50%\);[\s\S]*overflow:\s*hidden;/u,
-    );
+    const mathmlRule = css.match(
+      /\.katex \.katex-mathml\{(?<declarations>[^}]*)\}/u,
+    )?.groups?.declarations;
+    expect(mathmlRule).toContain("position:absolute");
+    expect(mathmlRule).toContain("clip-path:inset(50%)");
+    expect(mathmlRule).toContain("overflow:hidden");
     expect(css).toMatch(/url\(fonts\/KaTeX_Main-Regular\.woff2\)/u);
+    expect(await readFile(resolve(repeatedOutput, "katex.css"))).toEqual(
+      await readFile(resolve(output, "katex.css")),
+    );
+    expect(await readFile(resolve(repeatedOutput, "integrity.json"))).toEqual(
+      await readFile(resolve(output, "integrity.json")),
+    );
 
     for (const file of manifest.files) {
       const bytes = await readFile(resolve(output, file.path));
