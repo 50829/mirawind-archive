@@ -29,6 +29,7 @@ import { resolveDocumentResources } from "./resources/resolver.js";
 import { buildSearchSpool, writeSearchSpool } from "./search/build-spool.js";
 import { toIsoDateTime } from "../domain/time.js";
 import type { SafeDiagnostic } from "../domain/errors.js";
+import type { SemanticCompilationIdentity } from "./document/types.js";
 import { parseBookConfigYaml } from "../schemas/book-config.js";
 import {
   validateDocumentManifest,
@@ -41,6 +42,7 @@ export const versionBuildArtifactFilename = "version-build-result.json";
 export interface VersionBuildArtifact {
   readonly bookId: number;
   readonly configRevision: number;
+  readonly identity: SemanticCompilationIdentity;
   readonly manifestSha256: string;
   readonly versionDirectory: "version";
   readonly versionId: string;
@@ -491,6 +493,7 @@ export async function buildImmutableVersion(input: {
     const artifact: VersionBuildArtifact = Object.freeze({
       bookId: input.bookId,
       configRevision: input.configRevision,
+      identity: configured.identity,
       manifestSha256: sha256(manifestJson),
       versionDirectory: "version",
       versionId: input.versionId,

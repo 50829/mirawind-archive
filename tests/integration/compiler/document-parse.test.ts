@@ -10,7 +10,7 @@ import {
   parseMarkdownDocument,
 } from "@/compiler/document/parser";
 import type { TransientDocumentNode } from "@/compiler/document/types";
-import { renderDraftPreview } from "@/compiler/render/preview";
+import { renderSemanticDocument } from "@/compiler/render/document";
 import { resolveDocumentResources } from "@/compiler/resources/resolver";
 import { isOpaqueId } from "@/domain/ids";
 
@@ -206,18 +206,30 @@ describe("contained document resources and sanitized preview", () => {
       "book/images/ok.png": Uint8Array.from([1, 2, 3]),
     });
     const markdownPath = resolve(root, "book/chapter.md");
-    const document = parseMarkdownDocument(source);
+    const parsed = parseMarkdownDocument(source);
+    const document = normalizeDocumentBlocks(parsed);
     const resolution = await resolveDocumentResources({
       document,
       markdownPath,
       resourceRoot: resolve(root, "book"),
     });
-    const html = await renderDraftPreview({
-      authenticatedResourceUrl: (resourceId) =>
-        `/api/manage/books/book_test/preview/7/assets/${resourceId}`,
+    const rendered = await renderSemanticDocument({
       document,
+      headingOverrides: new Map(
+        document.headings.map((heading) => [
+          heading.blockId,
+          {
+            displayLevel: heading.level,
+            displayTitle: heading.sourceTitle,
+            number: null,
+          },
+        ]),
+      ),
+      publishedResourceUrl: (resourceId) =>
+        `/api/manage/books/book_test/preview/7/assets/${resourceId}`,
       resourceResolution: resolution,
     });
+    const html = rendered.html;
 
     expect(html).toContain("Retained text");
     expect(html).toContain("/api/manage/books/book_test/preview/7/assets/res_");

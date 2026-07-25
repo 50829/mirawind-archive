@@ -316,9 +316,17 @@ describe("prepare_draft and build_preview handlers", () => {
       );
 
       expect(ready).toMatchObject({ completedAtMs: 6, state: "ready" });
-      expect(
-        await readFile(resolve(previewRoot, "pages/1.html"), "utf8"),
-      ).toMatch(/Prepared Book[\s\S]*class="katex"[\s\S]*\/assets\/res_/u);
+      const firstPage = await readFile(
+        resolve(previewRoot, "pages/1.html"),
+        "utf8",
+      );
+      const secondPage = await readFile(
+        resolve(previewRoot, "pages/2.html"),
+        "utf8",
+      );
+      expect(`${firstPage}\n${secondPage}`).toMatch(
+        /Prepared Book[\s\S]*class="katex"[\s\S]*\/assets\/res_/u,
+      );
       expect(
         JSON.parse(
           await readFile(resolve(previewRoot, "preview-model.json"), "utf8"),
@@ -329,6 +337,7 @@ describe("prepare_draft and build_preview handlers", () => {
           { display_level: 1, role: "body", starts_page: true },
           { display_level: 2, role: "body", starts_page: true },
         ],
+        pages: [{ page_id: 1 }, { page_id: 2 }],
       });
     }));
 });

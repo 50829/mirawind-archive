@@ -4,40 +4,30 @@ import { relative, resolve, sep } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { normalizeDocumentBlocks } from "../../compiler/document/normalize.js";
-import { parseMarkdownDocument } from "../../compiler/document/parser.js";
-import type { ContentRole } from "../../compiler/document/structure-proposal.js";
-import { renderDraftPreview } from "../../compiler/render/preview.js";
+import { prepareConfiguredDocument } from "../../compiler/document/configured-document.js";
+import { canonicalJson } from "../../compiler/document/manifest.js";
+import type {
+  ConfirmedSourceRegion,
+  SemanticCompilationIdentity,
+  TypographyProvenance,
+} from "../../compiler/document/types.js";
+import { renderSemanticDocument } from "../../compiler/render/document.js";
 import { inspectRasterImage } from "../../compiler/resources/images.js";
 import { resolveDocumentResources } from "../../compiler/resources/resolver.js";
 import { DraftRepository } from "../../db/repositories/drafts.js";
-import { createOpaqueId } from "../../domain/ids.js";
+import type { SafeDiagnostic } from "../../domain/errors.js";
 import { parseBookConfigYaml } from "../../schemas/book-config.js";
 import { atomicWriteFile, resolveContainedPath } from "../../storage/layout.js";
 import type { StorageLayout } from "../../storage/layout.js";
 
-export const previewBuildVersion = "draft-preview-v1";
+export const previewBuildVersion = "draft-preview-v2";
 export const previewBuildArtifactFilename = "preview-build-result.json";
 
 export interface PreviewBuildArtifact {
   readonly diagnosticsRelativePath: string;
+  readonly identity: SemanticCompilationIdentity;
   readonly previewRelativePath: "preview";
   readonly version: typeof previewBuildVersion;
-}
-
-interface ConfigStructureNode {
-  readonly block_id: string;
-  readonly display_level: number;
-  readonly display_title?: string;
-  readonly include_in_toc: boolean;
-  readonly role?: ContentRole;
-  readonly starts_page: boolean;
-}
-
-function structureNodes(
-  config: Readonly<Record<string, unknown>>,
-): readonly ConfigStructureNode[] {
-  return config.structure as ConfigStructureNode[];
 }
 
 function dataRelativePath(root: string, target: string): string {
@@ -64,9 +54,8 @@ export async function buildPreview(input: {
     });
     await mkdir(stagingDirectory, { mode: 0o700, recursive: false });
     await mkdir(previewDirectory, { mode: 0o700, recursive: false });
-    const config = parseBookConfigYaml(
-      await readFile(input.configYamlPath, "utf8"),
-    );
+    const configYaml = await readFile(input.configYamlPath, "utf8");
+    const config = parseBookConfigYaml(configYaml);
     if (
       config.book_id !== input.bookId ||
       config.revision !== input.configRevision
@@ -86,30 +75,16 @@ export async function buildPreview(input: {
     ) {
       throw new Error("PREVIEW_SOURCE_HASH_MISMATCH");
     }
-    const document = parseMarkdownDocument(markdownBytes);
-    const configuredStructure = structureNodes(config);
-    let headingIndex = 0;
-    const normalized = normalizeDocumentBlocks(document, {
-      idFactory(node) {
-        if (node.type === "heading") {
-          const configured = configuredStructure[headingIndex++];
-          if (!configured) throw new Error("PREVIEW_HEADING_COUNT_MISMATCH");
-          return configured.block_id;
-        }
-        return createOpaqueId("block");
-      },
+    const configured = prepareConfiguredDocument({
+      config,
+      configSha256: createHash("sha256").update(configYaml).digest("hex"),
+      markdownBytes,
     });
-    if (headingIndex !== configuredStructure.length) {
-      throw new Error("PREVIEW_HEADING_COUNT_MISMATCH");
-    }
     const resolution = await resolveDocumentResources({
-      document,
+      document: configured.document,
       markdownPath,
       resourceRoot: input.sourceRoot,
     });
-    if (resolution.diagnostics.length > 0) {
-      throw new Error("PREVIEW_RESOURCE_CLOSURE_FAILED");
-    }
     const assetsDirectory = resolve(previewDirectory, "assets");
     await mkdir(assetsDirectory, { mode: 0o700 });
     for (const resource of resolution.resources) {
@@ -122,66 +97,117 @@ export async function buildPreview(input: {
         mode: 0o600,
       });
     }
-    const html = await renderDraftPreview({
-      authenticatedResourceUrl: (resourceId) =>
-        `/api/manage/books/${input.bookId}/preview/${input.configRevision}/assets/${resourceId}`,
-      document,
-      resourceResolution: resolution,
-    });
     const pagesDirectory = resolve(previewDirectory, "pages");
     await mkdir(pagesDirectory, { mode: 0o700 });
-    await atomicWriteFile(resolve(pagesDirectory, "1.html"), html, {
-      mode: 0o600,
-    });
-
-    let inheritedRole: ContentRole = "body";
-    const headings = normalized.headings.map((heading, index) => {
-      const configured = configuredStructure[index];
-      if (!configured) throw new Error("PREVIEW_HEADING_COUNT_MISMATCH");
-      if (configured.role) inheritedRole = configured.role;
-      return Object.freeze({
-        block_id: heading.blockId,
-        display_level: configured.display_level,
-        include_in_toc: configured.include_in_toc,
-        role: inheritedRole,
-        source_level: heading.level,
-        source_title: heading.sourceTitle,
-        starts_page: configured.starts_page,
-        title: configured.display_title ?? heading.sourceTitle,
-      });
-    });
-    const model = Object.freeze({
-      config_revision: input.configRevision,
-      headings,
-      pages: [
-        {
-          page_id: 1,
-          title:
-            headings.find((heading) => heading.starts_page)?.title ??
-            String(config.title),
+    const pageByHeading = new Map(
+      configured.pages.flatMap((page) =>
+        page.document.headings
+          .filter((heading) => page.blockIds.includes(heading.blockId))
+          .map((heading) => [heading.blockId, page.pageId] as const),
+      ),
+    );
+    const diagnostics: SafeDiagnostic[] = [...resolution.diagnostics];
+    for (const page of configured.pages) {
+      const rendered = await renderSemanticDocument({
+        document: page.document,
+        headingHref(blockId) {
+          const pageId = pageByHeading.get(blockId);
+          if (!pageId) throw new Error("PREVIEW_HEADING_PAGE_MISSING");
+          return `/api/manage/books/${input.bookId}/preview/${input.configRevision}/pages/${pageId}#${blockId}`;
         },
-      ],
+        headingOverrides: page.headingOverrides,
+        publishedResourceUrl: (resourceId) =>
+          `/api/manage/books/${input.bookId}/preview/${input.configRevision}/assets/${resourceId}`,
+        resourceResolution: resolution,
+      });
+      diagnostics.push(...rendered.diagnostics);
+      await atomicWriteFile(
+        resolve(pagesDirectory, `${page.pageId}.html`),
+        rendered.css
+          ? `<style>${rendered.css}</style>\n${rendered.html}`
+          : rendered.html,
+        { mode: 0o600 },
+      );
+    }
+    const boundedDiagnostics = [
+      ...new Map(
+        diagnostics
+          .slice(0, 10_000)
+          .map(
+            (diagnostic) => [JSON.stringify(diagnostic), diagnostic] as const,
+          ),
+      ).values(),
+    ];
+    const sourceRegions = (
+      config.schema_version === 2
+        ? (config.source_regions as readonly ConfirmedSourceRegion[])
+        : []
+    ).map((region) => ({
+      applied: true,
+      confidence: "high",
+      conflict_count: 0,
+      end_byte: region.range.end_byte,
+      entry_count: region.entries.length,
+      kind: region.kind,
+      matched_heading_count: region.entries.filter(
+        (entry) => entry.body_heading_block_id,
+      ).length,
+      region_id: region.region_id,
+      start_byte: region.range.start_byte,
+    }));
+    const typography =
+      config.schema_version === 2
+        ? ((
+            (config.source as Readonly<Record<string, unknown>>)
+              .preprocessing as Readonly<Record<string, unknown>>
+          ).typography as TypographyProvenance)
+        : undefined;
+    const model = Object.freeze({
+      compiler_version: configured.identity.compiler_version,
+      config_sha256: configured.identity.config_sha256,
+      config_revision: input.configRevision,
+      headings: configured.headings.map((heading) => ({
+        block_id: heading.block_id,
+        display_level: heading.display_level,
+        include_in_toc: heading.include_in_toc,
+        number: heading.number,
+        role: heading.role,
+        source_level: heading.source_level,
+        source_title: heading.source_title,
+        starts_page: heading.starts_page,
+        title: heading.display_title,
+      })),
+      pages: configured.pages.map((page) => ({
+        page_id: page.pageId,
+        title: page.title,
+      })),
+      renderer_version: configured.identity.renderer_version,
+      semantic_digest: configured.identity.semantic_digest,
+      source_regions: sourceRegions,
+      source_sha256: configured.identity.source_sha256,
+      ...(typography ? { typography } : {}),
       version: previewBuildVersion,
     });
     const diagnosticsPath = resolve(previewDirectory, "diagnostics.json");
     await atomicWriteFile(
       diagnosticsPath,
-      `${JSON.stringify({ diagnostics: [] })}\n`,
+      canonicalJson({ diagnostics: boundedDiagnostics }),
       { mode: 0o600 },
     );
     await atomicWriteFile(
       resolve(previewDirectory, "preview-model.json"),
-      `${JSON.stringify(model)}\n`,
+      canonicalJson(model),
       { mode: 0o600 },
     );
     const artifact: PreviewBuildArtifact = Object.freeze({
       diagnosticsRelativePath: "diagnostics.json",
+      identity: configured.identity,
       previewRelativePath: "preview",
       version: previewBuildVersion,
     });
     await atomicWriteFile(
       resolve(stagingDirectory, previewBuildArtifactFilename),
-      `${JSON.stringify(artifact)}\n`,
+      canonicalJson(artifact),
       { mode: 0o600 },
     );
     return artifact;
