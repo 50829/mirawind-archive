@@ -95,8 +95,15 @@ All commands must pass.
 ## 7. Run representative performance and real-fixture evidence
 
 ```sh
-pnpm fixtures:verify-real
-pnpm benchmark:reference
+pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"
+pnpm build
+pnpm benchmark:reference \
+  --real-dir "$PWD/tests/fixtures/mineru/real" \
+  --retain-dir "$PWD/.cache/publishing-quality-reference" \
+  --output-json "$PWD/docs/audits/publishing-quality-results.json" \
+  --output-markdown "$PWD/docs/audits/publishing-quality-release.md" \
+  --requests 200 \
+  --concurrency 8
 ```
 
 Expected:

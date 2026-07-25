@@ -85,6 +85,13 @@ The startup dependency chain is `data-init → migrate → web → worker`; Cadd
 Web is healthy. `data-init` and `migrate` must exit successfully. Web and worker must report
 `healthy`. Caddy is the only public service.
 
+The image build runs `pnpm prepare:assets` before Astro compilation. That command
+deterministically prepares both the pinned KaTeX CSS/WOFF2 closure and the versioned
+Tailwind reader stylesheet. These files are read-only application assets in production;
+Web and worker never generate renderer or style assets at runtime. A build that omits
+`public/_astro/renderers/` or `public/_astro/styles/` is incomplete and must not be
+deployed.
+
 ## 3. Container boundary
 
 Web and worker run as UID/GID 10001 with:
@@ -130,6 +137,11 @@ publication rename is atomic. Never expose this volume through Caddy as a static
 Published version directories are immutable. Do not edit `book.yaml`, manifest, HTML,
 resources or `version.json` in place. Correct source/configuration through a new import or
 revision and publish a new version.
+
+The management “重新排版 Markdown” action always reads the retained original archive and
+creates a new source snapshot plus a new v2 configuration revision. It never mutates an
+accepted source snapshot or published version. Keep the registered original archive when
+future preprocessing revisions may be needed.
 
 ## 5. Lifecycle commands
 
