@@ -18,6 +18,16 @@ interface HeadingContext {
   readonly title: string;
 }
 
+interface SourceRegion {
+  readonly entries: readonly unknown[];
+  readonly kind: "printed_toc";
+  readonly range: {
+    readonly end_byte: number;
+    readonly start_byte: number;
+  };
+  readonly region_id: string;
+}
+
 const roleLabels: Readonly<Record<ContentRole, string>> = {
   appendix: "附录",
   backmatter: "后置内容",
@@ -29,6 +39,14 @@ function configStructure(
   config: Readonly<Record<string, unknown>>,
 ): readonly StructureNode[] {
   return config.structure as readonly StructureNode[];
+}
+
+function configSourceRegions(
+  config: Readonly<Record<string, unknown>>,
+): readonly SourceRegion[] {
+  return Array.isArray(config.source_regions)
+    ? (config.source_regions as readonly SourceRegion[])
+    : [];
 }
 
 export function StructureEditor(props: {
@@ -43,6 +61,13 @@ export function StructureEditor(props: {
   );
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const sourceRegions = useMemo(
+    () => configSourceRegions(props.config),
+    [props.config],
+  );
+  const [enabledRegionIds, setEnabledRegionIds] = useState<ReadonlySet<string>>(
+    () => new Set(sourceRegions.map((region) => region.region_id)),
+  );
   const headingById = useMemo(
     () => new Map(props.headings.map((heading) => [heading.block_id, heading])),
     [props.headings],
@@ -78,6 +103,9 @@ export function StructureEditor(props: {
         body: JSON.stringify({
           ...props.config,
           revision: Number(props.config.revision) + 1,
+          source_regions: sourceRegions.filter((region) =>
+            enabledRegionIds.has(region.region_id),
+          ),
           structure: nodes.map((node) =>
             node.display_level === 1
               ? node
@@ -119,6 +147,51 @@ export function StructureEditor(props: {
         可修改显示标题、目录可见性、H1–H4
         层级、顶层内容角色和标题前拆页；正文顺序不会改变。
       </p>
+      {sourceRegions.length > 0 && (
+        <fieldset>
+          <legend>印刷目录参考区域</legend>
+          <p className="quiet">
+            勾选表示仅作为层级参照、不进入正文；取消后会恢复到正文。保存前不会改写
+            Markdown。
+          </p>
+          {sourceRegions.map((region) => (
+            <label key={region.region_id}>
+              <input
+                type="checkbox"
+                checked={enabledRegionIds.has(region.region_id)}
+                onChange={(event) =>
+                  setEnabledRegionIds((current) => {
+                    const next = new Set(current);
+                    if (event.target.checked) next.add(region.region_id);
+                    else next.delete(region.region_id);
+                    return next;
+                  })
+                }
+              />
+              排除印刷目录区域（字节 {region.range.start_byte}–
+              {region.range.end_byte}，{region.entries.length} 条）
+            </label>
+          ))}
+          <div>
+            <button
+              type="button"
+              onClick={() =>
+                setEnabledRegionIds(
+                  new Set(sourceRegions.map((region) => region.region_id)),
+                )
+              }
+            >
+              应用全部建议
+            </button>
+            <button
+              type="button"
+              onClick={() => setEnabledRegionIds(new Set())}
+            >
+              全部恢复到正文
+            </button>
+          </div>
+        </fieldset>
+      )}
       <ol className="structure-edit-list">
         {nodes.map((node, index) => {
           const heading = headingById.get(node.block_id);

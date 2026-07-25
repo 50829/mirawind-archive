@@ -4,12 +4,19 @@ import { resolve } from "node:path";
 import type { APIRoute } from "astro";
 
 import { DraftRepository } from "@/db/repositories/drafts";
-import { SafeApplicationError } from "@/domain/errors";
+import {
+  SafeApplicationError,
+  createSafeDiagnostic,
+  type SafeDiagnostic,
+} from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
 import { requireMutationOrigin } from "@/http/origin";
 import { readBoundedJson } from "@/http/json-body";
-import { parseBookConfigYaml } from "@/schemas/book-config";
+import {
+  migrateBookConfigToCurrent,
+  parseBookConfigYaml,
+} from "@/schemas/book-config";
 import { replaceDraftConfig } from "@/services/config-revisions";
 import { resolveContainedPath } from "@/storage/path-resolver";
 import {
@@ -57,7 +64,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
     : null;
   const currentPreview = drafts.findPreview(bookId, book.draftConfigRevision);
   let previewModel: Record<string, unknown> | null = null;
-  let diagnostics: readonly string[] = [];
+  let diagnostics: readonly SafeDiagnostic[] = [];
   if (readyPreview?.state === "ready" && readyPreview.previewRelativePath) {
     const previewRoot = await resolveContainedPath(
       layout.root,
@@ -78,8 +85,16 @@ export const GET: APIRoute = async ({ locals, params }) => {
       ) as { diagnostics?: unknown };
       diagnostics = Array.isArray(parsed.diagnostics)
         ? parsed.diagnostics
-            .filter((value): value is string => typeof value === "string")
+            .filter((value): value is SafeDiagnostic =>
+              Boolean(
+                value &&
+                typeof value === "object" &&
+                typeof (value as Record<string, unknown>).code === "string" &&
+                typeof (value as Record<string, unknown>).message === "string",
+              ),
+            )
             .slice(0, 10_000)
+            .map(createSafeDiagnostic)
         : [];
     }
   }
@@ -90,17 +105,24 @@ export const GET: APIRoute = async ({ locals, params }) => {
   return Response.json(
     {
       book_id: book.id,
-      config: parseBookConfigYaml(configYaml),
+      config: migrateBookConfigToCurrent(parseBookConfigYaml(configYaml)),
       config_revision: config.revision,
       diagnostics,
       preview:
         previewModel === null
           ? null
           : {
+              compiler_version: previewModel.compiler_version,
+              config_sha256: previewModel.config_sha256,
               config_revision: previewModel.config_revision,
               headings: previewModel.headings,
               is_stale: readyRevision !== book.draftConfigRevision,
               pages: previewModel.pages,
+              renderer_version: previewModel.renderer_version,
+              semantic_digest: previewModel.semantic_digest,
+              source_regions: previewModel.source_regions,
+              source_sha256: previewModel.source_sha256,
+              typography: previewModel.typography,
             },
       preview_state:
         currentPreview?.state ??

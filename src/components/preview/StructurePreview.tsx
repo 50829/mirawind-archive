@@ -20,18 +20,48 @@ interface PreviewPage {
   readonly title: string;
 }
 
+interface PreviewDiagnostic {
+  readonly code: string;
+  readonly message: string;
+  readonly path?: string;
+  readonly severity?: "error" | "info" | "warning";
+}
+
+interface PreviewRegion {
+  readonly applied: boolean;
+  readonly end_byte: number;
+  readonly entry_count: number;
+  readonly matched_heading_count: number;
+  readonly region_id: string;
+  readonly start_byte: number;
+}
+
+interface TypographySummary {
+  readonly profile: "preserve-v1" | "zh-smart-v1";
+  readonly protected_nodes: number;
+  readonly punctuation_converted: number;
+  readonly spaces_normalized: number;
+}
+
 interface DraftView {
   readonly book_id: number;
   readonly config: Readonly<Record<string, unknown>> & {
     readonly title?: string;
   };
   readonly config_revision: number;
-  readonly diagnostics: readonly string[];
+  readonly diagnostics: readonly PreviewDiagnostic[];
   readonly preview: {
+    readonly compiler_version: string;
+    readonly config_sha256: string;
     readonly config_revision: number;
     readonly headings: readonly PreviewHeading[];
     readonly is_stale: boolean;
     readonly pages: readonly PreviewPage[];
+    readonly renderer_version: string;
+    readonly semantic_digest: string;
+    readonly source_regions: readonly PreviewRegion[];
+    readonly source_sha256: string;
+    readonly typography?: TypographySummary;
   } | null;
   readonly preview_state: "building" | "failed" | "ready";
 }
@@ -151,6 +181,31 @@ export function StructurePreview(props: { readonly bookId: number }) {
                 ))}
               </select>
             </label>
+          )}
+          {preview?.typography && (
+            <section aria-labelledby="typography-summary-title">
+              <h2 id="typography-summary-title">Markdown 预处理</h2>
+              <p>
+                {preview.typography.profile} · 补齐空格{" "}
+                {preview.typography.spaces_normalized} · 转换标点{" "}
+                {preview.typography.punctuation_converted} · 保护节点{" "}
+                {preview.typography.protected_nodes}
+              </p>
+            </section>
+          )}
+          {preview && preview.source_regions.length > 0 && (
+            <section aria-labelledby="source-region-title">
+              <h2 id="source-region-title">印刷目录区域</h2>
+              <ul>
+                {preview.source_regions.map((region) => (
+                  <li key={region.region_id}>
+                    {region.applied ? "已排除正文" : "未应用"} ·{" "}
+                    {region.matched_heading_count}/{region.entry_count} 条目匹配
+                    · 字节 {region.start_byte}–{region.end_byte}
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
           <DiagnosticsPanel diagnostics={draft.diagnostics} />
           <PublishPanel
