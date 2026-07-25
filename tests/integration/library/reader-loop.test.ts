@@ -48,12 +48,14 @@ describe("reader loop", () => {
         bodyHtml: "<p>Body</p>",
         bookKey: book.alias ?? String(book.bookId),
         bookTitle: book.title,
+        currentHeadingId: null,
         currentPageId: 1,
+        firstPageHref: "/read/reader-book/1",
         nextHref: null,
         originalDownloads: [],
         outline: [],
-        pages: [{ href: "/read/reader-book/1", pageId: 1, title: "Page" }],
         previousHref: null,
+        toc: [],
       });
       expect(html).toContain("Published Reader");
       expect(html).toContain("/api/books/reader-book/search");

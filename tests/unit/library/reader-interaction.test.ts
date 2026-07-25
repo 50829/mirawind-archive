@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import {
+  buildReaderNavigationTree,
+  readerBreadcrumbs,
+} from "@/components/reader/navigation";
 import { renderReaderShell } from "@/components/reader/render";
 import { shouldNavigateWithArrowKey } from "@/components/reader/reader-interaction";
 
@@ -7,20 +11,63 @@ const props = {
   bodyHtml: '<h1 id="blk_test">Chapter</h1>',
   bookKey: "current-book",
   bookTitle: "Current Book",
+  currentHeadingId: "blk_test",
   currentPageId: 1,
+  firstPageHref: "/read/current-book/1",
   nextHref: "/read/current-book/2",
   originalDownloads: [
     { href: "/books/current-book/originals/file_test", label: "Source" },
   ],
-  outline: [{ href: "#blk_test", level: 1, title: "Chapter" }],
-  pages: [
-    { href: "/read/current-book/1", pageId: 1, title: "Chapter" },
-    { href: "/read/current-book/2", pageId: 2, title: "Next" },
+  outline: [
+    {
+      blockId: "blk_test",
+      href: "#blk_test",
+      level: 1,
+      title: "1. Chapter",
+    },
+  ],
+  toc: [
+    {
+      blockId: "blk_test",
+      href: "/read/current-book/1#blk_test",
+      level: 1,
+      pageId: 1,
+      title: "1. Chapter",
+    },
+    {
+      blockId: "blk_model",
+      href: "/read/current-book/1#blk_model",
+      level: 2,
+      pageId: 1,
+      title: "1.1. Model",
+    },
+    {
+      blockId: "blk_next",
+      href: "/read/current-book/2#blk_next",
+      level: 1,
+      pageId: 2,
+      title: "2. Next",
+    },
   ],
   previousHref: null,
 } as const;
 
 describe("reader interaction", () => {
+  it("builds nested navigation and the exact current ancestor path", () => {
+    const tree = buildReaderNavigationTree(props.toc);
+    expect(tree).toMatchObject([
+      {
+        blockId: "blk_test",
+        children: [{ blockId: "blk_model", children: [] }],
+      },
+      { blockId: "blk_next", children: [] },
+    ]);
+    expect(readerBreadcrumbs(props.toc, "blk_model")).toEqual([
+      expect.objectContaining({ blockId: "blk_test" }),
+      expect.objectContaining({ blockId: "blk_model" }),
+    ]);
+  });
+
   it("excludes editable, code, link, role-bearing and dialog contexts", () => {
     const base = {
       altKey: false,
@@ -74,6 +121,12 @@ describe("reader interaction", () => {
     expect(html).toContain('aria-label="全书目录"');
     expect(html).toContain('aria-label="本页提纲"');
     expect(html).toContain('href="/library"');
+    expect(html).toContain('aria-label="当前位置"');
+    expect(html).toContain("<details open");
+    expect(html).toContain('href="/read/current-book/1#blk_model"');
+    expect(html).toContain('data-outline-link="blk_test"');
+    expect(html).toContain('aria-current="location"');
+    expect(html).toContain("requestAnimationFrame(updateOutlineLocation)");
   });
 
   it("initializes every bounded search instance independently", () => {

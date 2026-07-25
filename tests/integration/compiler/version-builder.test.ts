@@ -28,6 +28,9 @@ const png = Buffer.from(
 const versionId = "ver_version_builder_test_0001";
 const sourceId = "src_version_builder_test_0001";
 const headingId = "blk_version_builder_heading_0001";
+const sectionHeadingId = "blk_version_builder_heading_0002";
+const detailHeadingId = "blk_version_builder_heading_0003";
+const nextHeadingId = "blk_version_builder_heading_0004";
 
 async function treeHashes(root: string): Promise<readonly string[]> {
   const values: string[] = [];
@@ -69,6 +72,10 @@ describe("complete immutable version construction", () => {
       const markdown = [
         "# Chapter",
         "",
+        "## Model selection",
+        "",
+        "### Underfit and overfit",
+        "",
         '![Pixel](images/pixel.png "Pixel")',
         "",
         "[External reference](https://example.test/reference)",
@@ -80,6 +87,8 @@ describe("complete immutable version construction", () => {
         "```mineru-unknown",
         "plain fallback",
         "```",
+        "",
+        "# Next chapter",
       ].join("\n");
       await writeFile(resolve(sourceRoot, "book.md"), markdown, {
         mode: 0o400,
@@ -106,6 +115,25 @@ describe("complete immutable version construction", () => {
         structure: [
           {
             block_id: headingId,
+            display_level: 1,
+            include_in_toc: true,
+            role: "body",
+            starts_page: true,
+          },
+          {
+            block_id: sectionHeadingId,
+            display_level: 2,
+            include_in_toc: true,
+            starts_page: false,
+          },
+          {
+            block_id: detailHeadingId,
+            display_level: 3,
+            include_in_toc: true,
+            starts_page: false,
+          },
+          {
+            block_id: nextHeadingId,
             display_level: 1,
             include_in_toc: true,
             role: "body",
@@ -193,6 +221,13 @@ describe("complete immutable version construction", () => {
       expect(pageHtml).toContain('aria-label="全书目录"');
       expect(pageHtml).toContain('<main class="reader-main"');
       expect(pageHtml).toContain('aria-label="本页提纲"');
+      expect(pageHtml).toContain('aria-label="当前位置"');
+      expect(pageHtml).toContain("<details open");
+      expect(pageHtml).toContain(
+        `href="/read/${bookId}/1#${sectionHeadingId}"`,
+      );
+      expect(pageHtml).toContain("1.1. Model selection");
+      expect(pageHtml).toContain(`data-outline-link="${headingId}"`);
       expect(pageHtml).toContain('role="search"');
       expect(pageHtml).toContain(`/books/${bookId}/assets/${versionId}/res_`);
       expect(pageHtml).toContain(

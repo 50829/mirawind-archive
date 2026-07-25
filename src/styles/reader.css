@@ -187,10 +187,6 @@
     @apply font-serif text-base leading-loose;
   }
 
-  .reader-document :is(h1, h2, h3, h4)[id] {
-    scroll-margin-top: 5.5rem;
-  }
-
   .reader-document img {
     @apply h-auto max-w-full;
   }

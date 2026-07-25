@@ -124,12 +124,39 @@ test("discovers details, restores context and completes the reader loop", async 
 
   await page.goto("/read/e2e-library-book/1");
   await expect(page.getByRole("link", { name: "返回书库" })).toBeVisible();
+  const breadcrumb = page.getByRole("navigation", { name: "当前位置" });
+  await expect(breadcrumb).toContainText("Opening");
   if (mobile) {
     await expect(page.getByRole("button", { name: "目录" })).toBeVisible();
   } else {
+    const toc = page.getByRole("navigation", { name: "全书目录" }).first();
+    await expect(toc).toBeVisible();
+    const currentBranch = toc.locator("details").first();
+    await expect(currentBranch).toHaveAttribute("open", "");
     await expect(
-      page.getByRole("navigation", { name: "全书目录" }).first(),
-    ).toBeVisible();
+      toc.getByRole("link", { name: "1.1. Overview" }),
+    ).toHaveAttribute(
+      "href",
+      "/read/e2e-library-book/1#blk_e2e_library_overview_0001",
+    );
+    if (javascriptEnabled) {
+      const toggle = currentBranch.locator("summary");
+      await toggle.click();
+      await expect(currentBranch).not.toHaveAttribute("open", "");
+      await toggle.click();
+      await expect(currentBranch).toHaveAttribute("open", "");
+
+      const outline = page
+        .getByRole("navigation", { name: "本页提纲" })
+        .first();
+      const overviewOutline = outline.getByRole("link", {
+        name: "1.1. Overview",
+      });
+      await page
+        .locator("#blk_e2e_library_overview_0001")
+        .evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await expect(overviewOutline).toHaveAttribute("aria-current", "location");
+    }
   }
   await expect(page.getByRole("main")).toContainText("A seeded public book");
   if (javascriptEnabled) {

@@ -341,6 +341,31 @@ export async function buildImmutableVersion(input: {
           .map((heading) => [heading.blockId, page.pageId] as const),
       ),
     );
+    const bookKey =
+      typeof config.alias === "string" ? config.alias : String(input.bookId);
+    const pageHref = (candidate: (typeof pages)[number]) =>
+      `/read/${bookKey}/${candidate.alias ?? candidate.pageId}`;
+    const pageById = new Map(pages.map((page) => [page.pageId, page]));
+    const displayHeadingTitle = (heading: (typeof headings)[number]) =>
+      heading.number
+        ? `${heading.number}. ${heading.display_title}`
+        : heading.display_title;
+    const readerToc = headings
+      .filter((heading) => heading.include_in_toc)
+      .map((heading) => {
+        const pageId = pageByHeading.get(heading.block_id);
+        const headingPage = pageId ? pageById.get(pageId) : undefined;
+        if (!pageId || !headingPage) {
+          throw new Error("VERSION_HEADING_PAGE_MISSING");
+        }
+        return Object.freeze({
+          blockId: heading.block_id,
+          href: `${pageHref(headingPage)}#${heading.block_id}`,
+          level: heading.display_level,
+          pageId,
+          title: displayHeadingTitle(heading),
+        });
+      });
     const renderedPages = await Promise.all(
       pages.map(async (page) => {
         const rendered = await renderSemanticDocument({
@@ -348,7 +373,9 @@ export async function buildImmutableVersion(input: {
           headingHref(blockId) {
             const pageId = pageByHeading.get(blockId);
             if (!pageId) throw new Error("VERSION_HEADING_PAGE_MISSING");
-            return `/read/${input.bookId}/${pageId}#${blockId}`;
+            const headingPage = pageById.get(pageId);
+            if (!headingPage) throw new Error("VERSION_HEADING_PAGE_MISSING");
+            return `${pageHref(headingPage)}#${blockId}`;
           },
           headingOverrides: page.headingOverrides,
           publishedResourceUrl: (resourceId) =>
@@ -380,12 +407,19 @@ export async function buildImmutableVersion(input: {
       const pageIndex = pages.findIndex(
         (candidate) => candidate.pageId === page.pageId,
       );
-      const bookKey =
-        typeof config.alias === "string" ? config.alias : String(input.bookId);
-      const pageHref = (candidate: (typeof pages)[number]) =>
-        `/read/${bookKey}/${candidate.alias ?? candidate.pageId}`;
       const nextPage = pageIndex >= 0 ? pages.at(pageIndex + 1) : undefined;
       const previousPage = pageIndex > 0 ? pages.at(pageIndex - 1) : undefined;
+      const outline = headings
+        .filter(
+          (heading) =>
+            heading.include_in_toc && page.blockIds.includes(heading.block_id),
+        )
+        .map((heading) => ({
+          blockId: heading.block_id,
+          href: `#${heading.block_id}`,
+          level: heading.display_level,
+          title: displayHeadingTitle(heading),
+        }));
       await atomicWriteFile(
         resolve(versionDirectory, page.outputPath),
         htmlDocument({
@@ -393,7 +427,9 @@ export async function buildImmutableVersion(input: {
             bodyHtml: rendered.html,
             bookKey,
             bookTitle: String(config.title),
+            currentHeadingId: outline.at(0)?.blockId ?? null,
             currentPageId: page.pageId,
+            firstPageHref: pageHref(pages[0] ?? page),
             nextHref: nextPage ? pageHref(nextPage) : null,
             originalDownloads: originalFiles.map((original) => ({
               href: `/books/${bookKey}/originals/${String(original.id)}`,
@@ -402,19 +438,9 @@ export async function buildImmutableVersion(input: {
                   ? "下载原始 ZIP"
                   : "下载原文件",
             })),
-            outline: headings
-              .filter((heading) => page.blockIds.includes(heading.block_id))
-              .map((heading) => ({
-                href: `#${heading.block_id}`,
-                level: heading.display_level,
-                title: heading.display_title,
-              })),
-            pages: pages.map((candidate) => ({
-              href: pageHref(candidate),
-              pageId: candidate.pageId,
-              title: candidate.title,
-            })),
+            outline,
             previousHref: previousPage ? pageHref(previousPage) : null,
+            toc: readerToc,
           }),
           canonicalPath: pageHref(page),
           css,

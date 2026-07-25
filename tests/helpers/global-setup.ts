@@ -73,6 +73,20 @@ async function seedPublishedLibraryBook(input: {
     "",
     "A seeded public book for the complete library and reading journey.",
     "",
+    ...Array.from(
+      { length: 12 },
+      (_, index) =>
+        `Opening context paragraph ${index + 1} keeps the first page long enough to exercise local navigation.`,
+    ).flatMap((paragraph) => [paragraph, ""]),
+    "## Overview",
+    "",
+    "The local outline follows this section while the full contents remains hierarchical.",
+    "",
+    ...Array.from(
+      { length: 8 },
+      (_, index) =>
+        `Overview detail paragraph ${index + 1} keeps the section readable during scroll tracking.`,
+    ).flatMap((paragraph) => [paragraph, ""]),
     "## Continue",
     "",
     "Searchable reader content.",
@@ -115,6 +129,12 @@ async function seedPublishedLibraryBook(input: {
         include_in_toc: true,
         role: "body",
         starts_page: true,
+      },
+      {
+        block_id: "blk_e2e_library_overview_0001",
+        display_level: 2,
+        include_in_toc: true,
+        starts_page: false,
       },
       {
         block_id: "blk_e2e_library_continue_0001",

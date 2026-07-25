@@ -1,7 +1,9 @@
 import { BookSearch } from "./BookSearch.js";
-import { TableOfContents, type ReaderPageLink } from "./TableOfContents.js";
+import { readerBreadcrumbs, type ReaderTocLink } from "./navigation.js";
+import { TableOfContents } from "./TableOfContents.js";
 
 export interface ReaderOutlineLink {
+  readonly blockId: string;
   readonly href: string;
   readonly level: number;
   readonly title: string;
@@ -46,6 +48,47 @@ const navigationScript = String.raw`
   window.addEventListener("hashchange", focusHashTarget);
   if (window.location.hash) requestAnimationFrame(focusHashTarget);
 
+  const outlineLinks = Array.from(document.querySelectorAll("a[data-outline-link]"));
+  const outlineIds = Array.from(new Set(outlineLinks.map((link) => link.getAttribute("data-outline-link")).filter(Boolean)));
+  const setOutlineLocation = (blockId) => {
+    for (const link of outlineLinks) {
+      if (link.getAttribute("data-outline-link") === blockId) {
+        link.setAttribute("aria-current", "location");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    }
+  };
+  const updateOutlineLocation = () => {
+    outlineScheduled = false;
+    if (outlineIds.length === 0) return;
+    const topbar = document.querySelector(".reader-topbar");
+    const threshold = (topbar instanceof HTMLElement ? topbar.getBoundingClientRect().height : 64) + 24;
+    let activeId = outlineIds[0];
+    const hashId = window.location.hash ? decodeURIComponent(window.location.hash.slice(1)) : "";
+    for (const blockId of outlineIds) {
+      const heading = document.getElementById(blockId);
+      if (!(heading instanceof HTMLElement)) continue;
+      if (heading.getBoundingClientRect().top <= threshold) activeId = blockId;
+      else break;
+    }
+    if (hashId && outlineIds.includes(hashId)) {
+      const hashHeading = document.getElementById(hashId);
+      if (hashHeading instanceof HTMLElement && hashHeading.getBoundingClientRect().top > threshold) activeId = hashId;
+    }
+    setOutlineLocation(activeId);
+  };
+  let outlineScheduled = false;
+  const scheduleOutlineLocation = () => {
+    if (outlineScheduled) return;
+    outlineScheduled = true;
+    requestAnimationFrame(updateOutlineLocation);
+  };
+  window.addEventListener("hashchange", scheduleOutlineLocation);
+  window.addEventListener("resize", scheduleOutlineLocation);
+  window.addEventListener("scroll", scheduleOutlineLocation, { passive: true });
+  scheduleOutlineLocation();
+
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -69,25 +112,82 @@ const navigationScript = String.raw`
 })();
 `;
 
+function PageOutline(props: {
+  readonly outline: readonly ReaderOutlineLink[];
+  readonly showHeading?: boolean;
+}) {
+  const baseLevel = Math.min(
+    ...props.outline.map((heading) => heading.level),
+    1,
+  );
+  return (
+    <nav aria-label="本页提纲" className="reader-outline">
+      {props.showHeading !== false && <h2>本页提纲</h2>}
+      <ol>
+        {props.outline.map((heading, index) => (
+          <li
+            key={heading.blockId}
+            style={{
+              marginInlineStart: `${Math.max(0, heading.level - baseLevel) * 0.7}rem`,
+            }}
+          >
+            <a
+              aria-current={index === 0 ? "location" : undefined}
+              data-outline-link={heading.blockId}
+              href={heading.href}
+            >
+              {heading.title}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
 export function ReaderShell(props: {
   readonly bodyHtml: string;
   readonly bookKey: string;
   readonly bookTitle: string;
+  readonly currentHeadingId: string | null;
   readonly currentPageId: number;
+  readonly firstPageHref: string;
   readonly nextHref: string | null;
   readonly originalDownloads: readonly {
     readonly href: string;
     readonly label: string;
   }[];
   readonly outline: readonly ReaderOutlineLink[];
-  readonly pages: readonly ReaderPageLink[];
   readonly previousHref: string | null;
+  readonly toc: readonly ReaderTocLink[];
 }) {
+  const breadcrumbs = readerBreadcrumbs(props.toc, props.currentHeadingId);
   return (
     <>
       <header className="reader-topbar">
-        <a href="/library">返回书库</a>
-        <span className="reader-book-title">{props.bookTitle}</span>
+        <a className="reader-library-link" href="/library">
+          返回书库
+        </a>
+        <nav aria-label="当前位置" className="reader-breadcrumb">
+          <a className="reader-book-title" href={props.firstPageHref}>
+            {props.bookTitle}
+          </a>
+          {breadcrumbs.map((crumb, index) => (
+            <span className="reader-breadcrumb-part" key={crumb.blockId}>
+              <span aria-hidden="true" className="reader-breadcrumb-separator">
+                ›
+              </span>
+              <a
+                aria-current={
+                  index === breadcrumbs.length - 1 ? "location" : undefined
+                }
+                href={crumb.href}
+              >
+                {crumb.title}
+              </a>
+            </span>
+          ))}
+        </nav>
         <div className="reader-desktop-tools">
           <BookSearch bookKey={props.bookKey} />
           {props.originalDownloads.map((download) => (
@@ -117,8 +217,9 @@ export function ReaderShell(props: {
       </nav>
       <div className="reader-layout">
         <TableOfContents
+          currentHeadingId={props.currentHeadingId}
           currentPageId={props.currentPageId}
-          pages={props.pages}
+          toc={props.toc}
         />
         <main className="reader-main" id="main-content">
           <article
@@ -142,21 +243,7 @@ export function ReaderShell(props: {
             )}
           </nav>
         </main>
-        <nav aria-label="本页提纲" className="reader-outline">
-          <h2>本页</h2>
-          <ol>
-            {props.outline.map((heading) => (
-              <li
-                key={heading.href}
-                style={{
-                  marginInlineStart: `${(heading.level - 1) * 0.65}rem`,
-                }}
-              >
-                <a href={heading.href}>{heading.title}</a>
-              </li>
-            ))}
-          </ol>
-        </nav>
+        <PageOutline outline={props.outline} />
       </div>
       <dialog
         aria-labelledby="reader-mobile-toc-heading"
@@ -170,8 +257,10 @@ export function ReaderShell(props: {
           </form>
         </div>
         <TableOfContents
+          currentHeadingId={props.currentHeadingId}
           currentPageId={props.currentPageId}
-          pages={props.pages}
+          showHeading={false}
+          toc={props.toc}
         />
       </dialog>
       <dialog
@@ -185,15 +274,7 @@ export function ReaderShell(props: {
             <button type="submit">关闭</button>
           </form>
         </div>
-        <nav aria-label="本页提纲">
-          <ol>
-            {props.outline.map((heading) => (
-              <li key={heading.href}>
-                <a href={heading.href}>{heading.title}</a>
-              </li>
-            ))}
-          </ol>
-        </nav>
+        <PageOutline outline={props.outline} showHeading={false} />
       </dialog>
       <dialog
         aria-labelledby="reader-mobile-search-heading"
