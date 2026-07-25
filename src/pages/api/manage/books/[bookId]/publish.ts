@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 
 import { DraftRepository } from "@/db/repositories/drafts";
 import { JobRepository } from "@/db/repositories/jobs";
+import { SourceRepository } from "@/db/repositories/sources";
 import { withImmediateTransaction } from "@/db/transaction/immediate";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
@@ -9,7 +10,11 @@ import { applyResponsePolicy } from "@/http/cache/policies";
 import { readBoundedJson } from "@/http/json-body";
 import { requireMutationOrigin } from "@/http/origin";
 import { m1PublishPolicy } from "@/policy/publish-policy";
-import { getRuntimeEnvironment } from "@/storage/runtime";
+import { assertReadyPreviewIdentity } from "@/services/preview-identity";
+import {
+  getRuntimeEnvironment,
+  getRuntimeStorageLayout,
+} from "@/storage/runtime";
 
 export const prerender = false;
 
@@ -62,6 +67,28 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   if (!current?.draftSourceId || !current.draftConfigRevision) {
     throw new SafeApplicationError("NOT_FOUND", "The book was not found.", 404);
   }
+  const config = drafts.requireConfig(id, current.draftConfigRevision);
+  const source = new SourceRepository(database).requireSnapshot(
+    current.draftSourceId,
+  );
+  const preview =
+    current.readyPreviewRevision === null
+      ? null
+      : drafts.findPreview(id, current.readyPreviewRevision);
+  if (!preview) {
+    throw new SafeApplicationError(
+      "PUBLISH_PREVIEW_STALE",
+      "The ready preview no longer matches the current publishing inputs.",
+      409,
+    );
+  }
+  await assertReadyPreviewIdentity({
+    book: current,
+    config,
+    layout: await getRuntimeStorageLayout(),
+    preview,
+    source,
+  });
   const policy = await m1PublishPolicy.evaluate({
     bookId: id,
     configRevision: expectedRevision,
@@ -87,8 +114,8 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
       !book.draftSourceId
     ) {
       throw new SafeApplicationError(
-        "PUBLISH_DRAFT_NOT_READY",
-        "The requested draft revision is not ready to publish.",
+        "PUBLISH_PREVIEW_STALE",
+        "The ready preview no longer matches the current publishing inputs.",
         409,
       );
     }
