@@ -31,7 +31,7 @@ by every user story.
 - [x] T009 Add canonical configured-document identity helpers and bump compiler, renderer and text-normalization constants in `src/compiler/document/manifest.ts`
 - [x] T010 Add failing exact mixed-script spacing, punctuation, protected-token, cross-inline-context, non-target-byte preservation and second-pass idempotency cases in `tests/unit/compiler/typography.test.ts`
 - [x] T011 Implement deterministic `preserve-v1` and `zh-smart-v1` source-slice preprocessing, protected-token segmentation, minimal UTF-8 replacements and bounded provenance in `src/compiler/preprocess/typography.ts`
-- [ ] T012 Run and atomically persist preprocessing before accepted-source hashing/structure proposal, expose provenance and implement the preconditioned re-preprocess-to-new-revision contract in `src/jobs/handlers/prepare-draft.ts`, `src/services/config-revisions.ts`, `src/pages/api/manage/books/[bookId]/reprocess.ts` and `src/components/preview/StructurePreview.tsx`
+- [x] T012 Run and atomically persist preprocessing before accepted-source hashing/structure proposal, expose provenance and implement the preconditioned re-preprocess-to-new-revision contract in `src/jobs/handlers/prepare-draft.ts`, `src/services/config-revisions.ts`, `src/pages/api/manage/books/[bookId]/reprocess.ts` and `src/components/preview/StructurePreview.tsx`
 
 **Checkpoint**: Strict v1/v2 validation and migration are available without changing v1
 publication behavior.
@@ -49,21 +49,21 @@ numbering, pages, outline and search while frozen source bytes remain equal.
 
 ### Evidence tests
 
-- [ ] T013 [P] [US1] Add failing detection, hierarchy, Unicode byte-range, ordinary “目录”, duplicate-label, OCR and rich-content tests in `tests/unit/compiler/printed-toc.test.ts`
-- [ ] T014 [P] [US1] Add failing range hash, AST-boundary, overlap, mapping-order, cross-reference and reversible-filter tests in `tests/unit/compiler/source-regions.test.ts`
-- [ ] T015 [P] [US1] Add failing end-to-end configured-document numbering/page/manifest/search exclusion tests in `tests/integration/compiler/configured-document.test.ts`
-- [ ] T016 [P] [US1] Add failing initial-draft proposal and bounded diagnostic recovery tests in `tests/integration/recovery/prepare-preview.test.ts`
+- [x] T013 [P] [US1] Add failing detection, hierarchy, Unicode byte-range, ordinary “目录”, duplicate-label, OCR and rich-content tests in `tests/unit/compiler/printed-toc.test.ts`
+- [x] T014 [P] [US1] Add failing range hash, AST-boundary, overlap, mapping-order, cross-reference and reversible-filter tests in `tests/unit/compiler/source-regions.test.ts`
+- [x] T015 [P] [US1] Add failing end-to-end configured-document numbering/page/manifest/search exclusion tests in `tests/integration/compiler/configured-document.test.ts`
+- [x] T016 [P] [US1] Add failing initial-draft proposal and bounded diagnostic recovery tests in `tests/integration/recovery/prepare-preview.test.ts`
 
 ### Implementation
 
-- [ ] T017 [US1] Implement UTF-8 byte conversion, region hash validation, root-block filtering and active-document derivation in `src/compiler/document/source-regions.ts`
-- [ ] T018 [US1] Implement conservative printed-contents extraction, exact monotonic matching, confidence gates and title-free entry mappings in `src/compiler/document/printed-toc.ts`
-- [ ] T019 [US1] Extend structure proposal generation to apply printed hierarchy and explicit body numbering without changing ambiguous headings in `src/compiler/document/structure-proposal.ts`
-- [ ] T020 [US1] Refactor semantic structure validation to bind all source headings but validate levels, roles and pages only on active headings in `src/compiler/document/validate-config.ts`
-- [ ] T021 [US1] Generate v2 configs, confirmed high-confidence regions and bounded candidate diagnostics during import in `src/jobs/handlers/prepare-draft.ts`
-- [ ] T022 [US1] Make resource resolution, manifest and search consume only the active filtered document and reject active references to excluded definitions or footnotes in `src/compiler/resources/resolver.ts`, `src/compiler/document/manifest.ts` and `src/compiler/search/build-spool.ts`
-- [ ] T023 [US1] Add source-region summary, applied state and a bulk reversible control to `src/components/preview/StructurePreview.tsx` and `src/components/preview/StructureEditor.tsx`
-- [ ] T024 [US1] Extend draft reads and atomic config replacement to expose/migrate/validate source regions without changing accepted source in `src/pages/api/manage/books/[bookId]/draft.ts` and `src/services/config-revisions.ts`
+- [x] T017 [US1] Implement UTF-8 byte conversion, region hash validation, root-block filtering and active-document derivation in `src/compiler/document/source-regions.ts`
+- [x] T018 [US1] Implement conservative printed-contents extraction, exact monotonic matching, confidence gates and title-free entry mappings in `src/compiler/document/printed-toc.ts`
+- [x] T019 [US1] Extend structure proposal generation to apply printed hierarchy and explicit body numbering without changing ambiguous headings in `src/compiler/document/structure-proposal.ts`
+- [x] T020 [US1] Refactor semantic structure validation to bind all source headings but validate levels, roles and pages only on active headings in `src/compiler/document/validate-config.ts`
+- [x] T021 [US1] Generate v2 configs, confirmed high-confidence regions and bounded candidate diagnostics during import in `src/jobs/handlers/prepare-draft.ts`
+- [x] T022 [US1] Make resource resolution, manifest and search consume only the active filtered document and reject active references to excluded definitions or footnotes in `src/compiler/resources/resolver.ts`, `src/compiler/document/manifest.ts` and `src/compiler/search/build-spool.ts`
+- [x] T023 [US1] Add source-region summary, applied state and a bulk reversible control to `src/components/preview/StructurePreview.tsx` and `src/components/preview/StructureEditor.tsx`
+- [x] T024 [US1] Extend draft reads and atomic config replacement to expose/migrate/validate source regions without changing accepted source in `src/pages/api/manage/books/[bookId]/draft.ts` and `src/services/config-revisions.ts`
 
 **Checkpoint**: User Story 1 is independently usable and no reader-specific hiding logic
 exists.
@@ -81,18 +81,18 @@ or compiler identity and observe publication reject the stale preview.
 
 ### Evidence tests
 
-- [ ] T025 [P] [US2] Add failing preview/publication page, heading, numbering, diagnostics and semantic-digest parity cases in `tests/integration/compiler/preview-publication-parity.test.ts`
-- [ ] T026 [P] [US2] Add failing stale source/config/compiler/renderer preview publication contract cases in `tests/integration/publication/stale-preview.test.ts`
-- [ ] T027 [P] [US2] Add failing private preview multi-page and response-policy cases in `tests/contract/config-publish.contract.test.ts`
+- [x] T025 [P] [US2] Add failing preview/publication page, heading, numbering, diagnostics and semantic-digest parity cases in `tests/integration/compiler/preview-publication-parity.test.ts`
+- [x] T026 [P] [US2] Add failing stale source/config/compiler/renderer preview publication contract cases in `tests/integration/publication/stale-preview.test.ts`
+- [x] T027 [P] [US2] Add failing private preview multi-page and response-policy cases in `tests/contract/config-publish.contract.test.ts`
 
 ### Implementation
 
-- [ ] T028 [US2] Extract configured parsing, stable heading assignment, active filtering, validation, numbering, page splitting and semantic identity into `src/compiler/document/configured-document.ts`
-- [ ] T029 [US2] Refactor immutable version building to consume the shared configured-document result in `src/compiler/version-builder.ts`
-- [ ] T030 [US2] Refactor preview building to emit every shared semantic page and real structured diagnostics through `renderSemanticDocument` in `src/jobs/handlers/build-preview.ts`
-- [ ] T031 [US2] Remove the obsolete independent preview renderer in `src/compiler/render/preview.ts` and update its callers/tests
-- [ ] T032 [US2] Extend preview model reads and management UI to show captured hashes, compiler identity, all pages and structured diagnostics in `src/pages/api/manage/books/[bookId]/draft.ts`, `src/components/preview/StructurePreview.tsx` and `src/components/preview/DiagnosticsPanel.tsx`
-- [ ] T033 [US2] Enforce current ready-preview source/config/compiler/renderer/semantic identities before queuing publication in `src/pages/api/manage/books/[bookId]/publish.ts`
+- [x] T028 [US2] Extract configured parsing, stable heading assignment, active filtering, validation, numbering, page splitting and semantic identity into `src/compiler/document/configured-document.ts`
+- [x] T029 [US2] Refactor immutable version building to consume the shared configured-document result in `src/compiler/version-builder.ts`
+- [x] T030 [US2] Refactor preview building to emit every shared semantic page and real structured diagnostics through `renderSemanticDocument` in `src/jobs/handlers/build-preview.ts`
+- [x] T031 [US2] Remove the obsolete independent preview renderer in `src/compiler/render/preview.ts` and update its callers/tests
+- [x] T032 [US2] Extend preview model reads and management UI to show captured hashes, compiler identity, all pages and structured diagnostics in `src/pages/api/manage/books/[bookId]/draft.ts`, `src/components/preview/StructurePreview.tsx` and `src/components/preview/DiagnosticsPanel.tsx`
+- [x] T033 [US2] Enforce current ready-preview source/config/compiler/renderer/semantic identities before queuing publication in `src/pages/api/manage/books/[bookId]/publish.ts`
 
 **Checkpoint**: A ready preview is a faithful, captured publication decision rather than a
 separate approximation.
@@ -110,17 +110,17 @@ failed CSS/font request.
 
 ### Evidence tests
 
-- [ ] T034 [P] [US3] Add failing single-KaTeX-version, CSS rewrite, font closure, license and integrity-manifest tests in `tests/unit/compiler/renderer-assets.test.ts`
-- [ ] T035 [P] [US3] Add failing renderer stylesheet link and renderer-version manifest cases in `tests/integration/compiler/semantic-render.test.ts` and `tests/integration/compiler/version-builder.test.ts`
-- [ ] T036 [P] [US3] Add failing computed typography, protected-token, formula visibility, accessibility, CSS/font request and invalid-formula parity cases in `tests/e2e/publishing-quality.spec.ts`
+- [x] T034 [P] [US3] Add failing single-KaTeX-version, CSS rewrite, font closure, license and integrity-manifest tests in `tests/unit/compiler/renderer-assets.test.ts`
+- [x] T035 [P] [US3] Add failing renderer stylesheet link and renderer-version manifest cases in `tests/integration/compiler/semantic-render.test.ts` and `tests/integration/compiler/version-builder.test.ts`
+- [x] T036 [P] [US3] Add failing computed typography, protected-token, formula visibility, accessibility, CSS/font request and invalid-formula parity cases in `tests/e2e/publishing-quality.spec.ts`
 
 ### Implementation
 
-- [ ] T037 [US3] Pin one KaTeX 0.18.1 dependency graph and add renderer-asset preparation hooks in `package.json` and `pnpm-lock.yaml`
-- [ ] T038 [US3] Implement deterministic woff2-only CSS/font/license/integrity generation in `scripts/prepare-renderer-assets.mjs`
-- [ ] T039 [US3] Link the shared renderer stylesheet from preview fragments and published HTML and use `semantic-html-v3-katex-0.18.1` in `src/compiler/version-builder.ts`, `src/jobs/handlers/build-preview.ts` and `src/compiler/document/manifest.ts`
-- [ ] T040 [US3] Make formula validation and rehype rendering use the same pinned options and preserve a single fallback in `src/compiler/render/math.ts` and `src/compiler/render/document.ts`
-- [ ] T041 [US3] Verify generated renderer assets enter local Astro and Docker production closures without runtime writes in `tests/integration/deployment/production-topology.test.ts` and `docs/operations/deployment.md`
+- [x] T037 [US3] Pin one KaTeX 0.18.1 dependency graph and add renderer-asset preparation hooks in `package.json` and `pnpm-lock.yaml`
+- [x] T038 [US3] Implement deterministic woff2-only CSS/font/license/integrity generation in `scripts/prepare-renderer-assets.mjs`
+- [x] T039 [US3] Link the shared renderer stylesheet from preview fragments and published HTML and use `semantic-html-v3-katex-0.18.1` in `src/compiler/version-builder.ts`, `src/jobs/handlers/build-preview.ts` and `src/compiler/document/manifest.ts`
+- [x] T040 [US3] Make formula validation and rehype rendering use the same pinned options and preserve a single fallback in `src/compiler/render/math.ts` and `src/compiler/render/document.ts`
+- [x] T041 [US3] Verify generated renderer assets enter local Astro and Docker production closures without runtime writes in `tests/integration/deployment/production-topology.test.ts` and `docs/operations/deployment.md`
 
 **Checkpoint**: Formula-heavy pages are visually correct, accessible, self-hosted and tied
 to the immutable renderer identity.
@@ -138,15 +138,15 @@ current version and old directory hashes unchanged.
 
 ### Evidence tests
 
-- [ ] T042 [P] [US4] Add v1 read/build, read-old/write-new `preserve-v1`, new-import `zh-smart-v1`, deterministic migration and v2 round-trip cases in `tests/integration/publication/config-revisions.test.ts`
-- [ ] T043 [P] [US4] Add invalid region, interrupted build, retry and old-current preservation cases in `tests/integration/publication/crash-boundaries.test.ts` and `tests/integration/recovery/reconciliation.test.ts`
-- [ ] T044 [P] [US4] Add immutable old-directory and renderer-identity republish cases in `tests/integration/compiler/reproducibility.test.ts`
+- [x] T042 [P] [US4] Add v1 read/build, read-old/write-new `preserve-v1`, new-import `zh-smart-v1`, deterministic migration and v2 round-trip cases in `tests/integration/publication/config-revisions.test.ts`
+- [x] T043 [P] [US4] Add invalid region, interrupted build, retry and old-current preservation cases in `tests/integration/publication/crash-boundaries.test.ts` and `tests/integration/recovery/reconciliation.test.ts`
+- [x] T044 [P] [US4] Add immutable old-directory and renderer-identity republish cases in `tests/integration/compiler/reproducibility.test.ts`
 
 ### Implementation
 
-- [ ] T045 [US4] Complete read-old/write-new behavior across draft reads, config saves, preview and publication in `src/services/config-revisions.ts`, `src/jobs/handlers/build-preview.ts` and `src/compiler/version-builder.ts`
-- [ ] T046 [US4] Extend version verification and recovery to validate v1/v2 config files without rewriting immutable versions in `src/services/version-verifier.ts` and `src/services/reconciliation.ts`
-- [ ] T047 [US4] Update schema compatibility fixtures, runtime docs and examples in `docs/schemas/`, `tests/fixtures/schemas/` and `docs/operations/deployment.md`
+- [x] T045 [US4] Complete read-old/write-new behavior across draft reads, config saves, preview and publication in `src/services/config-revisions.ts`, `src/jobs/handlers/build-preview.ts` and `src/compiler/version-builder.ts`
+- [x] T046 [US4] Extend version verification and recovery to validate v1/v2 config files without rewriting immutable versions in `src/services/version-verifier.ts` and `src/storage/reconcile.ts`
+- [x] T047 [US4] Update schema compatibility tests, runtime docs and examples in `docs/schemas/`, `tests/contract/book-schema.test.ts` and `docs/operations/deployment.md`
 
 **Checkpoint**: Existing versions remain readable and immutable; all new edits use strict v2
 and normal atomic publication.
@@ -157,13 +157,13 @@ and normal atomic publication.
 
 **Purpose**: Close end-to-end quality, performance, documentation and Spec Kit gates.
 
-- [ ] T048 [P] Add full management acceptance for proposal review, bulk reversal, typography summary, preview parity and republish in `tests/e2e/configure-publish.spec.ts`
-- [ ] T049 [P] Update compiler, preview, publication and response-class evidence in `docs/audits/publishing-quality-release.md`
-- [ ] T050 Run registered real MinerU and synthetic stress validation and record only opaque fixture evidence in `docs/audits/publishing-quality-results.json`
-- [ ] T051 Run reader and reference benchmarks during rebuild and document p95/resource results in `docs/audits/publishing-quality-release.md`
-- [ ] T052 Run `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`, fixing all regressions in affected files
-- [ ] T053 Synchronize product, architecture, schema, operations, quickstart and third-party documentation in `docs/` and `specs/004-publishing-quality/`
-- [ ] T054 Run Spec Kit analyze and converge, resolve every unmitigated CRITICAL finding and mark completed tasks in `specs/004-publishing-quality/tasks.md`
+- [x] T048 [P] Add full management acceptance for proposal review, bulk reversal, typography summary, preview parity and republish in `tests/e2e/configure-publish.spec.ts` and `tests/e2e/publishing-quality.spec.ts`
+- [x] T049 [P] Update compiler, preview, publication and response-class evidence in `docs/audits/publishing-quality-release.md`
+- [x] T050 Run registered real MinerU and synthetic stress validation and record only opaque fixture evidence in `docs/audits/publishing-quality-results.json`
+- [x] T051 Run reader and reference benchmarks during rebuild and document p95/resource results in `docs/audits/publishing-quality-release.md`
+- [x] T052 Run `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`, fixing all regressions in affected files
+- [x] T053 Synchronize product, architecture, schema, operations, quickstart and third-party documentation in `docs/` and `specs/004-publishing-quality/`
+- [x] T054 Run Spec Kit analyze and converge, resolve every unmitigated CRITICAL finding and mark completed tasks in `specs/004-publishing-quality/tasks.md`
 - [x] T055 [P] Add nested full-book TOC, current-branch, breadcrumb, page-outline and no-script navigation evidence in `tests/unit/library/reader-interaction.test.ts` and `tests/integration/compiler/version-builder.test.ts`
 - [x] T056 Generate canonical heading navigation inputs and render native collapsible hierarchy, current location and scroll-aware page outline in `src/compiler/version-builder.ts` and `src/components/reader/`
 - [x] T057 Add desktop/mobile reader navigation acceptance for branch toggling, ordinary links, scroll highlighting and drawer behavior in `tests/e2e/library-reading.spec.ts`
@@ -221,6 +221,10 @@ Foundation → US1 → US2 → US3 → US4 → Release
 
 ## Format validation
 
-All 60 tasks use the required checkbox, sequential task ID, optional parallel marker,
+All 61 tasks use the required checkbox, sequential task ID, optional parallel marker,
 required user-story label inside story phases, an actionable description and explicit file
 path.
+
+## Phase 8: Convergence
+
+- [x] T061 Deterministically minify generated KaTeX CSS while preserving its WOFF2-only asset closure and integrity manifest, with regression evidence in `scripts/prepare-renderer-assets.mjs` and `tests/unit/compiler/renderer-assets.test.ts`, per plan: Formula renderer assets (partial)

@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-25
 
-**Status**: Draft
+**Status**: Complete
 
 **Input**: Preserve authoritative Markdown while identifying printed tables of contents as
 reference-only source regions, use their hierarchy to improve the real body structure,
