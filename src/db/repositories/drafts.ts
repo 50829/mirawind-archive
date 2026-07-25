@@ -320,6 +320,130 @@ export class DraftRepository {
     });
   }
 
+  replaceSourceConfigAndQueuePreview(input: {
+    readonly bookId: number;
+    readonly expectedRevision: number;
+    readonly expectedSourceId: string;
+    readonly expectedYamlSha256: string;
+    readonly importId: string;
+    readonly newSourceId: string;
+    readonly nowMs: number;
+    readonly revision: number;
+    readonly schemaVersion: number;
+    readonly title: string;
+    readonly yamlRelativePath: string;
+    readonly yamlSha256: string;
+  }): {
+    readonly config: ConfigRevisionRecord;
+    readonly jobId: string;
+    readonly preview: DraftPreviewRecord;
+  } {
+    validateSha256(input.expectedYamlSha256);
+    validateSha256(input.yamlSha256);
+    if (input.revision !== input.expectedRevision + 1) {
+      throw new Error("CONFIG_REVISION_SEQUENCE_INVALID");
+    }
+    return withImmediateTransaction(this.database, () => {
+      const current = this.database
+        .prepare(
+          `SELECT books.draft_config_revision AS revision,
+                  books.draft_source_id AS source_id,
+                  config_revisions.yaml_sha256 AS yaml_sha256
+           FROM books
+           JOIN config_revisions
+             ON config_revisions.book_id = books.id
+            AND config_revisions.revision = books.draft_config_revision
+           WHERE books.id = ?`,
+        )
+        .get(input.bookId) as
+        | {
+            revision: number;
+            source_id: string;
+            yaml_sha256: string;
+          }
+        | undefined;
+      if (
+        !current ||
+        current.revision !== input.expectedRevision ||
+        current.source_id !== input.expectedSourceId ||
+        current.yaml_sha256 !== input.expectedYamlSha256
+      ) {
+        throw new Error("CONFIG_REVISION_CONFLICT");
+      }
+      this.database
+        .prepare(
+          `INSERT INTO config_revisions (
+            book_id, revision, source_id, schema_version,
+            yaml_rel_path, yaml_sha256, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.bookId,
+          input.revision,
+          input.newSourceId,
+          input.schemaVersion,
+          input.yamlRelativePath,
+          input.yamlSha256,
+          input.nowMs,
+        );
+      const changed = this.database
+        .prepare(
+          `UPDATE books
+           SET draft_source_id = ?, draft_config_revision = ?,
+               ready_preview_revision = NULL, title_cache = ?, updated_at = ?
+           WHERE id = ? AND draft_config_revision = ? AND draft_source_id = ?`,
+        )
+        .run(
+          input.newSourceId,
+          input.revision,
+          input.title,
+          input.nowMs,
+          input.bookId,
+          input.expectedRevision,
+          input.expectedSourceId,
+        );
+      if (changed.changes !== 1) throw new Error("CONFIG_REVISION_CONFLICT");
+
+      const jobId = createOpaqueId("job");
+      this.database
+        .prepare(
+          `INSERT INTO jobs (
+            id, kind, state, import_id, book_id, version_id,
+            captured_source_id, captured_config_revision,
+            captured_current_version_id, retry_of_job_id, attempt,
+            automatic_retry_count, lease_owner, lease_until, heartbeat_at,
+            phase, progress_json, error_code, error_class, error_detail_json,
+            requested_cancel_at, created_at, started_at, finished_at
+          ) VALUES (
+            ?, 'build_preview', 'queued', ?, ?, NULL, ?, ?, NULL, NULL, 1,
+            0, NULL, NULL, NULL, 'queued', '{}', NULL, NULL, NULL,
+            NULL, ?, NULL, NULL
+          )`,
+        )
+        .run(
+          jobId,
+          input.importId,
+          input.bookId,
+          input.newSourceId,
+          input.revision,
+          input.nowMs,
+        );
+      this.database
+        .prepare(
+          `INSERT INTO draft_previews (
+            book_id, config_revision, source_id, state, preview_rel_path,
+            diagnostics_rel_path, created_by_job_id, completed_at
+          ) VALUES (?, ?, ?, 'building', NULL, NULL, ?, NULL)`,
+        )
+        .run(input.bookId, input.revision, input.newSourceId, jobId);
+      return Object.freeze({
+        config: this.requireConfig(input.bookId, input.revision),
+        jobId,
+        preview: this.requirePreview(input.bookId, input.revision),
+      });
+    });
+  }
+
   findConfig(bookId: number, revision: number): ConfigRevisionRecord | null {
     const row = this.database
       .prepare(

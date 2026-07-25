@@ -6,6 +6,7 @@ import type {
 } from "../../compiler/document/candidate-discovery.js";
 import { createOpaqueId } from "../../domain/ids.js";
 import { withImmediateTransaction } from "../transaction/immediate.js";
+import type { TypographyProfile } from "../../compiler/document/types.js";
 
 export type ImportState =
   | "uploaded"
@@ -64,6 +65,14 @@ export interface ImportCandidateRecord {
   readonly importId: string;
   readonly normalizedPath: string;
   readonly score: number;
+}
+
+export interface ReprocessPreparationEvidence {
+  readonly expectedConfigRevision: number;
+  readonly expectedSourceId: string;
+  readonly kind: "reprocess";
+  readonly originalFileId: string;
+  readonly typographyProfile: TypographyProfile;
 }
 
 function mapImport(row: ImportRow): ImportRecord {
@@ -178,6 +187,7 @@ export class ImportRepository {
     readonly importId: string;
     readonly nextState: "needs_main_confirmation" | "preparing";
     readonly nowMs: number;
+    readonly preparation?: ReprocessPreparationEvidence;
     readonly selectedCandidateId: string | null;
   }): ImportRecord {
     return withImmediateTransaction(this.database, () => {
@@ -205,6 +215,7 @@ export class ImportRepository {
             byteSize: candidate.byteSize,
             companionFiles: candidate.companionFiles,
             firstHeading: candidate.firstHeading,
+            ...(input.preparation ? { preparation: input.preparation } : {}),
             referencedResources: candidate.referencedResources,
           }),
           JSON.stringify(candidate.diagnostics),

@@ -28,9 +28,16 @@ import {
 import { inspectRasterImage } from "../../compiler/resources/images.js";
 import { resolveDocumentResources } from "../../compiler/resources/resolver.js";
 import { DraftRepository } from "../../db/repositories/drafts.js";
-import { ImportRepository } from "../../db/repositories/imports.js";
+import {
+  ImportRepository,
+  type ReprocessPreparationEvidence,
+} from "../../db/repositories/imports.js";
 import { JobRepository, type JobRecord } from "../../db/repositories/jobs.js";
-import { validateBookConfig } from "../../schemas/book-config.js";
+import {
+  migrateBookConfigToCurrent,
+  parseBookConfigYaml,
+  validateBookConfig,
+} from "../../schemas/book-config.js";
 import { atomicWriteFile, resolveContainedPath } from "../../storage/layout.js";
 import type { StorageLayout } from "../../storage/layout.js";
 import {
@@ -80,6 +87,7 @@ export async function prepareDraft(input: {
   readonly selectedCandidatePath: string;
   readonly signal?: AbortSignal;
   readonly stagingDirectory: string;
+  readonly typographyProfile?: TypographyProvenance["profile"];
 }): Promise<PrepareDraftResult> {
   const stagingDirectory = resolve(input.stagingDirectory);
   const extractedRoot = resolve(stagingDirectory, "extracted");
@@ -101,7 +109,7 @@ export async function prepareDraft(input: {
     const markdownBytes = await readFile(markdownPath);
     const typography = preprocessMarkdownTypography(
       markdownBytes,
-      "zh-smart-v1",
+      input.typographyProfile ?? "zh-smart-v1",
     );
     await atomicWriteFile(markdownPath, typography.markdown, { mode: 0o600 });
     const document = parseMarkdownDocument(typography.markdown);
@@ -224,7 +232,9 @@ export function preparedDraftArtifactPath(stagingDirectory: string): string {
 }
 
 function configFor(input: {
+  readonly baseConfig?: Readonly<Record<string, unknown>>;
   readonly bookId: number;
+  readonly revision: number;
   readonly snapshot: SourceSnapshotResult;
   readonly sourceRegions: readonly ConfirmedSourceRegion[];
   readonly structure: readonly ProposedStructureNode[];
@@ -246,12 +256,13 @@ function configFor(input: {
     throw new Error("SOURCE_REGION_SNAPSHOT_MISMATCH");
   }
   return validateBookConfig({
+    ...(input.baseConfig ?? {}),
     book_id: input.bookId,
-    publishing: {
+    publishing: input.baseConfig?.publishing ?? {
       code: { line_numbers: false },
       numbering: { mode: "normalized" },
     },
-    revision: 1,
+    revision: input.revision,
     schema_version: 2,
     source: {
       main_markdown: input.snapshot.source.mainMarkdownPath,
@@ -277,6 +288,38 @@ function configFor(input: {
   });
 }
 
+function reprocessEvidence(
+  imports: ImportRepository,
+  importId: string,
+): ReprocessPreparationEvidence | null {
+  const imported = imports.require(importId);
+  if (!imported.selectedCandidateId) return null;
+  const candidate = imports
+    .candidates(importId)
+    .find((value) => value.id === imported.selectedCandidateId);
+  const value = candidate?.evidence.preparation;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const evidence = value as Record<string, unknown>;
+  if (
+    evidence.kind !== "reprocess" ||
+    !Number.isSafeInteger(evidence.expectedConfigRevision) ||
+    Number(evidence.expectedConfigRevision) < 1 ||
+    typeof evidence.expectedSourceId !== "string" ||
+    typeof evidence.originalFileId !== "string" ||
+    (evidence.typographyProfile !== "preserve-v1" &&
+      evidence.typographyProfile !== "zh-smart-v1")
+  ) {
+    throw new Error("REPROCESS_EVIDENCE_INVALID");
+  }
+  return Object.freeze({
+    expectedConfigRevision: Number(evidence.expectedConfigRevision),
+    expectedSourceId: evidence.expectedSourceId,
+    kind: "reprocess",
+    originalFileId: evidence.originalFileId,
+    typographyProfile: evidence.typographyProfile,
+  });
+}
+
 export async function finalizePreparedDraft(input: {
   readonly artifact: PreparedDraftArtifact;
   readonly database: Database.Database;
@@ -293,6 +336,22 @@ export async function finalizePreparedDraft(input: {
   if (imported.state !== "preparing" || imported.bookId === null) {
     throw new Error("IMPORT_PREPARE_STATE_CONFLICT");
   }
+  const reprocess = reprocessEvidence(imports, imported.id);
+  const currentBook = reprocess ? drafts.requireBook(imported.bookId) : null;
+  const currentConfigRecord =
+    reprocess && currentBook?.draftConfigRevision
+      ? drafts.requireConfig(imported.bookId, currentBook.draftConfigRevision)
+      : null;
+  if (
+    reprocess &&
+    (!currentBook ||
+      !currentConfigRecord ||
+      currentBook.draftSourceId !== reprocess.expectedSourceId ||
+      currentBook.draftConfigRevision !== reprocess.expectedConfigRevision ||
+      input.artifact.typography.profile !== reprocess.typographyProfile)
+  ) {
+    throw new Error("REPROCESS_PRECONDITION_FAILED");
+  }
   const snapshot = await new SourceSnapshotService(
     input.database,
     input.layout,
@@ -306,12 +365,29 @@ export async function finalizePreparedDraft(input: {
     originalArchivePath: input.originalArchivePath,
     originalName: "mineru.zip",
   });
+  const currentConfig =
+    currentConfigRecord === null
+      ? undefined
+      : migrateBookConfigToCurrent(
+          parseBookConfigYaml(
+            await readFile(
+              await resolveContainedPath(
+                input.layout.root,
+                currentConfigRecord.yamlRelativePath,
+              ),
+              "utf8",
+            ),
+          ),
+        );
+  const revision = reprocess ? reprocess.expectedConfigRevision + 1 : 1;
   const config = configFor({
+    ...(currentConfig ? { baseConfig: currentConfig } : {}),
     bookId: imported.bookId,
+    revision,
     snapshot,
     sourceRegions: input.artifact.sourceRegions,
     structure: input.artifact.structure,
-    title: input.artifact.title,
+    title: currentConfig ? String(currentConfig.title) : input.artifact.title,
     typography: input.artifact.typography,
   });
   const yaml = stringify(config, { lineWidth: 0 });
@@ -321,40 +397,61 @@ export async function finalizePreparedDraft(input: {
     String(imported.bookId),
     "draft",
     "configs",
-    "1",
+    String(revision),
     "book.yaml",
   );
   await atomicWriteFile(yamlPath, yaml, { mode: 0o600 });
   await chmod(yamlPath, 0o400);
   const yamlRelativePath = relativePath(input.layout.root, yamlPath);
-  drafts.addConfigRevision({
-    bookId: imported.bookId,
-    nowMs: input.nowMs,
-    revision: 1,
-    schemaVersion: 2,
-    sourceId: snapshot.source.id,
-    title: input.artifact.title,
-    yamlRelativePath,
-    yamlSha256,
-  });
-  const previewJob = jobs.create({
-    bookId: imported.bookId,
-    capturedConfigRevision: 1,
-    capturedSourceId: snapshot.source.id,
-    idempotency: {
-      key: `preview-import-${imported.id}`,
-      operation: "preview.build",
-    },
-    importId: imported.id,
-    kind: "build_preview",
-    nowMs: input.nowMs,
-  });
-  drafts.createPreview({
-    bookId: imported.bookId,
-    configRevision: 1,
-    jobId: previewJob.id,
-    sourceId: snapshot.source.id,
-  });
+  let previewJob: JobRecord;
+  if (reprocess && currentConfigRecord) {
+    const replaced = drafts.replaceSourceConfigAndQueuePreview({
+      bookId: imported.bookId,
+      expectedRevision: reprocess.expectedConfigRevision,
+      expectedSourceId: reprocess.expectedSourceId,
+      expectedYamlSha256: currentConfigRecord.yamlSha256,
+      importId: imported.id,
+      newSourceId: snapshot.source.id,
+      nowMs: input.nowMs,
+      revision,
+      schemaVersion: 2,
+      title: String(config.title),
+      yamlRelativePath,
+      yamlSha256,
+    });
+    const queuedPreview = jobs.get(replaced.jobId);
+    if (!queuedPreview) throw new Error("PREVIEW_JOB_NOT_FOUND");
+    previewJob = queuedPreview;
+  } else {
+    drafts.addConfigRevision({
+      bookId: imported.bookId,
+      nowMs: input.nowMs,
+      revision,
+      schemaVersion: 2,
+      sourceId: snapshot.source.id,
+      title: input.artifact.title,
+      yamlRelativePath,
+      yamlSha256,
+    });
+    previewJob = jobs.create({
+      bookId: imported.bookId,
+      capturedConfigRevision: revision,
+      capturedSourceId: snapshot.source.id,
+      idempotency: {
+        key: `preview-import-${imported.id}`,
+        operation: "preview.build",
+      },
+      importId: imported.id,
+      kind: "build_preview",
+      nowMs: input.nowMs,
+    });
+    drafts.createPreview({
+      bookId: imported.bookId,
+      configRevision: revision,
+      jobId: previewJob.id,
+      sourceId: snapshot.source.id,
+    });
+  }
   imports.attachPreparedBook({
     bookId: imported.bookId,
     importId: imported.id,
@@ -362,7 +459,7 @@ export async function finalizePreparedDraft(input: {
   });
   return Object.freeze({
     bookId: imported.bookId,
-    configRevision: 1,
+    configRevision: revision,
     previewJob,
     snapshot,
   });

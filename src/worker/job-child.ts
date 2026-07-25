@@ -202,6 +202,9 @@ async function execute(message: RunJobMessage): Promise<void> {
         selectedCandidatePath: message.input.selectedCandidateRelativePath,
         signal: controller.signal,
         stagingDirectory,
+        ...(message.input.typographyProfile
+          ? { typographyProfile: message.input.typographyProfile }
+          : {}),
       });
       send({
         jobId: message.input.jobId,

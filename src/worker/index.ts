@@ -75,6 +75,19 @@ function frozenInput(
         .candidates(imported.id)
         .find((candidate) => candidate.id === imported.selectedCandidateId)
     : null;
+  const preparation =
+    selectedCandidate?.evidence.preparation &&
+    typeof selectedCandidate.evidence.preparation === "object"
+      ? (selectedCandidate.evidence.preparation as Readonly<
+          Record<string, unknown>
+        >)
+      : null;
+  const typographyProfile =
+    preparation?.kind === "reprocess" &&
+    (preparation.typographyProfile === "preserve-v1" ||
+      preparation.typographyProfile === "zh-smart-v1")
+      ? preparation.typographyProfile
+      : null;
   const source = job.capturedSourceId
     ? sources.requireSnapshot(job.capturedSourceId)
     : null;
@@ -97,6 +110,7 @@ function frozenInput(
     selectedCandidateRelativePath: selectedCandidate?.normalizedPath ?? null,
     sourceRootRelativePath: source?.sourceRootRelativePath ?? null,
     stagingRelativePath: `staging/${job.id}`,
+    typographyProfile,
     versionId: job.versionId,
   });
 }

@@ -84,6 +84,40 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
     expect(at(operation, "responses")).toHaveProperty("202");
   });
 
+  it("reprocesses retained source into a new preconditioned draft revision", async () => {
+    const document = await contract();
+    const operation = at(
+      document,
+      "paths",
+      "/api/manage/books/{bookId}/reprocess",
+      "post",
+    );
+    const body = at(
+      operation,
+      "requestBody",
+      "content",
+      "application/json",
+      "schema",
+    );
+
+    expect(operation.operationId).toBe("reprocessDraftSource");
+    expect(body).toMatchObject({
+      additionalProperties: false,
+      required: [
+        "expected_config_revision",
+        "expected_source_id",
+        "original_file_id",
+        "profile",
+      ],
+    });
+    expect(at(body, "properties", "profile").enum).toEqual([
+      "preserve-v1",
+      "zh-smart-v1",
+    ]);
+    expect(at(operation, "responses")).toHaveProperty("202");
+    expect(at(operation, "responses")).toHaveProperty("409");
+  });
+
   it("allows only an immediate transition to draft or private", async () => {
     const document = await contract();
     const operation = at(
@@ -115,6 +149,7 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
     await Promise.all(
       [
         "src/pages/api/manage/books/[bookId]/publish.ts",
+        "src/pages/api/manage/books/[bookId]/reprocess.ts",
         "src/pages/api/manage/books/[bookId]/visibility.ts",
       ].map((path) => access(`${projectRoot}${path}`)),
     );

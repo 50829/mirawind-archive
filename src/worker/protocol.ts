@@ -1,5 +1,6 @@
 import { isOpaqueId } from "../domain/ids.js";
 import { jobKinds, type JobKind } from "../jobs/state-machine.js";
+import type { TypographyProfile } from "../compiler/document/types.js";
 
 export const jobChildProtocolVersion = 1;
 
@@ -18,6 +19,7 @@ export interface FrozenJobInput {
   readonly selectedCandidateRelativePath: string | null;
   readonly sourceRootRelativePath: string | null;
   readonly stagingRelativePath: string;
+  readonly typographyProfile?: TypographyProfile | null;
   readonly versionId: string | null;
 }
 
@@ -69,6 +71,17 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+function isNullableTypographyProfile(
+  value: unknown,
+): value is TypographyProfile | null | undefined {
+  return (
+    value === undefined ||
+    value === null ||
+    value === "preserve-v1" ||
+    value === "zh-smart-v1"
+  );
+}
+
 function isNullablePositiveInteger(value: unknown): value is number | null {
   return (
     value === null ||
@@ -115,6 +128,7 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
     isNullableString(input.versionId) &&
     isNullableString(input.selectedCandidateRelativePath) &&
     isNullableString(input.sourceRootRelativePath) &&
+    isNullableTypographyProfile(input.typographyProfile) &&
     input.stagingRelativePath === `staging/${input.jobId}` &&
     (input.kind === "analyze_import" || input.kind === "prepare_draft"
       ? input.importId !== null &&
@@ -122,7 +136,11 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
           `tmp/uploads/${input.importId}/original.zip`
       : input.importUploadRelativePath === null) &&
     (input.kind === "prepare_draft"
-      ? input.bookId !== null && input.selectedCandidateRelativePath !== null
+      ? input.bookId !== null &&
+        input.selectedCandidateRelativePath !== null &&
+        (input.typographyProfile == null ||
+          (input.capturedSourceId !== null &&
+            input.capturedConfigRevision !== null))
       : input.selectedCandidateRelativePath === null) &&
     (input.kind === "build_preview" || input.kind === "build_publish"
       ? input.bookId !== null &&
@@ -130,8 +148,11 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
         input.capturedSourceId !== null &&
         input.sourceRootRelativePath !== null &&
         input.configYamlRelativePath !== null
-      : input.sourceRootRelativePath === null &&
-        input.configYamlRelativePath === null)
+      : input.kind === "prepare_draft" && input.typographyProfile != null
+        ? input.sourceRootRelativePath !== null &&
+          input.configYamlRelativePath !== null
+        : input.sourceRootRelativePath === null &&
+          input.configYamlRelativePath === null)
   );
 }
 
