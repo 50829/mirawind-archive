@@ -1,8 +1,9 @@
 # Mirawind M1 + M2a schemas
 
-本目录冻结 M1 的三个独立版本化格式：
+本目录冻结 M1/M1.1 的三个独立版本化格式：
 
-- `book.schema.json`：长期保存、可导入导出的 `book.yaml` 权威配置
+- `book.v1.schema.json`：冻结的 M1 `book.yaml` v1
+- `book.schema.json`：当前 `book.yaml` v2，增加源预处理来源记录和源区域
 - `document-manifest.schema.json`：每个不可变发布版本的派生 manifest
 - `version.schema.json`：内部不可变版本的完整性和文件哈希标记
 
@@ -12,7 +13,7 @@
 
 ## 版本与未知字段
 
-- M1 的三个 `schema_version` 均从整数 `1` 开始，但彼此独立。
+- `book.yaml` 支持严格 v1/v2；manifest 与 version marker 仍为独立 v1。
 - schema 版本只在格式语义变化时增加，不随书籍内容修改增加。
 - `book.yaml.revision` 在每次接受的出版配置修改后单调递增。
 - 已知版本中的未知字段一律拒绝，不静默忽略。
@@ -29,6 +30,8 @@
 
 - 可移植元数据
 - 主 Markdown 和登记原文件描述
+- 已持久化源预处理的 profile、输入/输出摘要与有界计数
+- 与规范化主 Markdown 摘要和 UTF-8 字节范围绑定的源区域
 - 目录、标题、层级、角色、拆页和编号配置
 
 `book.yaml` 不得包含：
@@ -65,5 +68,7 @@ M2a 的 SQLite schema 6 新增 `book_version_presentations`。它不是第四个
 
 ## 示例
 
-`examples/book.v1.yaml` 展示最小但完整的 M1 配置。示例 ID 和哈希只用于
-说明格式，不得作为生产默认值。
+`examples/book.v1.yaml` 展示冻结的 M1 配置；`examples/book.v2.yaml` 展示
+M1.1 新导入配置。v1 只读迁移为 v2 时加入空 `source_regions` 和
+`preserve-v1` 来源记录；新导入默认在接纳正文前应用 `zh-smart-v1`。示例 ID
+和哈希只用于说明格式，不得作为生产默认值。

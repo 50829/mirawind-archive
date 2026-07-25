@@ -8,6 +8,7 @@ const destinations = [
   resolve(repositoryRoot, "dist", "docs", "schemas"),
 ];
 const schemaNames = [
+  "book.v1.schema.json",
   "book.schema.json",
   "document-manifest.schema.json",
   "version.schema.json",

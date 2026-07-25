@@ -1,6 +1,7 @@
 import { SafeApplicationError } from "../domain/errors.js";
 
-export const supportedBookSchemaVersions = Object.freeze([1] as const);
+export const supportedBookSchemaVersions = Object.freeze([1, 2] as const);
+export const currentBookSchemaVersion = 2 as const;
 export const supportedDocumentManifestSchemaVersions = Object.freeze([
   1,
 ] as const);
@@ -12,7 +13,8 @@ export function requireSupportedBookSchemaVersion(
   value: unknown,
 ): SupportedBookSchemaVersion {
   if (value === 1) return 1;
-  if (Number.isSafeInteger(value) && (value as number) > 1) {
+  if (value === 2) return 2;
+  if (Number.isSafeInteger(value) && (value as number) > 2) {
     throw new SafeApplicationError(
       "BOOK_SCHEMA_VERSION_UNSUPPORTED",
       "This book configuration uses a newer unsupported schema version.",

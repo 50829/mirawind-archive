@@ -2,8 +2,12 @@ import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import { isAlias, isMap, isPair, isSeq, parseDocument } from "yaml";
 
 import bookSchema from "../../docs/schemas/book.schema.json" with { type: "json" };
+import bookV1Schema from "../../docs/schemas/book.v1.schema.json" with { type: "json" };
 import { SafeApplicationError } from "../domain/errors.js";
-import { requireSupportedBookSchemaVersion } from "./versioning.js";
+import {
+  currentBookSchemaVersion,
+  requireSupportedBookSchemaVersion,
+} from "./versioning.js";
 
 export interface BookConfigDiagnostic {
   readonly instancePath: string;
@@ -40,7 +44,9 @@ ajv.addKeyword({
   schemaType: "array",
   valid: true,
 });
-const validateSchema = ajv.compile(bookSchema);
+ajv.addSchema(bookV1Schema);
+const validateVersionOne = ajv.compile(bookV1Schema);
+const validateVersionTwo = ajv.compile(bookSchema);
 
 function freezeDeep<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
@@ -141,7 +147,9 @@ export function validateBookConfig(
   input: unknown,
 ): Readonly<Record<string, unknown>> {
   const config = objectRecord(input);
-  requireSupportedBookSchemaVersion(config.schema_version);
+  const version = requireSupportedBookSchemaVersion(config.schema_version);
+  const validateSchema =
+    version === 1 ? validateVersionOne : validateVersionTwo;
   if (!validateSchema(config)) {
     throw new BookConfigValidationError(
       "BOOK_CONFIG_INVALID",
@@ -149,7 +157,133 @@ export function validateBookConfig(
       diagnostics(validateSchema.errors),
     );
   }
+  if (version === 2) validateVersionTwoSemantics(config);
   return freezeDeep(config);
+}
+
+interface ByteRangeRecord {
+  readonly end_byte: number;
+  readonly sha256: string;
+  readonly start_byte: number;
+}
+
+function semanticFailure(instancePath: string): never {
+  throw new BookConfigValidationError(
+    "BOOK_CONFIG_INVALID",
+    "The book configuration violates a semantic constraint.",
+    [Object.freeze({ instancePath, keyword: "x-semantic-validations" })],
+  );
+}
+
+function requireIncreasingRange(
+  range: ByteRangeRecord,
+  instancePath: string,
+): void {
+  if (range.start_byte >= range.end_byte) semanticFailure(instancePath);
+}
+
+function validateVersionTwoSemantics(config: Record<string, unknown>): void {
+  const source = config.source as {
+    readonly main_markdown: string;
+    readonly main_markdown_sha256: string;
+    readonly preprocessing: {
+      readonly typography: {
+        readonly output_sha256: string;
+      };
+    };
+  };
+  if (
+    source.preprocessing.typography.output_sha256 !==
+    source.main_markdown_sha256
+  ) {
+    semanticFailure("/source/preprocessing/typography/output_sha256");
+  }
+
+  const structure = config.structure as readonly {
+    readonly block_id: string;
+  }[];
+  const structureIndexes = new Map(
+    structure.map((node, index) => [node.block_id, index]),
+  );
+  const seenTargets = new Set<string>();
+  const regions = config.source_regions as readonly {
+    readonly entries: readonly {
+      readonly body_heading_block_id?: string;
+      readonly range: ByteRangeRecord;
+    }[];
+    readonly range: ByteRangeRecord;
+    readonly source_path: string;
+    readonly source_sha256: string;
+  }[];
+  let previousRegionEnd = -1;
+  let totalEntries = 0;
+  for (const [regionIndex, region] of regions.entries()) {
+    const regionPath = `/source_regions/${regionIndex}`;
+    requireIncreasingRange(region.range, `${regionPath}/range`);
+    if (
+      region.range.start_byte < previousRegionEnd ||
+      region.source_path !== source.main_markdown ||
+      region.source_sha256 !== source.main_markdown_sha256
+    ) {
+      semanticFailure(regionPath);
+    }
+    previousRegionEnd = region.range.end_byte;
+    let previousEntryEnd = region.range.start_byte;
+    let previousTargetIndex = -1;
+    totalEntries += region.entries.length;
+    if (totalEntries > 20_000) semanticFailure("/source_regions");
+    for (const [entryIndex, entry] of region.entries.entries()) {
+      const entryPath = `${regionPath}/entries/${entryIndex}`;
+      requireIncreasingRange(entry.range, `${entryPath}/range`);
+      if (
+        entry.range.start_byte < previousEntryEnd ||
+        entry.range.start_byte < region.range.start_byte ||
+        entry.range.end_byte > region.range.end_byte
+      ) {
+        semanticFailure(`${entryPath}/range`);
+      }
+      previousEntryEnd = entry.range.end_byte;
+      if (entry.body_heading_block_id) {
+        const targetIndex = structureIndexes.get(entry.body_heading_block_id);
+        if (
+          targetIndex === undefined ||
+          targetIndex <= previousTargetIndex ||
+          seenTargets.has(entry.body_heading_block_id)
+        ) {
+          semanticFailure(`${entryPath}/body_heading_block_id`);
+        }
+        previousTargetIndex = targetIndex;
+        seenTargets.add(entry.body_heading_block_id);
+      }
+    }
+  }
+}
+
+export function migrateBookConfigToCurrent(
+  input: unknown,
+): Readonly<Record<string, unknown>> {
+  const config = validateBookConfig(input);
+  if (config.schema_version === currentBookSchemaVersion) return config;
+  const source = config.source as Readonly<Record<string, unknown>>;
+  const digest = String(source.main_markdown_sha256);
+  return validateBookConfig({
+    ...config,
+    schema_version: currentBookSchemaVersion,
+    source: {
+      ...source,
+      preprocessing: {
+        typography: {
+          input_sha256: digest,
+          output_sha256: digest,
+          profile: "preserve-v1",
+          protected_nodes: 0,
+          punctuation_converted: 0,
+          spaces_normalized: 0,
+        },
+      },
+    },
+    source_regions: [],
+  });
 }
 
 export function parseBookConfigYaml(

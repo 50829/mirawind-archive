@@ -3,7 +3,11 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { parseBookConfigYaml, validateBookConfig } from "@/schemas/book-config";
+import {
+  migrateBookConfigToCurrent,
+  parseBookConfigYaml,
+  validateBookConfig,
+} from "@/schemas/book-config";
 
 const examplePath = fileURLToPath(
   new URL("../../docs/schemas/examples/book.v1.yaml", import.meta.url),
@@ -31,6 +35,30 @@ function minimalConfig(): Record<string, unknown> {
     },
     structure: [],
     title: "Book",
+  };
+}
+
+function minimalVersionTwoConfig(): Record<string, unknown> {
+  const digest = "a".repeat(64);
+  return {
+    ...minimalConfig(),
+    schema_version: 2,
+    source: {
+      main_markdown: "source/full.md",
+      main_markdown_sha256: digest,
+      original_files: [],
+      preprocessing: {
+        typography: {
+          input_sha256: digest,
+          output_sha256: digest,
+          profile: "preserve-v1",
+          protected_nodes: 0,
+          punctuation_converted: 0,
+          spaces_normalized: 0,
+        },
+      },
+    },
+    source_regions: [],
   };
 }
 
@@ -112,15 +140,110 @@ structure: []`,
     }
   });
 
-  it("dispatches unsupported newer and invalid versions explicitly", () => {
+  it("accepts strict version two and dispatches unsupported versions", () => {
+    expect(validateBookConfig(minimalVersionTwoConfig())).toMatchObject({
+      schema_version: 2,
+      source_regions: [],
+    });
     expect(() =>
-      validateBookConfig({ ...minimalConfig(), schema_version: 2 }),
+      validateBookConfig({ ...minimalConfig(), schema_version: 3 }),
     ).toThrow(
       expect.objectContaining({ code: "BOOK_SCHEMA_VERSION_UNSUPPORTED" }),
     );
     expect(() =>
       validateBookConfig({ ...minimalConfig(), schema_version: "1" }),
     ).toThrow(expect.objectContaining({ code: "BOOK_SCHEMA_VERSION_INVALID" }));
+  });
+
+  it("migrates version one to deterministic preserve-v1 provenance", () => {
+    const source = minimalConfig();
+    const migrated = migrateBookConfigToCurrent(source);
+    expect(migrated).toEqual({
+      ...source,
+      schema_version: 2,
+      source: {
+        ...(source.source as Record<string, unknown>),
+        preprocessing: {
+          typography: {
+            input_sha256: "a".repeat(64),
+            output_sha256: "a".repeat(64),
+            profile: "preserve-v1",
+            protected_nodes: 0,
+            punctuation_converted: 0,
+            spaces_normalized: 0,
+          },
+        },
+      },
+      source_regions: [],
+    });
+    expect(migrateBookConfigToCurrent(migrated)).toEqual(migrated);
+    expect(source).toEqual(minimalConfig());
+  });
+
+  it("rejects invalid preprocessing provenance and range bounds", () => {
+    const config = minimalVersionTwoConfig();
+    const source = config.source as Record<string, unknown>;
+    expect(() =>
+      validateBookConfig({
+        ...config,
+        source: {
+          ...source,
+          preprocessing: {
+            typography: {
+              ...(
+                source.preprocessing as {
+                  typography: Record<string, unknown>;
+                }
+              ).typography,
+              profile: "smart",
+            },
+          },
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: "BOOK_CONFIG_INVALID" }));
+
+    expect(() =>
+      validateBookConfig({
+        ...config,
+        source_regions: [
+          {
+            disposition: "reference_only",
+            entries: [],
+            kind: "printed_toc",
+            range: {
+              end_byte: 10,
+              sha256: "b".repeat(64),
+              start_byte: 10,
+            },
+            region_id: "region_abcdefghijklmnop",
+            source_path: "source/full.md",
+            source_sha256: "a".repeat(64),
+          },
+        ],
+      }),
+    ).toThrow(expect.objectContaining({ code: "BOOK_CONFIG_INVALID" }));
+  });
+
+  it("rejects provenance whose output digest differs from main Markdown", () => {
+    const config = minimalVersionTwoConfig();
+    const source = config.source as Record<string, unknown>;
+    const preprocessing = source.preprocessing as {
+      typography: Record<string, unknown>;
+    };
+    expect(() =>
+      validateBookConfig({
+        ...config,
+        source: {
+          ...source,
+          preprocessing: {
+            typography: {
+              ...preprocessing.typography,
+              output_sha256: "b".repeat(64),
+            },
+          },
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: "BOOK_CONFIG_INVALID" }));
   });
 
   it("does not coerce, default, remove or otherwise mutate rejected input", () => {
