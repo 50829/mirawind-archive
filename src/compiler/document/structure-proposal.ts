@@ -1,4 +1,9 @@
-import type { NormalizedDocument, NormalizedHeading } from "./types.js";
+import { inferPrintedReferenceLevel } from "./printed-toc.js";
+import type {
+  ConfirmedSourceRegion,
+  NormalizedDocument,
+  NormalizedHeading,
+} from "./types.js";
 
 export type ContentRole = "appendix" | "backmatter" | "body" | "frontmatter";
 
@@ -58,8 +63,26 @@ function continuousLevels(
  */
 export function proposeDocumentStructure(
   document: NormalizedDocument,
+  options: {
+    readonly sourceRegions?: readonly ConfirmedSourceRegion[];
+  } = {},
 ): StructureProposal {
-  const levels = continuousLevels(document.headings);
+  const printedLevels = new Map(
+    (options.sourceRegions ?? []).flatMap((region) =>
+      region.entries.flatMap((entry) =>
+        entry.body_heading_block_id
+          ? [[entry.body_heading_block_id, entry.reference_level] as const]
+          : [],
+      ),
+    ),
+  );
+  const ordinaryLevels = continuousLevels(document.headings);
+  const levels = document.headings.map((heading, index) => {
+    const printed = printedLevels.get(heading.blockId);
+    if (printed) return printed;
+    const numbered = inferPrintedReferenceLevel(heading.sourceTitle);
+    return numbered ?? ordinaryLevels[index] ?? 1;
+  });
   const hasSecondLevelSections = levels.includes(2);
   const nodes = document.headings.map((heading, index) => {
     const displayLevel = levels[index] ?? 1;

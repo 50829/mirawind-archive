@@ -77,6 +77,7 @@ function diagnostic(
 }
 
 export function validateDocumentConfig(input: {
+  readonly activeDocument?: NormalizedDocument;
   readonly config: unknown;
   readonly document: NormalizedDocument;
 }): ValidatedDocumentConfig {
@@ -98,6 +99,11 @@ export function validateDocumentConfig(input: {
   );
   const aliases = new Set<string>();
   const headings: ValidatedConfiguredHeading[] = [];
+  const activeHeadingIds = new Set(
+    (input.activeDocument ?? input.document).headings.map(
+      (heading) => heading.blockId,
+    ),
+  );
   let previousLevel = 0;
   let inheritedRole: ContentRole = "body";
 
@@ -115,9 +121,12 @@ export function validateDocumentConfig(input: {
         diagnostic(code, configured.block_id, `structure/${index}/block_id`),
       );
     }
+    const active = activeHeadingIds.has(configured.block_id);
     if (
-      (index === 0 && configured.display_level !== 1) ||
-      (index > 0 && configured.display_level > previousLevel + 1)
+      active &&
+      ((headings.length === 0 && configured.display_level !== 1) ||
+        (headings.length > 0 &&
+          configured.display_level > previousLevel + 1))
     ) {
       diagnostics.push(
         diagnostic(
@@ -127,11 +136,15 @@ export function validateDocumentConfig(input: {
         ),
       );
     }
-    previousLevel = configured.display_level;
+    if (active) previousLevel = configured.display_level;
 
-    if (configured.display_level === 1) {
+    if (active && configured.display_level === 1) {
       inheritedRole = configured.role ?? "body";
-    } else if (configured.role !== undefined) {
+    } else if (
+      active &&
+      configured.display_level !== 1 &&
+      configured.role !== undefined
+    ) {
       diagnostics.push(
         diagnostic(
           "ROLE_REQUIRES_TOP_LEVEL",
@@ -140,7 +153,7 @@ export function validateDocumentConfig(input: {
         ),
       );
     }
-    if (configured.alias) {
+    if (active && configured.alias) {
       if (!configured.starts_page) {
         diagnostics.push(
           diagnostic(
@@ -161,7 +174,7 @@ export function validateDocumentConfig(input: {
       }
       aliases.add(configured.alias);
     }
-    if (source) {
+    if (source && active) {
       headings.push(
         Object.freeze({
           ...(configured.alias ? { alias: configured.alias } : {}),
