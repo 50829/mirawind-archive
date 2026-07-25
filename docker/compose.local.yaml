@@ -1,0 +1,26 @@
+services:
+  web:
+    environment:
+      HOST: 0.0.0.0
+      MIRAWIND_ALLOWED_HOSTS: localhost,127.0.0.1
+      MIRAWIND_AUTH_SECRET: ${MIRAWIND_AUTH_SECRET}
+      MIRAWIND_DATA_DIR: /var/lib/mirawind
+      MIRAWIND_PASSKEY_RP_ID: localhost
+      MIRAWIND_PUBLIC_ORIGIN: http://localhost:4321
+      NODE_ENV: development
+      PORT: 4321
+    ports:
+      - "127.0.0.1:4321:4321"
+
+  worker:
+    environment:
+      MIRAWIND_ALLOWED_HOSTS: localhost,127.0.0.1
+      MIRAWIND_AUTH_SECRET: ${MIRAWIND_AUTH_SECRET}
+      MIRAWIND_DATA_DIR: /var/lib/mirawind
+      MIRAWIND_PASSKEY_RP_ID: localhost
+      MIRAWIND_PUBLIC_ORIGIN: http://localhost:4321
+      NODE_ENV: development
+
+  caddy:
+    profiles:
+      - production-proxy

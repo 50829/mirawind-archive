@@ -1,12 +1,12 @@
 # M1 documentation and provenance consistency report
 
 - Reviewed: 2026-07-25
-- Scope: T147, T151 and T152
+- Scope: T147, T151 and T152, plus the D-098 operational follow-up
 - Result: **PASSED**
 
 ## Authority consistency
 
-The constitution, D-001 through D-097, the product specification, feature specification,
+The constitution, D-001 through D-098, the product specification, feature specifications,
 plan, contracts, tasks, architecture, operations guidance and implementation were compared.
 No unresolved product-decision conflict was found.
 
@@ -25,6 +25,10 @@ and implemented behavior:
   compatibility and 500-page synthetic stress combination;
 - the feature specification and plan now report the implemented-and-verified lifecycle
   state instead of a future planning or handoff state.
+- D-098 is synchronized into the product specification, architecture, local-preview
+  feature, launcher contract, operations guidance and executable container contract. The
+  local override retains separate Web/worker processes and does not alter production
+  Compose or Caddy behavior.
 
 These are documentation corrections, not changes to approved behavior. No implementation
 continued across an unresolved authority conflict.

@@ -13,6 +13,32 @@ SQLite WAL 和本地持久化存储。不要横向扩容 Web/worker，也不要�
 开发环境需要 Node.js 24、pnpm 11.9 和带 FTS5 trigram 的 SQLite（项目使用
 `better-sqlite3` 自带版本）。
 
+### 本地 Docker 一键启动
+
+只安装 Docker Engine 和 Compose plugin 即可：
+
+```bash
+./docker/local.sh
+```
+
+第一次运行会创建权限为 `0600` 的本地 `.env`、构建镜像、初始化 Docker
+volume、执行迁移，并在当前终端安全询问管理员邮箱、显示名称和备用密码。以后
+再次运行同一命令会保留管理员、图书和已发布版本并直接启动。
+
+打开 <http://localhost:4321/login> 登录。常用管理命令：
+
+```bash
+./docker/local.sh status
+./docker/local.sh logs
+./docker/local.sh stop
+```
+
+本地启动仍保持一个 Web 进程和一个独立 worker 进程，只是由一个 Compose
+项目统一管理；浏览器只能通过回环地址访问。生产部署继续使用下方经过 Caddy
+保护的 HTTPS 拓扑。
+
+### 本机 Node.js 启动
+
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
@@ -71,6 +97,7 @@ pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"
 - [运行配置](docs/operations/configuration.md)
 - [部署与升级](docs/operations/deployment.md)
 - [恢复与事故处理](docs/operations/recovery.md)
+- [本地 Docker 预览规格](specs/002-local-docker-preview/spec.md)
 - [M1 Feature Spec](specs/001-mineru-public-publishing/spec.md)
 - [M1 验收流程](specs/001-mineru-public-publishing/quickstart.md)
 

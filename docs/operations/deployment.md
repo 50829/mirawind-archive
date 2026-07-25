@@ -5,6 +5,27 @@ worker, one SQLite WAL database, one local persistent data root and Caddy. Do no
 `docker compose up --scale`, run a second worker, or place the SQLite volume on a network
 filesystem.
 
+## Local Docker preview
+
+For a localhost-only preview, run:
+
+```bash
+./docker/local.sh
+```
+
+The launcher uses `docker/compose.local.yaml` on top of the production Compose definition.
+It binds Web only to `127.0.0.1:4321`, keeps Web and worker as separate non-root processes,
+uses a dedicated `mirawind-local` named volume and disables Caddy for the local HTTP
+development origin. On first use it creates a private random authentication secret, runs
+the ownership initializer and migrations, and invokes the offline administrator bootstrap
+interactively. It never accepts the fallback password from an environment variable or
+argument. Secret generation runs in the repository-pinned Node image, so the host does not
+need Node.js or OpenSSL.
+
+Use `./docker/local.sh status`, `./docker/local.sh logs`, and
+`./docker/local.sh stop` for normal local operation. The stop action preserves the volume.
+This local override is not a production deployment and must not be exposed beyond the host.
+
 ## 1. Prerequisites
 
 - x86-64 or arm64 Linux with adequate local SSD space;

@@ -4,7 +4,7 @@
 - Date: 2026-07-25
 - Scope: M0 foundations required by the first MinerU vertical slice, plus M1 import,
   preview, compile, search, publish, read, and original ZIP download
-- Governing decisions: D-019～D-025, D-042～D-097
+- Governing decisions: D-019～D-025, D-042～D-098
 
 ## 1. System boundary
 
@@ -30,6 +30,12 @@ surfaces.
 
 M1 does not introduce Redis, an external queue, object storage, a separate API service, a
 second database, or multiple Web/worker instances.
+
+For local preview, D-098 adds a repository launcher and a Compose override, not a new
+runtime topology. `./docker/local.sh` manages the same separate Web and worker processes as
+one `mirawind-local` Compose project, publishes Web only on `127.0.0.1:4321`, and omits
+Caddy for localhost HTTP. The existing production Compose and HTTPS proxy remain the
+authoritative deployment boundary.
 
 ## 2. Authority and derived data
 
