@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { PublishPanel } from "./PublishPanel";
 import { StructureEditor } from "./StructureEditor";
+import { TypographyReprocessPanel } from "./TypographyReprocessPanel";
 
 interface PreviewHeading {
   readonly block_id: string;
@@ -64,6 +65,7 @@ interface DraftView {
     readonly typography?: TypographySummary;
   } | null;
   readonly preview_state: "building" | "failed" | "ready";
+  readonly source_id: string;
 }
 
 const roleLabels: Readonly<Record<PreviewHeading["role"], string>> = {
@@ -113,6 +115,18 @@ export function StructurePreview(props: { readonly bookId: number }) {
   }
 
   const preview = draft.preview;
+  const originalFiles = (
+    draft.config.source as
+      | {
+          readonly original_files?: readonly {
+            readonly id?: string;
+          }[];
+        }
+      | undefined
+  )?.original_files;
+  const originalFileId = originalFiles?.find(
+    (file) => typeof file.id === "string",
+  )?.id;
   const pageId = preview?.pages.some((page) => page.page_id === selectedPage)
     ? selectedPage
     : (preview?.pages.at(0)?.page_id ?? null);
@@ -192,6 +206,16 @@ export function StructurePreview(props: { readonly bookId: number }) {
                 {preview.typography.protected_nodes}
               </p>
             </section>
+          )}
+          {preview?.typography && originalFileId && (
+            <TypographyReprocessPanel
+              bookId={draft.book_id}
+              configRevision={draft.config_revision}
+              currentProfile={preview.typography.profile}
+              onSourceChanged={refresh}
+              originalFileId={originalFileId}
+              sourceId={draft.source_id}
+            />
           )}
           {preview && preview.source_regions.length > 0 && (
             <section aria-labelledby="source-region-title">
