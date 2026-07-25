@@ -250,6 +250,21 @@ join Astro's verified static build closure without adding an application request
   `aria-current="location"` state. It does not parse source or infer hierarchy, and the
   complete navigation remains ordinary server-generated links when script execution fails.
 
+### Global Tailwind styling
+
+- Install pinned Tailwind CSS v4 with the official Vite plugin and import one global theme
+  entry from every Astro surface. Product colors use only the official `stone`, `emerald`,
+  `amber`, `red`, `white` and `black` tokens selected by D-106.
+- Replace page and reader color literals with Tailwind utilities or `--color-*` references.
+  Keep complex semantic selectors only where generated Markdown, dialog or reader DOM makes
+  direct utility placement impractical; do not create a second semantic color namespace.
+- Compile the standalone reader stylesheet from the same Tailwind source into a stable,
+  versioned public `/_astro/styles/` asset before dev/build. Immutable reader pages link that
+  asset and keep document-specific Shiki CSS separate.
+- Add a deterministic source scanner to normal lint that rejects literal product colors and
+  non-Tailwind color variables while excluding hostile/imported fixtures and generated
+  KaTeX/Shiki assets.
+
 ## Post-Design Constitution Check
 
 All six gates remain passed. The design adds one portable schema version and one generated

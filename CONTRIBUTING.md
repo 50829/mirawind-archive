@@ -30,6 +30,18 @@ Use `!` or a `BREAKING CHANGE:` footer for an intentional breaking change. Keep 
 reviewable logical change per commit. Commit messages do not replace the decision log or
 specification workflow.
 
+## UI styling
+
+Use Tailwind CSS utilities and the shared Tailwind v4 theme. Product UI colors come only
+from the approved official palette in D-106: `stone` for neutral surfaces, `emerald` for
+primary interaction, `amber` for focus or caution, and `red` for danger, plus Tailwind
+`white` and `black`. Do not add direct hex, RGB, HSL or OKLCH literals, page-local palettes,
+or another custom color namespace. The style-token check in `pnpm lint` enforces this rule.
+
+Complex generated-document selectors may remain in the global or reader stylesheet, but
+their colors must reference Tailwind `--color-*` variables. Third-party renderer output and
+import fixtures are not product UI and remain byte-preserving exceptions.
+
 The repository uses `.githooks/commit-msg` for local validation and CI validates every
 pull-request commit plus the final pull-request title. After cloning, enable the managed
 hooks with:

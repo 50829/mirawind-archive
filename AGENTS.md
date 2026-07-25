@@ -38,6 +38,10 @@ authority artifact. Do not silently choose one.
 
 ## Implementation rules
 
+- Use Tailwind CSS utilities and the global Tailwind theme for product UI. Product source
+  must not add literal hex/RGB/HSL/OKLCH colors or parallel custom color namespaces; use the
+  approved Tailwind palette tokens from D-106. Generated third-party renderer assets and
+  imported fixtures are excluded.
 - Reuse maintained libraries for authentication, archive parsing, Markdown, sanitization,
   KaTeX, highlighting, image metadata, and cryptography.
 - Preserve user changes and unrelated work. Avoid destructive migrations and in-place

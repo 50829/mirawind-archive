@@ -871,3 +871,25 @@
 - 原因：纸质目录修复只有真正进入阅读导航才形成闭环。扁平分页列表无法表达教材层级，
   请求时重新分析正文又违反 D-016、D-050 和宪法的请求路径边界；发布期生成加渐进增强
   同时满足结构一致性、性能、无脚本和可访问性要求。
+
+## D-106：站点界面统一使用 Tailwind CSS 主题与官方色阶
+
+- 状态：Accepted
+- 工具链：站点使用 Tailwind CSS v4 与官方 Vite 插件。全局样式入口负责 Tailwind
+  theme、preflight 和 utilities；Astro 页面与 React 组件不得各自定义另一套颜色系统。
+  阅读器的不可变独立 HTML 使用同一输入通过 Tailwind CLI 生成固定版本路径的 CSS，
+  仍由 build/dev 前置步骤产生，不在 reader 请求中编译样式。
+- 颜色规范：业务源码只允许 Tailwind 官方 palette 的 `--color-*` token、对应 utility
+  class 及 `transparent`、`currentColor`。界面不得散落十六进制、RGB、HSL、OKLCH 字面量，
+  也不得发明 `--brand-*`、`--reader-*` 等平行颜色名。当前产品以 `stone` 为中性色，
+  `emerald` 为主要交互色，`amber` 为提示/焦点色，`red` 为危险色；白黑只使用 Tailwind
+  `white`/`black` token。
+- 组件与例外：可复用状态和控件优先使用 Tailwind utility 组合；必须描述复杂派生正文、
+  native dialog、生成阅读器或第三方 renderer DOM 时，可以在全局/生成样式入口保留语义
+  selector，但颜色仍只能引用 Tailwind token。导入测试 fixture、图书原资源、KaTeX 和
+  Shiki 生成资产不属于站点设计色板，不能为了通过样式检查而改写其内容。
+- 门禁：仓库提供静态检查，拒绝业务源码中的直接颜色字面量和未批准颜色变量；该检查进入
+  常规 lint。新增页面必须加载全局 Tailwind 入口，不能复制页面级调色板。
+- 原因：现有页面分别维护相近但不同的棕色、绿色和灰色常量，阅读器继续新增局部变量会让
+  视觉、对比度和状态语义快速分叉。统一到 Tailwind 官方色阶可让颜色命名、透明度、暗色
+  适配和组件复用有一个稳定公共语言，同时不引入运行时 CSS 计算。

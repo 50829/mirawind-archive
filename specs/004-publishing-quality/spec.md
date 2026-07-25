@@ -280,6 +280,10 @@ version on failure.
   a smaller, hierarchically indented current-page outline. Progressive enhancement MUST
   update the outline's `aria-current="location"` from scrolling and hash navigation without
   making navigation, content or heading structure depend on JavaScript.
+- **FR-036**: Product interface styling MUST use one global Tailwind CSS v4 theme and its
+  approved official palette tokens. Product source MUST NOT define direct color literals or
+  parallel page/reader color namespaces; generated third-party renderer assets and imported
+  source fixtures remain byte-preserving exceptions.
 
 ### Non-Functional Requirements
 
@@ -310,6 +314,9 @@ version on failure.
 - **NFR-010**: Full-book hierarchy, breadcrumbs and page outlines MUST be generated in the
   background preview/publication build and persisted in page HTML. Reader HTTP requests
   MUST continue to serve immutable files without parsing Markdown, YAML, ASTs or manifests.
+- **NFR-011**: Tailwind compilation for application and fixed-path reader styles MUST occur
+  during development/build preparation, produce no browser runtime dependency, and be
+  guarded by a static check that rejects direct product color literals.
 
 ### Key Entities
 
