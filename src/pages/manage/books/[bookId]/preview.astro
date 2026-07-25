@@ -3,6 +3,7 @@ import { StructurePreview } from "@/components/preview/StructurePreview";
 import { hiddenManagementPage } from "@/http/authorization/manage-page";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
+import "@/styles/global.css";
 
 export const prerender = false;
 
@@ -43,8 +44,8 @@ applyResponsePolicy(Astro.response.headers, "manage");
   }
   :global(body) {
     margin: 0;
-    color: #25211b;
-    background: #f4efe6;
+    color: var(--color-stone-800);
+    background: var(--color-stone-100);
     font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   }
   main {
@@ -59,9 +60,9 @@ applyResponsePolicy(Astro.response.headers, "manage");
   :global(.structure-panel),
   :global(.document-panel) {
     padding: 1.5rem;
-    border: 1px solid #d7ccbd;
+    border: 1px solid var(--color-stone-300);
     border-radius: 1rem;
-    background: #fffdf8;
+    background: var(--color-white);
   }
   :global(.preview-header) {
     margin-bottom: 1rem;
@@ -83,12 +84,12 @@ applyResponsePolicy(Astro.response.headers, "manage");
   }
   :global(.heading-list span),
   :global(.quiet) {
-    color: #6b6257;
+    color: var(--color-stone-600);
     font-size: 0.875rem;
   }
   :global(.stale),
   :global(.diagnostics-panel li) {
-    color: #8b4513;
+    color: var(--color-amber-800);
   }
   :global(label) {
     display: grid;
@@ -103,7 +104,7 @@ applyResponsePolicy(Astro.response.headers, "manage");
   :global(input) {
     min-height: 2.75rem;
     padding: 0.5rem;
-    border: 1px solid #b9aa97;
+    border: 1px solid var(--color-stone-400);
     border-radius: 0.4rem;
     font: inherit;
   }
@@ -115,8 +116,8 @@ applyResponsePolicy(Astro.response.headers, "manage");
     padding: 0.6rem 1rem;
     border: 0;
     border-radius: 0.5rem;
-    color: white;
-    background: #54432f;
+    color: var(--color-white);
+    background: var(--color-stone-700);
     font: inherit;
     cursor: pointer;
   }
@@ -127,25 +128,25 @@ applyResponsePolicy(Astro.response.headers, "manage");
   :global(.structure-editor) {
     margin-top: 2rem;
     padding-top: 1rem;
-    border-top: 1px solid #ded6ca;
+    border-top: 1px solid var(--color-stone-200);
   }
   :global(.publish-panel) {
     margin-top: 2rem;
     padding-top: 1rem;
-    border-top: 1px solid #ded6ca;
+    border-top: 1px solid var(--color-stone-200);
   }
   :global(.publish-outcome) {
     margin-top: 1rem;
     padding: 1rem;
-    border: 1px solid #b9cdbd;
+    border: 1px solid var(--color-emerald-200);
     border-radius: 0.65rem;
-    background: #f2f8f2;
+    background: var(--color-emerald-50);
   }
   :global(.publish-outcome[data-state="failed"]),
   :global(.publish-outcome[data-state="interrupted"]),
   :global(.publish-outcome[data-state="canceled"]) {
-    border-color: #d8bea2;
-    background: #fff8ed;
+    border-color: var(--color-amber-200);
+    background: var(--color-amber-50);
   }
   :global(.publish-outcome nav) {
     display: flex;
@@ -160,7 +161,7 @@ applyResponsePolicy(Astro.response.headers, "manage");
   }
   :global(.structure-edit-list > li) {
     padding: 0.75rem;
-    border: 1px solid #e5dccf;
+    border: 1px solid var(--color-stone-200);
     border-radius: 0.5rem;
   }
   :global(.source-heading) {
@@ -181,9 +182,9 @@ applyResponsePolicy(Astro.response.headers, "manage");
   :global(iframe) {
     width: 100%;
     min-height: 70vh;
-    border: 1px solid #ded6ca;
+    border: 1px solid var(--color-stone-200);
     border-radius: 0.5rem;
-    background: white;
+    background: var(--color-white);
   }
   @media (max-width: 850px) {
     :global(.preview-grid) {

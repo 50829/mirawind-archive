@@ -11,10 +11,7 @@ import {
 } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
-import {
-  readerShellCss,
-  renderReaderShell,
-} from "../components/reader/render.js";
+import { renderReaderShell } from "../components/reader/render.js";
 import { prepareConfiguredDocument } from "./document/configured-document.js";
 import {
   buildDocumentManifest,
@@ -37,6 +34,7 @@ import {
   validateVersionMarker,
 } from "../schemas/document-manifest.js";
 import { atomicWriteFile, resolveContainedPath } from "../storage/layout.js";
+import { readerStylesheetUrl } from "../styles/assets.js";
 
 export const versionBuildArtifactFilename = "version-build-result.json";
 
@@ -135,6 +133,7 @@ function htmlDocument(input: {
 <title>${htmlEscape(input.title)}</title>
 <link rel="canonical" href="${htmlEscape(input.canonicalPath)}">
 <link rel="stylesheet" href="${rendererStylesheetUrl}">
+<link rel="stylesheet" href="${readerStylesheetUrl}">
 <style>${input.css}</style>
 </head>
 <body>${input.body}</body>
@@ -418,7 +417,7 @@ export async function buildImmutableVersion(input: {
             previousHref: previousPage ? pageHref(previousPage) : null,
           }),
           canonicalPath: pageHref(page),
-          css: `${readerShellCss}\n${css}`,
+          css,
           language,
           title: page.title,
         }),

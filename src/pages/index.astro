@@ -1,4 +1,6 @@
 ---
+import "@/styles/global.css";
+
 const title = "Mirawind Library";
 ---
 
@@ -29,8 +31,8 @@ const title = "Mirawind Library";
     margin: 0;
     display: grid;
     place-items: center;
-    color: #f7efe2;
-    background: #171512;
+    color: var(--color-stone-100);
+    background: var(--color-stone-950);
     font-family:
       Inter,
       ui-sans-serif,
@@ -46,7 +48,7 @@ const title = "Mirawind Library";
   }
 
   .eyebrow {
-    color: #d89f5b;
+    color: var(--color-amber-500);
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.2em;
@@ -60,7 +62,7 @@ const title = "Mirawind Library";
   }
 
   p:last-child {
-    color: #bdb3a4;
+    color: var(--color-stone-400);
   }
 
   .library-link {
@@ -70,14 +72,14 @@ const title = "Mirawind Library";
     margin-top: 1rem;
     padding: 0.7rem 1rem;
     border-radius: 999px;
-    color: #171512;
-    background: #d89f5b;
+    color: var(--color-stone-950);
+    background: var(--color-amber-500);
     font-weight: 700;
     text-decoration: none;
   }
 
   .library-link:focus-visible {
-    outline: 3px solid white;
+    outline: 3px solid var(--color-white);
     outline-offset: 3px;
   }
 </style>

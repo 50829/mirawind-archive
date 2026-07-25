@@ -187,6 +187,9 @@ describe("complete immutable version construction", () => {
       expect(pageHtml).toContain(
         'href="/_astro/renderers/semantic-html-v3-katex-0.18.1/katex.css"',
       );
+      expect(pageHtml).toContain(
+        'href="/_astro/styles/mirawind-reader-v1-tailwind-4.3.3.css"',
+      );
       expect(pageHtml).toContain('aria-label="全书目录"');
       expect(pageHtml).toContain('<main class="reader-main"');
       expect(pageHtml).toContain('aria-label="本页提纲"');

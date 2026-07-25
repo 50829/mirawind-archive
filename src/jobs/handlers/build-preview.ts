@@ -20,6 +20,7 @@ import type { SafeDiagnostic } from "../../domain/errors.js";
 import { parseBookConfigYaml } from "../../schemas/book-config.js";
 import { atomicWriteFile, resolveContainedPath } from "../../storage/layout.js";
 import type { StorageLayout } from "../../storage/layout.js";
+import { readerStylesheetUrl } from "../../styles/assets.js";
 
 export const previewBuildVersion = "draft-preview-v2";
 export const previewBuildArtifactFilename = "preview-build-result.json";
@@ -46,6 +47,7 @@ function previewHtmlDocument(body: string, css: string): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width">
 <link rel="stylesheet" href="${rendererStylesheetUrl}">
+<link rel="stylesheet" href="${readerStylesheetUrl}">
 ${css ? `<style>${css}</style>` : ""}
 </head>
 <body>${body}</body>

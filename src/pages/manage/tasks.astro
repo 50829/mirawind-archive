@@ -8,6 +8,7 @@ import {
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { serializeJobStatus } from "@/services/job-status";
+import "@/styles/global.css";
 
 export const prerender = false;
 
@@ -55,8 +56,8 @@ const initialJobs = new JobRepository(database)
   }
   :global(body) {
     margin: 0;
-    color: #25211b;
-    background: #f4efe6;
+    color: var(--color-stone-800);
+    background: var(--color-stone-100);
     font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   }
   main {
@@ -83,19 +84,19 @@ const initialJobs = new JobRepository(database)
   }
   :global(.task-card) {
     padding: 1.25rem;
-    border: 1px solid #d7ccbd;
+    border: 1px solid var(--color-stone-300);
     border-radius: 1rem;
-    background: #fffdf8;
+    background: var(--color-white);
   }
   :global(.task-heading code) {
     display: block;
     margin-top: 0.4rem;
-    color: #6f665a;
+    color: var(--color-stone-600);
   }
   :global(.task-heading span) {
     padding: 0.35rem 0.65rem;
     border-radius: 999px;
-    background: #e4ede6;
+    background: var(--color-emerald-100);
   }
   :global(.task-facts),
   :global(.task-progress) {
@@ -104,22 +105,22 @@ const initialJobs = new JobRepository(database)
     gap: 0.75rem;
   }
   :global(dt) {
-    color: #6f665a;
+    color: var(--color-stone-600);
     font-size: 0.85rem;
   }
   :global(dd) {
     margin: 0.2rem 0 0;
   }
   :global(.task-error) {
-    color: #9b3228;
+    color: var(--color-red-800);
   }
   :global(button) {
     min-height: 2.5rem;
     padding: 0.55rem 0.8rem;
     border: 0;
     border-radius: 0.6rem;
-    color: white;
-    background: #2f5b49;
+    color: var(--color-white);
+    background: var(--color-emerald-800);
     font: inherit;
     cursor: pointer;
   }

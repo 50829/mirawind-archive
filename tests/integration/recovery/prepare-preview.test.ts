@@ -330,6 +330,9 @@ describe("prepare_draft and build_preview handlers", () => {
       expect(`${firstPage}\n${secondPage}`).toContain(
         'href="/_astro/renderers/semantic-html-v3-katex-0.18.1/katex.css"',
       );
+      expect(`${firstPage}\n${secondPage}`).toContain(
+        'href="/_astro/styles/mirawind-reader-v1-tailwind-4.3.3.css"',
+      );
       expect(
         JSON.parse(
           await readFile(resolve(previewRoot, "preview-model.json"), "utf8"),

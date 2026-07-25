@@ -1,0 +1,368 @@
+@import "tailwindcss";
+
+@source "../components/reader/**/*.{ts,tsx}";
+
+@theme {
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-serif:
+    Georgia, "Times New Roman", "Noto Serif CJK SC", ui-serif, serif;
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-padding-top: 5rem;
+    color-scheme: light;
+  }
+
+  body {
+    @apply m-0 bg-white font-sans leading-relaxed text-stone-900;
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible {
+    @apply outline-3 outline-offset-3 outline-amber-700;
+  }
+}
+
+@layer components {
+  .reader-topbar {
+    @apply sticky top-0 z-20 flex min-h-16 items-center gap-4 border-b border-stone-200 bg-white/95 px-5 py-2.5 backdrop-blur-xl;
+  }
+
+  .reader-topbar a,
+  .reader-desktop-tools > a {
+    @apply text-emerald-800 no-underline;
+  }
+
+  .reader-library-link,
+  .reader-book-title {
+    @apply shrink-0;
+  }
+
+  .reader-book-title,
+  .reader-breadcrumb [aria-current="location"] {
+    @apply font-semibold;
+  }
+
+  .reader-breadcrumb {
+    @apply flex min-w-0 flex-1 items-center gap-2 overflow-hidden whitespace-nowrap;
+  }
+
+  .reader-breadcrumb-part {
+    @apply flex min-w-0 items-center gap-2;
+  }
+
+  .reader-breadcrumb a {
+    @apply overflow-hidden text-ellipsis;
+  }
+
+  .reader-breadcrumb [aria-current="location"] {
+    @apply text-stone-900;
+  }
+
+  .reader-breadcrumb-separator {
+    @apply text-stone-400;
+  }
+
+  .reader-desktop-tools {
+    @apply flex items-center gap-3;
+  }
+
+  .reader-mobile-actions {
+    display: none;
+  }
+
+  .reader-layout {
+    display: grid;
+    grid-template-columns: minmax(14rem, 18rem) minmax(0, 52rem) minmax(
+        11rem,
+        15rem
+      );
+    gap: clamp(1.25rem, 2.5vw, 2.5rem);
+    max-width: 94rem;
+    margin: 0 auto;
+    padding: 1.75rem 1.25rem 3rem;
+  }
+
+  .reader-toc,
+  .reader-outline {
+    @apply sticky self-start overflow-auto;
+    top: 5.5rem;
+    max-height: calc(100vh - 6.5rem);
+    scrollbar-width: thin;
+  }
+
+  .reader-toc {
+    @apply pr-2.5 text-sm;
+  }
+
+  .reader-outline {
+    @apply pl-1 text-xs leading-snug;
+  }
+
+  .reader-toc h2,
+  .reader-outline h2 {
+    @apply mx-2 mt-0.5 mb-3 text-xs font-bold tracking-widest text-stone-500 uppercase;
+  }
+
+  .reader-toc ol,
+  .reader-outline ol {
+    @apply m-0 list-none p-0;
+  }
+
+  .reader-toc ol ol {
+    @apply my-0.5 ml-2.5 border-l border-stone-200 pl-2;
+  }
+
+  .reader-toc-item {
+    @apply relative my-px;
+  }
+
+  .reader-toc details {
+    @apply relative;
+  }
+
+  .reader-toc summary {
+    @apply absolute top-1 left-0 z-10 grid h-7 w-5 cursor-pointer place-items-center rounded-sm text-stone-500;
+    list-style: none;
+  }
+
+  .reader-toc summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .reader-toc summary span {
+    @apply text-lg leading-none transition-transform;
+  }
+
+  .reader-toc details[open] > summary span {
+    transform: rotate(90deg);
+  }
+
+  .reader-toc-link,
+  .reader-outline a {
+    @apply block rounded-sm text-stone-600 no-underline;
+  }
+
+  .reader-toc-link {
+    @apply ml-5 px-2 py-1;
+  }
+
+  .reader-outline a {
+    @apply border-l-2 border-transparent px-2 py-1;
+  }
+
+  .reader-toc-link:hover,
+  .reader-outline a:hover {
+    @apply bg-stone-50 text-emerald-800;
+  }
+
+  .reader-toc a[aria-current="page"],
+  .reader-outline a[aria-current="location"] {
+    @apply bg-emerald-50 font-bold text-emerald-800;
+  }
+
+  .reader-toc a[data-current-page]:not([aria-current]) {
+    @apply font-semibold text-emerald-900;
+  }
+
+  .reader-outline a[aria-current="location"] {
+    @apply border-emerald-700;
+  }
+
+  .reader-main {
+    @apply min-w-0;
+  }
+
+  .reader-document {
+    @apply font-serif text-base leading-loose;
+  }
+
+  .reader-document :is(h1, h2, h3, h4)[id] {
+    scroll-margin-top: 5.5rem;
+  }
+
+  .reader-document img {
+    @apply h-auto max-w-full;
+  }
+
+  .reader-document table {
+    @apply block max-w-full overflow-auto border-collapse;
+  }
+
+  .reader-document th,
+  .reader-document td {
+    @apply border border-stone-200 p-2;
+  }
+
+  .reader-document [id]:focus {
+    @apply outline-3 outline-offset-4 outline-amber-700;
+  }
+
+  .reader-page-nav {
+    @apply mt-16 flex justify-between gap-4 border-t border-stone-200 pt-5;
+  }
+
+  .reader-page-nav a {
+    @apply text-emerald-800;
+  }
+
+  .book-search {
+    @apply relative;
+  }
+
+  .book-search form {
+    @apply flex gap-1.5;
+  }
+
+  .book-search input {
+    width: min(18rem, 50vw);
+    @apply border border-stone-300 px-2.5 py-2;
+  }
+
+  .book-search [data-search-results] {
+    @apply absolute right-0 my-2 max-h-[65vh] overflow-auto border border-stone-200 bg-white py-4 pr-4 pl-8 shadow-xl;
+    width: min(30rem, 90vw);
+  }
+
+  .book-search [data-search-results]:empty {
+    display: none;
+  }
+
+  .book-search [data-search-results] p {
+    @apply mt-1 mb-4 text-stone-500;
+  }
+
+  .reader-mobile-actions button,
+  .reader-drawer-heading button {
+    @apply min-h-11 rounded-lg border border-stone-200 bg-white px-3 py-2 text-stone-900;
+    font: inherit;
+  }
+
+  dialog[data-reader-drawer] {
+    @apply max-h-[calc(100vh-1.5rem)] rounded-2xl border-0 bg-white p-5 text-stone-900 shadow-2xl;
+    width: min(34rem, calc(100vw - 1.5rem));
+  }
+
+  dialog[data-reader-drawer]::backdrop {
+    background: --alpha(var(--color-stone-950) / 55%);
+    backdrop-filter: blur(5px);
+  }
+
+  .reader-drawer-heading {
+    @apply flex items-center justify-between gap-4 border-b border-stone-200;
+  }
+
+  .reader-drawer-heading h2 {
+    @apply mt-1.5 mb-4;
+  }
+
+  dialog[data-reader-drawer] .reader-toc,
+  dialog[data-reader-drawer] .reader-outline {
+    @apply static max-h-none p-0;
+  }
+
+  dialog[data-reader-drawer] .reader-toc ol ol {
+    @apply pl-2;
+  }
+
+  dialog[data-reader-drawer] ol,
+  dialog[data-reader-drawer] ul {
+    @apply pl-0;
+  }
+
+  dialog[data-reader-drawer] li {
+    @apply my-0.5;
+  }
+
+  dialog[data-reader-drawer] .book-search form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  dialog[data-reader-drawer] .book-search input,
+  dialog[data-reader-drawer] .book-search [data-search-results] {
+    @apply w-full;
+  }
+
+  dialog[data-reader-drawer] .book-search [data-search-results] {
+    @apply static max-h-none shadow-none;
+  }
+
+  .visually-hidden {
+    @apply absolute -m-px h-px w-px overflow-hidden border-0 p-0 whitespace-nowrap;
+    clip: rect(0, 0, 0, 0);
+  }
+}
+
+@media (max-width: 70rem) {
+  .reader-layout {
+    grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+  }
+
+  .reader-outline {
+    position: static;
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 48rem) {
+  .reader-topbar {
+    @apply flex-wrap;
+  }
+
+  .reader-desktop-tools {
+    @apply w-full flex-wrap;
+  }
+
+  .reader-layout {
+    @apply block pt-4;
+  }
+
+  .reader-toc,
+  .reader-outline {
+    @apply static mb-8 max-h-none;
+  }
+
+  .book-search,
+  .book-search form,
+  .book-search input {
+    @apply w-full;
+  }
+
+  .reader-enhanced .reader-desktop-tools {
+    display: none;
+  }
+
+  .reader-enhanced .reader-mobile-actions {
+    @apply sticky z-10 grid grid-cols-4 gap-1.5 border-b border-stone-200 bg-stone-100/95 p-2;
+    top: 4rem;
+  }
+
+  .reader-enhanced .reader-layout > .reader-toc,
+  .reader-enhanced .reader-layout > .reader-outline {
+    display: none;
+  }
+
+  .reader-enhanced .reader-layout {
+    @apply pt-6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

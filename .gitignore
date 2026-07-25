@@ -18,6 +18,7 @@ data/
 
 # Deterministically generated renderer assets and private publishing-quality evidence.
 /public/_astro/renderers/
+/public/_astro/styles/
 /docs/audits/publishing-quality-results.private.json
 
 *.log
