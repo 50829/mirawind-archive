@@ -1,0 +1,898 @@
+{
+  "build": {
+    "captured_at": "2026-07-25T11:39:55.509Z",
+    "real_fixture_gate": "required_and_verified",
+    "retained_data": true,
+    "results": [
+      {
+        "archive": {
+          "compressed_bytes": 97506068,
+          "entries": 1066,
+          "extracted_bytes": 144260277,
+          "files": 1064,
+          "sha256": "b309a572298b8f6f5d01c1d809c7391cba86e557a737fe5f84e7eef8acaf8f37"
+        },
+        "compiler_output": {
+          "blocks": 4323,
+          "bytes": 279841384,
+          "files": 1426,
+          "pages": 190,
+          "resources": 166
+        },
+        "database": {
+          "file_bytes": 327680,
+          "index_storage_bytes": 5574656,
+          "wal_bytes": 6641472
+        },
+        "fixture_id": "real-mineru-b309a572298b",
+        "fixture_type": "real",
+        "fts": {
+          "build_ms": 127.302,
+          "rows": 3967,
+          "short_rows": 241,
+          "spool_bytes": 1907617
+        },
+        "memory": {
+          "peak_process_tree_rss_bytes": 864546816,
+          "sample_interval_ms": 25,
+          "samples": 1269
+        },
+        "mineru_version": "3.4.4",
+        "page_count_range": {
+          "maximum": 441,
+          "minimum": 441
+        },
+        "phases": {
+          "analyze_import:1": {
+            "duration_ms": 3607,
+            "state": "succeeded"
+          },
+          "prepare_draft:1": {
+            "duration_ms": 10561,
+            "state": "succeeded"
+          },
+          "build_preview:1": {
+            "duration_ms": 7353,
+            "state": "succeeded"
+          },
+          "build_publish:1": {
+            "duration_ms": 8494,
+            "state": "succeeded"
+          }
+        },
+        "status": "passed",
+        "timings": {
+          "upload_ms": 146.084,
+          "wall_ms": 32775.585
+        },
+        "version_id": "ver_QX1aVooRLO9nSXBULsWKZsLY"
+      },
+      {
+        "archive": {
+          "compressed_bytes": 2676379,
+          "entries": 10,
+          "extracted_bytes": 11170052,
+          "files": 8,
+          "sha256": "e80477ff22ac436d996507f342d67831222e82ed4b2e09848c47ae0c407c869b"
+        },
+        "compiler_output": {
+          "blocks": 318,
+          "bytes": 15221904,
+          "files": 35,
+          "pages": 20,
+          "resources": 1
+        },
+        "database": {
+          "file_bytes": 327680,
+          "index_storage_bytes": 1196032,
+          "wal_bytes": 1915832
+        },
+        "fixture_id": "real-mineru-e80477ff22ac",
+        "fixture_type": "real",
+        "fts": {
+          "build_ms": 35.06,
+          "rows": 316,
+          "short_rows": 21,
+          "spool_bytes": 316439
+        },
+        "memory": {
+          "peak_process_tree_rss_bytes": 305172480,
+          "sample_interval_ms": 25,
+          "samples": 155
+        },
+        "mineru_version": "3.4.4",
+        "page_count_range": {
+          "maximum": 97,
+          "minimum": 97
+        },
+        "phases": {
+          "analyze_import:1": {
+            "duration_ms": 439,
+            "state": "succeeded"
+          },
+          "prepare_draft:1": {
+            "duration_ms": 567,
+            "state": "succeeded"
+          },
+          "build_preview:1": {
+            "duration_ms": 491,
+            "state": "succeeded"
+          },
+          "build_publish:1": {
+            "duration_ms": 590,
+            "state": "succeeded"
+          }
+        },
+        "status": "passed",
+        "timings": {
+          "upload_ms": 12.367,
+          "wall_ms": 4023.016
+        },
+        "version_id": "ver_gbTxtX_KKTHCEcl9PHwwu8e8"
+      },
+      {
+        "archive": {
+          "compressed_bytes": 51879180,
+          "entries": 2873,
+          "extracted_bytes": 146037698,
+          "files": 2871,
+          "sha256": "a53faf7243d4bd41dab2c1be23ecd7c857bf14ca44133005bac2b27dddbec443"
+        },
+        "compiler_output": {
+          "blocks": 10757,
+          "bytes": 273868340,
+          "files": 3183,
+          "pages": 243,
+          "resources": 63
+        },
+        "database": {
+          "file_bytes": 12075008,
+          "index_storage_bytes": 10780672,
+          "wal_bytes": 12298232
+        },
+        "fixture_id": "real-mineru-a53faf7243d4",
+        "fixture_type": "real",
+        "fts": {
+          "build_ms": 247.428,
+          "rows": 10632,
+          "short_rows": 244,
+          "spool_bytes": 4185949
+        },
+        "memory": {
+          "peak_process_tree_rss_bytes": 2025443328,
+          "sample_interval_ms": 25,
+          "samples": 3372
+        },
+        "mineru_version": "3.4.4",
+        "page_count_range": {
+          "maximum": 583,
+          "minimum": 583
+        },
+        "phases": {
+          "analyze_import:1": {
+            "duration_ms": 6702,
+            "state": "succeeded"
+          },
+          "prepare_draft:1": {
+            "duration_ms": 29189,
+            "state": "succeeded"
+          },
+          "build_preview:1": {
+            "duration_ms": 22522,
+            "state": "succeeded"
+          },
+          "build_publish:1": {
+            "duration_ms": 25198,
+            "state": "succeeded"
+          }
+        },
+        "status": "passed",
+        "timings": {
+          "upload_ms": 79.008,
+          "wall_ms": 86941.493
+        },
+        "version_id": "ver_VG6hD7IJ6NY_IMrdX5diQQ8d"
+      },
+      {
+        "archive": {
+          "compressed_bytes": 154454,
+          "entries": 35,
+          "extracted_bytes": 1368465,
+          "files": 35,
+          "sha256": "8db7785dbc88f127cd2088f9c436e42a29f64daa75d531af9aa42e31bc4b6152"
+        },
+        "compiler_output": {
+          "blocks": 12002,
+          "bytes": 108494210,
+          "files": 574,
+          "pages": 501,
+          "resources": 32
+        },
+        "database": {
+          "file_bytes": 327680,
+          "index_storage_bytes": 11886592,
+          "wal_bytes": 13122232
+        },
+        "fixture_id": "synthetic-stress-v1",
+        "fixture_type": "synthetic",
+        "fts": {
+          "build_ms": 193.602,
+          "rows": 12002,
+          "short_rows": 502,
+          "spool_bytes": 4592480
+        },
+        "memory": {
+          "peak_process_tree_rss_bytes": 679858176,
+          "sample_interval_ms": 25,
+          "samples": 1327
+        },
+        "mineru_version": "synthetic",
+        "page_count_range": {
+          "maximum": 500,
+          "minimum": 500
+        },
+        "phases": {
+          "analyze_import:1": {
+            "duration_ms": 852,
+            "state": "succeeded"
+          },
+          "prepare_draft:1": {
+            "duration_ms": 8230,
+            "state": "succeeded"
+          },
+          "build_preview:1": {
+            "duration_ms": 10425,
+            "state": "succeeded"
+          },
+          "build_publish:1": {
+            "duration_ms": 12120,
+            "state": "succeeded"
+          }
+        },
+        "status": "passed",
+        "timings": {
+          "upload_ms": 6.24,
+          "wall_ms": 34147.533
+        },
+        "version_id": "ver_LwrZdiO_VC6FKsRuzGzpsSqk"
+      }
+    ],
+    "schema_version": 1,
+    "status": "passed",
+    "stress_configuration": {
+      "blocks_per_page": 20,
+      "image_count": 32,
+      "pages": 500
+    }
+  },
+  "captured_at": "2026-07-25T11:41:01.223Z",
+  "configuration": {
+    "concurrency": 8,
+    "concurrent_requests": 500,
+    "requests": 200,
+    "search_query_storage": "sha256_and_code_point_count_only",
+    "stress": {
+      "blocks_per_page": 20,
+      "image_count": 32,
+      "pages": 500
+    }
+  },
+  "environment": {
+    "captured_at": "2026-07-25T11:37:17.300Z",
+    "compiler_identity": {
+      "name": "mirawind-book-compiler",
+      "renderer_version": "semantic-html-v3-katex-0.18.1",
+      "text_normalization_version": 2,
+      "version": "compiler-v3"
+    },
+    "dependencies": {
+      "production": {
+        "@astrojs/markdown-remark": "7.2.1",
+        "@astrojs/node": "11.0.2",
+        "@astrojs/react": "6.0.1",
+        "@better-auth/passkey": "1.6.25",
+        "@fastify/busboy": "3.2.0",
+        "@inquirer/prompts": "8.5.2",
+        "@shikijs/transformers": "4.3.1",
+        "@zip.js/zip.js": "2.8.34",
+        "ajv": "8.20.0",
+        "ajv-formats": "3.0.1",
+        "astro": "7.1.3",
+        "better-auth": "1.6.25",
+        "better-sqlite3": "12.11.1",
+        "katex": "0.18.1",
+        "pino": "10.3.1",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "rehype-katex": "7.0.1",
+        "rehype-raw": "7.0.0",
+        "rehype-sanitize": "6.0.0",
+        "rehype-stringify": "10.0.1",
+        "remark-gfm": "4.0.1",
+        "remark-math": "6.0.0",
+        "remark-parse": "11.0.0",
+        "remark-rehype": "11.1.2",
+        "sharp": "0.35.3",
+        "shiki": "4.3.1",
+        "unified": "11.0.5",
+        "yaml": "2.9.0"
+      },
+      "development": {
+        "@apidevtools/swagger-parser": "12.1.0",
+        "@astrojs/check": "0.9.9",
+        "@commitlint/cli": "21.2.1",
+        "@commitlint/config-conventional": "21.2.0",
+        "@eslint/js": "10.0.1",
+        "@playwright/test": "1.61.1",
+        "@tailwindcss/cli": "4.3.3",
+        "@tailwindcss/vite": "4.3.3",
+        "@testing-library/dom": "10.4.1",
+        "@testing-library/react": "16.3.2",
+        "@testing-library/user-event": "14.6.1",
+        "@types/better-sqlite3": "7.6.13",
+        "@types/katex": "0.16.8",
+        "@types/node": "24.13.3",
+        "@types/react": "19.2.17",
+        "@types/react-dom": "19.2.3",
+        "@vitest/coverage-v8": "4.1.10",
+        "axe-core": "4.12.1",
+        "eslint": "10.7.0",
+        "eslint-plugin-astro": "3.0.1",
+        "eslint-plugin-jsx-a11y": "6.10.2",
+        "eslint-plugin-react-hooks": "7.1.1",
+        "eslint-plugin-react-refresh": "0.5.3",
+        "globals": "17.7.0",
+        "happy-dom": "20.11.1",
+        "prettier": "3.9.6",
+        "prettier-plugin-astro": "0.14.1",
+        "tailwindcss": "4.3.3",
+        "tsx": "4.23.1",
+        "typescript": "6.0.3",
+        "typescript-eslint": "8.65.0",
+        "vite": "8.1.5",
+        "vitest": "4.1.10"
+      }
+    },
+    "host": {
+      "architecture": "x64",
+      "cpu_count": 18,
+      "cpu_models": ["Intel(R) Core(TM) Ultra 5 125H"],
+      "memory_bytes": 32695050240,
+      "platform": "linux",
+      "release": "7.0.0-28-generic"
+    },
+    "image_decoder": {
+      "formats": {
+        "input": [
+          "gif",
+          "heif",
+          "jpeg",
+          "png",
+          "raw",
+          "svg",
+          "tiff",
+          "vips",
+          "webp"
+        ],
+        "output": [
+          "dz",
+          "gif",
+          "heif",
+          "jpeg",
+          "png",
+          "raw",
+          "tiff",
+          "vips",
+          "webp"
+        ]
+      },
+      "versions": {
+        "aom": "3.14.1",
+        "archive": "3.8.8",
+        "cairo": "1.18.4",
+        "cgif": "0.5.3",
+        "exif": "0.6.26",
+        "expat": "2.8.2",
+        "ffi": "3.6.0",
+        "fontconfig": "2.18.1",
+        "freetype": "2.14.3",
+        "fribidi": "1.0.16",
+        "glib": "2.89.1",
+        "harfbuzz": "14.2.1",
+        "heif": "1.23.1",
+        "highway": "1.4.0",
+        "imagequant": "2.4.1",
+        "lcms": "2.19.1",
+        "mozjpeg": "0826579",
+        "pango": "1.58.0",
+        "pixman": "0.46.4",
+        "png": "1.6.58",
+        "proxy-libintl": "0.5",
+        "rsvg": "2.62.90",
+        "sharp": "0.35.3",
+        "tiff": "d01a94b",
+        "uhdr": "1acdbed",
+        "vips": "8.18.3",
+        "webp": "1.6.0",
+        "xml2": "2.15.3",
+        "zlib-ng": "2.3.3"
+      }
+    },
+    "package": {
+      "engines": {
+        "node": "24.x",
+        "pnpm": "11.9.0"
+      },
+      "lockfile_sha256": "7f612ae33edffd685682d4f59ebd28eaf837dd1aad39ca3c7e874e385bf58e7f",
+      "package_json_sha256": "d3f2c2166a6691add8e76983ea148d6a8375f55c8910df979a1c4ddfb00625ce",
+      "package_manager": "pnpm@11.9.0",
+      "version": "0.0.0"
+    },
+    "runtime": {
+      "node": "v24.15.0",
+      "versions": {
+        "acorn": "8.16.0",
+        "ada": "3.4.4",
+        "amaro": "1.1.8",
+        "ares": "1.34.6",
+        "brotli": "1.2.0",
+        "cldr": "48.0",
+        "icu": "78.2",
+        "llhttp": "9.3.1",
+        "merve": "1.2.2",
+        "modules": "137",
+        "napi": "10",
+        "nbytes": "0.1.3",
+        "ncrypto": "0.0.1",
+        "nghttp2": "1.68.0",
+        "node": "24.15.0",
+        "openssl": "3.5.5",
+        "simdjson": "4.5.0",
+        "simdutf": "6.4.0",
+        "sqlite": "3.51.3",
+        "tz": "2026a",
+        "undici": "7.24.4",
+        "unicode": "17.0",
+        "uv": "1.51.0",
+        "uvwasi": "0.0.23",
+        "v8": "13.6.233.17-node.48",
+        "zlib": "1.3.1-e00f703",
+        "zstd": "1.5.7"
+      }
+    },
+    "schema_version": 1,
+    "sqlite": {
+      "compile_options": [
+        "ATOMIC_INTRINSICS=1",
+        "COMPILER=gcc-10.2.1 20210110",
+        "DEFAULT_AUTOVACUUM",
+        "DEFAULT_CACHE_SIZE=-16000",
+        "DEFAULT_FILE_FORMAT=4",
+        "DEFAULT_FOREIGN_KEYS",
+        "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+        "DEFAULT_MEMSTATUS=0",
+        "DEFAULT_MMAP_SIZE=0",
+        "DEFAULT_PAGE_SIZE=4096",
+        "DEFAULT_PCACHE_INITSZ=20",
+        "DEFAULT_RECURSIVE_TRIGGERS",
+        "DEFAULT_SECTOR_SIZE=4096",
+        "DEFAULT_SYNCHRONOUS=2",
+        "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+        "DEFAULT_WAL_SYNCHRONOUS=1",
+        "DEFAULT_WORKER_THREADS=0",
+        "DIRECT_OVERFLOW_READ",
+        "DQS=0",
+        "ENABLE_COLUMN_METADATA",
+        "ENABLE_DBSTAT_VTAB",
+        "ENABLE_FTS3",
+        "ENABLE_FTS3_PARENTHESIS",
+        "ENABLE_FTS4",
+        "ENABLE_FTS5",
+        "ENABLE_GEOPOLY",
+        "ENABLE_MATH_FUNCTIONS",
+        "ENABLE_PERCENTILE",
+        "ENABLE_RTREE",
+        "ENABLE_STAT4",
+        "ENABLE_UPDATE_DELETE_LIMIT",
+        "LIKE_DOESNT_MATCH_BLOBS",
+        "MALLOC_SOFT_LIMIT=1024",
+        "MAX_ATTACHED=10",
+        "MAX_COLUMN=2000",
+        "MAX_COMPOUND_SELECT=500",
+        "MAX_DEFAULT_PAGE_SIZE=8192",
+        "MAX_EXPR_DEPTH=1000",
+        "MAX_FUNCTION_ARG=1000",
+        "MAX_LENGTH=1000000000",
+        "MAX_LIKE_PATTERN_LENGTH=50000",
+        "MAX_MMAP_SIZE=0x7fff0000",
+        "MAX_PAGE_COUNT=0xfffffffe",
+        "MAX_PAGE_SIZE=65536",
+        "MAX_SQL_LENGTH=1000000000",
+        "MAX_TRIGGER_DEPTH=1000",
+        "MAX_VARIABLE_NUMBER=32766",
+        "MAX_VDBE_OP=250000000",
+        "MAX_WORKER_THREADS=8",
+        "MUTEX_PTHREADS",
+        "OMIT_DEPRECATED",
+        "OMIT_PROGRESS_CALLBACK",
+        "OMIT_SHARED_CACHE",
+        "OMIT_TCL_VARIABLE",
+        "SOUNDEX",
+        "SYSTEM_MALLOC",
+        "TEMP_STORE=1",
+        "THREADSAFE=2",
+        "USE_URI"
+      ],
+      "fts5": true,
+      "journal_mode": "wal",
+      "linked_version": "3.53.2",
+      "minimum_version": "3.51.3",
+      "source_id": "2026-06-03 19:12:13 d6e03d8c777cfa2d35e3b60d8ec3e0187f3e9f99d8e2ee9cac695fd6fcdf1a24",
+      "trigram": true
+    }
+  },
+  "http_results": [
+    {
+      "fixture_id": "real-mineru-b309a572298b",
+      "concurrent_build_read": {
+        "concurrency": 8,
+        "mode": "concurrent-build",
+        "observed_running_build": true,
+        "requests": 500,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 500,
+          "maximum_ms": 35.082,
+          "mean_ms": 8.04,
+          "minimum_ms": 3.522,
+          "p50_ms": 6.761,
+          "p95_ms": 14.936,
+          "p99_ms": 34.107
+        },
+        "target_p95_ms": 300,
+        "warmups": 0
+      },
+      "idle_read": {
+        "concurrency": 8,
+        "mode": "idle",
+        "observed_running_build": false,
+        "requests": 200,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 200,
+          "maximum_ms": 16.077,
+          "mean_ms": 8.617,
+          "minimum_ms": 6.357,
+          "p50_ms": 8.075,
+          "p95_ms": 12,
+          "p99_ms": 15.201
+        },
+        "target_p95_ms": 300,
+        "warmups": 20
+      },
+      "publication": {
+        "foreground_requests_succeeded": true,
+        "pointer_advanced_after_build": true,
+        "version_before": "ver_QX1aVooRLO9nSXBULsWKZsLY",
+        "version_after": "ver_LKTj3LThaxjGHeK89qQulZt7"
+      },
+      "search": {
+        "book_key": "1",
+        "concurrency": 8,
+        "normal": {
+          "query_code_points": 4,
+          "query_sha256": "7c72066c66a912cdecd0cc67136a49d31796193a26486d6b494b131c0d24f058",
+          "scope": "metadata_heading_body",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 34.966,
+            "mean_ms": 16.115,
+            "minimum_ms": 3.808,
+            "p50_ms": 16.855,
+            "p95_ms": 19.445,
+            "p99_ms": 25.271
+          },
+          "target_p95_ms": 1000
+        },
+        "requests_per_branch": 200,
+        "schema_version": 1,
+        "short": {
+          "query_code_points": 1,
+          "query_sha256": "08f271887ce94707da822d5263bae19d5519cb3614e0daedc4c7ce5dab7473f1",
+          "scope": "metadata_heading_only",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 62.929,
+            "mean_ms": 17.108,
+            "minimum_ms": 7.887,
+            "p50_ms": 16.748,
+            "p95_ms": 19.483,
+            "p99_ms": 44.735
+          },
+          "target_p95_ms": 1000
+        },
+        "status": "passed",
+        "warmups_per_branch": 20
+      },
+      "status": "passed"
+    },
+    {
+      "fixture_id": "real-mineru-e80477ff22ac",
+      "concurrent_build_read": {
+        "concurrency": 8,
+        "mode": "concurrent-build",
+        "observed_running_build": true,
+        "requests": 500,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 500,
+          "maximum_ms": 14.78,
+          "mean_ms": 5.233,
+          "minimum_ms": 3.152,
+          "p50_ms": 4.351,
+          "p95_ms": 8.988,
+          "p99_ms": 13.262
+        },
+        "target_p95_ms": 300,
+        "warmups": 0
+      },
+      "idle_read": {
+        "concurrency": 8,
+        "mode": "idle",
+        "observed_running_build": false,
+        "requests": 200,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 200,
+          "maximum_ms": 11.644,
+          "mean_ms": 5.829,
+          "minimum_ms": 1.202,
+          "p50_ms": 5.415,
+          "p95_ms": 10.505,
+          "p99_ms": 11.404
+        },
+        "target_p95_ms": 300,
+        "warmups": 20
+      },
+      "publication": {
+        "foreground_requests_succeeded": true,
+        "pointer_advanced_after_build": true,
+        "version_before": "ver_gbTxtX_KKTHCEcl9PHwwu8e8",
+        "version_after": "ver_F3XG0G_dF603ILpxHzMER88C"
+      },
+      "search": {
+        "book_key": "1",
+        "concurrency": 8,
+        "normal": {
+          "query_code_points": 4,
+          "query_sha256": "f8d64a31eb7d864da9252b7e5dd2659229cf1a3c4bf9d6d544c0318c81e13cff",
+          "scope": "metadata_heading_body",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 24.541,
+            "mean_ms": 11.241,
+            "minimum_ms": 2.518,
+            "p50_ms": 9.843,
+            "p95_ms": 18.411,
+            "p99_ms": 20.077
+          },
+          "target_p95_ms": 1000
+        },
+        "requests_per_branch": 200,
+        "schema_version": 1,
+        "short": {
+          "query_code_points": 1,
+          "query_sha256": "ef2635e773789722621b09a9196758832009f88086d5256e678c604111d4cece",
+          "scope": "metadata_heading_only",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 26.203,
+            "mean_ms": 11.425,
+            "minimum_ms": 4.215,
+            "p50_ms": 9.839,
+            "p95_ms": 18.675,
+            "p99_ms": 20.47
+          },
+          "target_p95_ms": 1000
+        },
+        "status": "passed",
+        "warmups_per_branch": 20
+      },
+      "status": "passed"
+    },
+    {
+      "fixture_id": "real-mineru-a53faf7243d4",
+      "concurrent_build_read": {
+        "concurrency": 8,
+        "mode": "concurrent-build",
+        "observed_running_build": true,
+        "requests": 500,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 500,
+          "maximum_ms": 19.329,
+          "mean_ms": 6.977,
+          "minimum_ms": 3.749,
+          "p50_ms": 6.513,
+          "p95_ms": 9.792,
+          "p99_ms": 18.157
+        },
+        "target_p95_ms": 300,
+        "warmups": 0
+      },
+      "idle_read": {
+        "concurrency": 8,
+        "mode": "idle",
+        "observed_running_build": false,
+        "requests": 200,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 200,
+          "maximum_ms": 14.085,
+          "mean_ms": 8.061,
+          "minimum_ms": 5.557,
+          "p50_ms": 7.846,
+          "p95_ms": 9.732,
+          "p99_ms": 13.59
+        },
+        "target_p95_ms": 300,
+        "warmups": 20
+      },
+      "publication": {
+        "foreground_requests_succeeded": true,
+        "pointer_advanced_after_build": true,
+        "version_before": "ver_VG6hD7IJ6NY_IMrdX5diQQ8d",
+        "version_after": "ver_zXIQQwS8cQz-26xON8Ymh_L6"
+      },
+      "search": {
+        "book_key": "1",
+        "concurrency": 8,
+        "normal": {
+          "query_code_points": 6,
+          "query_sha256": "555bb34b712fc5786081c253038692989eaa9a61a5b62ec914bd3d7a5927075a",
+          "scope": "metadata_heading_body",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 38.576,
+            "mean_ms": 27.15,
+            "minimum_ms": 4.127,
+            "p50_ms": 29.162,
+            "p95_ms": 31.743,
+            "p99_ms": 38.54
+          },
+          "target_p95_ms": 1000
+        },
+        "requests_per_branch": 200,
+        "schema_version": 1,
+        "short": {
+          "query_code_points": 1,
+          "query_sha256": "6b23c0d5f35d1b11f9b683f0b0a617355deb11277d91ae091d399c655b87940d",
+          "scope": "metadata_heading_only",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 87.154,
+            "mean_ms": 29.234,
+            "minimum_ms": 9.416,
+            "p50_ms": 29.161,
+            "p95_ms": 37.929,
+            "p99_ms": 57.273
+          },
+          "target_p95_ms": 1000
+        },
+        "status": "passed",
+        "warmups_per_branch": 20
+      },
+      "status": "passed"
+    },
+    {
+      "fixture_id": "synthetic-stress-v1",
+      "concurrent_build_read": {
+        "concurrency": 8,
+        "mode": "concurrent-build",
+        "observed_running_build": true,
+        "requests": 500,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 500,
+          "maximum_ms": 23.572,
+          "mean_ms": 9.947,
+          "minimum_ms": 5.338,
+          "p50_ms": 9.299,
+          "p95_ms": 14.997,
+          "p99_ms": 22.293
+        },
+        "target_p95_ms": 300,
+        "warmups": 0
+      },
+      "idle_read": {
+        "concurrency": 8,
+        "mode": "idle",
+        "observed_running_build": false,
+        "requests": 200,
+        "route": "/read/1/1",
+        "schema_version": 1,
+        "status": "passed",
+        "summary": {
+          "count": 200,
+          "maximum_ms": 22.8,
+          "mean_ms": 11.789,
+          "minimum_ms": 6.995,
+          "p50_ms": 11.365,
+          "p95_ms": 15.571,
+          "p99_ms": 22.694
+        },
+        "target_p95_ms": 300,
+        "warmups": 20
+      },
+      "publication": {
+        "foreground_requests_succeeded": true,
+        "pointer_advanced_after_build": true,
+        "version_before": "ver_LwrZdiO_VC6FKsRuzGzpsSqk",
+        "version_after": "ver_3eHP-XhRGbluSY31f6rpwpHw"
+      },
+      "search": {
+        "book_key": "1",
+        "concurrency": 8,
+        "normal": {
+          "query_code_points": 4,
+          "query_sha256": "86e1de74820a9b252ba33b2eed445b0cd02c445b5f4b8007205aff1762d7301a",
+          "scope": "metadata_heading_body",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 32.379,
+            "mean_ms": 25.923,
+            "minimum_ms": 4.419,
+            "p50_ms": 28.44,
+            "p95_ms": 31.215,
+            "p99_ms": 32.071
+          },
+          "target_p95_ms": 1000
+        },
+        "requests_per_branch": 200,
+        "schema_version": 1,
+        "short": {
+          "query_code_points": 1,
+          "query_sha256": "08f271887ce94707da822d5263bae19d5519cb3614e0daedc4c7ce5dab7473f1",
+          "scope": "metadata_heading_only",
+          "status": "passed",
+          "summary": {
+            "count": 200,
+            "maximum_ms": 85.595,
+            "mean_ms": 28.505,
+            "minimum_ms": 7.27,
+            "p50_ms": 28.6,
+            "p95_ms": 31.537,
+            "p99_ms": 57.202
+          },
+          "target_p95_ms": 1000
+        },
+        "status": "passed",
+        "warmups_per_branch": 20
+      },
+      "status": "passed"
+    }
+  ],
+  "schema_version": 1,
+  "status": "passed"
+}
