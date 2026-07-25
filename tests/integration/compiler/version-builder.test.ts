@@ -184,6 +184,9 @@ describe("complete immutable version construction", () => {
         "utf8",
       );
       expect(pageHtml).toContain('<header class="reader-topbar">');
+      expect(pageHtml).toContain(
+        'href="/_astro/renderers/semantic-html-v3-katex-0.18.1/katex.css"',
+      );
       expect(pageHtml).toContain('aria-label="全书目录"');
       expect(pageHtml).toContain('<main class="reader-main"');
       expect(pageHtml).toContain('aria-label="本页提纲"');

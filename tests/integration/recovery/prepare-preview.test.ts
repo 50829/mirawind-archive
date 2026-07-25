@@ -327,6 +327,9 @@ describe("prepare_draft and build_preview handlers", () => {
       expect(`${firstPage}\n${secondPage}`).toMatch(
         /Prepared Book[\s\S]*class="katex"[\s\S]*\/assets\/res_/u,
       );
+      expect(`${firstPage}\n${secondPage}`).toContain(
+        'href="/_astro/renderers/semantic-html-v3-katex-0.18.1/katex.css"',
+      );
       expect(
         JSON.parse(
           await readFile(resolve(previewRoot, "preview-model.json"), "utf8"),

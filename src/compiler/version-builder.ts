@@ -24,6 +24,7 @@ import {
   type ManifestSourceFile,
 } from "./document/manifest.js";
 import { renderSemanticDocument } from "./render/document.js";
+import { rendererStylesheetUrl } from "./render/assets.js";
 import { inspectRasterImage } from "./resources/images.js";
 import { resolveDocumentResources } from "./resources/resolver.js";
 import { buildSearchSpool, writeSearchSpool } from "./search/build-spool.js";
@@ -133,6 +134,7 @@ function htmlDocument(input: {
 <meta name="viewport" content="width=device-width">
 <title>${htmlEscape(input.title)}</title>
 <link rel="canonical" href="${htmlEscape(input.canonicalPath)}">
+<link rel="stylesheet" href="${rendererStylesheetUrl}">
 <style>${input.css}</style>
 </head>
 <body>${input.body}</body>

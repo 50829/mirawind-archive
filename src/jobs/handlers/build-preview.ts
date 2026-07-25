@@ -11,6 +11,7 @@ import type {
   SemanticCompilationIdentity,
   TypographyProvenance,
 } from "../../compiler/document/types.js";
+import { rendererStylesheetUrl } from "../../compiler/render/assets.js";
 import { renderSemanticDocument } from "../../compiler/render/document.js";
 import { inspectRasterImage } from "../../compiler/resources/images.js";
 import { resolveDocumentResources } from "../../compiler/resources/resolver.js";
@@ -36,6 +37,20 @@ function dataRelativePath(root: string, target: string): string {
     throw new Error("PREVIEW_STORAGE_PATH_INVALID");
   }
   return result;
+}
+
+function previewHtmlDocument(body: string, css: string): string {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<link rel="stylesheet" href="${rendererStylesheetUrl}">
+${css ? `<style>${css}</style>` : ""}
+</head>
+<body>${body}</body>
+</html>
+`;
 }
 
 export async function buildPreview(input: {
@@ -123,9 +138,7 @@ export async function buildPreview(input: {
       diagnostics.push(...rendered.diagnostics);
       await atomicWriteFile(
         resolve(pagesDirectory, `${page.pageId}.html`),
-        rendered.css
-          ? `<style>${rendered.css}</style>\n${rendered.html}`
-          : rendered.html,
+        previewHtmlDocument(rendered.html, rendered.css),
         { mode: 0o600 },
       );
     }

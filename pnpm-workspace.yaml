@@ -6,6 +6,8 @@ allowBuilds:
 peerDependencyRules:
   allowedVersions:
     "eslint-plugin-jsx-a11y>eslint": "10"
+overrides:
+  katex: "0.18.1"
 minimumReleaseAgeExclude:
   - "@better-auth/core@1.6.25"
   - "@better-auth/drizzle-adapter@1.6.25"

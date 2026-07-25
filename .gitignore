@@ -16,6 +16,10 @@ data/
 # Administrator-provided, non-redistributable MinerU acceptance fixtures.
 /tests/fixtures/mineru/real/
 
+# Deterministically generated renderer assets and private publishing-quality evidence.
+/public/_astro/renderers/
+/docs/audits/publishing-quality-results.private.json
+
 *.log
 *.tmp
 *.swp
