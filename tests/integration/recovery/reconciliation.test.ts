@@ -6,6 +6,7 @@ import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
 import { buildImmutableVersion } from "@/compiler/version-builder";
+import { BookPresentationRepository } from "@/db/repositories/book-presentations";
 import { JobRepository } from "@/db/repositories/jobs";
 import { VersionRepository } from "@/db/repositories/versions";
 import {
@@ -24,6 +25,7 @@ import {
   setupPublicationFixture,
 } from "../publication/stale-build.test.js";
 import { publishReadyVersion } from "@/services/publication";
+import { deriveBookVersionPresentation } from "@/services/book-presentation";
 
 const sourceId = "src_stale_publish_test_0001";
 const replacementVersionId = "ver_reconciliation_current_0001";
@@ -94,7 +96,34 @@ async function materializeVersion(
     layout: root.layout,
     stagingDirectory,
   });
-  return marker;
+  return {
+    marker,
+    presentation: deriveBookVersionPresentation({
+      bookConfig: await readFile(
+        resolve(
+          root.layout.bookDirectory,
+          String(bookId),
+          "versions",
+          publicationTestVersionId,
+          "book.yaml",
+        ),
+        "utf8",
+      ),
+      createdAtMs: 10,
+      documentManifest: JSON.parse(
+        await readFile(
+          resolve(
+            root.layout.bookDirectory,
+            String(bookId),
+            "versions",
+            publicationTestVersionId,
+            "document-manifest.json",
+          ),
+          "utf8",
+        ),
+      ) as unknown,
+    }),
+  };
 }
 
 describe("startup storage and current-version reconciliation", () => {
@@ -103,7 +132,11 @@ describe("startup storage and current-version reconciliation", () => {
     const migrated = await openMigratedTestDatabase(root);
     try {
       const fixture = setupPublicationFixture(migrated.database);
-      const marker = await materializeVersion(root, fixture.book.id);
+      const materialized = await materializeVersion(root, fixture.book.id);
+      const { marker } = materialized;
+      const presentations = new BookPresentationRepository(migrated.database);
+      presentations.delete(publicationTestVersionId);
+      presentations.insert(materialized.presentation);
       migrated.database
         .prepare(
           `UPDATE book_versions

@@ -30,7 +30,7 @@ try {
 applyResponsePolicy(Astro.response.headers, "manage");
 const initialJobs = new JobRepository(database)
   .listRecent(50)
-  .map(serializeJobStatus) as readonly TaskView[];
+  .map((job) => serializeJobStatus(job)) as readonly TaskView[];
 ---
 
 <!doctype html>

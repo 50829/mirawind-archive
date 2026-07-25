@@ -73,10 +73,15 @@ export async function publishReadyVersion(input: {
            book_versions.state AS version_state,
            book_versions.source_id AS version_source_id,
            book_versions.config_revision AS version_config_revision,
-           book_versions.predecessor_version_id
+           book_versions.predecessor_version_id,
+           book_version_presentations.alias AS presentation_alias,
+           book_version_presentations.projection_sha256
          FROM jobs
          JOIN books ON books.id = jobs.book_id
          JOIN book_versions ON book_versions.id = jobs.version_id
+         LEFT JOIN book_version_presentations
+           ON book_version_presentations.version_id = book_versions.id
+          AND book_version_presentations.book_id = books.id
          LEFT JOIN draft_previews
            ON draft_previews.book_id = books.id
           AND draft_previews.config_revision = books.draft_config_revision
@@ -95,6 +100,8 @@ export async function publishReadyVersion(input: {
           job_version_id: string;
           lease_owner: string | null;
           predecessor_version_id: string | null;
+          presentation_alias: string | null;
+          projection_sha256: string | null;
           preview_state: string | null;
           version_config_revision: number;
           version_source_id: string;
@@ -102,6 +109,9 @@ export async function publishReadyVersion(input: {
         }
       | undefined;
     if (!capture) throw new Error("PUBLICATION_CAPTURE_MISSING");
+    if (!capture.projection_sha256) {
+      throw new Error("PUBLICATION_PRESENTATION_MISSING");
+    }
     if (
       capture.job_state !== "running" ||
       capture.lease_owner !== input.leaseOwner ||
@@ -148,13 +158,14 @@ export async function publishReadyVersion(input: {
       .prepare(
         `UPDATE books
          SET current_version_id = ?, visibility = 'public',
-             unavailable_reason = NULL, updated_at = ?
+             alias = ?, unavailable_reason = NULL, updated_at = ?
          WHERE id = ? AND draft_source_id = ?
            AND draft_config_revision = ?
            AND current_version_id IS ?`,
       )
       .run(
         input.versionId,
+        capture.presentation_alias,
         input.nowMs,
         capture.book_id,
         capture.captured_source_id,

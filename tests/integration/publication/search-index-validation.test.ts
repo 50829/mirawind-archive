@@ -8,6 +8,7 @@ import { SourceRepository } from "@/db/repositories/sources";
 import { VersionRepository } from "@/db/repositories/versions";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
+import { presentationForTest } from "./stale-build.test.js";
 
 const hash = "a".repeat(64);
 const sourceId = "src_search_index_test_0001";
@@ -103,6 +104,7 @@ describe("ready-version and search index transaction", () => {
         manifestSchemaVersion: 1,
         manifestSha256: hash,
         predecessorVersionId: null,
+        presentation: presentationForTest(book.id, versionId),
         rendererVersion: "semantic-html-v1",
         sourceId,
         spool: spool({ bookId: book.id, versionId }),
@@ -138,6 +140,7 @@ describe("ready-version and search index transaction", () => {
           manifestSchemaVersion: 1,
           manifestSha256: hash,
           predecessorVersionId: versionId,
+          presentation: presentationForTest(book.id, secondVersionId),
           rendererVersion: "semantic-html-v1",
           sourceId,
           spool: spool({ bookId: book.id, versionId: secondVersionId }),
@@ -151,6 +154,14 @@ describe("ready-version and search index transaction", () => {
         database
           .prepare(
             "SELECT COUNT(*) AS count FROM search_fts WHERE version_id = ?",
+          )
+          .get(secondVersionId),
+      ).toEqual({ count: 0 });
+      expect(
+        database
+          .prepare(
+            `SELECT COUNT(*) AS count
+             FROM book_version_presentations WHERE version_id = ?`,
           )
           .get(secondVersionId),
       ).toEqual({ count: 0 });

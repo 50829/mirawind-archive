@@ -31,7 +31,7 @@ export default defineConfig({
         extends: true,
         test: {
           ...shared,
-          include: ["tests/unit/**/*.test.ts"],
+          include: ["tests/unit/**/*.test.{ts,tsx}"],
           name: "unit",
         },
       },
@@ -39,7 +39,7 @@ export default defineConfig({
         extends: true,
         test: {
           ...shared,
-          include: ["tests/integration/**/*.test.ts"],
+          include: ["tests/integration/**/*.test.{ts,tsx}"],
           name: "integration",
           sequence: { concurrent: false },
         },
@@ -48,7 +48,7 @@ export default defineConfig({
         extends: true,
         test: {
           ...shared,
-          include: ["tests/contract/**/*.test.ts"],
+          include: ["tests/contract/**/*.test.{ts,tsx}"],
           name: "contract",
         },
       },

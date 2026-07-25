@@ -1,7 +1,9 @@
 import type Database from "better-sqlite3";
 
 import type { SearchSpool } from "../../compiler/search/build-spool.js";
+import type { BookVersionPresentation } from "../../services/book-presentation.js";
 import { withImmediateTransaction } from "../transaction/immediate.js";
+import { BookPresentationRepository } from "./book-presentations.js";
 import { SearchIndexRepository } from "./search-index.js";
 
 export type BookVersionState =
@@ -132,6 +134,7 @@ export class VersionRepository {
     readonly manifestSchemaVersion: number;
     readonly manifestSha256: string;
     readonly predecessorVersionId: string | null;
+    readonly presentation: BookVersionPresentation;
     readonly rendererVersion: string;
     readonly sourceId: string;
     readonly spool: SearchSpool;
@@ -143,6 +146,9 @@ export class VersionRepository {
     }
     return withImmediateTransaction(this.database, () => {
       if (
+        input.presentation.versionId !== input.versionId ||
+        input.presentation.bookId !== input.bookId ||
+        input.presentation.configRevision !== input.configRevision ||
         input.spool.ftsRows.some(
           (row) =>
             row.bookId !== input.bookId || row.versionId !== input.versionId,
@@ -177,6 +183,7 @@ export class VersionRepository {
           input.completeAtMs,
           input.createdByJobId,
         );
+      new BookPresentationRepository(this.database).insert(input.presentation);
       new SearchIndexRepository(this.database).insertAndValidate({
         expectedBlockIds: input.expectedSearchBlockIds,
         spool: input.spool,

@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 
+import { publicationPhaseLabel } from "./publication-phase.js";
+
 interface JobStatus {
   readonly error_code: string | null;
   readonly job_id: string;
   readonly phase: string;
+  readonly publication: {
+    readonly book_id: number;
+    readonly book_key: string;
+    readonly details_url: string;
+    readonly library_url: "/library";
+    readonly start_url: string;
+    readonly version_id: string;
+  } | null;
   readonly state:
     "canceled" | "failed" | "interrupted" | "queued" | "running" | "succeeded";
 }
@@ -18,10 +28,11 @@ const terminalStates = new Set([
 export function PublishPanel(props: {
   readonly bookId: number;
   readonly configRevision: number;
+  readonly initialJob?: JobStatus | null;
   readonly previewReady: boolean;
   readonly previewStale: boolean;
 }) {
-  const [job, setJob] = useState<JobStatus | null>(null);
+  const [job, setJob] = useState<JobStatus | null>(props.initialJob ?? null);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const idempotencyKey = useRef(crypto.randomUUID());
@@ -89,6 +100,7 @@ export function PublishPanel(props: {
         error_code: null,
         job_id: accepted.job_id,
         phase: "queued",
+        publication: null,
         state: accepted.state,
       });
       idempotencyKey.current = crypto.randomUUID();
@@ -120,7 +132,7 @@ export function PublishPanel(props: {
         {submitting
           ? "正在提交…"
           : job && !terminalStates.has(job.state)
-            ? `发布中：${job.phase}`
+            ? `发布中：${publicationPhaseLabel(job.phase)}`
             : "发布当前修订"}
       </button>
       {!props.previewReady && (
@@ -129,6 +141,30 @@ export function PublishPanel(props: {
       {props.previewStale && (
         <p className="stale">当前预览已过期，请等待最新修订重建完成。</p>
       )}
+      {job?.state === "succeeded" && job.publication ? (
+        <div className="publish-outcome" data-state="succeeded">
+          <p>
+            <strong>发布完成。</strong>{" "}
+            当前版本已经原子切换，新的访问会读取这一版本。
+          </p>
+          <nav aria-label="发布完成后的操作">
+            <a href={job.publication.details_url}>查看图书</a>
+            <a href={job.publication.start_url}>开始阅读</a>
+            <a href={job.publication.library_url}>返回书库</a>
+          </nav>
+        </div>
+      ) : null}
+      {job && ["canceled", "failed", "interrupted"].includes(job.state) ? (
+        <div className="publish-outcome" data-state={job.state}>
+          <p>
+            发布未完成；上一已发布版本仍保持在线。可以检查任务原因、修订预览后再试。
+          </p>
+          <nav aria-label="发布失败后的操作">
+            <a href="/manage/tasks">查看后台任务</a>
+            <a href={`/manage/books/${props.bookId}/preview`}>返回预览</a>
+          </nav>
+        </div>
+      ) : null}
       {message && <p role="status">{message}</p>}
     </section>
   );

@@ -99,7 +99,7 @@ describe("checksummed migrations", () => {
   it("applies the locked M1 schema with FTS5 and all authority tables", async () => {
     const database = await openTemporaryDatabase();
     const result = applyMigrations(database, await loadMigrationManifest());
-    expect(result).toEqual({ applied: [1, 2, 3, 4, 5], current: 5 });
+    expect(result).toEqual({ applied: [1, 2, 3, 4, 5, 6], current: 6 });
 
     const names = (
       database
@@ -119,6 +119,7 @@ describe("checksummed migrations", () => {
         "imports",
         "import_candidates",
         "book_versions",
+        "book_version_presentations",
         "jobs",
         "search_short_fields",
         "search_fts",
@@ -148,6 +149,50 @@ describe("checksummed migrations", () => {
         )
         .get(),
     ).toEqual({ count: 1 });
+    expect(
+      database
+        .prepare(
+          `SELECT COUNT(*) AS count
+           FROM pragma_table_info('book_version_presentations')
+           WHERE name IN (
+             'projection_schema_version',
+             'projection_sha256',
+             'toc_preview_json'
+           )`,
+        )
+        .get(),
+    ).toEqual({ count: 3 });
+    database.close();
+  });
+
+  it("upgrades a v5 database without changing existing book lineage", async () => {
+    const database = await openTemporaryDatabase();
+    const manifest = await loadMigrationManifest();
+    applyMigrations(database, manifest.slice(0, 5));
+    database
+      .prepare(
+        `INSERT INTO installation (
+          id, admin_user_id, schema_version, created_at, updated_at
+        ) VALUES (1, NULL, 1, 1000, 1000)`,
+      )
+      .run();
+
+    expect(applyMigrations(database, manifest)).toEqual({
+      applied: [6],
+      current: 6,
+    });
+    expect(
+      database.prepare("SELECT * FROM installation WHERE id = 1").get(),
+    ).toMatchObject({ created_at: 1000, id: 1, updated_at: 1000 });
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM book_version_presentations")
+        .get(),
+    ).toEqual({ count: 0 });
+    expect(applyMigrations(database, manifest)).toEqual({
+      applied: [],
+      current: 6,
+    });
     database.close();
   });
 
@@ -164,16 +209,16 @@ describe("checksummed migrations", () => {
         nowMs: 1_000,
       }),
     ).toMatchObject({
-      applied: [1, 2, 3, 4, 5],
+      applied: [1, 2, 3, 4, 5, 6],
       backupPath: null,
-      current: 5,
+      current: 6,
     });
     const second = await runDatabaseMigrations({
       backupDirectory,
       databasePath,
       nowMs: 2_000,
     });
-    expect(second).toMatchObject({ applied: [], current: 5 });
+    expect(second).toMatchObject({ applied: [], current: 6 });
     expect(second.backupPath).not.toBeNull();
     if (!second.backupPath) throw new Error("Expected a pre-migration backup");
     await access(second.backupPath);

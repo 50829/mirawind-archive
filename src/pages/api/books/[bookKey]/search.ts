@@ -8,6 +8,7 @@ import { SafeApplicationError } from "@/domain/errors";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
 import { ifNoneMatchMatches } from "@/http/conditional";
+import { noIndexRobotsTag } from "@/http/seo/robots";
 import { PublishedBookService } from "@/services/published-book";
 import { getRuntimeStorageLayout } from "@/storage/runtime";
 
@@ -145,6 +146,7 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
     headers,
     book.visibility === "public" ? "public-html" : "private",
   );
+  headers.set("X-Robots-Tag", noIndexRobotsTag);
   if (ifNoneMatchMatches(request.headers.get("if-none-match"), etag)) {
     headers.delete("Content-Type");
     return new Response(null, { headers, status: 304 });

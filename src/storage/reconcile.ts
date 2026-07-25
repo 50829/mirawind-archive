@@ -6,6 +6,10 @@ import type Database from "better-sqlite3";
 import { VersionRepository } from "../db/repositories/versions.js";
 import { isOpaqueId } from "../domain/ids.js";
 import {
+  reconcileBookVersionPresentations,
+  type PresentationReconciliation,
+} from "../services/book-presentation.js";
+import {
   verifyAndRecoverCurrentVersions,
   type CurrentVersionRecovery,
 } from "../services/version-verifier.js";
@@ -13,6 +17,7 @@ import type { StorageLayout } from "./layout.js";
 
 export interface StorageReconciliation {
   readonly corruptDatabaseVersions: readonly string[];
+  readonly presentationReconciliation: PresentationReconciliation;
   readonly quarantinedDirectories: readonly string[];
   readonly recoveredCurrentVersions: readonly CurrentVersionRecovery[];
   readonly removedStagingDirectories: readonly string[];
@@ -167,9 +172,18 @@ export async function reconcileStorage(input: {
     layout: input.layout,
     repository: new VersionRepository(input.database),
   });
-  const recoveredCurrentVersions = await verifyAndRecoverCurrentVersions(input);
+  const presentationReconciliation =
+    await reconcileBookVersionPresentations(input);
+  const recoveredCurrentVersions = await verifyAndRecoverCurrentVersions({
+    ...input,
+    presentationIntegrityFailures: [
+      ...presentationReconciliation.failedVersionIds,
+      ...presentationReconciliation.mismatchedVersionIds,
+    ],
+  });
   return Object.freeze({
     corruptDatabaseVersions,
+    presentationReconciliation,
     quarantinedDirectories,
     recoveredCurrentVersions,
     removedStagingDirectories,

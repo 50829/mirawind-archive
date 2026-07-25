@@ -17,6 +17,10 @@ import {
   readingPageHeaders,
 } from "@/http/cache/reading-response";
 import {
+  libraryHtmlResponse,
+  publicJsonResponse,
+} from "@/http/cache/library-response";
+import {
   createSafeHtmlError,
   createSafeJsonError,
 } from "@/http/errors/responses";
@@ -63,7 +67,7 @@ const responseMatrix: readonly {
   },
   {
     cacheControl: "public, max-age=0, must-revalidate",
-    name: "public reader HTML and search",
+    name: "public library, details, reader HTML and JSON",
     policy: "public-html",
   },
   {
@@ -93,7 +97,12 @@ const responseMatrix: readonly {
 
 const routePolicyEvidence: Readonly<Record<string, readonly string[]>> = {
   "api/auth/[...all].ts": ['headers.set("Cache-Control"'],
+  "api/books/[bookKey]/details.ts": [
+    "publicJsonResponse",
+    "applyResponsePolicy",
+  ],
   "api/books/[bookKey]/search.ts": ["applyResponsePolicy"],
+  "api/manage/library.ts": ['applyResponsePolicy(headers, "private-api")'],
   "api/manage/books/[bookId]/draft.ts": ["applyResponsePolicy"],
   "api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].ts": [
     "applyResponsePolicy",
@@ -117,7 +126,9 @@ const routePolicyEvidence: Readonly<Record<string, readonly string[]>> = {
   "books/[bookKey]/assets/[versionId]/[resourceId].ts": [
     "immutableAssetHeaders",
   ],
+  "books/[bookKey]/index.astro": ["libraryHtmlResponse", "applyResponsePolicy"],
   "books/[bookKey]/originals/[fileId].ts": ["applyResponsePolicy"],
+  "library/index.astro": ["libraryHtmlResponse"],
   "login.astro": ["applyResponsePolicy"],
   "manage/books/[bookId]/preview.astro": [
     "hiddenManagementPage",
@@ -223,6 +234,27 @@ describe("full route authorization, cache and indexing matrix", () => {
         visibility: "private",
       }).headers.get("cache-control"),
     ).toBe("private, no-store");
+    const library = libraryHtmlResponse({
+      digest: "route-matrix",
+      rendererIdentity: "library-v1",
+      request: new Request("https://library.example/library"),
+      requestPath: "/library",
+      visibility: "public",
+    });
+    expect(library.headers.get("cache-control")).toBe(
+      "public, max-age=0, must-revalidate",
+    );
+    expect(library.headers.get("x-robots-tag")).toBeNull();
+    const detailsJson = publicJsonResponse({
+      digest: "route-matrix",
+      rendererIdentity: "details-json-v1",
+      request: new Request("https://library.example/api/books/book/details"),
+      requestPath: "/api/books/book/details",
+    });
+    expect(detailsJson.headers.get("cache-control")).toBe(
+      "public, max-age=0, must-revalidate",
+    );
+    expect(detailsJson.headers.get("x-robots-tag")).toBe(noIndex);
     expect(
       immutableAssetHeaders({
         mediaType: "image/png",

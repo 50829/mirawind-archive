@@ -60,7 +60,23 @@ test("edits every M1 structure override and preserves the old version on a faile
   });
 
   await page.getByRole("button", { name: "发布当前修订" }).click();
-  await expect(page.getByText(/发布完成/u)).toBeVisible({ timeout: 60_000 });
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "发布完成；新请求现在读取完整的新版本。" }),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("link", { name: "查看图书" })).toHaveAttribute(
+    "href",
+    /\/books\/[a-z0-9-]+|\/books\/[1-9][0-9]*/u,
+  );
+  await expect(page.getByRole("link", { name: "开始阅读" })).toHaveAttribute(
+    "href",
+    /\/read\//u,
+  );
+  await expect(page.getByRole("link", { name: "返回书库" })).toHaveAttribute(
+    "href",
+    "/library",
+  );
 
   const databasePath = resolve(e2eDataRoot, "db", "mirawind.sqlite");
   const database = new Database(databasePath);
@@ -106,16 +122,19 @@ test("edits every M1 structure override and preserves the old version on a faile
     anonymousPage.getByRole("navigation", { name: "本页提纲" }),
   ).toBeVisible();
   await expect(anonymousPage.getByRole("main")).toContainText("Opening.");
-  await anonymousPage
+  const readerSearch = anonymousPage
+    .getByRole("region", { name: "书内搜索" })
+    .first();
+  await readerSearch
     .getByRole("searchbox", { name: "搜索本书" })
     .fill("Published");
-  await anonymousPage.getByRole("button", { name: "搜索" }).click();
-  await expect(anonymousPage.locator("[data-search-results]")).toContainText(
+  await readerSearch.getByRole("button", { name: "搜索" }).click();
+  await expect(readerSearch.locator("[data-search-results]")).toContainText(
     "Published body.",
   );
-  await anonymousPage.getByRole("searchbox", { name: "搜索本书" }).fill("P");
-  await anonymousPage.getByRole("button", { name: "搜索" }).click();
-  await expect(anonymousPage.locator("[data-search-notice]")).toContainText(
+  await readerSearch.getByRole("searchbox", { name: "搜索本书" }).fill("P");
+  await readerSearch.getByRole("button", { name: "搜索" }).click();
+  await expect(readerSearch.locator("[data-search-notice]")).toContainText(
     "1–2 个字符只搜索书名、作者和章节标题",
   );
 

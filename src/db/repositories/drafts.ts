@@ -186,7 +186,7 @@ export class DraftRepository {
         .prepare(
           `UPDATE books
            SET draft_source_id = ?, draft_config_revision = ?,
-               title_cache = ?, alias = ?, updated_at = ?
+               title_cache = ?, updated_at = ?
            WHERE id = ?
              AND (
                draft_config_revision IS NULL
@@ -197,7 +197,6 @@ export class DraftRepository {
           input.sourceId,
           input.revision,
           input.title,
-          input.alias ?? null,
           input.nowMs,
           input.bookId,
           input.revision,
@@ -275,14 +274,12 @@ export class DraftRepository {
       const changed = this.database
         .prepare(
           `UPDATE books
-           SET draft_config_revision = ?, title_cache = ?, alias = ?,
-               updated_at = ?
+           SET draft_config_revision = ?, title_cache = ?, updated_at = ?
            WHERE id = ? AND draft_config_revision = ? AND draft_source_id = ?`,
         )
         .run(
           input.revision,
           input.title,
-          input.alias,
           input.nowMs,
           input.bookId,
           input.expectedRevision,

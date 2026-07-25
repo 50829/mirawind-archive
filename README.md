@@ -1,10 +1,12 @@
 # Mirawind Library
 
-Mirawind 是一个自托管、单管理员的语义化在线图书馆。M1 接受“一本书一个
+Mirawind 是一个自托管、单管理员的语义化在线图书馆。当前 M1 + M2a 接受“一本书一个
 MinerU ZIP”，在后台安全解包、预览、编译和建立搜索索引，再以不可变版本原子
-发布；读者请求始终读取已经发布的版本。
+发布；读者可以从 `/library` 浏览当前公开版本、查看 `/books/:bookKey` 详情，
+再进入带目录、提纲、搜索、下载和移动抽屉的阅读器。读者请求始终读取已经
+发布的版本。
 
-当前 M1 架构固定为一台 Linux 主机、一个 Astro Web 进程、一个同代码库 worker、
+当前架构固定为一台 Linux 主机、一个 Astro Web 进程、一个同代码库 worker、
 SQLite WAL 和本地持久化存储。不要横向扩容 Web/worker，也不要自行加入 Redis、
 另一种数据库或对象存储。
 
@@ -80,6 +82,8 @@ pnpm typecheck
 pnpm test
 pnpm test:e2e
 pnpm build
+pnpm benchmark:library --output-json docs/audits/m2a-library-performance.json \
+  --output-markdown docs/audits/m2a-library-performance.md
 ```
 
 真实 MinerU 3.4.4 样本放在 Git 与 Docker 构建上下文都忽略的
@@ -100,7 +104,9 @@ pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"
 - [本地 Docker 预览规格](specs/002-local-docker-preview/spec.md)
 - [M1 Feature Spec](specs/001-mineru-public-publishing/spec.md)
 - [M1 验收流程](specs/001-mineru-public-publishing/quickstart.md)
+- [书库与阅读闭环规格](specs/003-library-reading-loop/spec.md)
 
 Markdown 与版本化 `book.yaml` 是出版权威；AST、HTML、
 `document-manifest.json`、资源和搜索索引都是可重建派生物。SQLite 中的
-`current_version_id` 是唯一的当前版本指针。
+`current_version_id` 是唯一的当前版本指针；`book_version_presentations` 只是
+从当前不可变 `book.yaml` 与 manifest 重建的有界展示投影，不是新的编辑权威。

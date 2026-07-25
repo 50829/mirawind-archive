@@ -42,6 +42,13 @@ const migrationDefinitions = [
     name: "version_reclamation",
     version: 5,
   },
+  {
+    checksum:
+      "6ee4440612914bb5a060d948fca5fa02ce0527d4edde3b5359bad9ed254fcfd6",
+    file: "0006_book_version_presentations.sql",
+    name: "book_version_presentations",
+    version: 6,
+  },
 ] as const;
 
 export async function loadMigrationManifest(): Promise<readonly Migration[]> {

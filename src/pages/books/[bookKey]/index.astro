@@ -1,0 +1,271 @@
+---
+import { BookDetails } from "@/components/library/BookDetails";
+import { LibraryScene } from "@/components/library/LibraryScene";
+import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
+import { libraryHtmlResponse } from "@/http/cache/library-response";
+import { applyResponsePolicy } from "@/http/cache/policies";
+import { LibraryService } from "@/services/library";
+
+export const prerender = false;
+
+const requestedKey = Astro.params.bookKey ?? "";
+const { database, decision } = resolveRuntimeAdministrator(
+  Astro.locals.session,
+);
+const service = new LibraryService(database);
+const details = service.resolveDetails({
+  administrator: decision,
+  bookKey: requestedKey,
+});
+if (requestedKey !== details.bookKey) {
+  const location = new URL(`/books/${details.bookKey}`, Astro.url);
+  const headers = new Headers({ Location: location.toString() });
+  applyResponsePolicy(headers, "redirect");
+  return new Response(null, { headers, status: 302 });
+}
+const library = service.publicLibrary({ limit: 12 });
+const response = libraryHtmlResponse({
+  digest: `${library.digest}\0${details.versionId}\0${details.presentationDigest}`,
+  rendererIdentity: "book-details-dialog-v1",
+  request: Astro.request,
+  requestPath: Astro.url.pathname,
+  visibility: details.visibility,
+});
+if (response.notModified) return response.notModified;
+for (const [name, value] of response.headers) {
+  Astro.response.headers.set(name, value);
+}
+const canonical = new URL(`/books/${details.bookKey}`, Astro.url);
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    {
+      details.visibility === "private" ? (
+        <meta name="robots" content="noindex, nofollow" />
+      ) : (
+        <meta
+          name="description"
+          content={
+            details.description ?? `查看《${details.title}》的图书详情与目录。`
+          }
+        />
+      )
+    }
+    <link rel="canonical" href={canonical} />
+    <title>{details.title} · Mirawind</title>
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="站点导航">
+      <a class="brand" href="/">MIRAWIND</a>
+      <a href="/library">书库</a>
+    </nav>
+    <main>
+      <div class="library-backdrop" aria-hidden="true">
+        <LibraryScene library={library} />
+      </div>
+      <BookDetails closeHref="/library" details={details} />
+    </main>
+  </body>
+</html>
+
+<script>
+  import { installDetailsNavigation } from "@/components/library/details-navigation";
+
+  installDetailsNavigation();
+</script>
+
+<style>
+  :global(*) {
+    box-sizing: border-box;
+  }
+  :global(body) {
+    min-width: 20rem;
+    min-height: 100vh;
+    margin: 0;
+    color: #29251f;
+    background: #e9e3d8;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+  :global(a) {
+    color: inherit;
+    text-underline-offset: 0.2em;
+  }
+  :global(a:focus-visible),
+  :global(button:focus-visible) {
+    outline: 3px solid #c86135;
+    outline-offset: 3px;
+  }
+  .site-nav {
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem max(1rem, calc((100vw - 78rem) / 2));
+    border-bottom: 1px solid #cfc4b4;
+    background: #f2eee5;
+  }
+  .brand,
+  :global(.eyebrow) {
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+  }
+  main {
+    position: relative;
+    min-height: calc(100vh - 3.5rem);
+  }
+  .library-backdrop {
+    width: min(78rem, calc(100vw - 2rem));
+    margin: 0 auto;
+    padding: 4rem 0;
+    opacity: 0.26;
+    filter: grayscale(0.5);
+  }
+  :global(.library-heading) {
+    display: flex;
+    justify-content: space-between;
+  }
+  :global(.library-heading h1) {
+    margin: 0;
+    font:
+      5rem/1 Georgia,
+      serif;
+  }
+  :global(.library-grid) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 1rem;
+  }
+  :global(.library-card) {
+    min-height: 15rem;
+    padding: 1rem;
+    border: 1px solid #cfc4b4;
+    background: white;
+  }
+  :global(.library-cover) {
+    display: none;
+  }
+  :global(.book-details-dialog) {
+    width: min(54rem, calc(100vw - 2rem));
+    max-height: min(52rem, calc(100vh - 2rem));
+    margin: auto;
+    padding: 0;
+    overflow: auto;
+    border: 0;
+    border-radius: 1.15rem;
+    color: #29251f;
+    background: #fffdf8;
+    box-shadow: 0 2rem 6rem rgb(25 19 12 / 35%);
+  }
+  :global(.book-details-dialog::backdrop) {
+    background: rgb(25 22 18 / 56%);
+    backdrop-filter: blur(7px);
+  }
+  :global(.book-details) {
+    padding: clamp(1.25rem, 5vw, 3.5rem);
+  }
+  :global(.book-details > header) {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 1.5rem;
+  }
+  :global(.book-details h1) {
+    max-width: 18ch;
+    margin: 0.2rem 0 0;
+    overflow-wrap: anywhere;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(2.3rem, 7vw, 4.6rem);
+    font-weight: 500;
+    line-height: 1;
+  }
+  :global(.book-details-subtitle),
+  :global(.book-details-authors) {
+    color: #665d51;
+    font-size: 1.08rem;
+  }
+  :global(.details-close) {
+    flex: none;
+    min-height: 2.75rem;
+    padding: 0.7rem;
+  }
+  :global(.details-actions) {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+  :global(.primary-action) {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    padding: 0.65rem 1rem;
+    border-radius: 999px;
+    color: white;
+    background: #2d5b4a;
+    text-decoration: none;
+  }
+  :global(.book-details section),
+  :global(.details-metadata) {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #ddd4c6;
+  }
+  :global(.details-description) {
+    max-width: 70ch;
+    white-space: pre-line;
+    line-height: 1.75;
+  }
+  :global(.details-metadata) {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.5rem 1rem;
+  }
+  :global(.details-metadata dd) {
+    margin: 0;
+  }
+  :global(.details-section-heading) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  :global(.details-section-heading span),
+  :global(.details-downloads span) {
+    color: #6e655a;
+    font-size: 0.85rem;
+  }
+  :global(.details-toc),
+  :global(.details-downloads) {
+    display: grid;
+    gap: 0.7rem;
+    padding-left: 1.4rem;
+  }
+  :global(.details-toc li) {
+    padding-left: calc((var(--toc-level) - 1) * 0.75rem);
+  }
+  :global(.details-toc a) {
+    display: flex;
+    gap: 0.6rem;
+  }
+  :global(.details-downloads li) {
+    display: grid;
+    gap: 0.2rem;
+  }
+  @media (max-width: 35rem) {
+    :global(.book-details > header) {
+      display: block;
+    }
+    :global(.details-close) {
+      display: inline-flex;
+      margin-top: 1rem;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global(*) {
+      scroll-behavior: auto !important;
+    }
+  }
+</style>

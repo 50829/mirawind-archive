@@ -5,6 +5,7 @@ import { relative, resolve, sep } from "node:path";
 
 import type Database from "better-sqlite3";
 
+import { BookPresentationRepository } from "../db/repositories/book-presentations.js";
 import {
   type BookVersionRecord,
   VersionRepository,
@@ -226,8 +227,13 @@ export async function verifyAndRecoverCurrentVersions(input: {
   readonly database: Database.Database;
   readonly layout: StorageLayout;
   readonly nowMs: number;
+  readonly presentationIntegrityFailures?: readonly string[];
 }): Promise<readonly CurrentVersionRecovery[]> {
   const versions = new VersionRepository(input.database);
+  const presentations = new BookPresentationRepository(input.database);
+  const presentationIntegrityFailures = new Set(
+    input.presentationIntegrityFailures ?? [],
+  );
   const books = input.database
     .prepare(
       `SELECT id, current_version_id FROM books
@@ -238,8 +244,14 @@ export async function verifyAndRecoverCurrentVersions(input: {
   const recovered: CurrentVersionRecovery[] = [];
   for (const book of books) {
     const current = versions.find(book.current_version_id);
+    const currentPresentation = presentations.find(book.current_version_id);
     const result =
-      current && current.state !== "corrupt"
+      current &&
+      current.state !== "corrupt" &&
+      !presentationIntegrityFailures.has(current.id) &&
+      currentPresentation &&
+      currentPresentation.bookId === book.id &&
+      currentPresentation.configRevision === current.configRevision
         ? await verifyVersionQuickly(input.layout, current)
         : ({ code: "VERSION_IDENTITY_MISMATCH", ok: false } as const);
     if (result.ok) continue;
@@ -259,6 +271,15 @@ export async function verifyAndRecoverCurrentVersions(input: {
       );
     let replacement: BookVersionRecord | null = null;
     for (const candidate of candidates) {
+      const candidatePresentation = presentations.find(candidate.id);
+      if (
+        presentationIntegrityFailures.has(candidate.id) ||
+        !candidatePresentation ||
+        candidatePresentation.bookId !== candidate.bookId ||
+        candidatePresentation.configRevision !== candidate.configRevision
+      ) {
+        continue;
+      }
       const candidateResult = await verifyVersionQuickly(
         input.layout,
         candidate,
@@ -286,11 +307,18 @@ export async function verifyAndRecoverCurrentVersions(input: {
         input.database
           .prepare(
             `UPDATE books
-             SET current_version_id = ?, unavailable_reason = NULL,
+             SET current_version_id = ?, alias = ?,
+                 unavailable_reason = NULL,
                  updated_at = ?
              WHERE id = ? AND current_version_id = ?`,
           )
-          .run(replacement.id, input.nowMs, book.id, book.current_version_id);
+          .run(
+            replacement.id,
+            presentations.require(replacement.id).alias,
+            input.nowMs,
+            book.id,
+            book.current_version_id,
+          );
       } else {
         input.database
           .prepare(

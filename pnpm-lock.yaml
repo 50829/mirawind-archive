@@ -141,6 +141,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)
+      axe-core:
+        specifier: 4.12.1
+        version: 4.12.1
       eslint:
         specifier: 10.7.0
         version: 10.7.0(jiti@2.6.1)

@@ -16,6 +16,7 @@ import {
   validateDocumentManifest,
   validateVersionMarker,
 } from "../../schemas/document-manifest.js";
+import { deriveBookVersionPresentation } from "../../services/book-presentation.js";
 import { publishReadyVersion } from "../../services/publication.js";
 import { finalizeImmutableVersion } from "../../storage/finalize-version.js";
 import type { StorageLayout } from "../../storage/layout.js";
@@ -79,6 +80,11 @@ export async function finalizeBuiltPublication(input: {
       await readFile(resolve(finalDirectory, "document-manifest.json"), "utf8"),
     ),
   );
+  const presentation = deriveBookVersionPresentation({
+    bookConfig: await readFile(resolve(finalDirectory, "book.yaml"), "utf8"),
+    createdAtMs: Date.parse(String(marker.created_at)),
+    documentManifest: manifest,
+  });
   const spoolJson = await readFile(
     resolve(finalDirectory, "derived", "search-spool.json"),
     "utf8",
@@ -107,6 +113,7 @@ export async function finalizeBuiltPublication(input: {
       typeof marker.predecessor_version_id === "string"
         ? marker.predecessor_version_id
         : null,
+    presentation,
     rendererVersion: String(
       (marker.compiler as Readonly<Record<string, unknown>>).renderer_version,
     ),

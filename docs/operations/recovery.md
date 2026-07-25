@@ -107,8 +107,16 @@ unreferenced complete directory. Review the result before deleting anything.
 
 On startup, the worker quickly verifies every current version. If the current version is
 missing or corrupt, it marks that version corrupt and atomically promotes the newest
-verified, published predecessor. If no valid predecessor exists, only that book becomes
-unavailable with `503`; unrelated books continue.
+verified, published predecessor that also has a matching presentation projection. If no
+valid predecessor exists, only that book becomes unavailable with `503`; unrelated books
+continue.
+
+After migration 6, a missing presentation is rebuilt off the request path from the
+immutable `book.yaml` and `document-manifest.json`. A digest mismatch is never overwritten
+automatically and prevents that version from automatic rollback promotion. Do not repair
+`book_version_presentations`, `books.alias` or the projection digest by hand; preserve the
+volume, inspect the version authorities, and let reconciliation either rebuild a missing
+row or isolate the book.
 
 When automatic rollback occurs:
 
@@ -141,6 +149,7 @@ test requires:
 - `PRAGMA foreign_key_check` returns no rows;
 - all expected migration versions/checksums match;
 - current version files pass closure and hash verification;
+- every current version has a matching presentation digest and current alias;
 - public/private/search/download behavior matches the restored pointer.
 
 ## 8. Disk full or WAL growth

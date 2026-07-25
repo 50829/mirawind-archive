@@ -7,14 +7,14 @@ const title = "Mirawind Library";
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
-    <meta name="robots" content="noindex, nofollow" />
     <title>{title}</title>
   </head>
   <body>
     <main>
       <p class="eyebrow">MIRAWIND</p>
       <h1>{title}</h1>
-      <p>MinerU 语义出版服务正在搭建中。</p>
+      <p>把复杂文档整理成一座安静、可检索、可持续阅读的书库。</p>
+      <a class="library-link" href="/library">查看书库</a>
     </main>
   </body>
 </html>
@@ -61,5 +61,23 @@ const title = "Mirawind Library";
 
   p:last-child {
     color: #bdb3a4;
+  }
+
+  .library-link {
+    display: inline-flex;
+    min-height: 2.8rem;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 0.7rem 1rem;
+    border-radius: 999px;
+    color: #171512;
+    background: #d89f5b;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .library-link:focus-visible {
+    outline: 3px solid white;
+    outline-offset: 3px;
   }
 </style>

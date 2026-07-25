@@ -147,6 +147,9 @@ export async function reclaimRetainedStorage(input: {
       .prepare("DELETE FROM search_fts WHERE version_id = ?")
       .run(versionId);
     input.database
+      .prepare("DELETE FROM book_version_presentations WHERE version_id = ?")
+      .run(versionId);
+    input.database
       .prepare(
         `INSERT INTO audit_events (
            actor_user_id, action, book_id, version_id, job_id,

@@ -134,6 +134,24 @@ applyResponsePolicy(Astro.response.headers, "manage");
     padding-top: 1rem;
     border-top: 1px solid #ded6ca;
   }
+  :global(.publish-outcome) {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid #b9cdbd;
+    border-radius: 0.65rem;
+    background: #f2f8f2;
+  }
+  :global(.publish-outcome[data-state="failed"]),
+  :global(.publish-outcome[data-state="interrupted"]),
+  :global(.publish-outcome[data-state="canceled"]) {
+    border-color: #d8bea2;
+    background: #fff8ed;
+  }
+  :global(.publish-outcome nav) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+  }
   :global(.structure-edit-list) {
     display: grid;
     gap: 1rem;

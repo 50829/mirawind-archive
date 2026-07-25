@@ -1,7 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
 import { resolve } from "node:path";
 
-const port = 4321;
+const configuredPort = Number(process.env.MIRAWIND_E2E_PORT ?? "4321");
+if (
+  !Number.isSafeInteger(configuredPort) ||
+  configuredPort < 1_024 ||
+  configuredPort > 65_535
+) {
+  throw new Error("MIRAWIND_E2E_PORT must be an integer from 1024 to 65535");
+}
+const port = configuredPort;
 const baseURL = `http://127.0.0.1:${port}`;
 const dataRoot = resolve(".cache/e2e-playwright-data");
 
@@ -22,8 +30,26 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "chromium",
+      name: "desktop-chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "library-mobile",
+      testMatch: /library-reading\.spec\.ts/u,
+      use: {
+        ...devices["Desktop Chrome"],
+        hasTouch: true,
+        isMobile: true,
+        viewport: { height: 800, width: 360 },
+      },
+    },
+    {
+      name: "library-no-javascript",
+      testMatch: /library-reading\.spec\.ts/u,
+      use: {
+        ...devices["Desktop Chrome"],
+        javaScriptEnabled: false,
+      },
     },
   ],
   webServer: {
@@ -34,6 +60,8 @@ export default defineConfig({
       MIRAWIND_DATA_DIR: dataRoot,
       MIRAWIND_PASSKEY_RP_ID: "127.0.0.1",
       MIRAWIND_PUBLIC_ORIGIN: baseURL,
+      HOST: "127.0.0.1",
+      PORT: String(port),
     },
     reuseExistingServer: false,
     timeout: 120_000,

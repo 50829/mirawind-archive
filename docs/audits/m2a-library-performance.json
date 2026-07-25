@@ -1,0 +1,41 @@
+{
+  "background_rebuild": {
+    "heartbeat_writes": 88,
+    "job_state": "running",
+    "observed": true
+  },
+  "book_count": 1000,
+  "concurrency": 4,
+  "details": {
+    "route": "/books/bench-book-500",
+    "status": "passed",
+    "summary": {
+      "count": 30,
+      "maximum_ms": 22.406,
+      "mean_ms": 19.731,
+      "minimum_ms": 6.501,
+      "p50_ms": 20.405,
+      "p95_ms": 21.927,
+      "p99_ms": 22.406
+    },
+    "target_p95_ms": 300
+  },
+  "library": {
+    "route": "/library",
+    "status": "passed",
+    "summary": {
+      "count": 30,
+      "maximum_ms": 243.929,
+      "mean_ms": 153.666,
+      "minimum_ms": 38.728,
+      "p50_ms": 148.021,
+      "p95_ms": 239.527,
+      "p99_ms": 243.929
+    },
+    "target_p95_ms": 300
+  },
+  "requests_per_route": 30,
+  "schema_version": 1,
+  "status": "passed",
+  "warmups_per_route": 5
+}

@@ -11,9 +11,9 @@ import type { CompiledDocumentPage } from "./pages.js";
 
 export const compilerIdentity = Object.freeze({
   name: "mirawind-book-compiler" as const,
-  renderer_version: "semantic-html-v1",
+  renderer_version: "semantic-html-v2",
   text_normalization_version: 1,
-  version: "compiler-v1",
+  version: "compiler-v2",
 });
 
 export interface ManifestSourceFile {

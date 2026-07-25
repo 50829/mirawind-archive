@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
 import { canonicalJson } from "@/compiler/document/manifest";
@@ -76,6 +77,34 @@ async function stagedPublicationVersion(root: string): Promise<void> {
   await mkdir(resolve(version, "source"), { mode: 0o700, recursive: true });
   const source = "Body";
   const blockId = "blk_stale_publish_test_0001";
+  const bookConfig = stringify(
+    {
+      book_id: 1,
+      metadata: {},
+      publishing: {
+        code: { line_numbers: false },
+        numbering: { mode: "normalized" },
+      },
+      revision: 1,
+      schema_version: 1,
+      source: {
+        main_markdown: "book.md",
+        main_markdown_sha256: hash(source),
+        original_files: [],
+      },
+      structure: [
+        {
+          block_id: blockId,
+          display_level: 1,
+          include_in_toc: false,
+          role: "body",
+          starts_page: true,
+        },
+      ],
+      title: "Book",
+    },
+    { lineWidth: 0 },
+  );
   const manifest = {
     blocks: {
       [blockId]: {
@@ -154,7 +183,7 @@ async function stagedPublicationVersion(root: string): Promise<void> {
     digest: hash(canonicalJson(spoolPayload)),
   };
   const values = new Map<string, string>([
-    ["book.yaml", "book: test\n"],
+    ["book.yaml", bookConfig],
     ["derived/search-spool.json", canonicalJson(spool)],
     ["document-manifest.json", canonicalJson(manifest)],
     ["published/pages/1.html", "<main>Body</main>\n"],

@@ -15,13 +15,13 @@ import type { StorageLayout } from "../storage/layout.js";
 import { resolveContainedPath } from "../storage/layout.js";
 
 interface CurrentBookRow {
-  alias: string | null;
   current_version_id: string | null;
   id: number;
   manifest_sha256: string | null;
+  presentation_alias: string | null;
+  presentation_title: string | null;
   renderer_version: string | null;
   state: VersionState | null;
-  title_cache: string;
   version_rel_path: string | null;
   visibility: BookVisibility;
 }
@@ -200,6 +200,7 @@ function mapCurrent(
     !row.version_rel_path ||
     !row.manifest_sha256 ||
     !row.renderer_version ||
+    !row.presentation_title ||
     row.state !== "published"
   ) {
     if (row.visibility === "public" || row.current_version_id) {
@@ -208,12 +209,12 @@ function mapCurrent(
     return hidden();
   }
   return Object.freeze({
-    alias: row.alias,
+    alias: row.presentation_alias,
     audience: access.audience,
     bookId: row.id,
     manifestSha256: row.manifest_sha256,
     rendererVersion: row.renderer_version,
-    title: row.title_cache,
+    title: row.presentation_title,
     versionId: row.current_version_id,
     versionRelativePath: row.version_rel_path,
     visibility: row.visibility,
@@ -221,15 +222,20 @@ function mapCurrent(
 }
 
 function currentSelect(predicate: string): string {
-  return `SELECT books.id, books.alias, books.visibility, books.title_cache,
+  return `SELECT books.id, books.visibility,
                  books.current_version_id, book_versions.state,
                  book_versions.version_rel_path, book_versions.renderer_version,
-                 book_versions.manifest_sha256
+                 book_versions.manifest_sha256,
+                 presentation.alias AS presentation_alias,
+                 presentation.title AS presentation_title
           FROM books
           LEFT JOIN book_versions
             ON book_versions.id = books.current_version_id
            AND book_versions.book_id = books.id
            AND book_versions.reclaimed_at IS NULL
+          LEFT JOIN book_version_presentations AS presentation
+            ON presentation.version_id = books.current_version_id
+           AND presentation.book_id = books.id
           WHERE ${predicate}
           LIMIT 1`;
 }
@@ -328,11 +334,13 @@ export class PublishedBookService {
     const predicate = keyPredicate(input.bookKey);
     const row = this.database
       .prepare(
-        `SELECT books.id, books.alias, books.visibility, books.title_cache,
+        `SELECT books.id, books.visibility,
                 books.current_version_id, current_version.state,
                 current_version.version_rel_path,
                 current_version.renderer_version,
                 current_version.manifest_sha256,
+                presentation.alias AS presentation_alias,
+                presentation.title AS presentation_title,
                 requested_version.state AS requested_state,
                 requested_version.version_rel_path AS requested_version_rel_path,
                 requested_version.manifest_sha256 AS requested_manifest_sha256
@@ -341,6 +349,9 @@ export class PublishedBookService {
            ON current_version.id = books.current_version_id
           AND current_version.book_id = books.id
           AND current_version.reclaimed_at IS NULL
+         LEFT JOIN book_version_presentations AS presentation
+           ON presentation.version_id = books.current_version_id
+          AND presentation.book_id = books.id
          LEFT JOIN book_versions AS requested_version
            ON requested_version.id = ?
           AND requested_version.book_id = books.id
@@ -394,10 +405,12 @@ export class PublishedBookService {
     const predicate = keyPredicate(input.bookKey);
     const row = this.database
       .prepare(
-        `SELECT books.id, books.alias, books.visibility, books.title_cache,
+        `SELECT books.id, books.visibility,
                 books.current_version_id, book_versions.state,
                 book_versions.version_rel_path, book_versions.renderer_version,
                 book_versions.manifest_sha256,
+                presentation.alias AS presentation_alias,
+                presentation.title AS presentation_title,
                 original_files.id AS file_id, original_files.original_name,
                 original_files.media_type, original_files.size_bytes,
                 original_files.sha256
@@ -406,6 +419,9 @@ export class PublishedBookService {
            ON book_versions.id = books.current_version_id
           AND book_versions.book_id = books.id
           AND book_versions.reclaimed_at IS NULL
+         LEFT JOIN book_version_presentations AS presentation
+           ON presentation.version_id = books.current_version_id
+          AND presentation.book_id = books.id
          LEFT JOIN original_files
            ON original_files.id = ?
           AND original_files.book_id = books.id

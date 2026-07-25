@@ -202,6 +202,13 @@ Unreferenced complete version directories move to per-book quarantine; old quara
 entries are removed only after 24 hours. Retention always preserves the current and newest
 previous verified version. Failed path deletion remains visible for a later retry.
 
+Schema migration 6 adds the rebuildable `book_version_presentations` table without parsing
+book files during migration. On the first worker startup after upgrade, reconciliation
+derives missing rows from each unreclaimed immutable `book.yaml` and manifest, validates
+existing projection digests, repairs the current alias, and excludes invalid projections
+from rollback. Keep the worker running until this pass completes; public `/library` omits a
+temporarily missing projection and shows only a generic partial-availability notice.
+
 Do not manually move quarantine entries into `versions`, delete the current version, remove
 the previous verified version, or delete FTS rows. Preserve the volume and follow
 `recovery.md` if reconciliation reports a corrupt current version.

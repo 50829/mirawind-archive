@@ -8,6 +8,7 @@ import { JobRepository } from "@/db/repositories/jobs";
 import { SourceRepository } from "@/db/repositories/sources";
 import { VersionRepository } from "@/db/repositories/versions";
 import { publishReadyVersion } from "@/services/publication";
+import type { BookVersionPresentation } from "@/services/book-presentation";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 
@@ -16,6 +17,28 @@ const sourceId = "src_stale_publish_test_0001";
 export const publicationTestVersionId = "ver_stale_publish_test_0001";
 const blockId = "blk_stale_publish_test_0001";
 export const publicationTestLeaseOwner = "worker:test";
+
+export function presentationForTest(
+  bookId: number,
+  versionId = publicationTestVersionId,
+): BookVersionPresentation {
+  return Object.freeze({
+    alias: null,
+    bookId,
+    configRevision: 1,
+    coverResourceId: null,
+    createdAtMs: 11,
+    firstPageAlias: null,
+    firstPageId: 1,
+    metadataJson: "{}\n",
+    projectionSchemaVersion: 1,
+    projectionSha256: hash,
+    title: "Book",
+    tocEntryCount: 0,
+    tocPreviewJson: "[]\n",
+    versionId,
+  });
+}
 
 function spool(
   bookId: number,
@@ -141,6 +164,7 @@ export function setupPublicationFixture(
       manifestSchemaVersion: 1,
       manifestSha256: hash,
       predecessorVersionId: null,
+      presentation: presentationForTest(book.id),
       rendererVersion: "semantic-html-v1",
       sourceId,
       spool: spool(book.id),
@@ -247,6 +271,7 @@ describe("guarded publication compare-and-swap", () => {
         manifestSchemaVersion: 1,
         manifestSha256: "b".repeat(64),
         predecessorVersionId: null,
+        presentation: presentationForTest(fixture.book.id, competingVersionId),
         rendererVersion: "semantic-html-v1",
         sourceId,
         spool: spool(fixture.book.id, competingVersionId),

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { JobRepository } from "@/db/repositories/jobs";
+import { BookPresentationRepository } from "@/db/repositories/book-presentations";
 import { VersionRepository } from "@/db/repositories/versions";
 import {
   reclaimRetainedStorage,
@@ -16,6 +17,7 @@ import { openMigratedTestDatabase } from "../../helpers/database.js";
 import {
   publicationTestLeaseOwner,
   publicationTestVersionId,
+  presentationForTest,
   setupPublicationFixture,
 } from "../publication/stale-build.test.js";
 
@@ -101,6 +103,10 @@ describe("published version and orphan retention", () => {
         25,
         jobIds[2]?.[1],
       );
+      const presentations = new BookPresentationRepository(migrated.database);
+      for (const versionId of [oldId, previousId, failedCleanupId]) {
+        presentations.insert(presentationForTest(fixture.book.id, versionId));
+      }
       for (const versionId of [
         publicationTestVersionId,
         previousId,
@@ -162,6 +168,9 @@ describe("published version and orphan retention", () => {
       expect(versions.require(previousId).reclaimedAtMs).toBeNull();
       expect(versions.require(oldId).reclaimedAtMs).toBe(nowMs);
       expect(versions.require(failedCleanupId).reclaimedAtMs).toBe(nowMs);
+      expect(presentations.find(oldId)).toBeNull();
+      expect(presentations.find(failedCleanupId)).toBeNull();
+      expect(presentations.find(previousId)).not.toBeNull();
       expect(fixture.drafts.requireBook(fixture.book.id).currentVersionId).toBe(
         publicationTestVersionId,
       );

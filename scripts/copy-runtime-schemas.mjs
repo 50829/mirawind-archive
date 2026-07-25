@@ -40,6 +40,7 @@ await Promise.all(
     "0003_passkey_last_used.sql",
     "0004_job_idempotency.sql",
     "0005_version_reclamation.sql",
+    "0006_book_version_presentations.sql",
   ].map((migrationName) =>
     copyFile(
       resolve(repositoryRoot, "src", "db", "migrations", migrationName),

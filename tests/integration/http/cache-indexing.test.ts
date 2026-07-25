@@ -8,8 +8,43 @@ import {
   immutableAssetHeaders,
   readingPageHeaders,
 } from "@/http/cache/reading-response";
+import {
+  libraryHtmlResponse,
+  publicJsonResponse,
+} from "@/http/cache/library-response";
 
 describe("public/private cache and indexing boundaries", () => {
+  it("uses current library/detail digests and route paths in strong identities", () => {
+    const request = new Request("https://library.example/library");
+    const baseline = libraryHtmlResponse({
+      digest: "books-v1",
+      rendererIdentity: "library-v1",
+      request,
+      requestPath: "/library",
+      visibility: "public",
+    });
+    expect(baseline.headers.get("cache-control")).toBe(
+      "public, max-age=0, must-revalidate",
+    );
+    expect(
+      libraryHtmlResponse({
+        digest: "books-v2",
+        rendererIdentity: "library-v1",
+        request,
+        requestPath: "/library",
+        visibility: "public",
+      }).etag,
+    ).not.toBe(baseline.etag);
+    const details = publicJsonResponse({
+      digest: "details-v1",
+      rendererIdentity: "details-json-v1",
+      request: new Request("https://library.example/api/books/book/details"),
+      requestPath: "/api/books/book/details",
+    });
+    expect(details.headers.get("x-robots-tag")).toContain("noindex");
+    expect(details.headers.has("vary")).toBe(false);
+  });
+
   it("makes public page ETags route, version and renderer specific", () => {
     const baseline = readingPageHeaders({
       pageIdentity: "1",

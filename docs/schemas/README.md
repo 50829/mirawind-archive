@@ -1,4 +1,4 @@
-# Mirawind M1 schemas
+# Mirawind M1 + M2a schemas
 
 本目录冻结 M1 的三个独立版本化格式：
 
@@ -41,6 +41,17 @@
 `document-manifest.json` 是可重建产物，不是可编辑正文。它保存当前版本页面、
 块、源位置、规范化可见文本、指纹和资源映射，以支持渲染、搜索、诊断和
 后续稳定 ID 继承。
+
+## SQLite schema 6 展示投影
+
+M2a 的 SQLite schema 6 新增 `book_version_presentations`。它不是第四个可编辑
+文件格式，而是从每个不可变版本中已经验证的 `book.yaml` 与
+`document-manifest.json` 派生的有界查询投影。投影冻结当前版本的别名、书名、
+可选元数据、封面资源、第一页与最多 200 条目录，并带规范化 SHA-256。
+
+新版本的 ready 行、展示投影和搜索行在同一事务提交；发布事务只有在投影身份
+匹配时才推进 `current_version_id` 和当前别名。迁移本身只建空表，worker 启动
+后离线回填；公开请求禁止退回读取草稿 `title_cache` 或现场解析 YAML。
 
 ## 两层验证
 

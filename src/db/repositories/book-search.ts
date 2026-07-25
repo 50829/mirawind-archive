@@ -163,9 +163,12 @@ export class BookSearchRepository {
                     LIMIT 1
                   )
                 ) AS block_id,
-                books.title_cache AS title
+                presentation.title AS title
          FROM search_short_fields
          JOIN books ON books.id = search_short_fields.book_id
+         JOIN book_version_presentations AS presentation
+           ON presentation.version_id = search_short_fields.version_id
+          AND presentation.book_id = books.id
          WHERE search_short_fields.book_id = ?
            AND search_short_fields.version_id = ?
            AND books.current_version_id = search_short_fields.version_id

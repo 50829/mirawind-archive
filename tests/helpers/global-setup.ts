@@ -1,11 +1,20 @@
+import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chmod, lstat, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { promisify } from "node:util";
+
+import { stringify } from "yaml";
 
 import { createSetupAuth } from "@/auth/setup-server";
 import { bootstrapAdministrator } from "@/cli/commands/admin-bootstrap";
 import { openDatabase } from "@/db/connection";
 import { applyMigrations } from "@/db/migrate";
 import { loadMigrationManifest } from "@/db/migration-manifest";
+import { DraftRepository } from "@/db/repositories/drafts";
+import { ImportRepository } from "@/db/repositories/imports";
+import { JobRepository } from "@/db/repositories/jobs";
+import { SourceRepository } from "@/db/repositories/sources";
 import { createStorageLayout } from "@/storage/layout";
 
 import { buildZip } from "../../scripts/fixtures/zip-builder.js";
@@ -17,7 +26,7 @@ export const e2eAdministrator = Object.freeze({
 });
 export const e2eDataRoot = resolve(".cache/e2e-playwright-data");
 export const e2eFixtureRoot = resolve(".cache/e2e-fixtures");
-export const e2eOrigin = "http://127.0.0.1:4321";
+export const e2eOrigin = `http://127.0.0.1:${process.env.MIRAWIND_E2E_PORT ?? "4321"}`;
 export const e2eHighMarkdown = [
   "# E2E Cloud Book",
   "",
@@ -31,6 +40,177 @@ const e2ePixelPng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
 );
+const execFileAsync = promisify(execFile);
+
+async function seedPublishedLibraryBook(input: {
+  readonly database: ReturnType<typeof openDatabase>;
+  readonly layout: Awaited<ReturnType<typeof createStorageLayout>>;
+}): Promise<void> {
+  const { buildPublish, finalizeBuiltPublication } =
+    await import("@/jobs/handlers/build-publish");
+  const nowMs = Date.now();
+  const drafts = new DraftRepository(input.database);
+  const book = drafts.createBook({ nowMs, title: "E2E Library Book" });
+  const imported = new ImportRepository(input.database).createUploaded({
+    bookId: book.id,
+    expiresAtMs: nowMs + 86_400_000,
+    id: "imp_e2e_library_seed_000001",
+    nowMs: nowMs + 1,
+    uploadRelativePath: "tmp/e2e-library-seed.zip",
+    uploadSha256: "a".repeat(64),
+    uploadSizeBytes: 1,
+  });
+  const sourceId = "src_e2e_library_seed_000001";
+  const draftRoot = resolve(
+    input.layout.bookDirectory,
+    String(book.id),
+    "draft",
+  );
+  const sourceRoot = resolve(draftRoot, "sources", sourceId);
+  await mkdir(sourceRoot, { mode: 0o700, recursive: true });
+  const markdown = [
+    "# Opening",
+    "",
+    "A seeded public book for the complete library and reading journey.",
+    "",
+    "## Continue",
+    "",
+    "Searchable reader content.",
+  ].join("\n");
+  await writeFile(resolve(sourceRoot, "book.md"), markdown, { mode: 0o400 });
+  const markdownSha256 = createHash("sha256").update(markdown).digest("hex");
+  new SourceRepository(input.database).createSnapshot({
+    analysisVersion: "e2e-seed-v1",
+    bookId: book.id,
+    createdFromImportId: imported.id,
+    id: sourceId,
+    mainMarkdownPath: "book.md",
+    mainMarkdownSha256: markdownSha256,
+    nowMs: nowMs + 2,
+    sourceRootRelativePath: `books/${book.id}/draft/sources/${sourceId}`,
+  });
+  const config = {
+    alias: "e2e-library-book",
+    book_id: book.id,
+    metadata: {
+      authors: ["Mirawind Test"],
+      description: "A stable browser fixture for the public reading loop.",
+      language: "en",
+    },
+    publishing: {
+      code: { line_numbers: false },
+      numbering: { mode: "normalized" },
+    },
+    revision: 1,
+    schema_version: 1,
+    source: {
+      main_markdown: "book.md",
+      main_markdown_sha256: markdownSha256,
+      original_files: [],
+    },
+    structure: [
+      {
+        block_id: "blk_e2e_library_opening_0001",
+        display_level: 1,
+        include_in_toc: true,
+        role: "body",
+        starts_page: true,
+      },
+      {
+        block_id: "blk_e2e_library_continue_0001",
+        display_level: 2,
+        include_in_toc: true,
+        starts_page: true,
+      },
+    ],
+    title: "E2E Library Book",
+  };
+  const configYaml = stringify(config, { lineWidth: 0 });
+  const configPath = resolve(draftRoot, "configs", "1", "book.yaml");
+  await mkdir(dirname(configPath), { mode: 0o700, recursive: true });
+  await writeFile(configPath, configYaml, { mode: 0o400 });
+  drafts.addConfigRevision({
+    alias: config.alias,
+    bookId: book.id,
+    nowMs: nowMs + 3,
+    revision: 1,
+    schemaVersion: 1,
+    sourceId,
+    title: config.title,
+    yamlRelativePath: `books/${book.id}/draft/configs/1/book.yaml`,
+    yamlSha256: createHash("sha256").update(configYaml).digest("hex"),
+  });
+  const jobs = new JobRepository(input.database);
+  const preview = jobs.create({
+    bookId: book.id,
+    capturedConfigRevision: 1,
+    capturedSourceId: sourceId,
+    kind: "build_preview",
+    nowMs: nowMs + 4,
+  });
+  drafts.createPreview({
+    bookId: book.id,
+    configRevision: 1,
+    jobId: preview.id,
+    sourceId,
+  });
+  jobs.claimNext({ leaseOwner: "e2e-seed", nowMs: nowMs + 5 });
+  jobs.completeSuccess({
+    jobId: preview.id,
+    leaseOwner: "e2e-seed",
+    nowMs: nowMs + 6,
+  });
+  drafts.completePreview({
+    bookId: book.id,
+    configRevision: 1,
+    diagnosticsRelativePath: `books/${book.id}/draft/previews/1/diagnostics.json`,
+    nowMs: nowMs + 7,
+    previewRelativePath: `books/${book.id}/draft/previews/1`,
+  });
+  const publish = jobs.create({
+    bookId: book.id,
+    capturedConfigRevision: 1,
+    capturedSourceId: sourceId,
+    kind: "build_publish",
+    nowMs: nowMs + 8,
+  });
+  jobs.claimNext({ leaseOwner: "e2e-seed", nowMs: nowMs + 9 });
+  const stagingDirectory = resolve(input.layout.temporaryDirectory, publish.id);
+  await buildPublish({
+    bookId: book.id,
+    configRevision: 1,
+    configYamlPath: configPath,
+    createdAtMs: nowMs + 10,
+    draftRoot,
+    jobId: publish.id,
+    predecessorVersionId: null,
+    sourceId,
+    sourceRoot,
+    stagingDirectory,
+  });
+  await finalizeBuiltPublication({
+    actorUserId: null,
+    database: input.database,
+    jobId: publish.id,
+    layout: input.layout,
+    leaseOwner: "e2e-seed",
+    nowMs: nowMs + 11,
+    stagingDirectory,
+  });
+}
+
+async function seedPublishedLibraryBookInIsolatedRuntime(): Promise<void> {
+  await execFileAsync(
+    resolve("node_modules/.bin/tsx"),
+    [resolve("tests/helpers/global-setup.ts")],
+    {
+      env: {
+        ...process.env,
+        MIRAWIND_E2E_SEED_ONLY: "1",
+      },
+    },
+  );
+}
 
 export async function ensureTestDataRoot(
   relativePath = "test-results/runtime-data",
@@ -93,6 +273,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   } finally {
     database.close();
   }
+  await seedPublishedLibraryBookInIsolatedRuntime();
 
   await Promise.all([
     writeFile(
@@ -193,4 +374,17 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     publicOrigin: e2eOrigin,
   });
   return async () => worker.stop();
+}
+
+if (process.env.MIRAWIND_E2E_SEED_ONLY === "1") {
+  const layout = await createStorageLayout(e2eDataRoot);
+  const database = openDatabase(
+    resolve(layout.databaseDirectory, "mirawind.sqlite"),
+    { role: "worker" },
+  );
+  try {
+    await seedPublishedLibraryBook({ database, layout });
+  } finally {
+    database.close();
+  }
 }

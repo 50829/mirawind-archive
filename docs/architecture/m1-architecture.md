@@ -1,10 +1,10 @@
 # M1 architecture: MinerU public publishing
 
-- Status: Implemented and verified for M1
+- Status: Implemented and verified for M1; M2a library/reading loop implemented
 - Date: 2026-07-25
 - Scope: M0 foundations required by the first MinerU vertical slice, plus M1 import,
   preview, compile, search, publish, read, and original ZIP download
-- Governing decisions: D-019～D-025, D-042～D-098
+- Governing decisions: D-019～D-025, D-042～D-100
 
 ## 1. System boundary
 
@@ -39,16 +39,17 @@ authoritative deployment boundary.
 
 ## 2. Authority and derived data
 
-| Data                     | Authority                         |                       Mutable? |          Rebuildable? |
-| ------------------------ | --------------------------------- | -----------------------------: | --------------------: |
-| Markdown                 | Imported source                   |   Only by a new import/version |                    No |
-| `book.yaml`              | Portable publishing configuration | Through atomic config revision |                    No |
-| Original MinerU ZIP      | Registered original file          | No, replace with a new version |                    No |
-| AST                      | Compiler memory                   |              No persisted copy |                   Yes |
-| `document-manifest.json` | Derived version manifest          |                      Immutable |                   Yes |
-| HTML and reading assets  | Derived version output            |                      Immutable |                   Yes |
-| FTS5 rows                | Derived version index             |                 Version-scoped |                   Yes |
-| Job/session/book state   | SQLite                            |                  Transactional | Not solely from books |
+| Data                     | Authority                          |                       Mutable? |          Rebuildable? |
+| ------------------------ | ---------------------------------- | -----------------------------: | --------------------: |
+| Markdown                 | Imported source                    |   Only by a new import/version |                    No |
+| `book.yaml`              | Portable publishing configuration  | Through atomic config revision |                    No |
+| Original MinerU ZIP      | Registered original file           | No, replace with a new version |                    No |
+| AST                      | Compiler memory                    |              No persisted copy |                   Yes |
+| `document-manifest.json` | Derived version manifest           |                      Immutable |                   Yes |
+| HTML and reading assets  | Derived version output             |                      Immutable |                   Yes |
+| FTS5 rows                | Derived version index              |                 Version-scoped |                   Yes |
+| Book presentation row    | Derived bounded display projection |                 Version-scoped |                   Yes |
+| Job/session/book state   | SQLite                             |                  Transactional | Not solely from books |
 
 `book.yaml`, manifest and the internal `version.json` complete marker use independent
 schemas in `docs/schemas/`. SQLite may cache metadata needed for routing and queries, but it
@@ -106,11 +107,18 @@ The concrete schema belongs in the M1 data model, but it must represent:
   revision;
 - FTS5 trigram rows scoped by book, version, page, and block;
 - a small normalized title/author/heading table for one- and two-character fallback;
+- one bounded `book_version_presentations` row per immutable version, derived from its
+  validated `book.yaml` and manifest and committed atomically with ready/search rows;
 - an audit trail for bootstrap, recovery, publish, rollback, visibility, and Passkey changes.
 
 Search queries must join or otherwise enforce both book visibility and
 `books.current_version_id`. Committed `ready`, old, or orphaned FTS rows must never become
 public results.
+
+The public `/library` and `/books/:bookKey` routes read only current public presentation
+rows. Draft title caches and administrator lifecycle state never enter cacheable HTML;
+`/api/manage/library` adds them after authorization with `private, no-store`. Numeric book
+keys redirect only after resolving and authorizing the current projection.
 
 ## 5. Authentication and authorization
 
@@ -210,11 +218,12 @@ The exact cutover is:
 2. fully build and validate staging;
 3. write and sync files, then atomically rename staging to `versions/<version_id>`;
 4. sync the versions parent directory;
-5. in one SQLite transaction, create the `ready` version and all version-scoped FTS rows;
+5. in one SQLite transaction, create the `ready` version, its bounded presentation
+   projection and all version-scoped FTS rows;
 6. validate FTS counts and identifiers; rollback on any failure;
 7. in a short `BEGIN IMMEDIATE` transaction, compare the captured base/config revision,
-   confirm `ready`, update `current_version_id`, transition version states, and complete the
-   job.
+   confirm `ready` and projection identity, update `current_version_id` plus the frozen
+   current alias, transition version states, and complete the job.
 
 There is no filesystem current pointer. Public version-specific routes must not expose a
 `ready` version merely because its directory exists.

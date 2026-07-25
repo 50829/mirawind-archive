@@ -10,6 +10,7 @@
   },
   "scripts": {
     "benchmark:environment": "tsx scripts/benchmarks/environment.ts",
+    "benchmark:library": "tsx scripts/benchmarks/library.ts",
     "benchmark:build": "tsx scripts/benchmarks/build.ts",
     "benchmark:read": "tsx scripts/benchmarks/read.ts",
     "benchmark:reference": "tsx scripts/benchmarks/reference.ts",
@@ -85,6 +86,7 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitest/coverage-v8": "4.1.10",
+    "axe-core": "4.12.1",
     "eslint": "10.7.0",
     "eslint-plugin-astro": "3.0.1",
     "eslint-plugin-jsx-a11y": "6.10.2",
