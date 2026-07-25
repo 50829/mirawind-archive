@@ -11,6 +11,7 @@ import { ImportRepository } from "@/db/repositories/imports";
 import { JobRepository } from "@/db/repositories/jobs";
 import { SourceRepository } from "@/db/repositories/sources";
 import { createStrongEtag } from "@/http/cache/policies";
+import { parseBookConfigYaml } from "@/schemas/book-config";
 import { replaceDraftConfig } from "@/services/config-revisions";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
@@ -153,12 +154,27 @@ describe("atomic draft configuration revisions", () => {
         title: "Edited",
       });
       const revision = drafts.requireConfig(setup.book.id, 2);
-      expect(
+      const persisted = parseBookConfigYaml(
         await readFile(
           resolve(dataRoot.layout.root, revision.yamlRelativePath),
           "utf8",
         ),
-      ).toContain("title: Edited");
+      );
+      expect(persisted).toMatchObject({
+        schema_version: 2,
+        source: {
+          preprocessing: {
+            typography: {
+              input_sha256: setup.markdownHash,
+              output_sha256: setup.markdownHash,
+              profile: "preserve-v1",
+            },
+          },
+        },
+        source_regions: [],
+        title: "Edited",
+      });
+      expect(revision.schemaVersion).toBe(2);
       expect(
         (await stat(resolve(dataRoot.layout.root, revision.yamlRelativePath)))
           .mode & 0o777,

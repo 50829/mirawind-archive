@@ -106,6 +106,7 @@ export function prepareConfiguredDocument(input: {
   readonly config: unknown;
   readonly configSha256: string;
   readonly markdownBytes: string | Uint8Array;
+  readonly sourceHeadingBlockIds?: readonly string[];
 }): ConfiguredDocument {
   if (!/^[a-f0-9]{64}$/u.test(input.configSha256)) {
     throw new Error("CONFIGURED_DOCUMENT_CONFIG_HASH_INVALID");
@@ -122,6 +123,8 @@ export function prepareConfiguredDocument(input: {
   }
 
   const structure = configuredStructure(config);
+  const sourceHeadingBlockIds =
+    input.sourceHeadingBlockIds ?? structure.map((heading) => heading.block_id);
   let headingIndex = 0;
   let blockOrdinal = 0;
   const fullDocument = normalizeDocumentBlocks(
@@ -129,17 +132,20 @@ export function prepareConfiguredDocument(input: {
     {
       idFactory(node) {
         if (node.type === "heading") {
-          const heading = structure[headingIndex++];
-          if (!heading) {
+          const blockId = sourceHeadingBlockIds[headingIndex++];
+          if (!blockId) {
             throw new Error("CONFIGURED_DOCUMENT_HEADING_COUNT_MISMATCH");
           }
-          return heading.block_id;
+          return blockId;
         }
         return configuredBlockId(input.configSha256, ++blockOrdinal);
       },
     },
   );
-  if (headingIndex !== structure.length) {
+  if (
+    headingIndex !== sourceHeadingBlockIds.length ||
+    sourceHeadingBlockIds.length !== structure.length
+  ) {
     throw new Error("CONFIGURED_DOCUMENT_HEADING_COUNT_MISMATCH");
   }
 

@@ -5,16 +5,14 @@ import { dirname, relative, resolve, sep } from "node:path";
 import type Database from "better-sqlite3";
 import { stringify } from "yaml";
 
-import { normalizeDocumentBlocks } from "../compiler/document/normalize.js";
-import { parseMarkdownDocument } from "../compiler/document/parser.js";
-import { validateDocumentConfig } from "../compiler/document/validate-config.js";
+import { prepareConfiguredDocument } from "../compiler/document/configured-document.js";
 import { DraftRepository } from "../db/repositories/drafts.js";
 import { SourceRepository } from "../db/repositories/sources.js";
 import { SafeApplicationError } from "../domain/errors.js";
 import { createStrongEtag } from "../http/cache/policies.js";
 import {
+  migrateBookConfigToCurrent,
   parseBookConfigYaml,
-  validateBookConfig,
 } from "../schemas/book-config.js";
 import {
   atomicWriteFile,
@@ -87,7 +85,7 @@ export async function replaceDraftConfig(input: {
       412,
     );
   }
-  const next = validateBookConfig(input.config);
+  const next = migrateBookConfigToCurrent(input.config);
   if (next.book_id !== input.bookId || next.revision !== current.revision + 1) {
     throw new SafeApplicationError(
       "CONFIG_REVISION_INVALID",
@@ -99,8 +97,8 @@ export async function replaceDraftConfig(input: {
     input.layout.root,
     current.yamlRelativePath,
   );
-  const currentConfig = parseBookConfigYaml(
-    await readFile(currentPath, "utf8"),
+  const currentConfig = migrateBookConfigToCurrent(
+    parseBookConfigYaml(await readFile(currentPath, "utf8")),
   );
   if (!equalJson(sourceConfig(currentConfig), sourceConfig(next))) {
     throw new SafeApplicationError(
@@ -131,24 +129,6 @@ export async function replaceDraftConfig(input: {
       409,
     );
   }
-  const currentStructure = structures(currentConfig);
-  let headingIndex = 0;
-  let generatedBlockIndex = 0;
-  const document = normalizeDocumentBlocks(
-    parseMarkdownDocument(markdownBytes),
-    {
-      idFactory(node) {
-        if (node.type !== "heading") {
-          return `blk_validation_only_${String(++generatedBlockIndex).padStart(16, "0")}`;
-        }
-        const configured = currentStructure[headingIndex++];
-        if (!configured) throw new Error("CONFIG_HEADING_COUNT_MISMATCH");
-        return configured.block_id;
-      },
-    },
-  );
-  validateDocumentConfig({ config: next, document });
-
   const yaml = stringify(next, { lineWidth: 0 });
   if (Buffer.byteLength(yaml, "utf8") > maximumConfigBytes) {
     throw new SafeApplicationError(
@@ -158,6 +138,14 @@ export async function replaceDraftConfig(input: {
     );
   }
   const yamlSha256 = createHash("sha256").update(yaml).digest("hex");
+  prepareConfiguredDocument({
+    config: next,
+    configSha256: yamlSha256,
+    markdownBytes,
+    sourceHeadingBlockIds: structures(currentConfig).map(
+      (heading) => heading.block_id,
+    ),
+  });
   const revisionDirectory = resolve(
     input.layout.bookDirectory,
     String(input.bookId),
