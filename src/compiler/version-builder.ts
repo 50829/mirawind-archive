@@ -15,6 +15,7 @@ import {
   readerShellCss,
   renderReaderShell,
 } from "../components/reader/render.js";
+import { prepareConfiguredDocument } from "./document/configured-document.js";
 import {
   buildDocumentManifest,
   canonicalJson,
@@ -22,11 +23,6 @@ import {
   type ManifestResource,
   type ManifestSourceFile,
 } from "./document/manifest.js";
-import { normalizeDocumentBlocks } from "./document/normalize.js";
-import { numberConfiguredHeadings } from "./document/numbering.js";
-import { parseMarkdownDocument } from "./document/parser.js";
-import { splitDocumentPages } from "./document/pages.js";
-import { validateDocumentConfig } from "./document/validate-config.js";
 import { renderSemanticDocument } from "./render/document.js";
 import { inspectRasterImage } from "./resources/images.js";
 import { resolveDocumentResources } from "./resources/resolver.js";
@@ -92,7 +88,7 @@ async function digestFile(
 }
 
 function opaqueBuildId(
-  prefix: "blk" | "res",
+  prefix: "res",
   versionId: string,
   ordinal: number,
 ): string {
@@ -224,10 +220,6 @@ async function describeFiles(root: string): Promise<readonly FileDescriptor[]> {
   return Object.freeze(descriptors);
 }
 
-function structureNodes(config: Readonly<Record<string, unknown>>) {
-  return config.structure as readonly { readonly block_id: string }[];
-}
-
 export async function buildImmutableVersion(input: {
   readonly bookId: number;
   readonly configRevision: number;
@@ -264,37 +256,12 @@ export async function buildImmutableVersion(input: {
     if (sha256(markdownBytes) !== source.main_markdown_sha256) {
       throw new Error("VERSION_SOURCE_HASH_MISMATCH");
     }
-    const configuredStructure = structureNodes(config);
-    let headingIndex = 0;
-    let blockOrdinal = 0;
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(markdownBytes),
-      {
-        idFactory(node) {
-          if (node.type === "heading") {
-            const heading = configuredStructure[headingIndex++];
-            if (!heading) throw new Error("VERSION_HEADING_COUNT_MISMATCH");
-            return heading.block_id;
-          }
-          return opaqueBuildId("blk", input.versionId, ++blockOrdinal);
-        },
-      },
-    );
-    if (headingIndex !== configuredStructure.length) {
-      throw new Error("VERSION_HEADING_COUNT_MISMATCH");
-    }
-    const validated = validateDocumentConfig({ config, document });
-    const publishing = config.publishing as Readonly<Record<string, unknown>>;
-    const numbering = publishing.numbering as Readonly<Record<string, unknown>>;
-    const headings = numberConfiguredHeadings(
-      validated.headings,
-      numbering.mode === "preserve" ? "preserve" : "normalized",
-    );
-    const pages = splitDocumentPages({
-      bookTitle: String(config.title),
-      document,
-      headings,
+    const configured = prepareConfiguredDocument({
+      config,
+      configSha256: sha256(configYaml),
+      markdownBytes,
     });
+    const { document, headings, pages } = configured;
 
     let resourceOrdinal = 0;
     const resourceResolution = await resolveDocumentResources({
