@@ -47,7 +47,7 @@ function expectRendererClosure(
   expect(responses.every((response) => response.status < 400)).toBe(true);
 }
 
-test("keeps typography, KaTeX accessibility and local assets equal in preview and publication", async ({
+test("closes typography, formula and printed contents preview-to-publication behavior", async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -186,18 +186,7 @@ test("keeps typography, KaTeX accessibility and local assets equal in preview an
   );
 
   expectRendererClosure(rendererResponses, rendererFailures);
-});
-
-test("reviews, reverses, reapplies and republishes a printed contents proposal", async ({
-  page,
-}) => {
-  test.setTimeout(90_000);
-  await page.goto("/login");
-  await page.getByText("使用备用密码", { exact: true }).click();
-  await page.getByLabel("管理员邮箱").fill(e2eAdministrator.email);
-  await page.getByLabel("备用密码").fill(e2eAdministrator.password);
-  await page.getByRole("button", { name: "使用备用密码登录" }).click();
-  await expect(page).toHaveURL(/\/manage$/u);
+  await page.goto("/manage");
 
   await page
     .getByLabel("MinerU ZIP")
@@ -219,13 +208,15 @@ test("reviews, reverses, reapplies and republishes a printed contents proposal",
     page.getByRole("heading", { name: "Markdown 预处理" }),
   ).toBeVisible();
 
-  const preview = page.frameLocator("iframe");
-  await expect(preview.getByRole("heading", { name: "目录" })).toHaveCount(0);
-  await expect(preview.locator(".reader-document")).not.toContainText(
+  const printedPreview = page.frameLocator("iframe");
+  await expect(
+    printedPreview.getByRole("heading", { name: "目录" }),
+  ).toHaveCount(0);
+  await expect(printedPreview.locator(".reader-document")).not.toContainText(
     "...... 1",
   );
   await expect(
-    preview.getByRole("heading", { name: "第 1 章 绪论" }),
+    printedPreview.getByRole("heading", { name: "第 1 章 绪论" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "全部恢复到正文" }).click();
@@ -237,8 +228,10 @@ test("reviews, reverses, reapplies and republishes a printed contents proposal",
   await expect(page.getByText("预览已就绪")).toBeVisible({
     timeout: 30_000,
   });
-  await expect(preview.getByRole("heading", { name: "目录" })).toHaveCount(0);
-  await expect(preview.locator(".reader-document")).not.toContainText(
+  await expect(
+    printedPreview.getByRole("heading", { name: "目录" }),
+  ).toHaveCount(0);
+  await expect(printedPreview.locator(".reader-document")).not.toContainText(
     "...... 1",
   );
 
@@ -290,10 +283,10 @@ test("reviews, reverses, reapplies and republishes a printed contents proposal",
     }
   })();
 
-  const readingHref = await page
+  const printedReadingHref = await page
     .getByRole("link", { name: "开始阅读" })
     .getAttribute("href");
-  await page.goto(readingHref ?? "");
+  await page.goto(printedReadingHref ?? "");
   await expect(page.locator(".reader-document")).not.toContainText("...... 1");
   await expect(
     page.getByRole("navigation", { name: "全书目录" }),
