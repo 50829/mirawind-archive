@@ -164,12 +164,12 @@ and normal atomic publication.
 - [ ] T052 Run `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`, fixing all regressions in affected files
 - [ ] T053 Synchronize product, architecture, schema, operations, quickstart and third-party documentation in `docs/` and `specs/004-publishing-quality/`
 - [ ] T054 Run Spec Kit analyze and converge, resolve every unmitigated CRITICAL finding and mark completed tasks in `specs/004-publishing-quality/tasks.md`
-- [ ] T055 [P] Add nested full-book TOC, current-branch, breadcrumb, page-outline and no-script navigation evidence in `tests/unit/library/reader-interaction.test.ts` and `tests/integration/compiler/version-builder.test.ts`
-- [ ] T056 Generate canonical heading navigation inputs and render native collapsible hierarchy, current location and scroll-aware page outline in `src/compiler/version-builder.ts` and `src/components/reader/`
-- [ ] T057 Add desktop/mobile reader navigation acceptance for branch toggling, ordinary links, scroll highlighting and drawer behavior in `tests/e2e/library-reading.spec.ts`
-- [ ] T058 Add pinned Tailwind CSS v4 Vite/CLI integration, one global theme entry and a deterministic standalone reader stylesheet build in `astro.config.mjs`, `package.json` and `src/styles/`
-- [ ] T059 Replace product-source color literals with approved Tailwind palette utilities/tokens and add the D-106 static style-token gate to normal lint
-- [ ] T060 Verify global application styling, immutable reader stylesheet delivery, desktop/mobile reader navigation and production asset closure in unit, contract, integration and Playwright tests
+- [x] T055 [P] Add nested full-book TOC, current-branch, breadcrumb, page-outline and no-script navigation evidence in `tests/unit/library/reader-interaction.test.ts` and `tests/integration/compiler/version-builder.test.ts`
+- [x] T056 Generate canonical heading navigation inputs and render native collapsible hierarchy, current location and scroll-aware page outline in `src/compiler/version-builder.ts` and `src/components/reader/`
+- [x] T057 Add desktop/mobile reader navigation acceptance for branch toggling, ordinary links, scroll highlighting and drawer behavior in `tests/e2e/library-reading.spec.ts`
+- [x] T058 Add pinned Tailwind CSS v4 Vite/CLI integration, one global theme entry and a deterministic standalone reader stylesheet build in `astro.config.mjs`, `package.json` and `src/styles/`
+- [x] T059 Replace product-source color literals with approved Tailwind palette utilities/tokens and add the D-106 static style-token gate to normal lint
+- [x] T060 Verify global application styling, immutable reader stylesheet delivery, desktop/mobile reader navigation and production asset closure in unit, contract, integration and Playwright tests
 
 ---
 
@@ -221,6 +221,6 @@ Foundation → US1 → US2 → US3 → US4 → Release
 
 ## Format validation
 
-All 54 tasks use the required checkbox, sequential task ID, optional parallel marker,
+All 60 tasks use the required checkbox, sequential task ID, optional parallel marker,
 required user-story label inside story phases, an actionable description and explicit file
 path.
