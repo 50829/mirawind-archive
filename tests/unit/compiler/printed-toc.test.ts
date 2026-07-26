@@ -106,7 +106,7 @@ describe("printed contents detection", () => {
     ).toBe(true);
   });
 
-  it("refuses automatic application when the candidate contains rich content", () => {
+  it("applies a high-confidence boundary that contains a scanned contents image", () => {
     const source = [
       "# 目录",
       "",
@@ -131,10 +131,203 @@ describe("printed contents detection", () => {
       sourcePath: "source/full.md",
       sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
-    expect(result.candidates[0]?.proposedRegion).toBeUndefined();
-    expect(result.candidates[0]?.diagnostics).toContainEqual(
+    expect(result.candidates[0]?.proposedRegion).toMatchObject({
+      applied: true,
+      disposition: "reference_only",
+    });
+    expect(result.candidates[0]?.diagnostics).not.toContainEqual(
       expect.objectContaining({ code: "PRINTED_TOC_RICH_CONTENT" }),
     );
+  });
+
+  it("does not promote arbitrary short prose inside a labelled contents", () => {
+    const source = [
+      "# Contents",
+      "",
+      "Editorial overview",
+      "",
+      "Bibliographic Notes . . . . .",
+      "",
+      "# Chapter 1 Start .... 1",
+      "",
+      "# Chapter 2 Continue .... 9",
+      "",
+      "# Chapter 3 Finish .... 17",
+      "",
+      "习题 19",
+      "",
+      "Fn 20",
+      "",
+      "# Chapter 1 Start",
+      "",
+      "Body",
+      "",
+      "# Chapter 2 Continue",
+      "",
+      "Body",
+      "",
+      "# Chapter 3 Finish",
+      "",
+      "Body",
+      "",
+      "# 习题",
+      "",
+      "Body",
+      "",
+      "# Fn",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]).toMatchObject({
+      entryCount: 5,
+      matchedHeadingCount: 5,
+    });
+  });
+
+  it("bridges a bounded run of non-entry blocks inside printed contents", () => {
+    const source = [
+      "# Contents",
+      "",
+      "# Chapter 1 Start .... 1",
+      "",
+      "![scan](images/contents.png)",
+      "",
+      "Page header.",
+      "",
+      "Copyright notice.",
+      "",
+      "Column marker.",
+      "",
+      "Continued on next page.",
+      "",
+      "# Chapter 2 Continue .... 9",
+      "",
+      "# Chapter 3 Finish .... 17",
+      "",
+      "# Chapter 1 Start",
+      "",
+      "Body",
+      "",
+      "# Chapter 2 Continue",
+      "",
+      "Body",
+      "",
+      "# Chapter 3 Finish",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]).toMatchObject({
+      boundaryConfidence: "high",
+      entryCount: 3,
+      proposedRegion: expect.objectContaining({ applied: true }),
+    });
+  });
+
+  it("stops before a following list of figures or tables", () => {
+    const source = [
+      "# Contents",
+      "",
+      "# Chapter 1 Start 1",
+      "",
+      "# Chapter 2 Continue 9",
+      "",
+      "# Chapter 3 Finish 17",
+      "",
+      "# List of Figures",
+      "",
+      "Figure 1 Overview 5",
+      "",
+      "Figure 2 Detail 7",
+      "",
+      "# List of Tables",
+      "",
+      "Table 1 Results 8",
+      "",
+      "# Chapter 1 Start",
+      "",
+      "Body",
+      "",
+      "# Chapter 2 Continue",
+      "",
+      "Body",
+      "",
+      "# Chapter 3 Finish",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]).toMatchObject({ entryCount: 3 });
+    expect(result.candidates[0]?.endByte).toBe(
+      Buffer.byteLength(
+        "# Contents\n\n# Chapter 1 Start 1\n\n# Chapter 2 Continue 9\n\n# Chapter 3 Finish 17",
+        "utf8",
+      ),
+    );
+  });
+
+  it("keeps a repeated chapter when printed-page rows continue after it", () => {
+    const source = [
+      "# Contents",
+      "",
+      "# Chapter 1 Start 1",
+      "",
+      "# Chapter 2 Continue 9",
+      "",
+      "# Chapter 1 Start",
+      "",
+      "1.1 Basics 1",
+      "",
+      "1.2 More 3",
+      "",
+      "# Chapter 2 Continue",
+      "",
+      "2.1 Detail 9",
+      "",
+      "2.2 Finish 12",
+      "",
+      "# Chapter 1 Start",
+      "",
+      "Body paragraph.",
+      "",
+      "# 1.1 Basics",
+      "",
+      "Body paragraph.",
+      "",
+      "# Chapter 2 Continue",
+      "",
+      "Body paragraph.",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]).toMatchObject({
+      entryCount: 8,
+      proposedRegion: expect.objectContaining({ applied: true }),
+    });
   });
 
   it("recovers nested printed levels when MinerU emits every heading as H2", async () => {
@@ -269,14 +462,190 @@ describe("printed contents detection", () => {
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({
       confidence: "high",
-      entryCount: 3,
-      matchedHeadingCount: 3,
+      entryCount: 4,
+      matchedHeadingCount: 4,
     });
     expect(
       result.candidates[0]?.proposedRegion?.entries.map(
         (entry) => entry.reference_level,
       ),
-    ).toEqual([1, 1, 1]);
+    ).toEqual([1, 1, 1, 1]);
+  });
+
+  it("includes an unnumbered frontmatter entry at an unlabelled boundary", () => {
+    const source = [
+      "# Book",
+      "",
+      "## 前言",
+      "",
+      "## 第一章 甲",
+      "",
+      "## 第二章 乙",
+      "",
+      "## 第三章 丙",
+      "",
+      "## 前言",
+      "",
+      "正文",
+      "",
+      "## 第一章 甲",
+      "",
+      "正文",
+      "",
+      "## 第二章 乙",
+      "",
+      "正文",
+      "",
+      "## 第三章 丙",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]).toMatchObject({
+      entryCount: 4,
+      proposedRegion: expect.objectContaining({
+        range: expect.objectContaining({
+          start_byte: Buffer.byteLength("# Book\n\n", "utf8"),
+        }),
+      }),
+    });
+  });
+
+  it("recognizes bilingual brief and full contents labels", () => {
+    const source = [
+      "# Book",
+      "",
+      "## Brief Contents 简明目录",
+      "",
+      "Chapter 1 Start 1",
+      "",
+      "Chapter 2 Continue 9",
+      "",
+      "## Contents 目录",
+      "",
+      "Chapter 1 Start 1",
+      "",
+      "1.1 Basics 2",
+      "",
+      "Chapter 2 Continue 9",
+      "",
+      "## Chapter 1 Start",
+      "",
+      "## 1.1 Basics",
+      "",
+      "## Chapter 2 Continue",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: (() => {
+        let ordinal = 0;
+        return () => `region_${String(++ordinal).padStart(16, "0")}`;
+      })(),
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates.map((candidate) => candidate.entryCount)).toEqual([
+      2, 3,
+    ]);
+    expect(result.candidates.filter((candidate) => candidate.canonical)).toHaveLength(
+      1,
+    );
+    expect(result.candidates.find((candidate) => candidate.canonical)?.entryCount).toBe(
+      3,
+    );
+  });
+
+  it("folds adjacent bilingual label blocks into one region", () => {
+    const source = [
+      "# Contents",
+      "",
+      "# 目录",
+      "",
+      "# Chapter 1 Start 1",
+      "",
+      "# Chapter 2 Continue 9",
+      "",
+      "# Chapter 3 Finish 17",
+      "",
+      "# Chapter 1 Start",
+      "",
+      "Body",
+      "",
+      "# Chapter 2 Continue",
+      "",
+      "Body",
+      "",
+      "# Chapter 3 Finish",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({
+      entryCount: 3,
+      proposedRegion: expect.objectContaining({
+        range: expect.objectContaining({ start_byte: 0 }),
+      }),
+    });
+  });
+
+  it("does not impose a fixed root-block window on an unlabelled contents", () => {
+    const preface = Array.from(
+      { length: 120 },
+      (_, index) =>
+        index === 30
+          ? "Chapter 99 appears in this isolated preface note"
+          : `Preface paragraph ${index + 1}.`,
+    );
+    const tail = Array.from(
+      { length: 140 },
+      (_, index) => `Body paragraph ${index + 1}.`,
+    );
+    const source = [
+      "# Book",
+      "",
+      ...preface,
+      "",
+      "Chapter 1 Start 1",
+      "",
+      "Chapter 2 Continue 9",
+      "",
+      "Chapter 3 Finish 17",
+      "",
+      "## Chapter 1 Start",
+      "",
+      "## Chapter 2 Continue",
+      "",
+      "## Chapter 3 Finish",
+      "",
+      ...tail,
+    ].join("\n\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]).toMatchObject({
+      boundaryConfidence: "high",
+      entryCount: 3,
+      proposedRegion: expect.objectContaining({ applied: true }),
+    });
   });
 
   it("locates an unmatched entry at the nearest reliable body heading", () => {

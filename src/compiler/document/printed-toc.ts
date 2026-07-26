@@ -80,8 +80,14 @@ interface AlignmentNode extends MatchCandidate {
 }
 
 const contentsTitle =
-  /^(?:目\s*录|简\s*目|brief\s+contents|contents|table\s+of\s+contents)$/iu;
+  /^(?:(?:目\s*录|简\s*(?:明\s*)?目(?:\s*录)?)(?:\s+(?:brief\s+contents|contents))?|(?:brief\s+contents|contents|table\s+of\s+contents)(?:\s+(?:目\s*录|简\s*(?:明\s*)?目(?:\s*录)?))?)$/iu;
 const dotLeader = /(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+)/u;
+const frontmatterEntryTitle =
+  /^(?:序|序言|前言|译者序|出版者的话|作者简介|译者简介|教学建议|preface|foreword|prologue)$/iu;
+const contextualEntryTitle =
+  /^(?:参考文献|参考资料|索引|后记|致谢|术语表|图片来源|符号索引|思考题|本章注记|附录注记|自测题|习题|练习|课后习题和问题|复习题|人物专访|编程作业|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits|practice exercises|further reading|review questions|exercises)$/iu;
+const supplementalListTitle =
+  /^(?:list\s+of\s+(?:figures|tables)|(?:图|插图|表)(?:目录|清单))$/iu;
 const richTypes = new Set([
   "definition",
   "footnoteDefinition",
@@ -94,6 +100,7 @@ const richTypes = new Set([
   "table",
 ]);
 const maximumMatchCandidates = 200_000;
+const maximumInterveningBlocks = 8;
 const entrySkipCost = 2.5;
 const headingSkipCost = 0.05;
 
@@ -215,7 +222,7 @@ function printedPageEvidence(
   if (
     !title ||
     !pageLabel ||
-    title.length < 3 ||
+    [...title].length < 2 ||
     /^(?:chapter|chap\.?|part|section|第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部))$/iu.test(
       title,
     )
@@ -279,7 +286,6 @@ function contextualLevel(
 }
 
 function lineEntries(input: {
-  readonly allowPlain: boolean;
   readonly block: TransientDocumentNode;
   readonly previousLevel: number;
   readonly source: string;
@@ -297,15 +303,12 @@ function lineEntries(input: {
     const plain = plainTitle(line);
     const numbering = inferPrintedHeadingEvidence(plain);
     const hasPrintedPage = printedPageEvidence(plain) !== undefined;
-    const hasDotLeader = dotLeader.test(plain);
-    const plainCandidate =
-      input.allowPlain &&
-      plain.length > 0 &&
-      plain.length <= 80 &&
-      !contentsTitle.test(plain) &&
-      !/[，,。.;；！？!?]/u.test(plain) &&
-      !/^(?:!\[|<|```|\|)/u.test(plain);
-    if (hasPrintedPage || hasDotLeader || numbering || plainCandidate) {
+    if (
+      hasPrintedPage ||
+      numbering ||
+      frontmatterEntryTitle.test(plain) ||
+      contextualEntryTitle.test(plain)
+    ) {
       const title = normalizedTitle(line);
       if (title) {
         const startOffset = input.block.position.start.offset + lineOffset;
@@ -332,6 +335,17 @@ function lineEntries(input: {
     lineOffset += line.length + 1;
   }
   return Object.freeze(entries);
+}
+
+function hasPrintedPageLine(
+  block: TransientDocumentNode | undefined,
+  source: string,
+): boolean {
+  if (!block?.position) return false;
+  return source
+    .slice(block.position.start.offset, block.position.end.offset)
+    .split(/\n/u)
+    .some((line) => printedPageEvidence(line) !== undefined);
 }
 
 function similarity(left: string, right: string): number {
@@ -675,35 +689,70 @@ export function detectPrintedContents(input: {
   const ranges: {
     readonly endIndex: number;
     readonly explicit: boolean;
+    readonly firstEntryIndex: number;
     readonly startIndex: number;
   }[] = [];
   const explicitLabels = roots.flatMap((root, index) =>
     contentsTitle.test(rootTitle(root).normalize("NFKC")) ? [index] : [],
   );
-  for (const [labelIndex, startIndex] of explicitLabels.entries()) {
+  for (let labelIndex = 0; labelIndex < explicitLabels.length; ) {
+    const startIndex = explicitLabels[labelIndex];
+    if (startIndex === undefined) break;
+    let labelEndIndex = startIndex;
+    while (explicitLabels[labelIndex + 1] === labelEndIndex + 1) {
+      labelEndIndex = explicitLabels[++labelIndex] ?? labelEndIndex;
+    }
     ranges.push({
       endIndex: (explicitLabels[labelIndex + 1] ?? roots.length) - 1,
       explicit: true,
+      firstEntryIndex: labelEndIndex + 1,
       startIndex,
     });
+    labelIndex += 1;
   }
   if (ranges.length === 0) {
-    const searchLimit = Math.min(roots.length, 100);
+    const searchLimit = roots.length;
     for (let index = 0; index < searchLimit; index += 1) {
       if (index / Math.max(1, roots.length) > 0.5) break;
       const root = roots[index];
       if (!root?.position) continue;
       const seed = lineEntries({
-        allowPlain: false,
         block: root,
         previousLevel: 0,
         source: input.document.source,
         sourceBytes,
       });
-      if (seed.length > 0) {
+      if (seed.length === 0) continue;
+      let evidenceEntries = seed.length;
+      let noiseBlocks = 0;
+      for (
+        let cursor = index + 1;
+        cursor < Math.min(searchLimit, index + 24);
+        cursor += 1
+      ) {
+        const candidate = roots[cursor];
+        if (!candidate?.position) continue;
+        const extracted = lineEntries({
+          block: candidate,
+          previousLevel: 0,
+          source: input.document.source,
+          sourceBytes,
+        });
+        if (extracted.length > 0) {
+          evidenceEntries += extracted.length;
+          noiseBlocks = 0;
+        } else if (
+          evidenceEntries > 0 &&
+          ++noiseBlocks > maximumInterveningBlocks
+        ) {
+          break;
+        }
+      }
+      if (evidenceEntries >= 3) {
         ranges.push({
           endIndex: roots.length - 1,
           explicit: false,
+          firstEntryIndex: index,
           startIndex: index,
         });
         break;
@@ -717,24 +766,36 @@ export function detectPrintedContents(input: {
     let candidateEndIndex = range.startIndex;
     let richContent = false;
     let noiseBlocks = 0;
-    const firstEntryIndex = range.explicit
-      ? range.startIndex + 1
-      : range.startIndex;
-    for (let index = firstEntryIndex; index <= range.endIndex; index += 1) {
+    for (
+      let index = range.firstEntryIndex;
+      index <= range.endIndex;
+      index += 1
+    ) {
       const block = roots[index];
       if (!block?.position) continue;
+      if (
+        entries.length > 0 &&
+        supplementalListTitle.test(rootTitle(block).normalize("NFKC"))
+      ) {
+        break;
+      }
       const possibleBodyTitle =
         block.type === "heading" ? normalizedTitle(rootTitle(block)) : "";
+      const printedRowsContinue = roots
+        .slice(index + 1, index + 5)
+        .some((candidate) =>
+          hasPrintedPageLine(candidate, input.document.source),
+        );
       if (
         entries.length > 0 &&
         possibleBodyTitle &&
         entries.some((entry) => entry.normalizedTitle === possibleBodyTitle) &&
-        printedPageEvidence(rootTitle(block)) === undefined
+        printedPageEvidence(rootTitle(block)) === undefined &&
+        !printedRowsContinue
       ) {
         break;
       }
       const extracted = lineEntries({
-        allowPlain: range.explicit,
         block,
         previousLevel: entries.at(-1)?.referenceLevel ?? 0,
         source: input.document.source,
@@ -747,7 +808,7 @@ export function detectPrintedContents(input: {
         noiseBlocks = 0;
       } else if (entries.length > 0) {
         noiseBlocks += 1;
-        if (noiseBlocks > 2) break;
+        if (noiseBlocks > maximumInterveningBlocks) break;
       }
       if (entries.length > 20_000) break;
     }
@@ -855,14 +916,6 @@ export function detectPrintedContents(input: {
         diagnostic("PRINTED_TOC_LEVEL_GAP", `candidates/${candidates.length}`),
       );
     }
-    if (richContent) {
-      diagnostics.push(
-        diagnostic(
-          "PRINTED_TOC_RICH_CONTENT",
-          `candidates/${candidates.length}`,
-        ),
-      );
-    }
     const matchedCount = matchedEntries.filter(
       (entry) => entry.bodyHeadingBlockId,
     ).length;
@@ -911,6 +964,14 @@ export function detectPrintedContents(input: {
     if (!frontmatter && recurrenceCount === 0) boundaryScore -= 2;
     const boundaryConfidence =
       boundaryScore >= 6 ? "high" : boundaryScore >= 4 ? "medium" : "low";
+    if (richContent && boundaryConfidence !== "high") {
+      diagnostics.push(
+        diagnostic(
+          "PRINTED_TOC_RICH_CONTENT",
+          `candidates/${candidates.length}`,
+        ),
+      );
+    }
     const matchConfidence =
       coverage >= 0.8 && alignment.margin >= 2
         ? "high"
@@ -918,10 +979,7 @@ export function detectPrintedContents(input: {
           ? "medium"
           : "low";
     const canApplyBoundary =
-      boundaryConfidence === "high" &&
-      entries.length >= 2 &&
-      !richContent &&
-      !diagnostics.some((item) => item.code === "PRINTED_TOC_LEVEL_GAP");
+      boundaryConfidence === "high" && entries.length >= 2;
     const proposedRegion = canApplyBoundary
       ? Object.freeze({
           applied: true,
