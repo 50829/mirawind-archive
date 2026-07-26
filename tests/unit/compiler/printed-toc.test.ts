@@ -57,6 +57,31 @@ describe("printed contents detection", () => {
       key: "3a.1",
       level: 3,
     });
+    expect(inferPrintedHeadingEvidence("A.2 Early Systems")).toMatchObject({
+      kind: "decimal",
+      key: "a.2",
+      level: 2,
+    });
+    expect(inferPrintedHeadingEvidence("PART ONE OVERVIEW")).toMatchObject({
+      kind: "part",
+      level: 1,
+    });
+    expect(
+      inferPrintedReferenceLevels([
+        "PART ONE OVERVIEW",
+        "Chapter 1 Introduction",
+        "1.1 What Operating Systems Do",
+      ]),
+    ).toEqual([1, 2, 3]);
+    expect(
+      inferPrintedReferenceLevels([
+        "PART ONE OVERVIEW",
+        "Chapter 1 Introduction",
+        "1.1 What Operating Systems Do",
+        "Bibliography",
+        "Chapter 2 Structures",
+      ]),
+    ).toEqual([1, 2, 3, 3, 2]);
     expect(inferPrintedHeadingEvidence("附录 4.2 因子模型")).toMatchObject({
       kind: "appendix",
       level: 2,

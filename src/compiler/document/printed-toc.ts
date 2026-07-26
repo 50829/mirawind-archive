@@ -103,6 +103,8 @@ const maximumMatchCandidates = 200_000;
 const maximumInterveningBlocks = 8;
 const entrySkipCost = 2.5;
 const headingSkipCost = 0.05;
+const englishOrdinalWord =
+  "(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)";
 
 function hash(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -134,10 +136,10 @@ export function inferPrintedHeadingEvidence(
       level: number.includes(".") ? Math.min(4, number.split(".").length) : 1,
     });
   }
-  const named =
-    /^(?:第\s*([0-9零〇一二三四五六七八九十百千]+)\s*(章|篇|部分|部)|(?:chapter|chap\.?)\s*([0-9ivxlcdm]+)|part\s*([0-9ivxlcdm]+))/iu.exec(
-      plain,
-    );
+  const named = new RegExp(
+    `^(?:第\\s*([0-9零〇一二三四五六七八九十百千]+)\\s*(章|篇|部分|部)|(?:chapter|chap\\.?)\\s*([0-9ivxlcdm]+|${englishOrdinalWord})|part\\s*([0-9ivxlcdm]+|${englishOrdinalWord}))`,
+    "iu",
+  ).exec(plain);
   if (named) {
     const chineseKind = named[2];
     const kind =
@@ -175,6 +177,16 @@ export function inferPrintedHeadingEvidence(
       level: Math.min(4, 2 + (alphaSection.match(/\./gu)?.length ?? 0)),
     });
   }
+  const appendixSection = /^([A-Z]\.\d+(?:\.\d+){0,2})(?=\s|、|:|：)/iu.exec(
+    plain,
+  )?.[1];
+  if (appendixSection) {
+    return Object.freeze({
+      kind: "decimal",
+      key: appendixSection.toLocaleLowerCase("und"),
+      level: Math.min(4, appendixSection.split(".").length),
+    });
+  }
   const bareChapter = /^(\d{1,3})(?=\s+[\p{L}“”'"（(])/u.exec(plain)?.[1];
   if (!bareChapter) return;
   return Object.freeze({
@@ -196,15 +208,43 @@ export function isLocalPartHeading(value: string): boolean {
 
 export function inferPrintedReferenceLevels(
   values: readonly string[],
-  options: { readonly localPartIndexes?: ReadonlySet<number> } = {},
+  options: {
+    readonly localPartIndexes?: ReadonlySet<number>;
+    readonly referenceLevels?: ReadonlyMap<number, number>;
+  } = {},
 ): readonly number[] {
   let insidePart = false;
   let previousLevel = 0;
+  const hasLaterBodyMajor: boolean[] = Array.from({ length: values.length });
+  let laterBodyMajor = false;
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    hasLaterBodyMajor[index] = laterBodyMajor;
+    const kind = inferPrintedHeadingEvidence(values[index] ?? "")?.kind;
+    if (kind === "chapter" || kind === "part") laterBodyMajor = true;
+  }
   return Object.freeze(
     values.map((value, index) => {
       const numbering = inferPrintedHeadingEvidence(value);
+      const suppliedLevel = options.referenceLevels?.get(index);
       let level: number;
-      if (numbering?.kind === "part" && options.localPartIndexes?.has(index)) {
+      if (suppliedLevel !== undefined) {
+        level = Math.min(4, Math.max(1, suppliedLevel));
+        if (
+          numbering?.kind === "part" ||
+          ((numbering?.kind === "chapter" || numbering?.kind === "decimal") &&
+            level > numbering.level)
+        ) {
+          insidePart = true;
+        } else if (
+          numbering?.kind === "appendix" ||
+          (numbering?.kind === "chapter" && level === numbering.level)
+        ) {
+          insidePart = false;
+        }
+      } else if (
+        numbering?.kind === "part" &&
+        options.localPartIndexes?.has(index)
+      ) {
         level = 3;
       } else if (numbering?.kind === "part") {
         insidePart = true;
@@ -227,12 +267,16 @@ export function inferPrintedReferenceLevels(
       } else if (numbering?.kind === "decimal") {
         level = Math.min(4, numbering.level + (insidePart ? 1 : 0));
       } else if (
-        /^(?:参考文献|参考资料|索引|后记|致谢|bibliography|references|index|afterword|acknowledg(?:e)?ments?)$/iu.test(
+        /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|index|afterword|acknowledg(?:e)?ments?)$/iu.test(
           plainTitle(value),
         )
       ) {
-        insidePart = false;
-        level = 1;
+        if (previousLevel > 1 && hasLaterBodyMajor[index]) {
+          level = previousLevel;
+        } else {
+          insidePart = false;
+          level = 1;
+        }
       } else if (
         /^(?:参考文献(?:说明)?|练习题答案|家庭作业|习题|练习|bibliographic notes|exercises|review questions)$/iu.test(
           plainTitle(value),
@@ -285,7 +329,7 @@ function normalizedTitle(value: string): string {
   const numbering = inferPrintedHeadingEvidence(withoutPage);
   const withoutNumber = numbering
     ? withoutPage.slice(
-        /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|chap\.?)\s*[0-9ivxlcdm]+|part\s*[0-9ivxlcdm]+|附录\s*[A-Za-z0-9一二三四五六七八九十]*(?:\.\d+){0,3}|\d+[A-Z](?:\.\d+){0,2}|\d+(?:\.\d+){0,3})/iu.exec(
+        /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|chap\.?)\s*(?:[0-9ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)|part\s*(?:[0-9ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)|附录\s*[A-Za-z0-9一二三四五六七八九十]*(?:\.\d+){0,3}|[A-Z]\.\d+(?:\.\d+){0,2}|\d+[A-Z](?:\.\d+){0,2}|\d+(?:\.\d+){0,3})/iu.exec(
           withoutPage,
         )?.[0].length ?? 0,
       )
@@ -627,32 +671,6 @@ function monotonicMatches(
         ambiguousEntries.add(entryIndex);
         matches.delete(entryIndex);
       }
-    }
-  }
-  for (const [entryIndex, headingIndex] of [...matches]) {
-    const chosen = candidates.find(
-      (item) =>
-        item.entryIndex === entryIndex && item.headingIndex === headingIndex,
-    );
-    const entry = entries[entryIndex];
-    const heading = headings[headingIndex];
-    if (!chosen || !entry || !heading) continue;
-    const exactNumber = Boolean(
-      entry.numbering &&
-      entry.numbering.key ===
-        inferPrintedHeadingEvidence(heading.sourceTitle)?.key,
-    );
-    if (
-      !exactNumber &&
-      candidates.some(
-        (item) =>
-          item.entryIndex === entryIndex &&
-          item.headingIndex !== headingIndex &&
-          item.score >= chosen.score - 1,
-      )
-    ) {
-      ambiguousEntries.add(entryIndex);
-      matches.delete(entryIndex);
     }
   }
   return Object.freeze({

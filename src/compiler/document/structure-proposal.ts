@@ -164,14 +164,31 @@ export function proposeDocumentStructure(
     dominantMarkdownLevel / Math.max(1, document.headings.length) < 0.9;
   const contextualNumberedLevels = inferPrintedReferenceLevels(
     document.headings.map((heading) => heading.sourceTitle),
-    { localPartIndexes },
+    {
+      localPartIndexes,
+      referenceLevels: new Map(
+        document.headings.flatMap((heading, index) => {
+          const level = printedLevels.get(heading.blockId);
+          return level === undefined ? [] : [[index, level] as const];
+        }),
+      ),
+    },
+  );
+  const localBackmatterIndexes = new Set(
+    document.headings.flatMap((heading, index) =>
+      backmatterTitle.test(heading.sourceTitle.trim().normalize("NFKC")) &&
+      (contextualNumberedLevels[index] ?? 1) > 1
+        ? [index]
+        : [],
+    ),
   );
   let hasNumberedUnit = false;
   const structuralEvidence: boolean[] = [];
   const inferredLevels = document.headings.map((heading, index) => {
     const title = heading.sourceTitle.trim().normalize("NFKC");
-    const explicitRole =
-      printedRoles.get(heading.blockId) ?? proposedRole(title);
+    const explicitRole = localBackmatterIndexes.has(index)
+      ? "body"
+      : (printedRoles.get(heading.blockId) ?? proposedRole(title));
     const semanticTopLevel =
       explicitRole === "frontmatter" ||
       explicitRole === "appendix" ||
@@ -244,7 +261,9 @@ export function proposeDocumentStructure(
         ? {
             role:
               printedRoles.get(heading.blockId) ??
-              proposedRole(heading.sourceTitle),
+              (localBackmatterIndexes.has(index)
+                ? "body"
+                : proposedRole(heading.sourceTitle)),
           }
         : {}),
       starts_page: false,
@@ -312,7 +331,10 @@ export function proposeDocumentStructure(
         !firstChapterInPart ||
         hasBodyBetween(partHeading, heading);
       firstChapterInPart = false;
-    } else if (frontmatterTitle.test(title) || backmatterTitle.test(title)) {
+    } else if (
+      frontmatterTitle.test(title) ||
+      (backmatterTitle.test(title) && !localBackmatterIndexes.has(index))
+    ) {
       insidePart = false;
       firstChapterInPart = false;
       partHeading = undefined;

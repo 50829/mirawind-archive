@@ -131,6 +131,74 @@ describe("default document structure proposal", () => {
     ]);
   });
 
+  it("carries an inferred part offset into body-only descendants", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## Preface",
+          "",
+          "Body",
+          "",
+          "## Chapter 1 Introduction",
+          "",
+          "Body",
+          "",
+          "## 1.1 Overview",
+          "",
+          "Body",
+          "",
+          "## 1.1.1 Detail",
+          "",
+          "Body",
+        ].join("\n"),
+      ),
+    );
+    const chapter = document.headings[1];
+    const section = document.headings[2];
+    if (!chapter || !section) throw new Error("expected headings");
+    const sourceRegions = [
+      {
+        applied: true,
+        disposition: "reference_only" as const,
+        entries: [
+          {
+            body_heading_block_id: chapter.blockId,
+            range: {
+              end_byte: 2,
+              sha256: "a".repeat(64),
+              start_byte: 1,
+            },
+            reference_level: 2,
+          },
+          {
+            body_heading_block_id: section.blockId,
+            range: {
+              end_byte: 4,
+              sha256: "b".repeat(64),
+              start_byte: 3,
+            },
+            reference_level: 3,
+          },
+        ],
+        kind: "printed_toc" as const,
+        range: {
+          end_byte: 4,
+          sha256: "c".repeat(64),
+          start_byte: 1,
+        },
+        region_id: "region_0123456789abcdef",
+        source_path: "book.md",
+        source_sha256: "d".repeat(64),
+      },
+    ];
+
+    expect(
+      proposeDocumentStructure(document, { sourceRegions }).nodes.map(
+        (node) => node.display_level,
+      ),
+    ).toEqual([1, 2, 3, 4]);
+  });
+
   it("keeps part nesting when a printed entry did not match its body heading", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
