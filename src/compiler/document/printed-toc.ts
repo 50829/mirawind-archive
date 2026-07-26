@@ -122,8 +122,20 @@ export function inferPrintedHeadingEvidence(
   const plain = plainTitle(value)
     .replace(/[．。]/gu, ".")
     .replace(/\s*\.\s*/gu, ".");
+  const appendix =
+    /^(?:附录|appendix)\s*(?<number>[A-Za-z0-9一二三四五六七八九十]+(?:\.\d+){0,3})?/iu.exec(
+      plain,
+    );
+  if (appendix) {
+    const number = appendix.groups?.number ?? "";
+    return Object.freeze({
+      kind: "appendix",
+      key: appendix[0].replace(/\s+/gu, "").toLocaleLowerCase("und"),
+      level: number.includes(".") ? Math.min(4, number.split(".").length) : 1,
+    });
+  }
   const named =
-    /^(?:第\s*([0-9零〇一二三四五六七八九十百千]+)\s*(章|篇|部分|部)|(?:chapter|chap\.?)\s*([0-9ivxlcdm]+)|part\s*([0-9ivxlcdm]+)|附录\s*([A-Za-z0-9一二三四五六七八九十]*))/iu.exec(
+    /^(?:第\s*([0-9零〇一二三四五六七八九十百千]+)\s*(章|篇|部分|部)|(?:chapter|chap\.?)\s*([0-9ivxlcdm]+)|part\s*([0-9ivxlcdm]+))/iu.exec(
       plain,
     );
   if (named) {
@@ -135,9 +147,7 @@ export function inferPrintedHeadingEvidence(
           ? "chapter"
           : named[4]
             ? "part"
-            : named[5] !== undefined
-              ? "appendix"
-              : "chapter";
+            : "chapter";
     return Object.freeze({
       kind,
       key: named[0].replace(/\s+/gu, "").toLocaleLowerCase("und"),
@@ -147,12 +157,30 @@ export function inferPrintedHeadingEvidence(
   const decimal =
     /^(\d+\.\d+(?:\.\d+){0,2})(?=\s|、|:|：|[A-Za-z\u3400-\u9fff])/u.exec(
       plain,
-    )?.[1] ?? /^(\d{1,2})(?=\s+[A-Za-z])/u.exec(plain)?.[1];
-  if (!decimal) return;
+    )?.[1];
+  if (decimal) {
+    return Object.freeze({
+      kind: "decimal",
+      key: decimal,
+      level: Math.min(4, decimal.split(".").length),
+    });
+  }
+  const alphaSection = /^(\d{1,3}[A-Z](?:\.\d+){0,2})(?=\s|、|:|：)/iu.exec(
+    plain,
+  )?.[1];
+  if (alphaSection) {
+    return Object.freeze({
+      kind: "decimal",
+      key: alphaSection.toLocaleLowerCase("und"),
+      level: Math.min(4, 2 + (alphaSection.match(/\./gu)?.length ?? 0)),
+    });
+  }
+  const bareChapter = /^(\d{1,3})(?=\s+[\p{L}“”'"（(])/u.exec(plain)?.[1];
+  if (!bareChapter) return;
   return Object.freeze({
-    kind: "decimal",
-    key: decimal,
-    level: Math.min(4, decimal.split(".").length),
+    kind: "chapter",
+    key: bareChapter,
+    level: 1,
   });
 }
 
@@ -160,21 +188,40 @@ export function inferPrintedReferenceLevel(value: string): number | undefined {
   return inferPrintedHeadingEvidence(value)?.level;
 }
 
+export function isLocalPartHeading(value: string): boolean {
+  return /^第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:篇|部分|部)\s*[（(]/u.test(
+    plainTitle(value),
+  );
+}
+
 export function inferPrintedReferenceLevels(
   values: readonly string[],
+  options: { readonly localPartIndexes?: ReadonlySet<number> } = {},
 ): readonly number[] {
   let insidePart = false;
   let previousLevel = 0;
   return Object.freeze(
-    values.map((value) => {
+    values.map((value, index) => {
       const numbering = inferPrintedHeadingEvidence(value);
       let level: number;
-      if (numbering?.kind === "part") {
+      if (numbering?.kind === "part" && options.localPartIndexes?.has(index)) {
+        level = 3;
+      } else if (numbering?.kind === "part") {
         insidePart = true;
         level = 1;
       } else if (numbering?.kind === "appendix") {
-        insidePart = false;
-        level = 1;
+        const localUnnumberedAppendix =
+          numbering.level === 1 &&
+          /^(?:附录|appendix)\s*[:：]/iu.test(plainTitle(value));
+        if (
+          numbering.level > 1 ||
+          (localUnnumberedAppendix && previousLevel > 1)
+        ) {
+          level = Math.max(2, numbering.level);
+        } else {
+          insidePart = false;
+          level = 1;
+        }
       } else if (numbering?.kind === "chapter") {
         level = insidePart ? 2 : 1;
       } else if (numbering?.kind === "decimal") {
@@ -238,7 +285,7 @@ function normalizedTitle(value: string): string {
   const numbering = inferPrintedHeadingEvidence(withoutPage);
   const withoutNumber = numbering
     ? withoutPage.slice(
-        /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|chap\.?)\s*[0-9ivxlcdm]+|part\s*[0-9ivxlcdm]+|附录\s*[A-Za-z0-9一二三四五六七八九十]*|\d+(?:\.\d+){0,3})/iu.exec(
+        /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|chap\.?)\s*[0-9ivxlcdm]+|part\s*[0-9ivxlcdm]+|附录\s*[A-Za-z0-9一二三四五六七八九十]*(?:\.\d+){0,3}|\d+[A-Z](?:\.\d+){0,2}|\d+(?:\.\d+){0,3})/iu.exec(
           withoutPage,
         )?.[0].length ?? 0,
       )
@@ -695,7 +742,7 @@ export function detectPrintedContents(input: {
   const explicitLabels = roots.flatMap((root, index) =>
     contentsTitle.test(rootTitle(root).normalize("NFKC")) ? [index] : [],
   );
-  for (let labelIndex = 0; labelIndex < explicitLabels.length; ) {
+  for (let labelIndex = 0; labelIndex < explicitLabels.length;) {
     const startIndex = explicitLabels[labelIndex];
     if (startIndex === undefined) break;
     let labelEndIndex = startIndex;

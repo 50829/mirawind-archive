@@ -101,6 +101,8 @@ const frontmatter =
   /^(?:序|序言|前言|译者序|出版者的话|作者简介|preface|foreword|prologue)$/iu;
 const auxiliary =
   /^(?:思考题|本章注记|附录注记|自测题|习题|练习|课后习题和问题|复习题|人物专访|编程作业|practice exercises|further reading|review questions|exercises)$/iu;
+const localPartSubdivision =
+  /^第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:篇|部分|部)\s*[（(]/u;
 
 function sha256(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
@@ -156,7 +158,7 @@ function normalize(value: string): string {
 function comparison(value: string): string {
   return normalize(value)
     .replace(
-      /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|part)\s*[0-9ivxlcdm]+|附录\s*[A-Za-z0-9一二三四五六七八九十]*|[A-Z]?\d+(?:\.\d+){0,3})\s*/iu,
+      /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|part)\s*[0-9ivxlcdm]+|附录\s*[A-Za-z0-9一二三四五六七八九十]*(?:\.\d+){0,3}|\d+[A-Z](?:\.\d+){0,2}|\d+(?:\.\d+){0,3})\s*/iu,
       "",
     )
     .replace(/[\p{P}\p{S}\s]/gu, "")
@@ -228,9 +230,17 @@ function numberedKind(value: string):
     }
     return Object.freeze({ depth: 1, kind: "chapter" as const });
   }
-  const decimal =
-    /^(?<number>[A-Z]?\d+(?:\.\d+){0,3})(?=\s|、|:|：|\p{L})/iu.exec(title)
-      ?.groups?.number;
+  const alpha = /^(?<number>\d+[A-Z](?:\.\d+){0,2})(?=\s|、|:|：)/iu.exec(title)
+    ?.groups?.number;
+  if (alpha) {
+    return Object.freeze({
+      depth: Math.min(4, 2 + (alpha.match(/\./gu)?.length ?? 0)),
+      kind: "section" as const,
+    });
+  }
+  const decimal = /^(?<number>\d+(?:\.\d+){0,3})(?=\s|、|:|：|\p{L})/iu.exec(
+    title,
+  )?.groups?.number;
   if (!decimal) return;
   const depth = decimal.includes(".") ? decimal.split(".").length : 1;
   return Object.freeze({
@@ -455,8 +465,18 @@ function matchEntries(
         );
       const best = candidates[0];
       const second = candidates[1];
+      const entryTitle = normalize(entry.title).toLocaleLowerCase("und");
+      const bestIsExact =
+        best !== undefined &&
+        normalize(best.heading.text).toLocaleLowerCase("und") === entryTitle;
+      const secondIsExact =
+        second !== undefined &&
+        normalize(second.heading.text).toLocaleLowerCase("und") === entryTitle;
       const ambiguous = Boolean(
-        best && second && best.score - second.score < 0.08,
+        best &&
+        second &&
+        ((bestIsExact && secondIsExact) ||
+          (!bestIsExact && best.score - second.score < 0.08)),
       );
       if (best && !ambiguous) cursor = best.index + 1;
       return Object.freeze({
@@ -533,8 +553,16 @@ function headingAccounting(input: {
         `${heading.anchor.root_index}:${heading.anchor.sha256}`,
       );
       const numbered = numberedKind(heading.text);
-      const inferred = entryFor(heading.text, insidePart, previousLevel);
-      let kind = matchedEntry?.kind ?? inferred?.kind ?? "other";
+      const localPart = Boolean(
+        !matchedEntry &&
+        numbered?.kind === "part" &&
+        localPartSubdivision.test(normalize(heading.text)),
+      );
+      const inferred = localPart
+        ? undefined
+        : entryFor(heading.text, insidePart, previousLevel);
+      let kind =
+        matchedEntry?.kind ?? (localPart ? "other" : inferred?.kind) ?? "other";
       if (
         !matchedEntry &&
         (kind === "backmatter" || kind === "frontmatter") &&
@@ -542,12 +570,13 @@ function headingAccounting(input: {
       ) {
         kind = "other";
       }
-      let level =
-        matchedEntry?.level ??
-        (kind === "other" && inferred?.kind !== "other"
-          ? previousLevel
-          : inferred?.level) ??
-        Math.min(4, Math.max(1, previousLevel || heading.depth));
+      let level = localPart
+        ? 3
+        : (matchedEntry?.level ??
+          (kind === "other" && inferred?.kind !== "other"
+            ? previousLevel
+            : inferred?.level) ??
+          Math.min(4, Math.max(1, previousLevel || heading.depth)));
       level = previousLevel === 0 ? 1 : Math.min(level, previousLevel + 1);
       if (kind === "part") {
         insidePart = true;
@@ -564,12 +593,12 @@ function headingAccounting(input: {
       }
       const include = Boolean(
         matchedEntry ||
-        numbered ||
+        (!localPart && numbered) ||
         frontmatter.test(heading.text) ||
         backmatter.test(heading.text),
       );
       const major =
-        kind === "part" ||
+        (!localPart && kind === "part") ||
         kind === "appendix" ||
         kind === "backmatter" ||
         kind === "frontmatter" ||

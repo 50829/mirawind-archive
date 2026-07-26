@@ -173,6 +173,53 @@ describe("default document structure proposal", () => {
     ).toEqual([1, 1, 2, 3, 3, 4, 1]);
   });
 
+  it("keeps parenthesized local parts inside their numbered section", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 1 导论",
+          "",
+          "正文",
+          "",
+          "## 1.8 EViews 简介",
+          "",
+          "正文",
+          "",
+          "## 第一部分(概述)",
+          "",
+          "正文",
+          "",
+          "## 第二部分(基本数据分析)",
+          "",
+          "正文",
+          "",
+          "## 1.9 延伸阅读",
+          "",
+          "正文",
+        ].join("\n"),
+      ),
+    );
+
+    const proposal = proposeDocumentStructure(document);
+    expect(proposal.nodes.map((node) => node.display_level)).toEqual([
+      1, 2, 3, 3, 2,
+    ]);
+    expect(proposal.nodes.map((node) => node.include_in_toc)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      true,
+    ]);
+    expect(proposal.nodes.map((node) => node.starts_page)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
   it("joins a part label and title across an ornamental part marker", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
@@ -196,6 +243,117 @@ describe("default document structure proposal", () => {
     });
     expect(proposal.nodes[1]).toMatchObject({
       display_level: 1,
+      include_in_toc: false,
+      starts_page: false,
+    });
+  });
+
+  it("joins a detached numeric chapter marker into the following title", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        ["## 1", "", "## 导论", "", "正文", "", "## 1.1 起步"].join("\n"),
+      ),
+    );
+
+    const proposal = proposeDocumentStructure(document);
+    expect(proposal.nodes[0]).toMatchObject({
+      include_in_toc: false,
+      starts_page: false,
+    });
+    expect(proposal.nodes[1]).toMatchObject({
+      display_level: 1,
+      include_in_toc: true,
+      starts_page: true,
+    });
+    expect(proposal.nodes[1]?.display_title).toBeUndefined();
+  });
+
+  it("does not include unrecognized frontmatter headings before a numbered book", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## Cover Title",
+          "",
+          "## Copyright Metadata",
+          "",
+          "## 1 Introduction",
+          "",
+          "正文",
+        ].join("\n"),
+      ),
+    );
+
+    expect(
+      proposeDocumentStructure(document).nodes.map(
+        (node) => node.include_in_toc,
+      ),
+    ).toEqual([false, false, true]);
+  });
+
+  it("propagates a matched printed appendix role without a manual role field", () => {
+    const source = [
+      "## 附录 1 数据来源 ........ 99",
+      "",
+      "## 本书中用到的数据来源",
+      "",
+      "正文",
+    ].join("\n");
+    const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
+    const entryStart = Buffer.from(
+      source.slice(0, source.indexOf("附录")),
+      "utf8",
+    ).byteLength;
+    const entryEnd =
+      entryStart +
+      Buffer.from("附录 1 数据来源 ........ 99", "utf8").byteLength;
+    const bodyHeading = document.headings[1];
+    expect(bodyHeading).toBeDefined();
+    if (!bodyHeading) throw new Error("expected body heading");
+
+    const proposal = proposeDocumentStructure(document, {
+      sourceRegions: [
+        {
+          applied: true,
+          disposition: "reference_only",
+          entries: [
+            {
+              body_heading_block_id: bodyHeading.blockId,
+              range: {
+                end_byte: entryEnd,
+                sha256: "a".repeat(64),
+                start_byte: entryStart,
+              },
+              reference_level: 1,
+            },
+          ],
+          kind: "printed_toc",
+          range: {
+            end_byte: entryEnd,
+            sha256: "b".repeat(64),
+            start_byte: entryStart,
+          },
+          region_id: "region_0123456789abcdef",
+          source_path: "book.md",
+          source_sha256: "c".repeat(64),
+        },
+      ],
+    });
+
+    expect(proposal.nodes[1]).toMatchObject({
+      display_level: 1,
+      include_in_toc: true,
+      role: "appendix",
+    });
+  });
+
+  it("keeps an unmatched learning objective in body but out of navigation", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        ["## 1 导论", "", "正文", "", "## 学习目标", "", "目标正文"].join("\n"),
+      ),
+    );
+
+    expect(proposeDocumentStructure(document).nodes[1]).toMatchObject({
       include_in_toc: false,
       starts_page: false,
     });

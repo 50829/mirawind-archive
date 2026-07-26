@@ -162,6 +162,54 @@ describe("Codex vision reference authoring", () => {
     ).toBe(true);
   });
 
+  it("prefers one exact body title over a later similar title", () => {
+    const source = [
+      "# Book",
+      "",
+      "## 目录",
+      "",
+      "## 附录:CLRM 结果的数学推导 .... 10",
+      "",
+      "## 附录:CLRM 结果的数学推导",
+      "",
+      "Body.",
+      "",
+      "## 附录 4.1 CLRM 结果的数学推导",
+      "",
+      "Body.",
+    ].join("\n");
+    const pack = packFor(source);
+    const transcript = reviewed(
+      createVisionTranscriptTemplate({
+        decision: {
+          fixture_id: pack.fixture_id,
+          printed_contents: {
+            regions: [
+              {
+                canonical: true,
+                end_root: 2,
+                pdf_page_indices: [2],
+                region_key: "full-contents",
+                start_root: 1,
+              },
+            ],
+            state: "present",
+          },
+        },
+        document: parseMarkdownDocument(source),
+        pack,
+      }),
+    );
+
+    expect(
+      authorMineruReferenceV2({ pack, transcript }).printed_contents.regions[0]
+        ?.entries[0],
+    ).toMatchObject({
+      body_heading_anchor: { root_index: 3 },
+      expected_match: "matched",
+    });
+  });
+
   it("records an inspected frontmatter set for a no-contents book", () => {
     const source = "# Book\n\n## Preface\n\nBody.\n";
     const pack = packFor(source);
@@ -184,6 +232,78 @@ describe("Codex vision reference authoring", () => {
       regions: [],
       state: "absent",
     });
+  });
+
+  it("accounts for alphanumeric section depth without treating it as a chapter", () => {
+    const source = "# Book\n\n## 3A Section\n\n## 3A.1 Detail\n";
+    const pack = packFor(source);
+    const transcript = reviewed(
+      createVisionTranscriptTemplate({
+        decision: {
+          fixture_id: pack.fixture_id,
+          printed_contents: { state: "absent" },
+        },
+        document: parseMarkdownDocument(source),
+        pack,
+      }),
+    );
+
+    expect(
+      authorMineruReferenceV2({ pack, transcript }).raw_heading_accounting.map(
+        (heading) =>
+          heading.disposition.kind === "expected_body"
+            ? heading.disposition.display_level
+            : null,
+      ),
+    ).toEqual([1, 2, 3]);
+  });
+
+  it("does not turn unmatched parenthesized local parts into book parts", () => {
+    const source = [
+      "# Book",
+      "",
+      "## 1 Intro",
+      "",
+      "## 1.1 EViews",
+      "",
+      "## 第一部分(概述)",
+      "",
+      "## 第二部分(分析)",
+      "",
+      "## 1.2 Continue",
+    ].join("\n");
+    const pack = packFor(source);
+    const transcript = reviewed(
+      createVisionTranscriptTemplate({
+        decision: {
+          fixture_id: pack.fixture_id,
+          printed_contents: { state: "absent" },
+        },
+        document: parseMarkdownDocument(source),
+        pack,
+      }),
+    );
+    const accounting = authorMineruReferenceV2({
+      pack,
+      transcript,
+    }).raw_heading_accounting;
+
+    expect(
+      accounting.map((heading) =>
+        heading.disposition.kind === "expected_body"
+          ? heading.disposition.display_level
+          : null,
+      ),
+    ).toEqual([1, 1, 2, 3, 3, 2]);
+    expect(
+      accounting
+        .slice(3, 5)
+        .map((heading) =>
+          heading.disposition.kind === "expected_body"
+            ? heading.disposition.include_in_toc
+            : null,
+        ),
+    ).toEqual([false, false]);
   });
 
   it("caps expected diagnostics to the private analysis contract", () => {

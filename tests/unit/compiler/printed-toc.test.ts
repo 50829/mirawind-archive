@@ -6,7 +6,11 @@ import { describe, expect, it } from "vitest";
 
 import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
 import { parseMarkdownDocument } from "@/compiler/document/parser";
-import { detectPrintedContents } from "@/compiler/document/printed-toc";
+import {
+  detectPrintedContents,
+  inferPrintedHeadingEvidence,
+  inferPrintedReferenceLevels,
+} from "@/compiler/document/printed-toc";
 import { applySourceRegions } from "@/compiler/document/source-regions";
 import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
 
@@ -37,6 +41,38 @@ function documentFor(source: string) {
 }
 
 describe("printed contents detection", () => {
+  it("recognizes bare chapter numbers, alphanumeric sections and local appendices", () => {
+    expect(inferPrintedHeadingEvidence("1 导论")).toMatchObject({
+      kind: "chapter",
+      key: "1",
+      level: 1,
+    });
+    expect(inferPrintedHeadingEvidence("1A Rn 和 Cn")).toMatchObject({
+      kind: "decimal",
+      key: "1a",
+      level: 2,
+    });
+    expect(inferPrintedHeadingEvidence("3A.1 OLS 系数推导")).toMatchObject({
+      kind: "decimal",
+      key: "3a.1",
+      level: 3,
+    });
+    expect(inferPrintedHeadingEvidence("附录 4.2 因子模型")).toMatchObject({
+      kind: "appendix",
+      level: 2,
+    });
+    expect(
+      inferPrintedReferenceLevels([
+        "4 对经典线性回归模型的进一步探讨",
+        "4.11 分位数回归",
+        "附录 4.1 数学推导",
+        "附录:补充证明",
+        "5 经典线性回归模型的假设",
+        "附录 1 数据来源",
+      ]),
+    ).toEqual([1, 2, 2, 2, 1, 1]);
+  });
+
   it("produces a high-confidence title-free region with monotonic body matches", async () => {
     const source = await readFile(fixturePath, "utf8");
     const digest = createHash("sha256").update(source).digest("hex");
@@ -555,12 +591,12 @@ describe("printed contents detection", () => {
     expect(result.candidates.map((candidate) => candidate.entryCount)).toEqual([
       2, 3,
     ]);
-    expect(result.candidates.filter((candidate) => candidate.canonical)).toHaveLength(
-      1,
-    );
-    expect(result.candidates.find((candidate) => candidate.canonical)?.entryCount).toBe(
-      3,
-    );
+    expect(
+      result.candidates.filter((candidate) => candidate.canonical),
+    ).toHaveLength(1);
+    expect(
+      result.candidates.find((candidate) => candidate.canonical)?.entryCount,
+    ).toBe(3);
   });
 
   it("folds adjacent bilingual label blocks into one region", () => {
@@ -604,12 +640,10 @@ describe("printed contents detection", () => {
   });
 
   it("does not impose a fixed root-block window on an unlabelled contents", () => {
-    const preface = Array.from(
-      { length: 120 },
-      (_, index) =>
-        index === 30
-          ? "Chapter 99 appears in this isolated preface note"
-          : `Preface paragraph ${index + 1}.`,
+    const preface = Array.from({ length: 120 }, (_, index) =>
+      index === 30
+        ? "Chapter 99 appears in this isolated preface note"
+        : `Preface paragraph ${index + 1}.`,
     );
     const tail = Array.from(
       { length: 140 },

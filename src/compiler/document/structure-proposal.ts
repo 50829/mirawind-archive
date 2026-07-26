@@ -2,6 +2,7 @@ import {
   inferPrintedHeadingEvidence,
   inferPrintedReferenceLevel,
   inferPrintedReferenceLevels,
+  isLocalPartHeading,
 } from "./printed-toc.js";
 import type {
   ConfirmedSourceRegion,
@@ -30,13 +31,15 @@ const frontmatterTitle =
 const appendixTitle =
   /^(?:附录|附表|appendix)(?:\s|[A-Z一二三四五六七八九十0-9]|$)/iu;
 const backmatterTitle =
-  /^(?:参考文献|参考资料|索引|后记|致谢|bibliography|references|index|afterword|acknowledg(?:e)?ments?)$/iu;
+  /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|index|afterword|acknowledg(?:e)?ments?)$/iu;
 const chapterLocalTitle =
-  /^(?:学习目标|简要回顾|供讨论的问题|延伸思考|习题|练习|家庭作业|参考文献(?:说明)?|阅读材料|休息一会儿|bibliographic notes|exercises|review questions)$/iu;
+  /^(?:简要回顾|供讨论的问题|延伸思考|习题|练习|家庭作业|参考文献(?:说明)?|阅读材料|休息一会儿|bibliographic notes|exercises|review questions)$/iu;
+const nonNavigationalLocalTitle = /^(?:学习目标|learning objectives?)$/iu;
 const pureMajorLabel =
   /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|part)\s*[0-9ivxlcdm]+|附录\s*[A-Za-z0-9一二三四五六七八九十]*)$/iu;
 const purePartLabel =
   /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:篇|部分|部)|part\s*[0-9ivxlcdm]+)$/iu;
+const pureNumericChapterMarker = /^\d{1,3}$/u;
 const ornamentalPartMarker = /^p\s*a\s*r\s*t\s*[0-9ivxlcdm]+$/iu;
 
 function nodeText(node: TransientDocumentNode): string {
@@ -55,6 +58,32 @@ function proposedRole(title: string): ContentRole {
   if (appendixTitle.test(normalized)) return "appendix";
   if (backmatterTitle.test(normalized)) return "backmatter";
   return "body";
+}
+
+function printedEntryRole(
+  source: string,
+  entry: ConfirmedSourceRegion["entries"][number],
+): ContentRole | undefined {
+  const bytes = Buffer.from(source, "utf8");
+  if (
+    entry.range.start_byte < 0 ||
+    entry.range.end_byte > bytes.byteLength ||
+    entry.range.start_byte >= entry.range.end_byte
+  ) {
+    return;
+  }
+  const title = bytes
+    .subarray(entry.range.start_byte, entry.range.end_byte)
+    .toString("utf8")
+    .normalize("NFKC")
+    .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)、]\s*)/u, "")
+    .replace(/\s*(?:\.{2,}|…+|\s{2,})\s*(?:\d+|[ivxlcdm]+)\s*$/iu, "")
+    .trim();
+  if (inferPrintedHeadingEvidence(title)?.kind === "appendix") {
+    return "appendix";
+  }
+  const role = proposedRole(title);
+  return role === "body" ? undefined : role;
 }
 
 function continuousLevels(
@@ -99,7 +128,31 @@ export function proposeDocumentStructure(
       ),
     ),
   );
+  const printedRoles = new Map(
+    (options.sourceRegions ?? []).flatMap((region) =>
+      region.entries.flatMap((entry) => {
+        if (!entry.body_heading_block_id) return [];
+        const role = printedEntryRole(document.source, entry);
+        return role ? [[entry.body_heading_block_id, role] as const] : [];
+      }),
+    ),
+  );
   const printedHeadingIds = new Set(printedLevels.keys());
+  const localPartIndexes = new Set(
+    document.headings.flatMap((heading, index) =>
+      !printedHeadingIds.has(heading.blockId) &&
+      isLocalPartHeading(heading.sourceTitle)
+        ? [index]
+        : [],
+    ),
+  );
+  const hasAnyNumberedEvidence =
+    printedHeadingIds.size > 0 ||
+    document.headings.some(
+      (heading, index) =>
+        !localPartIndexes.has(index) &&
+        inferPrintedHeadingEvidence(heading.sourceTitle) !== undefined,
+    );
   const ordinaryLevels = continuousLevels(document.headings);
   const levelCounts = new Map<number, number>();
   for (const heading of document.headings) {
@@ -111,12 +164,14 @@ export function proposeDocumentStructure(
     dominantMarkdownLevel / Math.max(1, document.headings.length) < 0.9;
   const contextualNumberedLevels = inferPrintedReferenceLevels(
     document.headings.map((heading) => heading.sourceTitle),
+    { localPartIndexes },
   );
   let hasNumberedUnit = false;
   const structuralEvidence: boolean[] = [];
   const inferredLevels = document.headings.map((heading, index) => {
     const title = heading.sourceTitle.trim().normalize("NFKC");
-    const explicitRole = proposedRole(title);
+    const explicitRole =
+      printedRoles.get(heading.blockId) ?? proposedRole(title);
     const semanticTopLevel =
       explicitRole === "frontmatter" ||
       explicitRole === "appendix" ||
@@ -159,7 +214,6 @@ export function proposeDocumentStructure(
     previousLevel = closed;
     return closed;
   });
-  let numberedBodyStarted = false;
   const roots = document.root.children ?? [];
   const nodes: {
     block_id: string;
@@ -172,14 +226,12 @@ export function proposeDocumentStructure(
     const displayLevel = levels[index] ?? 1;
     const title = heading.sourceTitle.trim().normalize("NFKC");
     const explicitLevel = inferPrintedReferenceLevel(title);
-    if (explicitLevel !== undefined || printedHeadingIds.has(heading.blockId)) {
-      numberedBodyStarted = true;
-    }
+    const localPart = localPartIndexes.has(index);
     const includeInToc =
       markdownLevelsAreUseful ||
-      !numberedBodyStarted ||
+      !hasAnyNumberedEvidence ||
       printedHeadingIds.has(heading.blockId) ||
-      explicitLevel !== undefined ||
+      (!localPart && explicitLevel !== undefined) ||
       frontmatterTitle.test(title) ||
       appendixTitle.test(title) ||
       backmatterTitle.test(title) ||
@@ -189,7 +241,11 @@ export function proposeDocumentStructure(
       display_level: displayLevel,
       include_in_toc: includeInToc,
       ...(displayLevel === 1
-        ? { role: proposedRole(heading.sourceTitle) }
+        ? {
+            role:
+              printedRoles.get(heading.blockId) ??
+              proposedRole(heading.sourceTitle),
+          }
         : {}),
       starts_page: false,
     };
@@ -220,9 +276,27 @@ export function proposeDocumentStructure(
     const node = nodes[index];
     if (!node) continue;
     const evidence = inferPrintedHeadingEvidence(heading.sourceTitle);
+    const printedRole = printedRoles.get(heading.blockId);
     const title = heading.sourceTitle.trim().normalize("NFKC");
     let major = node.display_level === 1;
-    if (evidence?.kind === "part") {
+    if (
+      (!node.include_in_toc && node.role === "body") ||
+      localPartIndexes.has(index) ||
+      (!printedHeadingIds.has(heading.blockId) &&
+        nonNavigationalLocalTitle.test(title))
+    ) {
+      major = false;
+    } else if (printedRole === "appendix") {
+      insidePart = false;
+      firstChapterInPart = false;
+      partHeading = undefined;
+      major = true;
+    } else if (printedRole === "frontmatter" || printedRole === "backmatter") {
+      insidePart = false;
+      firstChapterInPart = false;
+      partHeading = undefined;
+      major = true;
+    } else if (evidence?.kind === "part") {
       insidePart = true;
       firstChapterInPart = true;
       partHeading = heading;
@@ -278,6 +352,19 @@ export function proposeDocumentStructure(
       interveningBody.every((root) =>
         ornamentalPartMarker.test(nodeText(root)),
       );
+    if (
+      !hasBodyBetween &&
+      pureNumericChapterMarker.test(previousTitle) &&
+      /^\p{Script=Han}/u.test(title)
+    ) {
+      previousNode.include_in_toc = false;
+      previousNode.starts_page = false;
+      node.display_level = 1;
+      node.include_in_toc = true;
+      node.role = "body";
+      node.starts_page = true;
+      continue;
+    }
     if (
       (!hasBodyBetween || onlyOrnamentalPartMarker) &&
       title.length >= 1 &&
