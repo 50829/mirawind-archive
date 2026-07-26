@@ -91,9 +91,9 @@ share analysis and every diagnostic activates a valid location/recovery without 
 ## Phase 9: Fifteen-book references
 
 - [x] T042 Generate observation packs for all fifteen registered archives without production proposals
-- [ ] T043 Render and open every candidate printed-contents page for the eight new books with the Codex image-recognition tool; Codex directly transcribes every logical row, column, indentation, continued line and semantic kind into ground truth without human adjudication
-- [ ] T044 Re-run the same Codex image recognition for every printed-contents page of the original seven, inspect frontmatter for the no-contents book, and do not copy reference v1 decisions
-- [ ] T045 Author and validate fifteen independent ignored reference-v2 files only from the saved Codex image-recognition transcript; use native/OCR text and MinerU evidence solely as navigation aids
+- [x] T043 Render and open every candidate printed-contents page for the eight new books with the Codex image-recognition tool; Codex directly transcribes every logical row, column, indentation, continued line and semantic kind into ground truth without human adjudication
+- [x] T044 Re-run the same Codex image recognition for every printed-contents page of the original seven, inspect frontmatter for the no-contents book, and do not copy reference v1 decisions
+- [x] T045 Author and validate fifteen independent ignored reference-v2 files only from the saved Codex image-recognition transcript; use native/OCR text and MinerU evidence solely as navigation aids
 - [ ] T046 Compare production output only after expected v2 decisions are saved; verify every raw heading disposition, body match, hierarchy, role, TOC and split without auto-updating ground truth
 - [ ] T047 Verify protected ranges and expected diagnostics for all fifteen books
 - [ ] T048 Run exact fifteen-book comparator and resolve every implementation mismatch without rewriting correct ground truth
