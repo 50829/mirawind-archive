@@ -292,8 +292,7 @@ export function proposeDocumentStructure(
         (!localPart && explicitLevel !== undefined) ||
         frontmatterTitle.test(title) ||
         appendixTitle.test(title) ||
-        backmatterTitle.test(title) ||
-        chapterLocalTitle.test(title));
+        backmatterTitle.test(title));
     let role: ContentRole | undefined;
     if (displayLevel === 1) {
       const classifiedRole =
@@ -454,8 +453,7 @@ export function proposeDocumentStructure(
       /^\p{Script=Han}+$/u.test(title) &&
       !chapterLocalTitle.test(title) &&
       /\p{Script=Han}$/u.test(previousTitle) &&
-      (pureMajorLabel.test(previousTitle.normalize("NFKC")) ||
-        previousTitle.length >= 20) &&
+      pureMajorLabel.test(previousTitle.normalize("NFKC")) &&
       inferPrintedReferenceLevel(previousTitle) !== undefined &&
       inferPrintedReferenceLevel(title) === undefined
     ) {

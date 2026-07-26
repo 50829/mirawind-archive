@@ -506,7 +506,7 @@ describe("default document structure proposal", () => {
     });
   });
 
-  it("joins an adjacent short MinerU heading fragment for navigation", () => {
+  it("does not invent a display-title override from a short heading fragment", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
         [
@@ -525,10 +525,10 @@ describe("default document structure proposal", () => {
 
     const proposal = proposeDocumentStructure(document);
     expect(proposal.nodes[1]).toMatchObject({
-      display_title: "2.8 从个人贸易到国际贸易，再回到个人贸易",
       include_in_toc: true,
       starts_page: false,
     });
+    expect(proposal.nodes[1]?.display_title).toBeUndefined();
     expect(proposal.nodes[2]).toMatchObject({
       display_level: 2,
       include_in_toc: false,
