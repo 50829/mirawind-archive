@@ -89,24 +89,26 @@ share analysis and every diagnostic activates a valid location/recovery without 
 ## Phase 9: Fifteen-book references
 
 - [ ] T042 Generate observation packs for all fifteen registered archives without production proposals
-- [ ] T043 Inspect every printed-contents PDF page and frontmatter for the no-contents book
-- [ ] T044 Author and validate fifteen independent ignored reference-v2 files
-- [ ] T045 Review every raw heading disposition, body match, hierarchy, role, TOC and split
-- [ ] T046 Review protected ranges and expected diagnostics for all fifteen books
-- [ ] T047 Run exact fifteen-book comparator and resolve every mismatch
+- [ ] T043 Render and open every candidate printed-contents page for the eight new books with the Codex image-recognition tool; transcribe every logical row, column, indentation, continued line and semantic kind into independent ground truth
+- [ ] T044 Re-run the same Codex image review for every printed-contents page of the original seven, inspect frontmatter for the no-contents book, and do not copy reference v1 decisions
+- [ ] T045 Author and validate fifteen independent ignored reference-v2 files only from the saved image review; use native/OCR text and MinerU evidence solely as navigation aids
+- [ ] T046 Compare production output only after expected v2 decisions are saved; review every raw heading disposition, body match, hierarchy, role, TOC and split without auto-updating ground truth
+- [ ] T047 Review protected ranges and expected diagnostics for all fifteen books
+- [ ] T048 Run exact fifteen-book comparator and resolve every implementation mismatch without rewriting correct ground truth
 
 ## Phase 10: Verification and convergence
 
-- [ ] T048 Run focused unit, contract, integration and component gates
-- [ ] T049 Run format, lint, typecheck, full tests and production build
-- [ ] T050 Run separate three-real plus 500-page build benchmark and 300 ms reader p95 gate
-- [ ] T051 Run Spec Kit analyze and converge, append and finish any remaining tasks
-- [ ] T052 Rerun converge with no unmitigated CRITICAL findings and synchronize runtime docs
-- [ ] T053 Commit remaining logical implementation and convergence units using Conventional Commits
+- [ ] T049 Run focused unit, contract, integration and component gates
+- [ ] T050 Run format, lint, typecheck, full tests and production build
+- [ ] T051 Run separate three-real plus 500-page build benchmark and 300 ms reader p95 gate
+- [ ] T052 Run Spec Kit analyze and converge, append and finish any remaining tasks
+- [ ] T053 Rerun converge with no unmitigated CRITICAL findings and synchronize runtime docs
+- [ ] T054 Commit remaining logical implementation and convergence units using Conventional Commits
 
 ## Dependencies
 
 T004 blocks implementation. T005-T012 establish an independent oracle before production
 algorithm changes. T013-T017 feed T018-T029. T030-T037 can proceed after the reference model
-is stable. T038-T041 consume final diagnostic/artifact contracts. T042-T047 require all
-comparison tooling and drive algorithm correction. T048-T053 are final gates.
+is stable. T038-T041 consume final diagnostic/artifact contracts. T042-T048 require all
+comparison tooling, complete Codex image review and drive algorithm correction. T049-T054 are
+final gates.

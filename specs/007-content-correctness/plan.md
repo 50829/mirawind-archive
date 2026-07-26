@@ -60,6 +60,14 @@ emits only observations: file hashes, PDF page images/text, raw Markdown root bl
 sidecar rows and production output in a separate observed section. It must not import
 `printed-toc.ts` or `structure-proposal.ts` and must never populate expected decisions.
 
+For each of the eight newly added books, Codex MUST render and open every candidate printed-
+contents PDF page with the image-recognition tool, read every logical row, resolve columns,
+indentation, continued lines and semantic kind from the page image, and author those decisions
+as reference v2 ground truth. The same image-review procedure is rerun for the original seven
+rather than copying v1. Native/OCR text and MinerU rows are navigation aids only; production
+proposals are shown after the expected reference is saved and can only produce a comparison
+report, never fill or revise expected decisions automatically.
+
 The comparator independently validates actual preparation against every expected decision;
 missing, extra, order, boundary, match, level, role, TOC, split, protection and diagnostic
 differences fail with bounded fixture/anchor codes.
@@ -152,7 +160,9 @@ tests/fixtures/mineru/{synthetic,real/references-v2}/
 4. Write failing multi-region/index/alignment/hierarchy/split tests and implement pipeline.
 5. Write failing OCR budget/cleanup tests and implement fallback/artifact.
 6. Propagate diagnostics and identities with integration/component tests.
-7. Rebuild and visually review all fifteen references, run exact and performance gates.
+7. Render every candidate contents page, use Codex image recognition to read all pages of the
+   eight new books and re-review the original seven, then author fifteen references and run
+   exact and performance gates.
 8. Run full gates, analyze/converge, complete appended tasks and rerun converge.
 
 ## Complexity Tracking
