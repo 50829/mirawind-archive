@@ -447,46 +447,91 @@ function matchEntries(
   entries: CodexVisionTranscript["regions"][number]["entries"],
   headings: readonly HeadingText[],
 ): readonly ReferenceContentsEntry[] {
-  let cursor = 0;
+  const width = headings.length + 1;
+  const cellCount = (entries.length + 1) * width;
+  if (cellCount > 10_000_000) {
+    throw new Error("VISION_REFERENCE_ALIGNMENT_LIMIT_EXCEEDED");
+  }
+  const scores = new Float64Array(cellCount);
+  const actions = new Uint8Array(cellCount);
+  const entrySkipCost = 3;
+  const headingSkipCost = 0.01;
+  for (let entryIndex = 1; entryIndex <= entries.length; entryIndex += 1) {
+    scores[entryIndex * width] = -entrySkipCost * entryIndex;
+    actions[entryIndex * width] = 1;
+  }
+  for (
+    let headingIndex = 1;
+    headingIndex <= headings.length;
+    headingIndex += 1
+  ) {
+    scores[headingIndex] = -headingSkipCost * headingIndex;
+    actions[headingIndex] = 2;
+  }
+  for (let entryIndex = 1; entryIndex <= entries.length; entryIndex += 1) {
+    const entry = entries[entryIndex - 1];
+    if (!entry) continue;
+    const expected = comparison(entry.title);
+    for (
+      let headingIndex = 1;
+      headingIndex <= headings.length;
+      headingIndex += 1
+    ) {
+      const heading = headings[headingIndex - 1];
+      if (!heading) continue;
+      const offset = entryIndex * width + headingIndex;
+      const similarityScore = similarity(expected, comparison(heading.text));
+      const exactTitle =
+        normalize(entry.title).toLocaleLowerCase("und") ===
+        normalize(heading.text).toLocaleLowerCase("und");
+      const matched =
+        similarityScore < 0.62
+          ? Number.NEGATIVE_INFINITY
+          : (scores[offset - width - 1] ?? Number.NEGATIVE_INFINITY) +
+            similarityScore * 10 +
+            (exactTitle ? 5 : 0);
+      const skipEntry =
+        (scores[offset - width] ?? Number.NEGATIVE_INFINITY) - entrySkipCost;
+      const skipHeading =
+        (scores[offset - 1] ?? Number.NEGATIVE_INFINITY) - headingSkipCost;
+      if (matched >= skipEntry && matched >= skipHeading) {
+        scores[offset] = matched;
+        actions[offset] = 3;
+      } else if (skipEntry >= skipHeading) {
+        scores[offset] = skipEntry;
+        actions[offset] = 1;
+      } else {
+        scores[offset] = skipHeading;
+        actions[offset] = 2;
+      }
+    }
+  }
+  const matchedHeadings = new Map<number, number>();
+  let entryCursor = entries.length;
+  let headingCursor = headings.length;
+  while (entryCursor > 0 || headingCursor > 0) {
+    const action = actions[entryCursor * width + headingCursor];
+    if (action === 3) {
+      matchedHeadings.set(entryCursor - 1, headingCursor - 1);
+      entryCursor -= 1;
+      headingCursor -= 1;
+    } else if (action === 1 && entryCursor > 0) {
+      entryCursor -= 1;
+    } else if (headingCursor > 0) {
+      headingCursor -= 1;
+    } else {
+      entryCursor -= 1;
+    }
+  }
   return Object.freeze(
-    entries.map((entry) => {
-      const expected = comparison(entry.title);
-      const candidates = headings
-        .map((heading, index) => ({
-          heading,
-          index,
-          score: similarity(expected, comparison(heading.text)),
-        }))
-        .filter(
-          (candidate) => candidate.index >= cursor && candidate.score >= 0.62,
-        )
-        .sort(
-          (left, right) => right.score - left.score || left.index - right.index,
-        );
-      const best = candidates[0];
-      const second = candidates[1];
-      const entryTitle = normalize(entry.title).toLocaleLowerCase("und");
-      const bestIsExact =
-        best !== undefined &&
-        normalize(best.heading.text).toLocaleLowerCase("und") === entryTitle;
-      const secondIsExact =
-        second !== undefined &&
-        normalize(second.heading.text).toLocaleLowerCase("und") === entryTitle;
-      const ambiguous = Boolean(
-        best &&
-        second &&
-        ((bestIsExact && secondIsExact) ||
-          (!bestIsExact && best.score - second.score < 0.08)),
-      );
-      if (best && !ambiguous) cursor = best.index + 1;
+    entries.map((entry, entryIndex) => {
+      const headingIndex = matchedHeadings.get(entryIndex);
+      const heading =
+        headingIndex === undefined ? undefined : headings[headingIndex];
       return Object.freeze({
-        body_heading_anchor: best && !ambiguous ? best.heading.anchor : null,
+        body_heading_anchor: heading?.anchor ?? null,
         entry_key: entry.entry_key,
-        expected_match: best
-          ? ambiguous
-            ? "ambiguous"
-            : "matched"
-          : "unmatched",
+        expected_match: heading ? "matched" : "unmatched",
         kind: entry.kind,
         level: entry.level,
         page_label: entry.page_label,
@@ -585,11 +630,10 @@ function headingAccounting(input: {
         insidePart = false;
         firstChapterInPart = false;
       }
-      if (level === 1) {
-        currentRole =
-          kind === "part" || kind === "chapter"
-            ? "body"
-            : roleFor(kind, currentRole);
+      if (kind === "part" || kind === "chapter") {
+        currentRole = "body";
+      } else if (level === 1) {
+        currentRole = roleFor(kind, currentRole);
       }
       const include = Boolean(
         matchedEntry ||

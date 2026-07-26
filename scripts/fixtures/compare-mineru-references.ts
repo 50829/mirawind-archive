@@ -7,6 +7,7 @@ import {
   type MineruReferenceV2,
   type ReferenceAnchor,
   type ReferenceContentsRegion,
+  type ReferenceContentsEntry,
   type ReferenceExpectedDiagnostic,
   type ReferenceHeadingAccounting,
   type ReferenceProtectedRange,
@@ -50,6 +51,150 @@ function diagnosticKey(diagnostic: ReferenceExpectedDiagnostic): string {
   return `${diagnostic.code}:${JSON.stringify(diagnostic.location)}`;
 }
 
+function comparableTitle(value: string): string {
+  return value
+    .normalize("NFKC")
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "")
+    .replace(/(?<!\\)\$/gu, "")
+    .replace(/[\p{P}\p{S}\s]/gu, "")
+    .toLocaleLowerCase("und");
+}
+
+function titleSimilarity(left: string, right: string): number {
+  if (left === right) return 1;
+  if (left.length < 2 || right.length < 2) return 0;
+  const pairs = (value: string): Map<string, number> => {
+    const output = new Map<string, number>();
+    for (let index = 0; index < value.length - 1; index += 1) {
+      const pair = value.slice(index, index + 2);
+      output.set(pair, (output.get(pair) ?? 0) + 1);
+    }
+    return output;
+  };
+  const leftPairs = pairs(left);
+  const rightPairs = pairs(right);
+  let overlap = 0;
+  for (const [pair, count] of leftPairs) {
+    overlap += Math.min(count, rightPairs.get(pair) ?? 0);
+  }
+  return (2 * overlap) / (left.length + right.length - 2);
+}
+
+function entryAlignmentScore(
+  expected: ReferenceContentsEntry,
+  actual: ReferenceContentsEntry,
+): number | undefined {
+  const sameAnchor =
+    expected.body_heading_anchor !== null &&
+    actual.body_heading_anchor !== null &&
+    anchorKey(expected.body_heading_anchor) ===
+      anchorKey(actual.body_heading_anchor);
+  const similarity = titleSimilarity(
+    comparableTitle(expected.title),
+    comparableTitle(actual.title),
+  );
+  if (!sameAnchor && similarity < 0.58) return;
+  return (
+    (sameAnchor ? 20 : similarity * 10) +
+    (expected.page_label === actual.page_label ? 1 : 0) +
+    (expected.kind === actual.kind ? 1 : 0) +
+    (expected.level === actual.level ? 1 : 0)
+  );
+}
+
+function alignEntries(
+  expected: readonly ReferenceContentsEntry[],
+  actual: readonly ReferenceContentsEntry[],
+): {
+  readonly pairs: readonly {
+    readonly actual: ReferenceContentsEntry;
+    readonly actualIndex: number;
+    readonly expected: ReferenceContentsEntry;
+    readonly expectedIndex: number;
+  }[];
+  readonly unmatchedActual: ReadonlySet<number>;
+  readonly unmatchedExpected: ReadonlySet<number>;
+} {
+  const width = actual.length + 1;
+  const scores = new Float64Array((expected.length + 1) * width);
+  const actions = new Uint8Array(scores.length);
+  const skipCost = 3;
+  for (
+    let expectedIndex = 1;
+    expectedIndex <= expected.length;
+    expectedIndex += 1
+  ) {
+    scores[expectedIndex * width] = -skipCost * expectedIndex;
+    actions[expectedIndex * width] = 1;
+  }
+  for (let actualIndex = 1; actualIndex <= actual.length; actualIndex += 1) {
+    scores[actualIndex] = -skipCost * actualIndex;
+    actions[actualIndex] = 2;
+  }
+  for (
+    let expectedIndex = 1;
+    expectedIndex <= expected.length;
+    expectedIndex += 1
+  ) {
+    for (let actualIndex = 1; actualIndex <= actual.length; actualIndex += 1) {
+      const offset = expectedIndex * width + actualIndex;
+      const skipExpected =
+        (scores[offset - width] ?? Number.NEGATIVE_INFINITY) - skipCost;
+      const skipActual =
+        (scores[offset - 1] ?? Number.NEGATIVE_INFINITY) - skipCost;
+      const match = entryAlignmentScore(
+        expected[expectedIndex - 1] as ReferenceContentsEntry,
+        actual[actualIndex - 1] as ReferenceContentsEntry,
+      );
+      const matched =
+        match === undefined
+          ? Number.NEGATIVE_INFINITY
+          : (scores[offset - width - 1] ?? Number.NEGATIVE_INFINITY) + match;
+      if (matched >= skipExpected && matched >= skipActual) {
+        scores[offset] = matched;
+        actions[offset] = 3;
+      } else if (skipExpected >= skipActual) {
+        scores[offset] = skipExpected;
+        actions[offset] = 1;
+      } else {
+        scores[offset] = skipActual;
+        actions[offset] = 2;
+      }
+    }
+  }
+  const pairs = [];
+  const unmatchedExpected = new Set<number>();
+  const unmatchedActual = new Set<number>();
+  let expectedIndex = expected.length;
+  let actualIndex = actual.length;
+  while (expectedIndex > 0 || actualIndex > 0) {
+    const action = actions[expectedIndex * width + actualIndex];
+    if (action === 3) {
+      pairs.push(
+        Object.freeze({
+          actual: actual[actualIndex - 1] as ReferenceContentsEntry,
+          actualIndex: actualIndex - 1,
+          expected: expected[expectedIndex - 1] as ReferenceContentsEntry,
+          expectedIndex: expectedIndex - 1,
+        }),
+      );
+      expectedIndex -= 1;
+      actualIndex -= 1;
+    } else if (action === 1 && expectedIndex > 0) {
+      unmatchedExpected.add(--expectedIndex);
+    } else if (actualIndex > 0) {
+      unmatchedActual.add(--actualIndex);
+    } else {
+      unmatchedExpected.add(--expectedIndex);
+    }
+  }
+  return Object.freeze({
+    pairs: Object.freeze(pairs.reverse()),
+    unmatchedActual: Object.freeze(unmatchedActual),
+    unmatchedExpected: Object.freeze(unmatchedExpected),
+  });
+}
+
 function compareRegion(
   expected: ReferenceContentsRegion,
   actual: ReferenceContentsRegion,
@@ -65,22 +210,15 @@ function compareRegion(
   if (!same(expected.markdown_range, actual.markdown_range)) {
     add("REGION_MARKDOWN_RANGE_MISMATCH", path);
   }
-  const expectedKeys = expected.entries.map((entry) => entry.entry_key);
-  const actualKeys = actual.entries.map((entry) => entry.entry_key);
-  if (!same(expectedKeys, actualKeys)) add("ENTRY_ORDER_MISMATCH", path);
-  const actualByKey = new Map(
-    actual.entries.map((entry) => [entry.entry_key, entry] as const),
-  );
-  const expectedByKey = new Map(
-    expected.entries.map((entry) => [entry.entry_key, entry] as const),
-  );
-  for (const entry of expected.entries) {
-    const observed = actualByKey.get(entry.entry_key);
+  const alignment = alignEntries(expected.entries, actual.entries);
+  if (
+    alignment.unmatchedExpected.size > 0 ||
+    alignment.unmatchedActual.size > 0
+  ) {
+    add("ENTRY_ORDER_MISMATCH", path);
+  }
+  for (const { actual: observed, expected: entry } of alignment.pairs) {
     const entryPath = `${path}/entries/${entry.entry_key}`;
-    if (!observed) {
-      add("ENTRY_MISSING", entryPath);
-      continue;
-    }
     if (entry.title !== observed.title) add("ENTRY_TITLE_MISMATCH", entryPath);
     if (entry.kind !== observed.kind) add("ENTRY_KIND_MISMATCH", entryPath);
     if (entry.level !== observed.level) add("ENTRY_LEVEL_MISMATCH", entryPath);
@@ -94,10 +232,13 @@ function compareRegion(
       add("ENTRY_BODY_MISMATCH", entryPath);
     }
   }
-  for (const entry of actual.entries) {
-    if (!expectedByKey.has(entry.entry_key)) {
-      add("ENTRY_EXTRA", `${path}/entries/${entry.entry_key}`);
-    }
+  for (const expectedIndex of alignment.unmatchedExpected) {
+    const entry = expected.entries[expectedIndex];
+    if (entry) add("ENTRY_MISSING", `${path}/entries/${entry.entry_key}`);
+  }
+  for (const actualIndex of alignment.unmatchedActual) {
+    const entry = actual.entries[actualIndex];
+    if (entry) add("ENTRY_EXTRA", `${path}/entries/${entry.entry_key}`);
   }
 }
 

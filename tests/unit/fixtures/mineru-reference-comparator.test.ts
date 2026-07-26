@@ -215,4 +215,76 @@ describe("MinerU reference v2 comparator", () => {
       ]),
     );
   });
+
+  it("keeps one missing entry local instead of shifting later comparisons", () => {
+    const expected = reference();
+    const first = expected.printed_contents.regions[0]?.entries[0];
+    const region = expected.printed_contents.regions[0];
+    if (!first || !region) throw new Error("test fixture is incomplete");
+    const second = {
+      ...first,
+      body_heading_anchor: anchor(9, "second chapter"),
+      entry_key: "chapter-two",
+      page_label: "20",
+      title: "Chapter Two",
+    };
+    const third = {
+      ...first,
+      body_heading_anchor: anchor(10, "third chapter"),
+      entry_key: "chapter-three",
+      page_label: "40",
+      title: "Chapter Three",
+    };
+    const expanded = parseMineruReferenceV2({
+      ...expected,
+      printed_contents: {
+        ...expected.printed_contents,
+        regions: [{ ...region, entries: [first, second, third] }],
+      },
+      raw_heading_accounting: [
+        ...expected.raw_heading_accounting,
+        {
+          anchor: second.body_heading_anchor,
+          disposition: {
+            display_level: 1,
+            display_title: null,
+            include_in_toc: true,
+            kind: "expected_body" as const,
+            role: "body" as const,
+            starts_page: true,
+          },
+        },
+        {
+          anchor: third.body_heading_anchor,
+          disposition: {
+            display_level: 1,
+            display_title: null,
+            include_in_toc: true,
+            kind: "expected_body" as const,
+            role: "body" as const,
+            starts_page: true,
+          },
+        },
+      ],
+    });
+    const actual = observed(expanded);
+    const actualRegion = actual.printed_contents.regions[0];
+    if (!actualRegion) throw new Error("test fixture is incomplete");
+
+    const result = compareMineruReferenceV2(expanded, {
+      ...actual,
+      printed_contents: {
+        ...actual.printed_contents,
+        regions: [{ ...actualRegion, entries: [first, third] }],
+      },
+    });
+
+    expect(result.issues).toEqual([
+      { code: "ENTRY_ORDER_MISMATCH", path: "regions/full-contents" },
+      {
+        code: "ENTRY_MISSING",
+        path: "regions/full-contents/entries/chapter-two",
+      },
+    ]);
+  });
 });
