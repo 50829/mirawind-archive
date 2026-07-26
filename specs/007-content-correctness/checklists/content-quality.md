@@ -10,6 +10,6 @@
 - [x] Protected text is byte-identical across every rewrite class.
 - [x] Diagnostics define location, evidence, confidence and recovery.
 - [x] Sidecars and OCR remain derived, bounded worker inputs.
-- [x] Review-pack observations are independent from production proposals and cannot fill expectations.
+- [x] Observation-pack data is independent from production proposals and cannot fill expectations.
 - [x] Reference v1 is rejected and deleted rather than migrated.
 - [x] No complete book or copyrighted contents transcription is committed.

@@ -39,6 +39,9 @@ match and proposed level with its independently image-derived reference v2.
 6. **Given** a recognized printed-contents region, **When** preview, publication, navigation
    and search are built, **Then** the printed rows are absent while their matched body
    headings remain.
+7. **Given** any region, canonical, body-match or hierarchy decision, **When** preparation
+   runs, **Then** the versioned algorithm produces it without a human adjudication input or
+   a confirmation wait state.
 
 ---
 
@@ -143,7 +146,9 @@ activate each diagnostic from the workbench and execute its offered recovery.
   evidence, current proposal, one block/region/page/safe-range location and only valid
   recovery actions.
 - **FR-011**: The workbench MUST synchronize diagnostic activation with structure and preview,
-  restore dialog focus, execute supported recoveries and preserve dirty/conflict safeguards.
+  restore dialog focus, execute reload or reprocess recoveries and preserve dirty/conflict
+  safeguards; it MUST NOT offer region, canonical, body-match or hierarchy adjudication as an
+  analysis recovery.
 - **FR-012**: OCR fallback MUST run only when native/sidecar evidence is insufficient, inspect
   at most the first 48 PDF pages at 150 DPI, cap each page at 15 seconds and aggregate OCR at
   10 minutes, obey cancellation/30-minute job limits and delete temporary raster files.
@@ -157,13 +162,16 @@ activate each diagnostic from the workbench and execute its offered recovery.
   body matches, raw-root exclusion anchors/hashes, complete raw-heading accounting, expected
   levels/roles/TOC/splits/display titles, protected ranges and expected diagnostics.
 - **FR-016**: Reference tooling MUST reject unknown fields, reference v1 and unknown newer
-  versions. Review-pack generation MUST NOT import production proposal modules or populate
+  versions. Observation-pack generation MUST NOT import production proposal modules or populate
   expected ground-truth decisions before Codex image recognition.
 - **FR-017**: The final implementation MUST delete the v1 parser, generator and reference
   chain; existing local v1 data MUST NOT be migrated into v2.
 - **FR-018**: Preparation, preview and private analysis identities MUST become
   `prepare-draft-v4`, `draft-preview-v4` and `printed-contents-analysis-v2`; existing drafts
   require explicit reprocessing while published versions remain immutable.
+- **FR-019**: Region discovery, canonical selection, body matching and hierarchy inference MUST
+  be deterministic production outputs with no human answer input. Explicit publishing
+  overrides MUST NOT feed the detector, populate reference v2 or satisfy the correctness gate.
 
 ### Non-Functional Requirements
 
@@ -207,9 +215,11 @@ activate each diagnostic from the workbench and execute its offered recovery.
 
 ## Assumptions
 
-- The fifteen bundles and original PDFs are locally available for visual review.
+- The fifteen bundles and original PDFs are locally available for Codex visual inspection.
 - Codex image recognition builds the blocking fixture without a human adjudication step; it is
   not an interactive step for ordinary imports.
+- The workbench may locate uncertainty and reprocess retained input, but it does not resolve
+  the four automatic analysis decisions through manual confirmation.
 - Insufficient evidence produces a local diagnostic rather than invented hierarchy.
 
 ## Out of Scope

@@ -14,7 +14,7 @@ unknown versions/fields, inconsistent regions, incomplete heading accounting and
 
 - [x] T005 Add failing strict reference-v2 parser tests in `tests/unit/fixtures/mineru-reference-v2.test.ts`
 - [x] T006 Implement per-book exact-field v2 parser/validator in `scripts/fixtures/mineru-reference-v2.ts`
-- [x] T007 Add failing review-pack independence, archive safety and cleanup tests
+- [x] T007 Add failing observation-pack independence, archive safety and cleanup tests
 - [x] T008 Implement observation-only pack generation in `scripts/fixtures/create-mineru-reference-pack.ts`
 - [x] T009 Add failing exact comparator tests for main-document selection, regions, canonical source, headings, matches, levels, roles, TOC, splits, protection and diagnostics
 - [x] T010 Implement bounded comparator/reporting in `scripts/fixtures/compare-mineru-references.ts`
@@ -84,6 +84,8 @@ share analysis and every diagnostic activates a valid location/recovery without 
 - [ ] T038 Raise `prepare-draft-v4` and `draft-preview-v4` with stale-draft integration tests
 - [ ] T039 Carry preparation diagnostics through draft DTO without source/config leakage
 - [ ] T040 Implement typed block/region/page/range activation and supported recovery actions
+- [ ] T040a Remove region/canonical/body-match/hierarchy adjudication recoveries; keep
+      structure selection as navigation plus reload/verbatim reprocess only
 - [ ] T041 Add component tests for navigation, revision pinning, dirty/conflict preservation, dialog focus restoration and verbatim reprocess
 
 ## Phase 9: Fifteen-book references
@@ -91,9 +93,9 @@ share analysis and every diagnostic activates a valid location/recovery without 
 - [ ] T042 Generate observation packs for all fifteen registered archives without production proposals
 - [ ] T043 Render and open every candidate printed-contents page for the eight new books with the Codex image-recognition tool; Codex directly transcribes every logical row, column, indentation, continued line and semantic kind into ground truth without human adjudication
 - [ ] T044 Re-run the same Codex image recognition for every printed-contents page of the original seven, inspect frontmatter for the no-contents book, and do not copy reference v1 decisions
-- [ ] T045 Author and validate fifteen independent ignored reference-v2 files only from the saved image review; use native/OCR text and MinerU evidence solely as navigation aids
-- [ ] T046 Compare production output only after expected v2 decisions are saved; review every raw heading disposition, body match, hierarchy, role, TOC and split without auto-updating ground truth
-- [ ] T047 Review protected ranges and expected diagnostics for all fifteen books
+- [ ] T045 Author and validate fifteen independent ignored reference-v2 files only from the saved Codex image-recognition transcript; use native/OCR text and MinerU evidence solely as navigation aids
+- [ ] T046 Compare production output only after expected v2 decisions are saved; verify every raw heading disposition, body match, hierarchy, role, TOC and split without auto-updating ground truth
+- [ ] T047 Verify protected ranges and expected diagnostics for all fifteen books
 - [ ] T048 Run exact fifteen-book comparator and resolve every implementation mismatch without rewriting correct ground truth
 
 ## Phase 10: Verification and convergence
@@ -110,5 +112,5 @@ share analysis and every diagnostic activates a valid location/recovery without 
 T004 blocks implementation. T005-T012 establish an independent oracle before production
 algorithm changes. T013-T017 feed T018-T029. T030-T037 can proceed after the reference model
 is stable. T038-T041 consume final diagnostic/artifact contracts. T042-T048 require all
-comparison tooling, complete Codex image review and drive algorithm correction. T049-T054 are
+comparison tooling, complete Codex image inspection and drive algorithm correction. T049-T054 are
 final gates.

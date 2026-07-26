@@ -25,6 +25,10 @@ Markdown or leave partial analysis.
 Each region exposes boundary confidence separately from its entry match states. Accepted
 regions use `reference_only`; only the canonical region contributes hierarchy.
 
+Region acceptance, canonical selection, body alignment and hierarchy are deterministic
+production outputs. No confirmation record, publishing override or reference fixture is an
+input to these decisions.
+
 The detector recognizes labelled and unlabelled early runs, spaced/continuous leaders,
 ordinary right-side page suffixes, 1-3 columns and wrapped rows. A reliable intervening row can
 bridge noise. Termination follows the last reliable row, not a fixed page count. Late index

@@ -5,7 +5,7 @@
 The original seven and eight newly supplied MinerU 3.4.4 bundles contain original/layout
 PDFs, one main Markdown and flat/nested sidecars. The new eight add 4,983 PDF pages, 6,290
 Markdown headings and 11,391 flat `list_items`; 6,157 headings (97.9%) are H2. At least 73
-printed-contents pages require visual review across the complete set. One original book has no
+printed-contents pages require Codex visual inspection across the complete set. One original book has no
 printed contents. One has both Brief Contents and full Contents, both of which must be
 excluded while only the full region supplies canonical hierarchy.
 
@@ -93,3 +93,8 @@ All fifteen references are an exact content-correctness gate. Performance remain
 suite using the established 441-page and 583-page books, one other representative real book,
 the 500-page synthetic book and uncached reader p95. Conflating these sets would make local
 correctness data a performance dependency and would weaken both signals.
+
+There is no human adjudication layer in 007. Region discovery, canonical selection, body
+alignment and hierarchy are production algorithm outputs. Codex image recognition creates the
+independent offline oracle; diagnostics expose uncertainty but do not request a person to fill
+an answer back into the analyzer.

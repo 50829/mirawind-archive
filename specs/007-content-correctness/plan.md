@@ -49,13 +49,13 @@ Gate result: PASS. No constitution exception or schema transition is required.
 
 ## Architecture
 
-### 1. Reference v2 and review pack
+### 1. Reference v2 and observation pack
 
 Store one ignored file at `tests/fixtures/mineru/real/references-v2/<fixture-id>.json`. A
 repository parser validates exact fields, hash bindings, page/region consistency, unique
 canonical region, complete raw-heading disposition and diagnostics. It accepts only version 2. Delete the combined v1 parser/generator/data path.
 
-The review-pack command safely extracts one registered archive into a temporary directory and
+The observation-pack command safely extracts one registered archive into a temporary directory and
 emits only observations: file hashes, PDF page images/text, raw Markdown root blocks/headings,
 sidecar rows and production output in a separate observed section. It must not import
 `printed-toc.ts` or `structure-proposal.ts` and must never populate expected decisions.
@@ -63,7 +63,7 @@ sidecar rows and production output in a separate observed section. It must not i
 For each of the eight newly added books, Codex MUST render and open every candidate printed-
 contents PDF page with the image-recognition tool, read every logical row, resolve columns,
 indentation, continued lines and semantic kind from the page image, and directly author those
-decisions as reference v2 ground truth without human adjudication. The same image-review
+decisions as reference v2 ground truth without human adjudication. The same image-inspection
 procedure is rerun for the original seven rather than copying v1. Native/OCR text and MinerU
 rows are navigation aids only; production proposals are shown after the expected reference is
 saved and can only produce a comparison report, never fill or revise expected decisions.
@@ -124,9 +124,14 @@ and never exposed through public assets.
 ### 6. Diagnostics and identities
 
 Carry preparation diagnostics into the draft DTO with stable location and recovery. The
-workbench selects block/region/page/fragment, supports reload, region enablement and verbatim
-reprocess where valid, and restores dialog trigger focus. Dirty and conflict behavior remains
+workbench selects block/region/page/fragment, supports reload and verbatim reprocess where
+valid, and restores dialog trigger focus. It does not enable regions, choose canonical input,
+force body matches or adjudicate inferred hierarchy. Dirty and conflict behavior remains
 unchanged.
+
+Region discovery, canonical selection, body alignment and hierarchy are versioned automatic
+outputs. Codex-produced reference v2 remains an offline oracle, and existing explicit
+publishing overrides are neither detector inputs nor acceptable fixture-specific corrections.
 
 Set preparation and preview identities to `prepare-draft-v4` and `draft-preview-v4`. Do not
 change `book.yaml`, database, compiler-v4, semantic renderer or reader identities.
@@ -155,7 +160,7 @@ tests/fixtures/mineru/{synthetic,real/references-v2}/
 ## Delivery Sequence
 
 1. Freeze D-114 and all 007 contracts; analyze before implementation.
-2. Write failing strict-v2/parser/comparator/review-pack tests; remove v1 only when v2 passes.
+2. Write failing strict-v2/parser/comparator/observation-pack tests; remove v1 only when v2 passes.
 3. Write failing streaming/list/column/cancellation tests and implement evidence extraction.
 4. Write failing multi-region/index/alignment/hierarchy/split tests and implement pipeline.
 5. Write failing OCR budget/cleanup tests and implement fallback/artifact.

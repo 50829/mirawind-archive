@@ -26,7 +26,7 @@ interface SafeDiagnostic {
         readonly endByte: number;
       };
   readonly recovery: readonly (
-    "select_structure" | "enable_region" | "reload" | "reprocess_verbatim"
+    "select_structure" | "reload" | "reprocess_verbatim"
   )[];
 }
 ```
@@ -38,3 +38,5 @@ paths. Every warning/error has one valid location and at least one action valid 
 Activation selects the block/nearest related block, pins the iframe to the correct revision,
 navigates to the page/fragment and returns focus to the invoking control when a dialog closes.
 Recovery calls use existing authenticated draft APIs and preserve dirty/conflict safeguards.
+They cannot enable a region, choose canonical evidence, force a body match or supply a heading
+level to the automatic analyzer. `select_structure` is navigation only, not adjudication.

@@ -61,6 +61,8 @@ Private derived artifact with identity `printed-contents-analysis-v2`:
 - hierarchy/split proposals and bounded diagnostics
 
 It is revision-pinned, rebuildable and never a public resource.
+Its region, canonical, match and hierarchy fields are algorithm output only; the artifact has
+no reviewer, confirmation or manual-decision fields.
 
 ## LocatableDiagnostic
 
@@ -68,5 +70,7 @@ It is revision-pinned, rebuildable and never a public resource.
 - bounded evidence/proposal summaries
 - exactly one primary block, region, page or safe byte-range location
 - allowed recovery actions
+
+Recovery does not include supplying region, canonical, body-match or hierarchy decisions.
 
 Complete source text, raw archive paths and OCR output do not cross the management API.

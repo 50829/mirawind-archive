@@ -13,6 +13,10 @@ The pack command emits observations only. Codex completes each ignored
 fails unless all fifteen registered books have valid v2 files and every expected decision
 matches. v1 and unknown schemas are rejected.
 
+No human confirmation is part of this gate or the production pipeline. The detector computes
+regions, canonical selection, body matches and hierarchy automatically; reference v2 is only
+an independently authored offline oracle.
+
 ## Focused gates
 
 ```sh
