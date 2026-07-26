@@ -153,6 +153,21 @@ export function proposeDocumentStructure(
         !localPartIndexes.has(index) &&
         inferPrintedHeadingEvidence(heading.sourceTitle) !== undefined,
     );
+  const firstBodyUnitIndex = document.headings.findIndex((heading, index) => {
+    if (localPartIndexes.has(index)) return false;
+    const kind = inferPrintedHeadingEvidence(heading.sourceTitle)?.kind;
+    return kind === "chapter" || kind === "part";
+  });
+  const firstFrontmatterIndex = document.headings.findIndex((heading) =>
+    frontmatterTitle.test(heading.sourceTitle.trim().normalize("NFKC")),
+  );
+  const coverBoundaryIndex =
+    firstBodyUnitIndex < 0
+      ? -1
+      : firstFrontmatterIndex >= 0 &&
+          firstFrontmatterIndex < firstBodyUnitIndex
+        ? firstFrontmatterIndex
+        : firstBodyUnitIndex;
   const ordinaryLevels = continuousLevels(document.headings);
   const levelCounts = new Map<number, number>();
   for (const heading of document.headings) {
@@ -211,6 +226,7 @@ export function proposeDocumentStructure(
       return 1;
     }
     structuralEvidence[index] = false;
+    if (coverBoundaryIndex >= 0 && index < coverBoundaryIndex) return 1;
     if (markdownLevelsAreUseful) return ordinaryLevels[index] ?? 1;
     return hasNumberedUnit ? (contextualNumberedLevels[index] ?? 2) : 1;
   });
@@ -244,15 +260,24 @@ export function proposeDocumentStructure(
     const title = heading.sourceTitle.trim().normalize("NFKC");
     const explicitLevel = inferPrintedReferenceLevel(title);
     const localPart = localPartIndexes.has(index);
+    const coverMetadata =
+      coverBoundaryIndex >= 0 &&
+      index < coverBoundaryIndex &&
+      !printedHeadingIds.has(heading.blockId) &&
+      explicitLevel === undefined &&
+      !frontmatterTitle.test(title) &&
+      !appendixTitle.test(title) &&
+      !backmatterTitle.test(title);
     const includeInToc =
-      markdownLevelsAreUseful ||
-      !hasAnyNumberedEvidence ||
-      printedHeadingIds.has(heading.blockId) ||
-      (!localPart && explicitLevel !== undefined) ||
-      frontmatterTitle.test(title) ||
-      appendixTitle.test(title) ||
-      backmatterTitle.test(title) ||
-      chapterLocalTitle.test(title);
+      !coverMetadata &&
+      (markdownLevelsAreUseful ||
+        !hasAnyNumberedEvidence ||
+        printedHeadingIds.has(heading.blockId) ||
+        (!localPart && explicitLevel !== undefined) ||
+        frontmatterTitle.test(title) ||
+        appendixTitle.test(title) ||
+        backmatterTitle.test(title) ||
+        chapterLocalTitle.test(title));
     return {
       block_id: heading.blockId,
       display_level: displayLevel,

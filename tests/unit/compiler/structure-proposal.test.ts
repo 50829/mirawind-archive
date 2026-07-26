@@ -5,6 +5,43 @@ import { parseMarkdownDocument } from "@/compiler/document/parser";
 import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
 
 describe("default document structure proposal", () => {
+  it("keeps cover metadata before numbered chapters out of navigation", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "# Book Title",
+          "",
+          "Cover copy",
+          "",
+          "# Book Title",
+          "",
+          "## [Author] Name",
+          "",
+          "## Preface",
+          "",
+          "Preface body",
+          "",
+          "## Chapter 1 Opening",
+          "",
+          "Chapter body",
+        ].join("\n"),
+      ),
+    );
+
+    expect(
+      proposeDocumentStructure(document).nodes.map((node) => ({
+        include_in_toc: node.include_in_toc,
+        level: node.display_level,
+      })),
+    ).toEqual([
+      { include_in_toc: false, level: 1 },
+      { include_in_toc: false, level: 1 },
+      { include_in_toc: false, level: 1 },
+      { include_in_toc: true, level: 1 },
+      { include_in_toc: true, level: 1 },
+    ]);
+  });
+
   it("keeps heading order, closes level gaps and starts only major units on pages", () => {
     const normalized = normalizeDocumentBlocks(
       parseMarkdownDocument(
