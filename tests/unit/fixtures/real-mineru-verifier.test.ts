@@ -39,7 +39,7 @@ function fixture(id: string, content: string) {
 }
 
 describe("real MinerU fixture verifier", () => {
-  it("accepts exactly registered local-only files with matching hashes", async () => {
+  it("accepts registered local-only files with matching hashes", async () => {
     const root = await mkdtemp(join(tmpdir(), "real-mineru-verifier-"));
     roots.push(root);
     const contents = [
@@ -129,19 +129,17 @@ describe("real MinerU fixture verifier", () => {
       }),
     ).toThrow(/must be unique/);
     expect(() =>
-      parseRealFixtureManifest({ fixtures: [first], schema_version: 1 }),
-    ).toThrow(/exactly the three approved real entries/);
-    expect(() =>
       parseRealFixtureManifest({
-        fixtures: [
-          first,
-          second,
-          third,
-          fixture("real-mineru-d447ea", "fourth"),
-        ],
+        fixtures: [],
         schema_version: 1,
       }),
-    ).toThrow(/exactly the three approved real entries/);
+    ).toThrow(/between one and 100 approved entries/);
+    expect(
+      parseRealFixtureManifest({
+        fixtures: [first],
+        schema_version: 1,
+      }).fixtures,
+    ).toHaveLength(1);
   });
 
   it("rejects fixtures produced by a different MinerU version", () => {

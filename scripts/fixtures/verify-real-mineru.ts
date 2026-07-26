@@ -93,10 +93,11 @@ function parseFixture(value: unknown, index: number): RealFixture {
   }
   if (
     typeof input.file_name !== "string" ||
-    input.file_name !== `${input.id}.zip` ||
-    basename(input.file_name) !== input.file_name
+    !input.file_name.toLowerCase().endsWith(".zip") ||
+    basename(input.file_name) !== input.file_name ||
+    input.file_name.length > 255
   ) {
-    throw new Error(`${label}.file_name must be the opaque ID plus .zip`);
+    throw new Error(`${label}.file_name must be a direct ZIP filename`);
   }
   if (input.mineru_version !== "3.4.4") {
     throw new Error(`${label}.mineru_version must be 3.4.4`);
@@ -176,14 +177,24 @@ export function parseRealFixtureManifest(value: unknown): RealFixtureManifest {
   if (input.schema_version !== 1) {
     throw new Error("manifest.schema_version must be 1");
   }
-  if (!Array.isArray(input.fixtures) || input.fixtures.length !== 3) {
+  if (
+    !Array.isArray(input.fixtures) ||
+    input.fixtures.length < 1 ||
+    input.fixtures.length > 100
+  ) {
     throw new Error(
-      "manifest.fixtures must contain exactly the three approved real entries",
+      "manifest.fixtures must contain between one and 100 approved entries",
     );
   }
   const fixtures = input.fixtures.map(parseFixture);
   if (new Set(fixtures.map((fixture) => fixture.id)).size !== fixtures.length) {
     throw new Error("manifest fixture IDs must be unique");
+  }
+  if (
+    new Set(fixtures.map((fixture) => fixture.file_name)).size !==
+    fixtures.length
+  ) {
+    throw new Error("manifest fixture filenames must be unique");
   }
   return { fixtures, schema_version: 1 };
 }

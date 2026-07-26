@@ -12,14 +12,14 @@
 **Independent gate**: strict parser accepts a minimal complete v2 fixture and rejects v1,
 unknown versions/fields, inconsistent regions, incomplete heading accounting and hash drift.
 
-- [ ] T005 Add failing strict reference-v2 parser tests in `tests/unit/fixtures/mineru-reference-v2.test.ts`
-- [ ] T006 Implement per-book exact-field v2 parser/validator in `scripts/fixtures/mineru-reference-v2.ts`
-- [ ] T007 Add failing review-pack independence, archive safety and cleanup tests
-- [ ] T008 Implement observation-only pack generation in `scripts/fixtures/create-mineru-reference-pack.ts`
-- [ ] T009 Add failing exact comparator tests for main-document selection, regions, canonical source, headings, matches, levels, roles, TOC, splits, protection and diagnostics
-- [ ] T010 Implement bounded comparator/reporting in `scripts/fixtures/compare-mineru-references.ts`
-- [ ] T011 Register all fifteen archive hashes/page counts and add package scripts/docs
-- [ ] T012 Delete v1 parser, generator, combined references and package scripts after v2 gates pass
+- [x] T005 Add failing strict reference-v2 parser tests in `tests/unit/fixtures/mineru-reference-v2.test.ts`
+- [x] T006 Implement per-book exact-field v2 parser/validator in `scripts/fixtures/mineru-reference-v2.ts`
+- [x] T007 Add failing review-pack independence, archive safety and cleanup tests
+- [x] T008 Implement observation-only pack generation in `scripts/fixtures/create-mineru-reference-pack.ts`
+- [x] T009 Add failing exact comparator tests for main-document selection, regions, canonical source, headings, matches, levels, roles, TOC, splits, protection and diagnostics
+- [x] T010 Implement bounded comparator/reporting in `scripts/fixtures/compare-mineru-references.ts`
+- [x] T011 Register all fifteen archive hashes/page counts and add package scripts/docs
+- [x] T012 Delete v1 parser, generator, combined references and package scripts after v2 gates pass
 
 ## Phase 3: Streaming layout evidence
 

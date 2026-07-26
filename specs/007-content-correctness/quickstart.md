@@ -3,9 +3,9 @@
 ## Strict reference v2
 
 ```sh
-pnpm fixtures:verify-real -- --dir "$PWD/tests/fixtures/mineru/real"
-pnpm fixtures:reference-pack -- --fixture real-mineru-example
-pnpm fixtures:compare-references -- --dir "$PWD/tests/fixtures/mineru/real"
+pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"
+pnpm fixtures:reference-pack --fixture real-mineru-example
+pnpm fixtures:compare-references --reference-dir references-v2 --observed-dir observed-v2
 ```
 
 The pack command emits observations only. A reviewer completes each ignored

@@ -26,6 +26,8 @@
     "format:write": "prettier --write package.json pnpm-workspace.yaml tsconfig.json tsconfig.processes.json astro.config.mjs eslint.config.js commitlint.config.mjs vitest.config.ts playwright.config.ts CONTRIBUTING.md .github/workflows src tests scripts docs/operations docs/third-party",
     "fixtures:build-hostile": "tsx scripts/fixtures/build-hostile-zips.ts",
     "fixtures:build-stress": "tsx scripts/fixtures/build-stress-book.ts",
+    "fixtures:compare-references": "tsx scripts/fixtures/compare-mineru-references.ts",
+    "fixtures:reference-pack": "tsx scripts/fixtures/create-mineru-reference-pack.ts",
     "fixtures:verify-real": "tsx scripts/fixtures/verify-real-mineru.ts",
     "lint": "eslint . && node scripts/check-style-tokens.mjs",
     "mirawind": "tsx src/cli/index.ts",
