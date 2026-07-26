@@ -20,7 +20,7 @@ production parsing/proposal behavior and can turn current output into expected o
 cannot independently detect the defects under repair. Byte offsets also become stale after
 preprocessing.
 
-Reference v2 is per book, strict and human-authored from PDF evidence. It models absent or
+Reference v2 is per book, strict and authored by Codex from direct PDF image recognition. It models absent or
 multiple contents, a unique canonical region, root-block anchors, semantic kinds, complete
 heading disposition, protected ranges and expected diagnostics. The final repository supports
 v2 only. v1 files and code are deleted, not migrated.

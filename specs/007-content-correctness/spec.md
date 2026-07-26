@@ -6,7 +6,7 @@
 
 **Status**: Approved
 
-**Input**: Rebuild MinerU import preprocessing around fifteen human-reviewed books so the
+**Input**: Rebuild MinerU import preprocessing around fifteen Codex image-reviewed books so the
 main document, printed contents, heading hierarchy, page splits, protected technical text
 and administrator recovery diagnostics are correct on the first preparation pass.
 
@@ -19,7 +19,7 @@ book's contents even when MinerU emits nearly every Markdown heading at H2.
 
 **Independent Test**: Prepare each of the fifteen designated books and compare every
 document choice, printed-contents region, canonical entry, raw heading disposition, body
-match and proposed level with its independently reviewed reference v2.
+match and proposed level with its independently image-derived reference v2.
 
 **Acceptance Scenarios**:
 
@@ -150,14 +150,15 @@ activate each diagnostic from the workbench and execute its offered recovery.
 - **FR-013**: OCR absence, timeout, low confidence or malformed evidence MUST preserve accepted
   source and emit diagnostics rather than silently install a lower-confidence proposal.
 - **FR-014**: Exactly the fifteen administrator-designated MinerU 3.4.4 bundles MUST form the
-  blocking local correctness set; each MUST have a separately reviewed strict reference v2.
+  blocking local correctness set; each MUST have a strict reference v2 created by Codex after
+  opening every candidate printed-contents PDF page with the image-recognition tool.
 - **FR-015**: Reference v2 MUST bind archive/PDF/Markdown hashes and page count, model
   `present|absent`, multiple regions and one canonical region, logical entries, semantic kind,
   body matches, raw-root exclusion anchors/hashes, complete raw-heading accounting, expected
   levels/roles/TOC/splits/display titles, protected ranges and expected diagnostics.
 - **FR-016**: Reference tooling MUST reject unknown fields, reference v1 and unknown newer
   versions. Review-pack generation MUST NOT import production proposal modules or populate
-  expected human decisions.
+  expected ground-truth decisions before Codex image recognition.
 - **FR-017**: The final implementation MUST delete the v1 parser, generator and reference
   chain; existing local v1 data MUST NOT be migrated into v2.
 - **FR-018**: Preparation, preview and private analysis identities MUST become
@@ -180,7 +181,7 @@ activate each diagnostic from the workbench and execute its offered recovery.
 
 ### Key Entities
 
-- **Reference v2**: Strict, per-book, hash-bound human acceptance record.
+- **Reference v2**: Strict, per-book, hash-bound Codex image-recognition ground truth.
 - **Layout Evidence**: Bounded sidecar/native/OCR rows with page, reading order and provenance.
 - **Printed Contents Region**: Excluded source interval with logical entries and canonical flag.
 - **Contents Alignment**: Best and second-best ordered entry/body paths with local states.
@@ -207,7 +208,8 @@ activate each diagnostic from the workbench and execute its offered recovery.
 ## Assumptions
 
 - The fifteen bundles and original PDFs are locally available for visual review.
-- Human review builds the blocking fixture, not an interactive step for ordinary imports.
+- Codex image recognition builds the blocking fixture without a human adjudication step; it is
+  not an interactive step for ordinary imports.
 - Insufficient evidence produces a local diagnostic rather than invented hierarchy.
 
 ## Out of Scope

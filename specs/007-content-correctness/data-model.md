@@ -2,7 +2,7 @@
 
 ## MineruReferenceV2
 
-One strict file per registered fixture:
+One strict Codex image-derived file per registered fixture:
 
 - `schema_version`: exactly `2`
 - `fixture_id`, archive SHA-256
