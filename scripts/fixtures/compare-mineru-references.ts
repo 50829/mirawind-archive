@@ -219,7 +219,13 @@ function compareRegion(
   }
   for (const { actual: observed, expected: entry } of alignment.pairs) {
     const entryPath = `${path}/entries/${entry.entry_key}`;
-    if (entry.title !== observed.title) add("ENTRY_TITLE_MISMATCH", entryPath);
+    const alignedTitleSimilarity = titleSimilarity(
+      comparableTitle(entry.title),
+      comparableTitle(observed.title),
+    );
+    if (alignedTitleSimilarity < 0.9) {
+      add("ENTRY_TITLE_MISMATCH", entryPath);
+    }
     if (entry.kind !== observed.kind) add("ENTRY_KIND_MISMATCH", entryPath);
     if (entry.level !== observed.level) add("ENTRY_LEVEL_MISMATCH", entryPath);
     if (entry.page_label !== observed.page_label) {

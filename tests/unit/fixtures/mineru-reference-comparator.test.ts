@@ -287,4 +287,34 @@ describe("MinerU reference v2 comparator", () => {
       },
     ]);
   });
+
+  it("accepts bounded OCR punctuation and single-character loss", () => {
+    const expected = reference();
+    const actual = observed(expected);
+    const region = actual.printed_contents.regions[0];
+    const entry = region?.entries[0];
+    if (!region || !entry) throw new Error("test fixture is incomplete");
+
+    const result = compareMineruReferenceV2(expected, {
+      ...actual,
+      printed_contents: {
+        ...actual.printed_contents,
+        regions: [
+          {
+            ...region,
+            entries: [
+              {
+                ...entry,
+                title: entry.title.replace("One", "On") + " .",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result.issues).not.toContainEqual(
+      expect.objectContaining({ code: "ENTRY_TITLE_MISMATCH" }),
+    );
+  });
 });
