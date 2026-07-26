@@ -11,6 +11,7 @@ import {
 } from "../../compiler/archive/extractor.js";
 import { normalizeDocumentBlocks } from "../../compiler/document/normalize.js";
 import { parseMarkdownDocument } from "../../compiler/document/parser.js";
+import { readMineruLayoutEvidence } from "../../compiler/document/layout-evidence.js";
 import {
   detectPrintedContents,
   type PrintedContentsCandidate,
@@ -113,6 +114,10 @@ export async function prepareDraft(input: {
     await atomicWriteFile(markdownPath, typography.markdown, { mode: 0o600 });
     const document = parseMarkdownDocument(typography.markdown);
     const normalized = normalizeDocumentBlocks(document);
+    const layoutEvidence = await readMineruLayoutEvidence(
+      markdownPath,
+      input.signal,
+    );
     const resources = await resolveDocumentResources({
       document,
       markdownPath,
@@ -129,19 +134,22 @@ export async function prepareDraft(input: {
     }
     const printedContents = detectPrintedContents({
       document: normalized,
+      layoutEvidence,
       sourcePath: basename(input.selectedCandidatePath),
       sourceSha256: typography.provenance.output_sha256,
     });
     const sourceRegions = printedContents.candidates.flatMap((candidate) =>
       candidate.proposedRegion ? [candidate.proposedRegion] : [],
     );
-    const proposal = proposeDocumentStructure(normalized, { sourceRegions });
     const activeDocument = applySourceRegions({
       document: normalized,
       mainMarkdownPath: basename(input.selectedCandidatePath),
       mainMarkdownSha256: typography.provenance.output_sha256,
       regions: sourceRegions,
     }).document;
+    const proposal = proposeDocumentStructure(activeDocument, {
+      sourceRegions,
+    });
     const artifact: PreparedDraftArtifact = Object.freeze({
       mainMarkdownRelativePath: input.selectedCandidatePath,
       printedContents: Object.freeze(

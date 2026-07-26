@@ -55,6 +55,7 @@
     "@fastify/busboy": "3.2.0",
     "@inquirer/prompts": "8.5.2",
     "@shikijs/transformers": "4.3.1",
+    "@streamparser/json": "^0.0.22",
     "@tanstack/react-virtual": "^3.14.8",
     "@zip.js/zip.js": "2.8.34",
     "ajv": "8.20.0",

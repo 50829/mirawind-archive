@@ -26,11 +26,11 @@ unknown versions/fields, inconsistent regions, incomplete heading accounting and
 **Independent gate**: flat/nested sidecars remain bounded and cancelable; `list_items`, group
 order, 1-3 column reading order and wrapped rows match synthetic expectations.
 
-- [ ] T013 Add failing streaming byte/depth/count/malformed/cancellation tests in `tests/unit/compiler/layout-evidence.test.ts`
-- [ ] T014 Add failing list-item and missing-item-bbox order tests
-- [ ] T015 Add failing one/two/three-column and alternating-margin row reconstruction tests
-- [ ] T016 Implement streaming flat sidecar and list expansion in `src/compiler/document/layout-evidence.ts`
-- [ ] T017 Implement bounded column order and wrapped-row reconstruction
+- [x] T013 Add failing streaming byte/depth/count/malformed/cancellation tests in `tests/unit/compiler/layout-evidence.test.ts`
+- [x] T014 Add failing list-item and missing-item-bbox order tests
+- [x] T015 Add failing one/two/three-column and alternating-margin row reconstruction tests
+- [x] T016 Implement streaming flat sidecar and list expansion in `src/compiler/document/layout-evidence.ts`
+- [x] T017 Implement bounded column order and wrapped-row reconstruction
 
 ## Phase 4: Printed contents and global alignment
 
