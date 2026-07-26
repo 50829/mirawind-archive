@@ -68,6 +68,13 @@ export interface CodexVisionTranscript {
   readonly source: "codex-image-recognition";
 }
 
+export interface VisionTranscriptTemplate extends Omit<
+  CodexVisionTranscript,
+  "source"
+> {
+  readonly source: "unverified-markdown-template";
+}
+
 interface RootText {
   readonly rootIndex: number;
   readonly text: string;
@@ -365,13 +372,13 @@ function pageImages(
   return Object.freeze(pages);
 }
 
-export function createCodexVisionTranscript(input: {
+export function createVisionTranscriptTemplate(input: {
   readonly decision: VisionFixtureDecision;
   readonly document: {
     readonly root: { readonly children?: readonly unknown[] };
   };
   readonly pack: MineruReferencePack;
-}): CodexVisionTranscript {
+}): VisionTranscriptTemplate {
   if (input.decision.fixture_id !== input.pack.fixture_id) {
     throw new Error("VISION_REFERENCE_FIXTURE_MISMATCH");
   }
@@ -403,8 +410,27 @@ export function createCodexVisionTranscript(input: {
     inspected_pages: pageImages(input.pack, input.decision),
     regions: Object.freeze(regions),
     schema_version: 1,
-    source: "codex-image-recognition",
+    source: "unverified-markdown-template",
   });
+}
+
+function parseCodexVisionTranscript(value: unknown): CodexVisionTranscript {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("VISION_TRANSCRIPT_INVALID");
+  }
+  const input = value as Readonly<Record<string, unknown>>;
+  if (
+    input.schema_version !== 1 ||
+    input.source !== "codex-image-recognition" ||
+    typeof input.fixture_id !== "string" ||
+    !Array.isArray(input.inspected_pages) ||
+    !Array.isArray(input.regions) ||
+    Object.keys(input).sort().join(",") !==
+      "fixture_id,inspected_pages,regions,schema_version,source"
+  ) {
+    throw new Error("VISION_TRANSCRIPT_INVALID");
+  }
+  return input as unknown as CodexVisionTranscript;
 }
 
 function matchEntries(
@@ -572,7 +598,8 @@ export function authorMineruReferenceV2(input: {
   readonly pack: MineruReferencePack;
   readonly transcript: CodexVisionTranscript;
 }): MineruReferenceV2 {
-  if (input.pack.fixture_id !== input.transcript.fixture_id) {
+  const transcript = parseCodexVisionTranscript(input.transcript);
+  if (input.pack.fixture_id !== transcript.fixture_id) {
     throw new Error("VISION_REFERENCE_FIXTURE_MISMATCH");
   }
   const markdown = input.pack.markdown_documents[0];
@@ -593,7 +620,7 @@ export function authorMineruReferenceV2(input: {
     type: heading.type,
   }));
   const excludedRoots = new Set(
-    input.transcript.regions.flatMap((region) =>
+    transcript.regions.flatMap((region) =>
       Array.from(
         { length: region.end_root - region.start_root + 1 },
         (_, index) => region.start_root + index,
@@ -603,7 +630,7 @@ export function authorMineruReferenceV2(input: {
   const bodyHeadings = allHeadings.filter(
     (heading) => !excludedRoots.has(heading.rootIndex),
   );
-  const regions = input.transcript.regions.map((region) => {
+  const regions = transcript.regions.map((region) => {
     const start = markdown.root_blocks[region.start_root];
     const end = markdown.root_blocks[region.end_root];
     if (!start || !end)
@@ -628,29 +655,31 @@ export function authorMineruReferenceV2(input: {
       const hasMatchedEntry = region.entries.some(
         (entry) => entry.expected_match === "matched",
       );
-      return region.entries.flatMap((entry) =>
-        entry.expected_match === "matched"
-          ? []
-          : [
-              {
-                code:
-                  entry.expected_match === "ambiguous"
-                    ? "PRINTED_TOC_AMBIGUOUS_MATCH"
-                    : "PRINTED_TOC_UNMATCHED_ENTRY",
-                location: {
-                  entry_key: entry.entry_key,
-                  kind: "entry" as const,
+      return region.entries
+        .flatMap((entry) =>
+          entry.expected_match === "matched"
+            ? []
+            : [
+                {
+                  code:
+                    entry.expected_match === "ambiguous"
+                      ? "PRINTED_TOC_AMBIGUOUS_MATCH"
+                      : "PRINTED_TOC_UNMATCHED_ENTRY",
+                  location: {
+                    entry_key: entry.entry_key,
+                    kind: "entry" as const,
+                  },
+                  phase: "matching" as const,
+                  recovery: [
+                    hasMatchedEntry
+                      ? ("select_structure" as const)
+                      : ("reload" as const),
+                  ],
+                  severity: "info" as const,
                 },
-                phase: "matching" as const,
-                recovery: [
-                  hasMatchedEntry
-                    ? ("select_structure" as const)
-                    : ("reload" as const),
-                ],
-                severity: "info" as const,
-              },
-            ],
-      );
+              ],
+        )
+        .slice(0, 100);
     }),
     fixture_id: input.pack.fixture_id,
     main_markdown: {
@@ -752,10 +781,9 @@ function parseDecisionSet(value: unknown): VisionDecisionSet {
   });
 }
 
-export async function authorRealMineruReferences(input: {
+export async function createRealMineruTranscriptTemplates(input: {
   readonly decisionsPath: string;
   readonly realDirectory: string;
-  readonly referenceDirectory: string;
   readonly transcriptDirectory: string;
 }): Promise<
   readonly {
@@ -782,9 +810,7 @@ export async function authorRealMineruReferences(input: {
     throw new Error("VISION_REFERENCE_FIXTURE_NOT_REGISTERED");
   }
   const transcriptDirectory = resolve(input.transcriptDirectory);
-  const referenceDirectory = resolve(input.referenceDirectory);
   await mkdir(transcriptDirectory, { mode: 0o700, recursive: true });
-  await mkdir(referenceDirectory, { mode: 0o700, recursive: true });
   const summaries = [];
   for (const decision of decisions.fixtures) {
     const fixture = manifest.fixtures.find(
@@ -818,14 +844,14 @@ export async function authorRealMineruReferences(input: {
       if (sha256(source) !== markdown.input_sha256) {
         throw new Error("VISION_REFERENCE_MARKDOWN_HASH_MISMATCH");
       }
-      const transcript = createCodexVisionTranscript({
+      const transcript = createVisionTranscriptTemplate({
         decision,
         document: parseMarkdownDocument(source),
         pack,
       });
       const transcriptPath = join(
         transcriptDirectory,
-        `${decision.fixture_id}.json`,
+        `${decision.fixture_id}.template.json`,
       );
       await writeFile(
         transcriptPath,
@@ -834,27 +860,15 @@ export async function authorRealMineruReferences(input: {
           mode: 0o600,
         },
       );
-      const savedTranscript = JSON.parse(
-        await readFile(transcriptPath, "utf8"),
-      ) as CodexVisionTranscript;
-      const reference = authorMineruReferenceV2({
-        pack,
-        transcript: savedTranscript,
-      });
-      await writeFile(
-        join(referenceDirectory, `${decision.fixture_id}.json`),
-        `${JSON.stringify(reference, null, 2)}\n`,
-        { mode: 0o600 },
-      );
       summaries.push(
         Object.freeze({
-          entries: reference.printed_contents.regions.reduce(
+          entries: transcript.regions.reduce(
             (total, region) => total + region.entries.length,
             0,
           ),
           fixture_id: decision.fixture_id,
-          headings: reference.raw_heading_accounting.length,
-          regions: reference.printed_contents.regions.length,
+          headings: markdown.headings.length,
+          regions: transcript.regions.length,
         }),
       );
     } finally {
@@ -865,6 +879,7 @@ export async function authorRealMineruReferences(input: {
 }
 
 export async function reauthorRealMineruReferences(input: {
+  readonly fixtureId?: string;
   readonly realDirectory: string;
   readonly referenceDirectory: string;
   readonly transcriptDirectory: string;
@@ -881,16 +896,24 @@ export async function reauthorRealMineruReferences(input: {
   const referenceDirectory = resolve(input.referenceDirectory);
   const transcriptDirectory = resolve(input.transcriptDirectory);
   await mkdir(referenceDirectory, { mode: 0o700, recursive: true });
-  for (const fixture of manifest.fixtures) {
+  const fixtures = input.fixtureId
+    ? manifest.fixtures.filter((fixture) => fixture.id === input.fixtureId)
+    : manifest.fixtures;
+  if (fixtures.length < 1) {
+    throw new Error("VISION_REFERENCE_FIXTURE_NOT_REGISTERED");
+  }
+  for (const fixture of fixtures) {
     const pack = JSON.parse(
       await readFile(
         join(root, "reference-packs", fixture.id, "observations.json"),
         "utf8",
       ),
     ) as MineruReferencePack;
-    const transcript = JSON.parse(
-      await readFile(join(transcriptDirectory, `${fixture.id}.json`), "utf8"),
-    ) as CodexVisionTranscript;
+    const transcript = parseCodexVisionTranscript(
+      JSON.parse(
+        await readFile(join(transcriptDirectory, `${fixture.id}.json`), "utf8"),
+      ) as unknown,
+    );
     const reference = authorMineruReferenceV2({ pack, transcript });
     await writeFile(
       join(referenceDirectory, `${fixture.id}.json`),
@@ -911,6 +934,7 @@ function argumentsMap(arguments_: readonly string[]): Map<string, string> {
       !value ||
       ![
         "--decisions",
+        "--fixture",
         "--real-dir",
         "--reference-dir",
         "--reuse-transcripts",
@@ -935,7 +959,9 @@ async function main(): Promise<void> {
     throw new Error("Required: --real-dir --transcript-dir --reference-dir");
   }
   if (values.get("--reuse-transcripts") === "true") {
+    const fixtureId = values.get("--fixture");
     await reauthorRealMineruReferences({
+      ...(fixtureId ? { fixtureId } : {}),
       realDirectory,
       referenceDirectory,
       transcriptDirectory,
@@ -946,14 +972,13 @@ async function main(): Promise<void> {
     return;
   }
   if (!decisionsPath) throw new Error("Required: --decisions");
-  const summaries = await authorRealMineruReferences({
+  const summaries = await createRealMineruTranscriptTemplates({
     decisionsPath,
     realDirectory,
-    referenceDirectory,
     transcriptDirectory,
   });
   process.stdout.write(
-    `${JSON.stringify({ fixtures: summaries, ok: true })}\n`,
+    `${JSON.stringify({ fixtures: summaries, ok: true, templates_only: true })}\n`,
   );
 }
 

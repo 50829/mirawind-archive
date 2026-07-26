@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   authorMineruReferenceV2,
-  createCodexVisionTranscript,
+  createVisionTranscriptTemplate,
+  type CodexVisionTranscript,
+  type VisionTranscriptTemplate,
 } from "../../../scripts/fixtures/author-mineru-references";
 import type { MineruReferencePack } from "../../../scripts/fixtures/create-mineru-reference-pack";
 import { parseMarkdownDocument } from "@/compiler/document/parser";
@@ -81,6 +83,13 @@ function packFor(source: string): MineruReferencePack {
 }
 
 describe("Codex vision reference authoring", () => {
+  function reviewed(template: VisionTranscriptTemplate): CodexVisionTranscript {
+    return Object.freeze({
+      ...template,
+      source: "codex-image-recognition" as const,
+    });
+  }
+
   it("binds image-inspected structure without production proposals", () => {
     const source = [
       "# Book",
@@ -105,7 +114,7 @@ describe("Codex vision reference authoring", () => {
     ].join("\n");
     const pack = packFor(source);
     const document = parseMarkdownDocument(source);
-    const transcript = createCodexVisionTranscript({
+    const template = createVisionTranscriptTemplate({
       decision: {
         fixture_id: pack.fixture_id,
         printed_contents: {
@@ -125,10 +134,11 @@ describe("Codex vision reference authoring", () => {
       pack,
     });
 
-    expect(transcript).toMatchObject({
+    expect(template).toMatchObject({
       inspected_pages: [{ page_index: 2 }],
-      source: "codex-image-recognition",
+      source: "unverified-markdown-template",
     });
+    const transcript = reviewed(template);
     expect(transcript.regions[0]?.entries).toMatchObject([
       { kind: "part", level: 1, title: "Part I Foundations" },
       { kind: "chapter", level: 2, page_label: "1" },
@@ -155,14 +165,16 @@ describe("Codex vision reference authoring", () => {
   it("records an inspected frontmatter set for a no-contents book", () => {
     const source = "# Book\n\n## Preface\n\nBody.\n";
     const pack = packFor(source);
-    const transcript = createCodexVisionTranscript({
-      decision: {
-        fixture_id: pack.fixture_id,
-        printed_contents: { state: "absent" },
-      },
-      document: parseMarkdownDocument(source),
-      pack,
-    });
+    const transcript = reviewed(
+      createVisionTranscriptTemplate({
+        decision: {
+          fixture_id: pack.fixture_id,
+          printed_contents: { state: "absent" },
+        },
+        document: parseMarkdownDocument(source),
+        pack,
+      }),
+    );
     const reference = authorMineruReferenceV2({ pack, transcript });
 
     expect(transcript.inspected_pages).toEqual([
@@ -172,5 +184,70 @@ describe("Codex vision reference authoring", () => {
       regions: [],
       state: "absent",
     });
+  });
+
+  it("caps expected diagnostics to the private analysis contract", () => {
+    const entries = Array.from(
+      { length: 101 },
+      (_, index) => `## Chapter ${index + 1} Missing ${index + 1}`,
+    );
+    const source = ["# Book", "", "## Contents", "", ...entries].join("\n\n");
+    const pack = packFor(source);
+    const transcript = reviewed(
+      createVisionTranscriptTemplate({
+        decision: {
+          fixture_id: pack.fixture_id,
+          printed_contents: {
+            regions: [
+              {
+                canonical: true,
+                end_root: 102,
+                pdf_page_indices: [2],
+                region_key: "full-contents",
+                start_root: 1,
+              },
+            ],
+            state: "present",
+          },
+        },
+        document: parseMarkdownDocument(source),
+        pack,
+      }),
+    );
+
+    expect(
+      authorMineruReferenceV2({ pack, transcript }).expected_diagnostics,
+    ).toHaveLength(100);
+  });
+
+  it("rejects an unreviewed Markdown-derived transcript", () => {
+    const source = "# Book\n\n## Contents\n\nChapter 1 Start 1\n";
+    const pack = packFor(source);
+    const template = createVisionTranscriptTemplate({
+      decision: {
+        fixture_id: pack.fixture_id,
+        printed_contents: {
+          regions: [
+            {
+              canonical: true,
+              end_root: 2,
+              pdf_page_indices: [2],
+              region_key: "full-contents",
+              start_root: 1,
+            },
+          ],
+          state: "present",
+        },
+      },
+      document: parseMarkdownDocument(source),
+      pack,
+    });
+
+    expect(() =>
+      authorMineruReferenceV2({
+        pack,
+        transcript: template as unknown as CodexVisionTranscript,
+      }),
+    ).toThrow("VISION_TRANSCRIPT_INVALID");
   });
 });
