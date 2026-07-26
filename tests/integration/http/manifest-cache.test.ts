@@ -45,9 +45,9 @@ function manifest(bookId: number): Readonly<Record<string, unknown>> {
     book_id: bookId,
     compiler: {
       name: "mirawind-book-compiler",
-      renderer_version: "semantic-html-v1",
+      renderer_version: "semantic-html-v4-katex-0.18.1",
       text_normalization_version: 1,
-      version: "compiler-v1",
+      version: "compiler-v4",
     },
     config_revision: 1,
     created_at: "2026-07-24T00:00:00.000Z",
@@ -61,7 +61,7 @@ function manifest(bookId: number): Readonly<Record<string, unknown>> {
       },
     ],
     resources: {},
-    schema_version: 1,
+    schema_version: 2,
     source_files: [
       {
         path: "source/book.md",

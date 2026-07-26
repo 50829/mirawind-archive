@@ -34,7 +34,6 @@ import {
 } from "../../db/repositories/imports.js";
 import { JobRepository, type JobRecord } from "../../db/repositories/jobs.js";
 import {
-  migrateBookConfigToCurrent,
   parseBookConfigYaml,
   validateBookConfig,
 } from "../../schemas/book-config.js";
@@ -45,7 +44,7 @@ import {
   type SourceSnapshotResult,
 } from "../../services/source-snapshot.js";
 
-export const draftPreparationVersion = "prepare-draft-v2";
+export const draftPreparationVersion = "prepare-draft-v3";
 export const preparationArtifactFilename = "prepared-draft.json";
 
 export interface PreparedDraftArtifact {
@@ -212,7 +211,7 @@ function validTypographyProvenance(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   const provenance = value as Record<string, unknown>;
   return (
-    (provenance.profile === "preserve-v1" ||
+    (provenance.profile === "verbatim-v1" ||
       provenance.profile === "zh-smart-v1") &&
     typeof provenance.input_sha256 === "string" &&
     /^[a-f0-9]{64}$/u.test(provenance.input_sha256) &&
@@ -263,7 +262,7 @@ function configFor(input: {
       numbering: { mode: "normalized" },
     },
     revision: input.revision,
-    schema_version: 2,
+    schema_version: 3,
     source: {
       main_markdown: input.snapshot.source.mainMarkdownPath,
       main_markdown_sha256: input.snapshot.source.mainMarkdownSha256,
@@ -306,7 +305,7 @@ function reprocessEvidence(
     Number(evidence.expectedConfigRevision) < 1 ||
     typeof evidence.expectedSourceId !== "string" ||
     typeof evidence.originalFileId !== "string" ||
-    (evidence.typographyProfile !== "preserve-v1" &&
+    (evidence.typographyProfile !== "verbatim-v1" &&
       evidence.typographyProfile !== "zh-smart-v1")
   ) {
     throw new Error("REPROCESS_EVIDENCE_INVALID");
@@ -368,15 +367,13 @@ export async function finalizePreparedDraft(input: {
   const currentConfig =
     currentConfigRecord === null
       ? undefined
-      : migrateBookConfigToCurrent(
-          parseBookConfigYaml(
-            await readFile(
-              await resolveContainedPath(
-                input.layout.root,
-                currentConfigRecord.yamlRelativePath,
-              ),
-              "utf8",
+      : parseBookConfigYaml(
+          await readFile(
+            await resolveContainedPath(
+              input.layout.root,
+              currentConfigRecord.yamlRelativePath,
             ),
+            "utf8",
           ),
         );
   const revision = reprocess ? reprocess.expectedConfigRevision + 1 : 1;
@@ -414,7 +411,7 @@ export async function finalizePreparedDraft(input: {
       newSourceId: snapshot.source.id,
       nowMs: input.nowMs,
       revision,
-      schemaVersion: 2,
+      schemaVersion: 3,
       title: String(config.title),
       yamlRelativePath,
       yamlSha256,
@@ -427,7 +424,7 @@ export async function finalizePreparedDraft(input: {
       bookId: imported.bookId,
       nowMs: input.nowMs,
       revision,
-      schemaVersion: 2,
+      schemaVersion: 3,
       sourceId: snapshot.source.id,
       title: input.artifact.title,
       yamlRelativePath,

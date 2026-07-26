@@ -34,6 +34,14 @@
 }
 
 @layer components {
+  .reader-skip-link {
+    @apply fixed top-2 left-2 z-50 -translate-y-24 rounded-sm bg-white px-4 py-3 font-semibold text-emerald-800 shadow-lg;
+  }
+
+  .reader-skip-link:focus {
+    @apply translate-y-0;
+  }
+
   .reader-topbar {
     @apply sticky top-0 z-20 flex min-h-16 items-center gap-4 border-b border-stone-200 bg-white/95 px-5 py-2.5 backdrop-blur-xl;
   }
@@ -132,7 +140,7 @@
   }
 
   .reader-toc summary {
-    @apply absolute top-1 left-0 z-10 grid h-7 w-5 cursor-pointer place-items-center rounded-sm text-stone-500;
+    @apply absolute top-0 left-0 z-10 grid h-8 w-8 cursor-pointer place-items-center rounded-sm text-stone-500;
     list-style: none;
   }
 
@@ -154,11 +162,11 @@
   }
 
   .reader-toc-link {
-    @apply ml-5 px-2 py-1;
+    @apply ml-8 flex min-h-8 items-center px-2 py-1;
   }
 
   .reader-outline a {
-    @apply border-l-2 border-transparent px-2 py-1;
+    @apply flex min-h-8 items-center border-l-2 border-transparent px-2 py-1;
   }
 
   .reader-toc-link:hover,
@@ -312,6 +320,18 @@
 }
 
 @media (max-width: 48rem) {
+  .reader-toc summary {
+    @apply h-11 w-11;
+  }
+
+  .reader-toc-link {
+    @apply ml-11 min-h-11;
+  }
+
+  .reader-outline a {
+    @apply min-h-11;
+  }
+
   .reader-topbar {
     @apply flex-wrap;
   }

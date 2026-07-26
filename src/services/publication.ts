@@ -49,9 +49,6 @@ export async function publishReadyVersion(input: {
   readonly jobId: string;
   readonly leaseOwner: string;
   readonly nowMs: number;
-  readonly progress?: Readonly<
-    Record<string, boolean | null | number | string>
-  >;
   readonly versionId: string;
 }): Promise<void> {
   await injectCrashPoint(input.crashPoint, "before_current_pointer");
@@ -203,8 +200,10 @@ export async function publishReadyVersion(input: {
       )
       .run(
         JSON.stringify({
-          ...input.progress,
-          version_id: input.versionId,
+          completed: 3,
+          processed_bytes: null,
+          total: 3,
+          unit: "steps",
         }),
         input.nowMs,
         input.jobId,

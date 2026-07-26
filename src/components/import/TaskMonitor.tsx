@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+
+import { usePolling } from "@/components/manage/use-polling";
+import {
+  managePanel,
+  managePrimaryButton,
+  manageQuietText,
+} from "@/components/ui/manage-classes";
+import type { JobProgress } from "@/worker/protocol";
 
 type JobState =
   "canceled" | "failed" | "interrupted" | "queued" | "running" | "succeeded";
@@ -6,6 +14,7 @@ type JobState =
 export interface TaskView {
   readonly attempt: number;
   readonly automatic_retry_count: number;
+  readonly cancellation_requested_at: string | null;
   readonly created_at: string;
   readonly error_class: string | null;
   readonly error_code: string | null;
@@ -13,7 +22,7 @@ export interface TaskView {
   readonly job_id: string;
   readonly kind: string;
   readonly phase: string;
-  readonly progress: Readonly<Record<string, boolean | number | string | null>>;
+  readonly progress: JobProgress;
   readonly retry_of_job_id: string | null;
   readonly started_at: string | null;
   readonly state: JobState;
@@ -54,7 +63,6 @@ export function TaskMonitor(props: {
         .map((job) => job.job_id),
     [jobs],
   );
-  const activeKey = activeIds.join("|");
 
   async function refreshOne(jobId: string): Promise<void> {
     const response = await fetch(`/api/manage/jobs/${jobId}`, {
@@ -70,16 +78,11 @@ export function TaskMonitor(props: {
     );
   }
 
-  useEffect(() => {
-    if (!activeKey) return;
-    const polledIds = activeKey.split("|");
-    const timer = window.setInterval(() => {
-      void Promise.all(polledIds.map(refreshOne)).catch(() =>
-        setMessage("任务状态刷新失败，请稍后重试。"),
-      );
-    }, 1_500);
-    return () => window.clearInterval(timer);
-  }, [activeKey]);
+  usePolling(activeIds.length > 0, async () => {
+    await Promise.all(activeIds.map(refreshOne)).catch(() =>
+      setMessage("任务状态刷新失败，请稍后重试。"),
+    );
+  });
 
   async function mutate(job: TaskView, action: "cancel" | "retry") {
     setBusyId(job.job_id);
@@ -122,65 +125,93 @@ export function TaskMonitor(props: {
 
   return (
     <section className="task-monitor" aria-labelledby="task-monitor-title">
-      <header>
+      <header className="flex items-center justify-between gap-4">
         <div>
-          <p className="eyebrow">后台工作</p>
-          <h1 id="task-monitor-title">任务与恢复</h1>
+          <p className="eyebrow text-sm font-semibold text-emerald-800">
+            后台工作
+          </p>
+          <h1 className="mt-1 text-2xl font-bold" id="task-monitor-title">
+            任务与恢复
+          </h1>
         </div>
-        <p className="task-summary">
+        <p className="task-summary text-sm text-stone-600">
           {jobs.filter((job) => !terminalStates.has(job.state)).length}{" "}
           个活动任务
         </p>
       </header>
-      {message && <p role="status">{message}</p>}
+      {message && (
+        <p className="mt-4 text-sm text-stone-700" role="status">
+          {message}
+        </p>
+      )}
       {jobs.length === 0 ? (
-        <p className="empty">暂时没有后台任务。</p>
+        <p className={`empty mt-6 ${manageQuietText}`}>暂时没有后台任务。</p>
       ) : (
-        <ol className="task-list">
+        <ol className="task-list mt-6 grid list-none gap-4 p-0">
           {jobs.map((job) => (
-            <li className="task-card" key={job.job_id}>
-              <div className="task-heading">
+            <li className={`task-card ${managePanel}`} key={job.job_id}>
+              <div className="task-heading flex items-center justify-between gap-4">
                 <div>
                   <strong>{job.kind}</strong>
-                  <code>{job.job_id}</code>
+                  <code className="mt-1 block text-sm text-stone-600">
+                    {job.job_id}
+                  </code>
                 </div>
-                <span data-state={job.state}>{stateLabels[job.state]}</span>
+                <span
+                  className="rounded-full bg-emerald-100 px-3 py-1.5 text-sm"
+                  data-state={job.state}
+                >
+                  {stateLabels[job.state]}
+                </span>
               </div>
-              <dl className="task-facts">
+              <dl className="task-facts mt-4 grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-3">
                 <div>
-                  <dt>阶段</dt>
-                  <dd>{job.phase}</dd>
+                  <dt className="text-sm text-stone-600">阶段</dt>
+                  <dd className="mt-1">{job.phase}</dd>
                 </div>
                 <div>
-                  <dt>尝试</dt>
-                  <dd>
+                  <dt className="text-sm text-stone-600">尝试</dt>
+                  <dd className="mt-1">
                     第 {job.attempt} 次
                     {job.retry_of_job_id && <> · 接续 {job.retry_of_job_id}</>}
                   </dd>
                 </div>
                 <div>
-                  <dt>创建</dt>
-                  <dd>{new Date(job.created_at).toLocaleString("zh-CN")}</dd>
+                  <dt className="text-sm text-stone-600">创建</dt>
+                  <dd className="mt-1">
+                    {new Date(job.created_at).toLocaleString("zh-CN")}
+                  </dd>
                 </div>
               </dl>
-              {Object.keys(job.progress).length > 0 && (
-                <dl className="task-progress">
-                  {Object.entries(job.progress).map(([key, value]) => (
-                    <div key={key}>
-                      <dt>{key}</dt>
-                      <dd>{String(value)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
+              <dl className="task-progress mt-4 grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-3">
+                <div>
+                  <dt className="text-sm text-stone-600">进度</dt>
+                  <dd className="mt-1">
+                    {job.progress.completed}
+                    {job.progress.total === null
+                      ? ""
+                      : ` / ${job.progress.total}`}{" "}
+                    {job.progress.unit}
+                  </dd>
+                </div>
+                {job.progress.processed_bytes !== null && (
+                  <div>
+                    <dt className="text-sm text-stone-600">已处理字节</dt>
+                    <dd className="mt-1">
+                      {job.progress.processed_bytes.toLocaleString()}
+                    </dd>
+                  </div>
+                )}
+              </dl>
               {job.error_class && (
-                <p className="task-error">
+                <p className="task-error mt-4 text-red-800">
                   {job.error_class} · {job.error_code ?? "UNKNOWN_FAILURE"}
                 </p>
               )}
-              <div className="task-actions">
+              <div className="task-actions mt-4 flex items-center justify-end gap-2">
                 {!terminalStates.has(job.state) && (
                   <button
+                    className={managePrimaryButton}
                     disabled={busyId === job.job_id}
                     onClick={() => void mutate(job, "cancel")}
                     type="button"
@@ -190,6 +221,7 @@ export function TaskMonitor(props: {
                 )}
                 {["canceled", "failed", "interrupted"].includes(job.state) && (
                   <button
+                    className={managePrimaryButton}
                     disabled={busyId === job.job_id}
                     onClick={() => void mutate(job, "retry")}
                     type="button"

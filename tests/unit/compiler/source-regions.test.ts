@@ -28,6 +28,7 @@ function setup() {
   const startByte = utf8ByteOffset(source, start);
   const endByte = utf8ByteOffset(source, end);
   const region: ConfirmedSourceRegion = {
+    applied: true,
     disposition: "reference_only",
     entries: [],
     kind: "printed_toc",
@@ -133,6 +134,7 @@ describe("reference-only source regions", () => {
         mainMarkdownSha256: sha(source),
         regions: [
           {
+            applied: true,
             disposition: "reference_only",
             entries: [],
             kind: "printed_toc",

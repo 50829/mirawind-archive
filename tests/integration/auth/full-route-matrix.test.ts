@@ -157,6 +157,11 @@ const routePolicyEvidence: Readonly<Record<string, readonly string[]>> = {
   ],
   "read/[bookKey]/[pageKey].ts": ["readingPageHeaders", "applyResponsePolicy"],
   "read/[bookKey]/index.ts": ["applyResponsePolicy"],
+  "reader-assets/[...assetPath].ts": [
+    "applyResponsePolicy",
+    "Access-Control-Allow-Origin",
+    "Cross-Origin-Resource-Policy",
+  ],
 };
 
 async function routeFiles(directory: string, prefix = ""): Promise<string[]> {

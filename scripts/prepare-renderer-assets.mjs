@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 
 import { transform } from "lightningcss";
 
-const rendererVersion = "semantic-html-v3-katex-0.18.1";
+const rendererVersion = "semantic-html-v4-katex-0.18.1";
 const katexVersion = "0.18.1";
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputFlag = process.argv.indexOf("--output");
@@ -25,6 +25,7 @@ const outputDirectory = resolve(
     ? process.argv[outputFlag + 1]
     : resolve(projectRoot, "public", "_astro", "renderers", rendererVersion),
 );
+const defaultOutput = outputFlag < 0;
 const require = createRequire(import.meta.url);
 const packagePath = require.resolve("katex/package.json");
 const packageRoot = dirname(packagePath);
@@ -75,7 +76,10 @@ function rendererCss(source) {
   return `${minified.trim()}\n`;
 }
 
-await rm(outputDirectory, { force: true, recursive: true });
+await rm(defaultOutput ? dirname(outputDirectory) : outputDirectory, {
+  force: true,
+  recursive: true,
+});
 await mkdir(resolve(outputDirectory, "fonts"), {
   mode: 0o755,
   recursive: true,

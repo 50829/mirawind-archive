@@ -11,9 +11,9 @@ import type { CompiledDocumentPage } from "./pages.js";
 
 export const compilerIdentity = Object.freeze({
   name: "mirawind-book-compiler" as const,
-  renderer_version: "semantic-html-v3-katex-0.18.1",
+  renderer_version: "semantic-html-v4-katex-0.18.1",
   text_normalization_version: 2,
-  version: "compiler-v3",
+  version: "compiler-v4",
 });
 
 export interface ManifestSourceFile {
@@ -186,7 +186,7 @@ export function buildDocumentManifest(input: {
           },
         ]),
     ),
-    schema_version: 1,
+    schema_version: 2,
     source_files: [...input.sourceFiles].sort((left, right) =>
       Buffer.from(left.path).compare(Buffer.from(right.path)),
     ),

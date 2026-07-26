@@ -55,9 +55,9 @@ function configuredStructure(
 function configuredRegions(
   config: Readonly<Record<string, unknown>>,
 ): readonly ConfirmedSourceRegion[] {
-  return config.schema_version === 2
-    ? (config.source_regions as readonly ConfirmedSourceRegion[])
-    : [];
+  return (config.source_regions as readonly ConfirmedSourceRegion[]).filter(
+    (region) => region.applied,
+  );
 }
 
 function semanticPayload(input: {

@@ -1,11 +1,11 @@
 # Mirawind Library
 
-Mirawind 是一个自托管、单管理员的语义化在线图书馆。当前 M1 + M2a 接受“一本书一个
-MinerU ZIP”，在后台安全解包、预览、编译和建立搜索索引，再以不可变版本原子
-发布；读者可以从 `/library` 浏览当前公开版本、查看 `/books/:bookKey` 详情，
-再进入带目录、提纲、搜索、下载和移动抽屉的阅读器。读者请求始终读取已经
-发布的版本。管理员还可以在私有书库中通过输入当前书名永久删除单本图书；
-接受后立即隐藏并由 worker 清理，没有回收站或恢复入口。
+Mirawind 是一个自托管、单管理员的语义化在线图书馆。当前出版闭环接受“一本书一个
+MinerU ZIP”，在后台安全解包、构建真实阅读预览、编译并建立搜索索引，再以不可变
+版本原子发布；读者可以从 `/library` 浏览当前公开版本、查看 `/books/:bookKey`
+详情，再进入带目录、提纲、搜索、下载和移动抽屉的阅读器。读者请求始终读取已经
+发布的版本。管理员还可以在私有书库中永久删除单本图书；接受后立即隐藏并由 worker
+清理，没有回收站或恢复入口。
 
 当前架构固定为一台 Linux 主机、一个 Astro Web 进程、一个同代码库 worker、
 SQLite WAL 和本地持久化存储。不要横向扩容 Web/worker，也不要自行加入 Redis、
@@ -107,6 +107,7 @@ pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"
 - [M1 验收流程](specs/001-mineru-public-publishing/quickstart.md)
 - [书库与阅读闭环规格](specs/003-library-reading-loop/spec.md)
 - [永久删除规格](specs/005-permanent-book-deletion/spec.md)
+- [出版与阅读闭环规格](specs/006-clean-slate-publishing/spec.md)
 
 Markdown 与版本化 `book.yaml` 是出版权威；AST、HTML、
 `document-manifest.json`、资源和搜索索引都是可重建派生物。SQLite 中的

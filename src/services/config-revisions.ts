@@ -11,8 +11,8 @@ import { SourceRepository } from "../db/repositories/sources.js";
 import { SafeApplicationError } from "../domain/errors.js";
 import { createStrongEtag } from "../http/cache/policies.js";
 import {
-  migrateBookConfigToCurrent,
   parseBookConfigYaml,
+  validateBookConfig,
 } from "../schemas/book-config.js";
 import {
   atomicWriteFile,
@@ -57,6 +57,215 @@ export interface ConfigRevisionUpdate {
   readonly revision: number;
 }
 
+interface DraftStructureChange {
+  readonly block_id: string;
+  readonly display_level?: number;
+  readonly display_title?: string | null;
+  readonly include_in_toc?: boolean;
+  readonly role?: "appendix" | "backmatter" | "body" | "frontmatter" | null;
+  readonly starts_page?: boolean;
+}
+
+interface DraftRegionChange {
+  readonly applied: boolean;
+  readonly region_id: string;
+}
+
+function record(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new SafeApplicationError(
+      "DRAFT_PATCH_INVALID",
+      "The draft patch is invalid.",
+      400,
+    );
+  }
+  return value as Record<string, unknown>;
+}
+
+function exactKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+): void {
+  if (Object.keys(value).some((key) => !allowed.includes(key))) {
+    throw new SafeApplicationError(
+      "DRAFT_PATCH_INVALID",
+      "The draft patch contains an unknown field.",
+      400,
+    );
+  }
+}
+
+function parseDraftPatch(value: unknown): {
+  readonly changes: readonly DraftStructureChange[];
+  readonly regions: readonly DraftRegionChange[];
+} {
+  const patch = record(value);
+  exactKeys(patch, ["changes", "regions"]);
+  if (
+    !Array.isArray(patch.changes) ||
+    patch.changes.length > 20_000 ||
+    (patch.regions !== undefined &&
+      (!Array.isArray(patch.regions) || patch.regions.length > 32))
+  ) {
+    throw new SafeApplicationError(
+      "DRAFT_PATCH_INVALID",
+      "The draft patch is invalid.",
+      400,
+    );
+  }
+  const changes = patch.changes.map((item) => {
+    const change = record(item);
+    exactKeys(change, [
+      "block_id",
+      "display_level",
+      "display_title",
+      "include_in_toc",
+      "role",
+      "starts_page",
+    ]);
+    if (
+      typeof change.block_id !== "string" ||
+      (change.display_level !== undefined &&
+        (!Number.isSafeInteger(change.display_level) ||
+          Number(change.display_level) < 1 ||
+          Number(change.display_level) > 4)) ||
+      (change.display_title !== undefined &&
+        change.display_title !== null &&
+        (typeof change.display_title !== "string" ||
+          change.display_title.length < 1 ||
+          change.display_title.length > 500)) ||
+      (change.include_in_toc !== undefined &&
+        typeof change.include_in_toc !== "boolean") ||
+      (change.starts_page !== undefined &&
+        typeof change.starts_page !== "boolean") ||
+      (change.role !== undefined &&
+        change.role !== null &&
+        !["appendix", "backmatter", "body", "frontmatter"].includes(
+          String(change.role),
+        ))
+    ) {
+      throw new SafeApplicationError(
+        "DRAFT_PATCH_INVALID",
+        "A structure change is invalid.",
+        400,
+      );
+    }
+    return change as unknown as DraftStructureChange;
+  });
+  const regions = (patch.regions ?? []).map((item) => {
+    const change = record(item);
+    exactKeys(change, ["applied", "region_id"]);
+    if (
+      typeof change.region_id !== "string" ||
+      typeof change.applied !== "boolean"
+    ) {
+      throw new SafeApplicationError(
+        "DRAFT_PATCH_INVALID",
+        "A source-region change is invalid.",
+        400,
+      );
+    }
+    return change as unknown as DraftRegionChange;
+  });
+  if (
+    new Set(changes.map((change) => change.block_id)).size !== changes.length ||
+    new Set(regions.map((change) => change.region_id)).size !== regions.length
+  ) {
+    throw new SafeApplicationError(
+      "DRAFT_PATCH_INVALID",
+      "The draft patch contains duplicate identities.",
+      400,
+    );
+  }
+  return { changes, regions };
+}
+
+export async function patchDraftConfig(input: {
+  readonly bookId: number;
+  readonly database: Database.Database;
+  readonly expectedEtag: string | null;
+  readonly layout: StorageLayout;
+  readonly nowMs: number;
+  readonly patch: unknown;
+}): Promise<ConfigRevisionUpdate> {
+  const parsed = parseDraftPatch(input.patch);
+  const drafts = new DraftRepository(input.database);
+  const book = drafts.findBook(input.bookId);
+  if (!book?.draftConfigRevision) {
+    throw new SafeApplicationError(
+      "NOT_FOUND",
+      "The draft was not found.",
+      404,
+    );
+  }
+  const current = drafts.requireConfig(input.bookId, book.draftConfigRevision);
+  const config = parseBookConfigYaml(
+    await readFile(
+      await resolveContainedPath(input.layout.root, current.yamlRelativePath),
+      "utf8",
+    ),
+  );
+  const currentNodes = config.structure as readonly Record<string, unknown>[];
+  const nodeIds = new Set(currentNodes.map((node) => String(node.block_id)));
+  const currentRegions = config.source_regions as readonly Record<
+    string,
+    unknown
+  >[];
+  const regionIds = new Set(
+    currentRegions.map((region) => String(region.region_id)),
+  );
+  if (
+    parsed.changes.some((change) => !nodeIds.has(change.block_id)) ||
+    parsed.regions.some((change) => !regionIds.has(change.region_id))
+  ) {
+    throw new SafeApplicationError(
+      "DRAFT_PATCH_ID_UNKNOWN",
+      "The draft patch references an unknown identity.",
+      400,
+    );
+  }
+  const changes = new Map(
+    parsed.changes.map((change) => [change.block_id, change]),
+  );
+  const regionChanges = new Map(
+    parsed.regions.map((change) => [change.region_id, change.applied]),
+  );
+  const next = {
+    ...config,
+    revision: Number(config.revision) + 1,
+    source_regions: currentRegions.map((region) => ({
+      ...region,
+      applied:
+        regionChanges.get(String(region.region_id)) ?? Boolean(region.applied),
+    })),
+    structure: currentNodes.map((node) => {
+      const change = changes.get(String(node.block_id));
+      if (!change) return node;
+      const updated: Record<string, unknown> = { ...node };
+      for (const key of [
+        "display_level",
+        "include_in_toc",
+        "starts_page",
+      ] as const) {
+        if (change[key] !== undefined) updated[key] = change[key];
+      }
+      for (const key of ["display_title", "role"] as const) {
+        if (change[key] === null) Reflect.deleteProperty(updated, key);
+        else if (change[key] !== undefined) updated[key] = change[key];
+      }
+      return updated;
+    }),
+  };
+  return replaceDraftConfig({
+    bookId: input.bookId,
+    config: next,
+    database: input.database,
+    expectedEtag: input.expectedEtag,
+    layout: input.layout,
+    nowMs: input.nowMs,
+  });
+}
+
 export async function replaceDraftConfig(input: {
   readonly bookId: number;
   readonly config: unknown;
@@ -85,7 +294,7 @@ export async function replaceDraftConfig(input: {
       412,
     );
   }
-  const next = migrateBookConfigToCurrent(input.config);
+  const next = validateBookConfig(input.config);
   if (next.book_id !== input.bookId || next.revision !== current.revision + 1) {
     throw new SafeApplicationError(
       "CONFIG_REVISION_INVALID",
@@ -97,8 +306,8 @@ export async function replaceDraftConfig(input: {
     input.layout.root,
     current.yamlRelativePath,
   );
-  const currentConfig = migrateBookConfigToCurrent(
-    parseBookConfigYaml(await readFile(currentPath, "utf8")),
+  const currentConfig = parseBookConfigYaml(
+    await readFile(currentPath, "utf8"),
   );
   if (!equalJson(sourceConfig(currentConfig), sourceConfig(next))) {
     throw new SafeApplicationError(

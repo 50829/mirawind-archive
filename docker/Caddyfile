@@ -1,6 +1,14 @@
 {$MIRAWIND_PUBLIC_HOST:localhost} {
 	encode zstd gzip
 
+	@import_upload {
+		method POST
+		path /api/manage/imports
+	}
+	request_body @import_upload {
+		max_size 2147549184
+	}
+
 	header {
 		-Server
 		Content-Security-Policy "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests"
@@ -11,6 +19,29 @@
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
+	}
+
+	@preview_pages path_regexp preview_pages ^/api/manage/books/[1-9][0-9]*/preview/[1-9][0-9]*/pages/[1-9][0-9]*$
+	header @preview_pages {
+		-X-Frame-Options
+		Content-Security-Policy "default-src 'none'; base-uri 'none'; font-src https://{$MIRAWIND_PUBLIC_HOST:localhost} data:; form-action 'none'; frame-ancestors https://{$MIRAWIND_PUBLIC_HOST:localhost}; img-src https://{$MIRAWIND_PUBLIC_HOST:localhost} data:; object-src 'none'; script-src https://{$MIRAWIND_PUBLIC_HOST:localhost}; style-src https://{$MIRAWIND_PUBLIC_HOST:localhost} 'unsafe-inline'; upgrade-insecure-requests"
+		Cross-Origin-Resource-Policy "cross-origin"
+		Referrer-Policy "no-referrer"
+	}
+
+	@reader_assets path /reader-assets/*
+	header @reader_assets {
+		Access-Control-Allow-Origin "*"
+		Cache-Control "public, max-age=31536000, immutable"
+		Cross-Origin-Resource-Policy "cross-origin"
+	}
+
+	@preview_assets path_regexp preview_assets ^/api/manage/books/[1-9][0-9]*/preview/[1-9][0-9]*/assets/res_[A-Za-z0-9_-]+$
+	header @preview_assets {
+		Access-Control-Allow-Origin "*"
+		Cache-Control "private, no-store"
+		Cross-Origin-Resource-Policy "cross-origin"
+		Referrer-Policy "no-referrer"
 	}
 
 	reverse_proxy web:4321 {

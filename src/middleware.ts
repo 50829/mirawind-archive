@@ -9,6 +9,11 @@ import {
 import { errorPolicyForRequest } from "@/http/errors/error-policy";
 import { createRequestContext } from "@/http/request-context";
 import { operationalMetrics } from "@/observability/metrics";
+import { applyResponsePolicy } from "@/http/cache/policies";
+
+function isReaderAsset(path: string): boolean {
+  return path.startsWith("/reader-assets/");
+}
 
 export const onRequest = defineMiddleware(async ({ locals, request }, next) => {
   const requestContext = createRequestContext(request);
@@ -40,5 +45,14 @@ export const onRequest = defineMiddleware(async ({ locals, request }, next) => {
     operationalMetrics.recordRequest("search", elapsedMs);
   }
   response.headers.set("X-Request-ID", requestContext.id);
+  if (
+    (request.method === "GET" || request.method === "HEAD") &&
+    isReaderAsset(requestPath)
+  ) {
+    applyResponsePolicy(response.headers, "site-static");
+    response.headers.set("Access-Control-Allow-Origin", "*");
+    response.headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+    response.headers.set("X-Content-Type-Options", "nosniff");
+  }
   return response;
 });

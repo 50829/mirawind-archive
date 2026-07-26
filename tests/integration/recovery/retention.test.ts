@@ -64,8 +64,8 @@ describe("published version and orphan retention", () => {
            state, version_rel_path, manifest_schema_version, manifest_sha256,
            compiler_version, renderer_version, complete_at, published_at,
            verified_at, created_by_job_id, reclaimed_at
-         ) VALUES (?, ?, ?, 1, ?, 'superseded', ?, 1, ?, 'compiler-v1',
-                   'renderer-v1', ?, ?, ?, ?, NULL)`,
+         ) VALUES (?, ?, ?, 1, ?, 'superseded', ?, 2, ?, 'compiler-v4',
+                   'semantic-html-v4-katex-0.18.1', ?, ?, ?, ?, NULL)`,
       );
       insert.run(
         oldId,

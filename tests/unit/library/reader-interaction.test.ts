@@ -6,6 +6,7 @@ import {
 } from "@/components/reader/navigation";
 import { renderReaderShell } from "@/components/reader/render";
 import { shouldNavigateWithArrowKey } from "@/components/reader/reader-interaction";
+import { readerScriptUrl } from "@/styles/assets";
 
 const props = {
   bodyHtml: '<h1 id="blk_test">Chapter</h1>',
@@ -122,19 +123,22 @@ describe("reader interaction", () => {
     expect(html).toContain('aria-label="本页提纲"');
     expect(html).toContain('href="/library"');
     expect(html).toContain('aria-label="当前位置"');
+    expect(html).toContain(
+      '<a class="reader-skip-link" href="#main-content">跳到正文</a>',
+    );
+    expect(html).toContain('<main class="reader-main" id="main-content">');
     expect(html).toContain("<details open");
     expect(html).toContain('href="/read/current-book/1#blk_model"');
     expect(html).toContain('data-outline-link="blk_test"');
     expect(html).toContain('aria-current="location"');
-    expect(html).toContain("requestAnimationFrame(updateOutlineLocation)");
+    expect(html).toContain(`src="${readerScriptUrl}"`);
+    expect(html).not.toContain("requestAnimationFrame(updateOutlineLocation)");
+    expect(html).not.toContain("dangerouslySetInnerHTML");
   });
 
   it("initializes every bounded search instance independently", () => {
     const html = renderReaderShell(props);
-    expect(html).toContain(
-      'document.querySelectorAll("[data-book-search-container]")',
-    );
     expect(html.match(/data-book-search/g)?.length).toBeGreaterThan(1);
-    expect(html).toContain("container.dataset.searchInitialized");
+    expect(html.match(new RegExp(readerScriptUrl, "gu"))).toHaveLength(1);
   });
 });

@@ -12,7 +12,10 @@ import { JobRepository } from "@/db/repositories/jobs";
 import { SourceRepository } from "@/db/repositories/sources";
 import { createStrongEtag } from "@/http/cache/policies";
 import { parseBookConfigYaml } from "@/schemas/book-config";
-import { replaceDraftConfig } from "@/services/config-revisions";
+import {
+  patchDraftConfig,
+  replaceDraftConfig,
+} from "@/services/config-revisions";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 
@@ -24,6 +27,7 @@ function sha256(value: string | Uint8Array): string {
 
 function config(input: {
   readonly level?: number;
+  readonly regionApplied?: boolean;
   readonly revision: number;
   readonly sourceHash: string;
   readonly title: string;
@@ -35,12 +39,41 @@ function config(input: {
       numbering: { mode: "normalized" },
     },
     revision: input.revision,
-    schema_version: 1,
+    schema_version: 3,
     source: {
       main_markdown: "book.md",
       main_markdown_sha256: input.sourceHash,
       original_files: [],
+      preprocessing: {
+        typography: {
+          input_sha256: input.sourceHash,
+          output_sha256: input.sourceHash,
+          profile: "verbatim-v1",
+          protected_nodes: 0,
+          punctuation_converted: 0,
+          spaces_normalized: 0,
+        },
+      },
     },
+    source_regions:
+      input.regionApplied === undefined
+        ? []
+        : [
+            {
+              applied: input.regionApplied,
+              disposition: "reference_only",
+              entries: [],
+              kind: "printed_toc",
+              range: {
+                end_byte: 16,
+                sha256: sha256("# Source heading"),
+                start_byte: 0,
+              },
+              region_id: "region_config_revision_0001",
+              source_path: "book.md",
+              source_sha256: input.sourceHash,
+            },
+          ],
     structure: [
       {
         block_id: blockId,
@@ -60,6 +93,7 @@ async function fixture(
     readonly bookDirectory: string;
     readonly root: string;
   },
+  regionApplied?: boolean,
 ) {
   const markdown = "# Source heading\n\nBody.";
   const markdownHash = sha256(markdown);
@@ -94,6 +128,7 @@ async function fixture(
     sourceRootRelativePath: `books/${book.id}/draft/sources/src_config_revision_test_0001`,
   });
   const initial = config({
+    ...(regionApplied === undefined ? {} : { regionApplied }),
     revision: 1,
     sourceHash: markdownHash,
     title: "Initial",
@@ -113,7 +148,7 @@ async function fixture(
     bookId: book.id,
     nowMs: 4,
     revision: 1,
-    schemaVersion: 1,
+    schemaVersion: 3,
     sourceId: source.id,
     title: "Initial",
     yamlRelativePath: `books/${book.id}/draft/configs/1/book.yaml`,
@@ -128,6 +163,127 @@ async function fixture(
 }
 
 describe("atomic draft configuration revisions", () => {
+  it("toggles a source region without deleting its authoritative definition", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const setup = await fixture(database, dataRoot.layout, true);
+      const disabled = await patchDraftConfig({
+        bookId: setup.book.id,
+        database,
+        expectedEtag: setup.currentEtag,
+        layout: dataRoot.layout,
+        nowMs: 10,
+        patch: {
+          changes: [],
+          regions: [
+            {
+              applied: false,
+              region_id: "region_config_revision_0001",
+            },
+          ],
+        },
+      });
+      const drafts = new DraftRepository(database);
+      const disabledConfig = parseBookConfigYaml(
+        await readFile(
+          resolve(
+            dataRoot.layout.root,
+            drafts.requireConfig(setup.book.id, 2).yamlRelativePath,
+          ),
+          "utf8",
+        ),
+      );
+      expect(disabledConfig.source_regions).toEqual([
+        expect.objectContaining({
+          applied: false,
+          region_id: "region_config_revision_0001",
+        }),
+      ]);
+
+      await patchDraftConfig({
+        bookId: setup.book.id,
+        database,
+        expectedEtag: disabled.etag,
+        layout: dataRoot.layout,
+        nowMs: 11,
+        patch: {
+          changes: [],
+          regions: [
+            {
+              applied: true,
+              region_id: "region_config_revision_0001",
+            },
+          ],
+        },
+      });
+      const enabledConfig = parseBookConfigYaml(
+        await readFile(
+          resolve(
+            dataRoot.layout.root,
+            drafts.requireConfig(setup.book.id, 3).yamlRelativePath,
+          ),
+          "utf8",
+        ),
+      );
+      expect(enabledConfig.source_regions).toEqual([
+        expect.objectContaining({
+          applied: true,
+          region_id: "region_config_revision_0001",
+        }),
+      ]);
+    }));
+
+  it("merges a strict block patch without accepting unknown fields", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const setup = await fixture(database, dataRoot.layout);
+      await expect(
+        patchDraftConfig({
+          bookId: setup.book.id,
+          database,
+          expectedEtag: setup.currentEtag,
+          layout: dataRoot.layout,
+          nowMs: 9,
+          patch: {
+            changes: [{ block_id: blockId, unknown: true }],
+          },
+        }),
+      ).rejects.toMatchObject({ code: "DRAFT_PATCH_INVALID" });
+
+      const result = await patchDraftConfig({
+        bookId: setup.book.id,
+        database,
+        expectedEtag: setup.currentEtag,
+        layout: dataRoot.layout,
+        nowMs: 10,
+        patch: {
+          changes: [
+            {
+              block_id: blockId,
+              display_title: "Edited heading",
+              include_in_toc: false,
+            },
+          ],
+        },
+      });
+      const persisted = parseBookConfigYaml(
+        await readFile(
+          resolve(
+            dataRoot.layout.root,
+            new DraftRepository(database).requireConfig(setup.book.id, 2)
+              .yamlRelativePath,
+          ),
+          "utf8",
+        ),
+      );
+      expect(result).toMatchObject({ revision: 2 });
+      expect(persisted.structure).toEqual([
+        expect.objectContaining({
+          block_id: blockId,
+          display_title: "Edited heading",
+          include_in_toc: false,
+        }),
+      ]);
+    }));
+
   it("writes a read-only immutable revision and atomically queues its preview", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const setup = await fixture(database, dataRoot.layout);
@@ -161,20 +317,20 @@ describe("atomic draft configuration revisions", () => {
         ),
       );
       expect(persisted).toMatchObject({
-        schema_version: 2,
+        schema_version: 3,
         source: {
           preprocessing: {
             typography: {
               input_sha256: setup.markdownHash,
               output_sha256: setup.markdownHash,
-              profile: "preserve-v1",
+              profile: "verbatim-v1",
             },
           },
         },
         source_regions: [],
         title: "Edited",
       });
-      expect(revision.schemaVersion).toBe(2);
+      expect(revision.schemaVersion).toBe(3);
       expect(
         (await stat(resolve(dataRoot.layout.root, revision.yamlRelativePath)))
           .mode & 0o777,

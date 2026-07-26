@@ -4,6 +4,7 @@ import { relative, resolve, sep } from "node:path";
 
 import type Database from "better-sqlite3";
 
+import { renderReaderShell } from "../../components/reader/render.js";
 import { prepareConfiguredDocument } from "../../compiler/document/configured-document.js";
 import { canonicalJson } from "../../compiler/document/manifest.js";
 import type {
@@ -11,7 +12,10 @@ import type {
   SemanticCompilationIdentity,
   TypographyProvenance,
 } from "../../compiler/document/types.js";
-import { rendererStylesheetUrl } from "../../compiler/render/assets.js";
+import {
+  katexCriticalCss,
+  rendererStylesheetUrl,
+} from "../../compiler/render/assets.js";
 import { renderSemanticDocument } from "../../compiler/render/document.js";
 import { inspectRasterImage } from "../../compiler/resources/images.js";
 import { resolveDocumentResources } from "../../compiler/resources/resolver.js";
@@ -22,7 +26,7 @@ import { atomicWriteFile, resolveContainedPath } from "../../storage/layout.js";
 import type { StorageLayout } from "../../storage/layout.js";
 import { readerStylesheetUrl } from "../../styles/assets.js";
 
-export const previewBuildVersion = "draft-preview-v2";
+export const previewBuildVersion = "draft-preview-v3";
 export const previewBuildArtifactFilename = "preview-build-result.json";
 
 export interface PreviewBuildArtifact {
@@ -40,17 +44,31 @@ function dataRelativePath(root: string, target: string): string {
   return result;
 }
 
-function previewHtmlDocument(body: string, css: string): string {
+function htmlEscape(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function readerHtmlDocument(input: {
+  readonly body: string;
+  readonly css: string;
+  readonly language: string;
+  readonly title: string;
+}): string {
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${htmlEscape(input.language)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width">
+<title>${htmlEscape(input.title)}</title>
 <link rel="stylesheet" href="${rendererStylesheetUrl}">
 <link rel="stylesheet" href="${readerStylesheetUrl}">
-${css ? `<style>${css}</style>` : ""}
+<style>${katexCriticalCss}${input.css}</style>
 </head>
-<body><article class="reader-document">${body}</article></body>
+<body>${input.body}</body>
 </html>
 `;
 }
@@ -123,24 +141,107 @@ export async function buildPreview(input: {
           .map((heading) => [heading.blockId, page.pageId] as const),
       ),
     );
-    const diagnostics: SafeDiagnostic[] = [...resolution.diagnostics];
-    for (const page of configured.pages) {
-      const rendered = await renderSemanticDocument({
-        document: page.document,
-        headingHref(blockId) {
-          const pageId = pageByHeading.get(blockId);
-          if (!pageId) throw new Error("PREVIEW_HEADING_PAGE_MISSING");
-          return `/api/manage/books/${input.bookId}/preview/${input.configRevision}/pages/${pageId}#${blockId}`;
-        },
-        headingOverrides: page.headingOverrides,
-        publishedResourceUrl: (resourceId) =>
-          `/api/manage/books/${input.bookId}/preview/${input.configRevision}/assets/${resourceId}`,
-        resourceResolution: resolution,
+    const pageById = new Map(
+      configured.pages.map((page) => [page.pageId, page] as const),
+    );
+    const pageHref = (pageId: number) =>
+      `/api/manage/books/${input.bookId}/preview/${input.configRevision}/pages/${pageId}`;
+    const displayHeadingTitle = (
+      heading: (typeof configured.headings)[number],
+    ) =>
+      heading.number
+        ? `${heading.number}. ${heading.display_title}`
+        : heading.display_title;
+    const readerToc = configured.headings
+      .filter((heading) => heading.include_in_toc)
+      .map((heading) => {
+        const pageId = pageByHeading.get(heading.block_id);
+        if (!pageId || !pageById.has(pageId)) {
+          throw new Error("PREVIEW_HEADING_PAGE_MISSING");
+        }
+        return {
+          blockId: heading.block_id,
+          href: `${pageHref(pageId)}#${heading.block_id}`,
+          level: heading.display_level,
+          pageId,
+          title: displayHeadingTitle(heading),
+        };
       });
-      diagnostics.push(...rendered.diagnostics);
+    const diagnostics: SafeDiagnostic[] = [...resolution.diagnostics];
+    const renderedPages = await Promise.all(
+      configured.pages.map(async (page) => {
+        const rendered = await renderSemanticDocument({
+          document: page.document,
+          headingHref(blockId) {
+            const pageId = pageByHeading.get(blockId);
+            if (!pageId) throw new Error("PREVIEW_HEADING_PAGE_MISSING");
+            return `${pageHref(pageId)}#${blockId}`;
+          },
+          headingOverrides: page.headingOverrides,
+          publishedResourceUrl: (resourceId) =>
+            `/api/manage/books/${input.bookId}/preview/${input.configRevision}/assets/${resourceId}`,
+          resourceResolution: resolution,
+        });
+        diagnostics.push(...rendered.diagnostics);
+        return { page, rendered };
+      }),
+    );
+    const css = renderedPages
+      .map(({ rendered }) => rendered.css)
+      .filter(Boolean)
+      .sort()
+      .filter((value, index, values) => value !== values[index - 1])
+      .join("");
+    const language =
+      typeof (config.metadata as Record<string, unknown> | undefined)
+        ?.language === "string"
+        ? String(
+            (config.metadata as Record<string, unknown> | undefined)?.language,
+          )
+        : "zh-CN";
+    for (const { page, rendered } of renderedPages) {
+      const pageIndex = configured.pages.findIndex(
+        (candidate) => candidate.pageId === page.pageId,
+      );
+      const nextPage =
+        pageIndex >= 0 ? configured.pages.at(pageIndex + 1) : undefined;
+      const previousPage =
+        pageIndex > 0 ? configured.pages.at(pageIndex - 1) : undefined;
+      const outline = configured.headings
+        .filter(
+          (heading) =>
+            heading.include_in_toc && page.blockIds.includes(heading.block_id),
+        )
+        .map((heading) => ({
+          blockId: heading.block_id,
+          href: `#${heading.block_id}`,
+          level: heading.display_level,
+          title: displayHeadingTitle(heading),
+        }));
       await atomicWriteFile(
         resolve(pagesDirectory, `${page.pageId}.html`),
-        previewHtmlDocument(rendered.html, rendered.css),
+        readerHtmlDocument({
+          body: renderReaderShell({
+            bodyHtml: rendered.html,
+            bookKey: String(input.bookId),
+            bookTitle: String(config.title),
+            currentHeadingId: outline.at(0)?.blockId ?? null,
+            currentPageId: page.pageId,
+            firstPageHref: pageHref(
+              configured.pages.at(0)?.pageId ?? page.pageId,
+            ),
+            mode: "preview",
+            nextHref: nextPage ? pageHref(nextPage.pageId) : null,
+            originalDownloads: [],
+            outline,
+            previousHref: previousPage ? pageHref(previousPage.pageId) : null,
+            previewRevision: input.configRevision,
+            toc: readerToc,
+          }),
+          css,
+          language,
+          title: page.title,
+        }),
         { mode: 0o600 },
       );
     }
@@ -154,11 +255,9 @@ export async function buildPreview(input: {
       ).values(),
     ];
     const sourceRegions = (
-      config.schema_version === 2
-        ? (config.source_regions as readonly ConfirmedSourceRegion[])
-        : []
+      config.source_regions as readonly ConfirmedSourceRegion[]
     ).map((region) => ({
-      applied: true,
+      applied: region.applied,
       confidence: "high",
       conflict_count: 0,
       end_byte: region.range.end_byte,
@@ -170,13 +269,10 @@ export async function buildPreview(input: {
       region_id: region.region_id,
       start_byte: region.range.start_byte,
     }));
-    const typography =
-      config.schema_version === 2
-        ? ((
-            (config.source as Readonly<Record<string, unknown>>)
-              .preprocessing as Readonly<Record<string, unknown>>
-          ).typography as TypographyProvenance)
-        : undefined;
+    const typography = (
+      (config.source as Readonly<Record<string, unknown>>)
+        .preprocessing as Readonly<Record<string, unknown>>
+    ).typography as TypographyProvenance;
     const model = Object.freeze({
       compiler_version: configured.identity.compiler_version,
       config_sha256: configured.identity.config_sha256,
@@ -186,6 +282,7 @@ export async function buildPreview(input: {
         display_level: heading.display_level,
         include_in_toc: heading.include_in_toc,
         number: heading.number,
+        page_id: pageByHeading.get(heading.block_id) ?? null,
         role: heading.role,
         source_level: heading.source_level,
         source_title: heading.source_title,
@@ -200,7 +297,7 @@ export async function buildPreview(input: {
       semantic_digest: configured.identity.semantic_digest,
       source_regions: sourceRegions,
       source_sha256: configured.identity.source_sha256,
-      ...(typography ? { typography } : {}),
+      typography,
       version: previewBuildVersion,
     });
     const diagnosticsPath = resolve(previewDirectory, "diagnostics.json");

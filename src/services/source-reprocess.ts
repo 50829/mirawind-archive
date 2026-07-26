@@ -84,38 +84,24 @@ export async function queueSourceReprocess(input: {
   readonly bookId: number;
   readonly database: Database.Database;
   readonly expectedConfigRevision: number;
-  readonly expectedSourceId: string;
   readonly layout: StorageLayout;
   readonly nowMs: number;
-  readonly originalFileId: string;
   readonly profile: TypographyProfile;
 }): Promise<{ readonly importId: string; readonly job: JobRecord }> {
   const drafts = new DraftRepository(input.database);
   const sources = new SourceRepository(input.database);
   const imports = new ImportRepository(input.database);
   const jobs = new JobRepository(input.database);
-  const operation = `book.reprocess:${input.bookId}`;
-  const idempotencyKey = [
-    input.originalFileId,
-    input.expectedSourceId,
-    input.expectedConfigRevision,
-    input.profile,
-  ].join(":");
-  const existing = jobs.findByIdempotency(operation, idempotencyKey);
-  if (existing?.importId) {
-    return Object.freeze({ importId: existing.importId, job: existing });
-  }
-
   const book = drafts.findBook(input.bookId);
   if (
     !book ||
-    book.draftSourceId !== input.expectedSourceId ||
+    !book.draftSourceId ||
     book.draftConfigRevision !== input.expectedConfigRevision
   ) {
     preconditionFailed();
   }
-  const source = sources.findSnapshot(input.expectedSourceId);
-  const original = sources.findOriginal(input.originalFileId);
+  const source = sources.findSnapshot(book.draftSourceId);
+  const original = sources.findMineruOriginal(input.bookId, book.draftSourceId);
   if (
     !source ||
     !original ||
@@ -125,6 +111,17 @@ export async function queueSourceReprocess(input: {
     original.role !== "mineru_zip"
   ) {
     sourceUnavailable();
+  }
+  const operation = `book.reprocess:${input.bookId}`;
+  const idempotencyKey = [
+    original.id,
+    source.id,
+    input.expectedConfigRevision,
+    input.profile,
+  ].join(":");
+  const existing = jobs.findByIdempotency(operation, idempotencyKey);
+  if (existing?.importId) {
+    return Object.freeze({ importId: existing.importId, job: existing });
   }
   const sourceImport = imports.find(source.createdFromImportId);
   const selected =
@@ -178,9 +175,9 @@ export async function queueSourceReprocess(input: {
       nowMs: input.nowMs,
       preparation: {
         expectedConfigRevision: input.expectedConfigRevision,
-        expectedSourceId: input.expectedSourceId,
+        expectedSourceId: source.id,
         kind: "reprocess",
-        originalFileId: input.originalFileId,
+        originalFileId: original.id,
         typographyProfile: input.profile,
       },
       selectedCandidateId: candidate.id,
@@ -188,7 +185,7 @@ export async function queueSourceReprocess(input: {
     const job = jobs.create({
       bookId: input.bookId,
       capturedConfigRevision: input.expectedConfigRevision,
-      capturedSourceId: input.expectedSourceId,
+      capturedSourceId: source.id,
       idempotency: { key: idempotencyKey, operation },
       importId,
       kind: "prepare_draft",

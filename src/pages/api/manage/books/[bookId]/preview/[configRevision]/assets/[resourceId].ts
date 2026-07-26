@@ -6,10 +6,14 @@ import type { APIRoute } from "astro";
 import { DraftRepository } from "@/db/repositories/drafts";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
-import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
+import { authorizePreviewResource } from "@/http/authorization/preview-resource";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { resolveContainedPath } from "@/storage/path-resolver";
-import { getRuntimeStorageLayout } from "@/storage/runtime";
+import {
+  getRuntimeEnvironment,
+  getRuntimeStorageLayout,
+} from "@/storage/runtime";
+import { getRuntimeDatabase } from "@/auth/session";
 
 export const prerender = false;
 
@@ -40,10 +44,8 @@ function mediaType(bytes: Uint8Array): string {
   return "application/octet-stream";
 }
 
-export const GET: APIRoute = async ({ locals, params }) => {
-  const { database } = requireRuntimeAdministrator(locals.session, {
-    hideExistence: true,
-  });
+export const GET: APIRoute = async ({ params, request }) => {
+  const database = getRuntimeDatabase();
   const bookId = positiveInteger(params.bookId);
   const revision = positiveInteger(params.configRevision);
   const resourceId = params.resourceId;
@@ -59,8 +61,24 @@ export const GET: APIRoute = async ({ locals, params }) => {
       404,
     );
   }
-  const preview = new DraftRepository(database).findPreview(bookId, revision);
-  if (preview?.state !== "ready" || !preview.previewRelativePath) {
+  const drafts = new DraftRepository(database);
+  const book = drafts.findBook(bookId);
+  const preview = drafts.findPreview(bookId, revision);
+  if (
+    book?.draftConfigRevision !== revision ||
+    book.readyPreviewRevision !== revision ||
+    preview?.state !== "ready" ||
+    !preview.previewRelativePath ||
+    !authorizePreviewResource({
+      authorization: new URL(request.url).searchParams.get("authorization"),
+      authSecret: getRuntimeEnvironment().authSecret,
+      bookId,
+      database,
+      nowMs: Date.now(),
+      resourceId,
+      revision,
+    })
+  ) {
     throw new SafeApplicationError(
       "NOT_FOUND",
       "The asset was not found.",
@@ -83,7 +101,10 @@ export const GET: APIRoute = async ({ locals, params }) => {
     );
   }
   const headers = new Headers({
+    "Access-Control-Allow-Origin": "*",
     "Content-Type": mediaType(bytes),
+    "Cross-Origin-Resource-Policy": "cross-origin",
+    "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
   });
   applyResponsePolicy(headers, "draft");

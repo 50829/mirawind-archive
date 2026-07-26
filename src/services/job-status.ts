@@ -1,35 +1,8 @@
 import type { JobRecord } from "../db/repositories/jobs.js";
 import type Database from "better-sqlite3";
 
-type SafeProgressValue = boolean | number | string | null;
-
 function timestamp(value: number | null): string | null {
   return value === null ? null : new Date(value).toISOString();
-}
-
-function safeProgress(
-  progress: Readonly<Record<string, unknown>>,
-): Readonly<Record<string, SafeProgressValue>> {
-  const output: Record<string, SafeProgressValue> = {};
-  for (const [key, value] of Object.entries(progress).slice(0, 100)) {
-    if (
-      key.length < 1 ||
-      key.length > 80 ||
-      !/^[a-zA-Z][a-zA-Z0-9_.-]*$/u.test(key)
-    ) {
-      continue;
-    }
-    if (
-      value === null ||
-      typeof value === "boolean" ||
-      (typeof value === "number" && Number.isFinite(value))
-    ) {
-      output[key] = value;
-    } else if (typeof value === "string") {
-      output[key] = value.slice(0, 500);
-    }
-  }
-  return Object.freeze(output);
 }
 
 function publicationOutcome(
@@ -101,6 +74,7 @@ export function serializeJobStatus(
   return Object.freeze({
     attempt: job.attempt,
     automatic_retry_count: job.automaticRetryCount,
+    cancellation_requested_at: timestamp(job.cancellationRequestedAtMs),
     created_at: new Date(job.createdAtMs).toISOString(),
     error_class: job.errorClass,
     error_code: job.errorCode,
@@ -109,7 +83,7 @@ export function serializeJobStatus(
     kind: isDeletionCleanup ? "permanent_book_deletion" : job.kind,
     phase: job.phase.slice(0, 80),
     ...(database ? { publication: publicationOutcome(job, database) } : {}),
-    progress: safeProgress(job.progress),
+    progress: job.progress,
     retry_of_job_id: job.retryOfJobId,
     started_at: timestamp(job.startedAtMs),
     state: job.state,

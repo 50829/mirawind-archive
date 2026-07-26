@@ -52,7 +52,7 @@ describe("configured document preparation", () => {
         numbering: { mode: "normalized" },
       },
       revision: 2,
-      schema_version: 2,
+      schema_version: 3,
       source: {
         main_markdown: "book.md",
         main_markdown_sha256: sourceSha256,
@@ -61,7 +61,7 @@ describe("configured document preparation", () => {
           typography: {
             input_sha256: sourceSha256,
             output_sha256: sourceSha256,
-            profile: "preserve-v1",
+            profile: "verbatim-v1",
             protected_nodes: 0,
             punctuation_converted: 0,
             spaces_normalized: 0,
@@ -113,9 +113,9 @@ describe("configured document preparation", () => {
     expect(configured.pages).toHaveLength(6);
     expect(configured.identity).toEqual(repeated.identity);
     expect(configured.identity).toMatchObject({
-      compiler_version: "compiler-v3",
+      compiler_version: "compiler-v4",
       config_sha256: configSha256,
-      renderer_version: "semantic-html-v3-katex-0.18.1",
+      renderer_version: "semantic-html-v4-katex-0.18.1",
       semantic_digest: expect.stringMatching(/^[a-f0-9]{64}$/u),
       source_sha256: sourceSha256,
     });

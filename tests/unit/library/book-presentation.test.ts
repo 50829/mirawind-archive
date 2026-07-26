@@ -24,12 +24,23 @@ function config(coverResourceId: string | null = resourceId) {
       numbering: { mode: "normalized" },
     },
     revision: 2,
-    schema_version: 1,
+    schema_version: 3,
     source: {
       main_markdown: "main.md",
       main_markdown_sha256: "a".repeat(64),
       original_files: [],
+      preprocessing: {
+        typography: {
+          input_sha256: "a".repeat(64),
+          output_sha256: "a".repeat(64),
+          profile: "verbatim-v1",
+          protected_nodes: 0,
+          punctuation_converted: 0,
+          spaces_normalized: 0,
+        },
+      },
     },
+    source_regions: [],
     structure: [],
     title: "Example Book",
   };
@@ -63,9 +74,9 @@ function manifest(tocSize = 1, includeCover = true) {
     book_id: 1,
     compiler: {
       name: "mirawind-book-compiler",
-      renderer_version: "semantic-html-v1",
+      renderer_version: "semantic-html-v4-katex-0.18.1",
       text_normalization_version: 1,
-      version: "compiler-v1",
+      version: "compiler-v4",
     },
     config_revision: 2,
     created_at: "2026-07-25T00:00:00.000Z",
@@ -91,7 +102,7 @@ function manifest(tocSize = 1, includeCover = true) {
           },
         }
       : {},
-    schema_version: 1,
+    schema_version: 2,
     source_files: [
       { path: "source/main.md", sha256: "c".repeat(64), size: 10 },
     ],

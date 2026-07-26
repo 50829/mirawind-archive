@@ -137,7 +137,7 @@ describe("durable job repository", () => {
       errorClass: "canceled",
       errorCode: "JOB_CANCELED",
       finishedAtMs: 2_000,
-      requestedCancelAtMs: 2_000,
+      cancellationRequestedAtMs: 2_000,
       state: "canceled",
     });
 
@@ -148,7 +148,7 @@ describe("durable job repository", () => {
     repository.claimNext({ leaseOwner: "worker-a", nowMs: 4_000 });
     expect(repository.requestCancellation(running.id, 5_000)).toMatchObject({
       finishedAtMs: null,
-      requestedCancelAtMs: 5_000,
+      cancellationRequestedAtMs: 5_000,
       state: "running",
     });
     expect(
@@ -178,11 +178,16 @@ describe("durable job repository", () => {
         leaseOwner: "worker-a",
         nowMs: 12_000,
         phase: "verify_manifest",
-        progress: { checked: 12 },
+        progress: {
+          completed: 12,
+          processed_bytes: null,
+          total: 20,
+          unit: "items",
+        },
       }),
     ).toMatchObject({
       phase: "verify_manifest",
-      progress: { checked: 12 },
+      progress: { completed: 12, total: 20, unit: "items" },
     });
     expect(() =>
       repository.completeSuccess({
@@ -196,12 +201,17 @@ describe("durable job repository", () => {
         jobId: job.id,
         leaseOwner: "worker-a",
         nowMs: 14_000,
-        progress: { checked: 20 },
+        progress: {
+          completed: 20,
+          processed_bytes: null,
+          total: 20,
+          unit: "items",
+        },
       }),
     ).toMatchObject({
       finishedAtMs: 14_000,
       leaseOwner: null,
-      progress: { checked: 20 },
+      progress: { completed: 20, total: 20, unit: "items" },
       state: "succeeded",
     });
     expect(() =>

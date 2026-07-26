@@ -41,6 +41,7 @@ describe("printed contents detection", () => {
       entryCount: 6,
       matchedHeadingCount: 6,
       proposedRegion: {
+        applied: true,
         disposition: "reference_only",
         entries: expect.arrayContaining([
           expect.objectContaining({

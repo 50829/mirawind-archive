@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createOpaqueId } from "@/domain/ids";
+import { shouldReportJobProgress } from "@/worker/progress-throttle";
 import {
   isChildToParentMessage,
   isRunJobMessage,
@@ -8,6 +9,33 @@ import {
 } from "@/worker/protocol";
 
 describe("job child IPC protocol", () => {
+  it("reports phase changes immediately and limits repeated progress to 250ms", () => {
+    expect(
+      shouldReportJobProgress({
+        lastPhase: "security_check",
+        lastReportedAtMs: 1_000,
+        nowMs: 1_001,
+        phase: "identify_document",
+      }),
+    ).toBe(true);
+    expect(
+      shouldReportJobProgress({
+        lastPhase: "security_check",
+        lastReportedAtMs: 1_000,
+        nowMs: 1_249,
+        phase: "security_check",
+      }),
+    ).toBe(false);
+    expect(
+      shouldReportJobProgress({
+        lastPhase: "security_check",
+        lastReportedAtMs: 1_000,
+        nowMs: 1_250,
+        phase: "security_check",
+      }),
+    ).toBe(true);
+  });
+
   it("accepts only frozen job inputs with a job-scoped staging path", () => {
     const jobId = createOpaqueId("job");
     const message = {
@@ -110,23 +138,34 @@ describe("job child IPC protocol", () => {
     ).toBe(false);
   });
 
-  it("rejects content-sized or structurally unsafe child progress", () => {
+  it("accepts only the closed bounded progress shape", () => {
     const base = {
       jobId: createOpaqueId("job"),
-      phase: "extract",
+      phase: "security_check",
       protocolVersion: jobChildProtocolVersion,
       type: "progress",
     };
     expect(
       isChildToParentMessage({
         ...base,
-        progress: { entries: 12, ratio: 3.5 },
+        progress: {
+          completed: 12,
+          processed_bytes: 1024,
+          total: 20,
+          unit: "items",
+        },
       }),
     ).toBe(true);
     expect(
       isChildToParentMessage({
         ...base,
-        progress: { markdown: "x".repeat(501) },
+        progress: {
+          completed: 12,
+          markdown: "private body",
+          processed_bytes: 1024,
+          total: 20,
+          unit: "items",
+        },
       }),
     ).toBe(false);
   });

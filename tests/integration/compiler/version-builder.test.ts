@@ -96,6 +96,7 @@ describe("complete immutable version construction", () => {
       await writeFile(resolve(sourceRoot, "images", "pixel.png"), png, {
         mode: 0o400,
       });
+      const markdownHash = createHash("sha256").update(markdown).digest("hex");
       const config = {
         book_id: bookId,
         metadata: { language: "en" },
@@ -104,14 +105,23 @@ describe("complete immutable version construction", () => {
           numbering: { mode: "normalized" },
         },
         revision: 1,
-        schema_version: 1,
+        schema_version: 3,
         source: {
           main_markdown: "book.md",
-          main_markdown_sha256: createHash("sha256")
-            .update(markdown)
-            .digest("hex"),
+          main_markdown_sha256: markdownHash,
           original_files: [],
+          preprocessing: {
+            typography: {
+              input_sha256: markdownHash,
+              output_sha256: markdownHash,
+              profile: "verbatim-v1",
+              protected_nodes: 0,
+              punctuation_converted: 0,
+              spaces_normalized: 0,
+            },
+          },
         },
+        source_regions: [],
         structure: [
           {
             block_id: headingId,
@@ -211,12 +221,19 @@ describe("complete immutable version construction", () => {
         resolve(stagingA, "version", "published", "pages", "1.html"),
         "utf8",
       );
-      expect(pageHtml).toContain('<header class="reader-topbar">');
+      expect(pageHtml).toContain('<header class="reader-topbar"');
       expect(pageHtml).toContain(
-        'href="/_astro/renderers/semantic-html-v3-katex-0.18.1/katex.css"',
+        'src="/reader-assets/scripts/mirawind-reader-v2-tailwind-4.3.3.js"',
+      );
+      expect(pageHtml).not.toContain("<script>(() =>");
+      expect(pageHtml).toContain(
+        'href="/reader-assets/renderers/semantic-html-v4-katex-0.18.1/katex.css"',
       );
       expect(pageHtml).toContain(
-        'href="/_astro/styles/mirawind-reader-v1-tailwind-4.3.3.css"',
+        'href="/reader-assets/styles/mirawind-reader-v2-tailwind-4.3.3.css"',
+      );
+      expect(pageHtml).toContain(
+        ".katex .katex-mathml{position:absolute;width:1px;height:1px",
       );
       expect(pageHtml).toContain('aria-label="全书目录"');
       expect(pageHtml).toContain('<main class="reader-main"');

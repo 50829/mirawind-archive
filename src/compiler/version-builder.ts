@@ -21,7 +21,7 @@ import {
   type ManifestSourceFile,
 } from "./document/manifest.js";
 import { renderSemanticDocument } from "./render/document.js";
-import { rendererStylesheetUrl } from "./render/assets.js";
+import { katexCriticalCss, rendererStylesheetUrl } from "./render/assets.js";
 import { inspectRasterImage } from "./resources/images.js";
 import { resolveDocumentResources } from "./resources/resolver.js";
 import { buildSearchSpool, writeSearchSpool } from "./search/build-spool.js";
@@ -134,7 +134,7 @@ function htmlDocument(input: {
 <link rel="canonical" href="${htmlEscape(input.canonicalPath)}">
 <link rel="stylesheet" href="${rendererStylesheetUrl}">
 <link rel="stylesheet" href="${readerStylesheetUrl}">
-<style>${input.css}</style>
+<style>${katexCriticalCss}${input.css}</style>
 </head>
 <body>${input.body}</body>
 </html>
@@ -507,7 +507,7 @@ export async function buildImmutableVersion(input: {
       })),
       manifest_sha256: sha256(manifestJson),
       predecessor_version_id: input.predecessorVersionId,
-      schema_version: 1,
+      schema_version: 2,
       source_id: input.sourceId,
       version_id: input.versionId,
     };

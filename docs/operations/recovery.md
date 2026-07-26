@@ -49,8 +49,9 @@ Restore into a new disposable volume or host, never over the only live copy:
 1. provision an empty volume;
 2. restore the complete data-root contents and metadata;
 3. run `data-init` to enforce UID/GID 10001 ownership;
-4. run `migrate` with the restored volume while Web/worker are stopped;
-5. verify SQLite integrity and migration completion;
+4. run the matching release's `migrate` command with the restored volume while Web/worker
+   are stopped;
+5. verify SQLite integrity and schema identity;
 6. start one Web and one worker;
 7. verify public reads, private authorization, search, original download and the
    administrator task/health page;
@@ -111,9 +112,9 @@ verified, published predecessor that also has a matching presentation projection
 valid predecessor exists, only that book becomes unavailable with `503`; unrelated books
 continue.
 
-After migration 6, a missing presentation is rebuilt off the request path from the
-immutable `book.yaml` and `document-manifest.json`. A digest mismatch is never overwritten
-automatically and prevents that version from automatic rollback promotion. Do not repair
+A missing presentation is rebuilt off the request path from the immutable `book.yaml` and
+`document-manifest.json`. A digest mismatch is never overwritten automatically and prevents
+that version from automatic rollback promotion. Do not repair
 `book_version_presentations`, `books.alias` or the projection digest by hand; preserve the
 volume, inspect the version authorities, and let reconciliation either rebuild a missing
 row or isolate the book.
@@ -155,7 +156,7 @@ Restoring a complete pre-deletion host backup is a disaster-recovery rollback of
 deployment, not a product restore feature. Never merge a deleted book out of such a backup
 into the live database.
 
-## 8. SQLite corruption or failed migration
+## 8. SQLite corruption or failed schema transition
 
 Stop both writers immediately:
 
@@ -173,7 +174,7 @@ test requires:
 
 - `PRAGMA integrity_check` returns `ok`;
 - `PRAGMA foreign_key_check` returns no rows;
-- all expected migration versions/checksums match;
+- the expected schema identity and migration checksum match;
 - current version files pass closure and hash verification;
 - every current version has a matching presentation digest and current alias;
 - public/private/search/download behavior matches the restored pointer.

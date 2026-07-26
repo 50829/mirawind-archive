@@ -44,9 +44,9 @@ async function stagedVersion(root: string, versionId: string): Promise<string> {
     complete: true,
     compiler: {
       name: "mirawind-book-compiler",
-      renderer_version: "semantic-html-v1",
+      renderer_version: "semantic-html-v4-katex-0.18.1",
       text_normalization_version: 1,
-      version: "compiler-v1",
+      version: "compiler-v4",
     },
     config_revision: 1,
     created_at: "2026-07-25T00:00:00.000Z",
@@ -57,7 +57,7 @@ async function stagedVersion(root: string, versionId: string): Promise<string> {
     })),
     manifest_sha256: hash(files[1]?.value ?? ""),
     predecessor_version_id: null,
-    schema_version: 1,
+    schema_version: 2,
     source_id: "src_crash_boundary_test_0001",
     version_id: versionId,
   };
@@ -86,12 +86,23 @@ async function stagedPublicationVersion(root: string): Promise<void> {
         numbering: { mode: "normalized" },
       },
       revision: 1,
-      schema_version: 1,
+      schema_version: 3,
       source: {
         main_markdown: "book.md",
         main_markdown_sha256: hash(source),
         original_files: [],
+        preprocessing: {
+          typography: {
+            input_sha256: hash(source),
+            output_sha256: hash(source),
+            profile: "verbatim-v1",
+            protected_nodes: 0,
+            punctuation_converted: 0,
+            spaces_normalized: 0,
+          },
+        },
       },
+      source_regions: [],
       structure: [
         {
           block_id: blockId,
@@ -127,9 +138,9 @@ async function stagedPublicationVersion(root: string): Promise<void> {
     book_id: 1,
     compiler: {
       name: "mirawind-book-compiler",
-      renderer_version: "semantic-html-v1",
+      renderer_version: "semantic-html-v4-katex-0.18.1",
       text_normalization_version: 1,
-      version: "compiler-v1",
+      version: "compiler-v4",
     },
     config_revision: 1,
     created_at: "2026-07-25T00:00:00.000Z",
@@ -143,7 +154,7 @@ async function stagedPublicationVersion(root: string): Promise<void> {
       },
     ],
     resources: {},
-    schema_version: 1,
+    schema_version: 2,
     source_files: [
       { path: "source/book.md", sha256: hash(source), size: source.length },
     ],
@@ -214,7 +225,7 @@ async function stagedPublicationVersion(root: string): Promise<void> {
       ),
     manifest_sha256: hash(values.get("document-manifest.json") ?? ""),
     predecessor_version_id: null,
-    schema_version: 1,
+    schema_version: 2,
     source_id: "src_stale_publish_test_0001",
     version_id: publicationTestVersionId,
   };

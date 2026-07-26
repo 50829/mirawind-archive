@@ -16,16 +16,57 @@ import {
   isCancelJobMessage,
   isRunJobMessage,
   jobChildProtocolVersion,
+  type JobProgress,
+  type JobProgressMessage,
   type JobResultMessage,
   type RunJobMessage,
 } from "./protocol.js";
+import { shouldReportJobProgress } from "./progress-throttle.js";
 
 let active: RunJobMessage | undefined;
 const controller = new AbortController();
+let lastProgressAt = 0;
+let lastProgressPhase: string | null = null;
 
 function send(result: JobResultMessage): void {
   process.send?.(result, () => {
     if (process.connected) process.disconnect();
+  });
+}
+
+function reportProgress(
+  phase: JobProgressMessage["phase"],
+  progress: JobProgress,
+): void {
+  if (!active) return;
+  const now = Date.now();
+  if (
+    !shouldReportJobProgress({
+      lastPhase: lastProgressPhase,
+      lastReportedAtMs: lastProgressAt,
+      nowMs: now,
+      phase,
+    })
+  ) {
+    return;
+  }
+  lastProgressAt = now;
+  lastProgressPhase = phase;
+  process.send?.({
+    jobId: active.input.jobId,
+    phase,
+    progress,
+    protocolVersion: jobChildProtocolVersion,
+    type: "progress",
+  } satisfies JobProgressMessage);
+}
+
+function steps(completed: number, total: number): JobProgress {
+  return Object.freeze({
+    completed,
+    processed_bytes: null,
+    total,
+    unit: "steps",
   });
 }
 
@@ -68,6 +109,7 @@ async function execute(message: RunJobMessage): Promise<void> {
       message.input.kind === "analyze_import" &&
       message.input.importUploadRelativePath
     ) {
+      reportProgress("security_check", steps(0, 2));
       const archivePath = await resolveContainedPath(
         root,
         message.input.importUploadRelativePath,
@@ -77,6 +119,7 @@ async function execute(message: RunJobMessage): Promise<void> {
         signal: controller.signal,
         stagingDirectory,
       });
+      reportProgress("identify_document", steps(2, 2));
       send({
         jobId: message.input.jobId,
         ok: true,
@@ -99,6 +142,7 @@ async function execute(message: RunJobMessage): Promise<void> {
       message.input.kind === "verify_version" &&
       message.input.versionId !== null
     ) {
+      reportProgress("verify_manifest", steps(0, 1));
       const database = openDatabase(join(root, "db", "mirawind.sqlite"), {
         role: "worker",
       });
@@ -132,6 +176,7 @@ async function execute(message: RunJobMessage): Promise<void> {
       return;
     }
     if (message.input.kind === "reconcile") {
+      reportProgress("reconcile_storage", steps(0, 1));
       const database = openDatabase(join(root, "db", "mirawind.sqlite"), {
         role: "worker",
       });
@@ -159,6 +204,10 @@ async function execute(message: RunJobMessage): Promise<void> {
       return;
     }
     if (message.input.kind === "reclaim") {
+      reportProgress(
+        message.input.bookId ? "permanent_book_deletion" : "reclaim_storage",
+        steps(0, 1),
+      );
       const database = openDatabase(join(root, "db", "mirawind.sqlite"), {
         role: "worker",
       });
@@ -214,6 +263,8 @@ async function execute(message: RunJobMessage): Promise<void> {
       message.input.importUploadRelativePath &&
       message.input.selectedCandidateRelativePath
     ) {
+      reportProgress("security_check", steps(0, 3));
+      reportProgress("identify_document", steps(1, 3));
       const result = await prepareDraft({
         archivePath: await resolveContainedPath(
           root,
@@ -226,6 +277,7 @@ async function execute(message: RunJobMessage): Promise<void> {
           ? { typographyProfile: message.input.typographyProfile }
           : {}),
       });
+      reportProgress("organize_structure", steps(3, 3));
       send({
         jobId: message.input.jobId,
         ok: true,
@@ -246,6 +298,7 @@ async function execute(message: RunJobMessage): Promise<void> {
       message.input.configYamlRelativePath &&
       message.input.sourceRootRelativePath
     ) {
+      reportProgress("render_pages", steps(0, 1));
       await buildPreview({
         bookId: message.input.bookId,
         configRevision: message.input.capturedConfigRevision,
@@ -278,6 +331,7 @@ async function execute(message: RunJobMessage): Promise<void> {
       message.input.configYamlRelativePath &&
       message.input.sourceRootRelativePath
     ) {
+      reportProgress("render_pages", steps(0, 3));
       await buildPublish({
         bookId: message.input.bookId,
         configRevision: message.input.capturedConfigRevision,
@@ -299,6 +353,7 @@ async function execute(message: RunJobMessage): Promise<void> {
         ),
         stagingDirectory,
       });
+      reportProgress("build_search", steps(2, 3));
       send({
         jobId: message.input.jobId,
         ok: true,

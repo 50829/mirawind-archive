@@ -319,6 +319,7 @@ export function detectPrintedContents(input: {
     );
     const proposedRegion = high
       ? Object.freeze({
+          applied: true,
           disposition: "reference_only" as const,
           entries: Object.freeze(
             matchedEntries.map((entry) =>

@@ -281,9 +281,9 @@
     "captured_at": "2026-07-25T11:37:17.300Z",
     "compiler_identity": {
       "name": "mirawind-book-compiler",
-      "renderer_version": "semantic-html-v3-katex-0.18.1",
+      "renderer_version": "semantic-html-v4-katex-0.18.1",
       "text_normalization_version": 2,
-      "version": "compiler-v3"
+      "version": "compiler-v4"
     },
     "dependencies": {
       "production": {

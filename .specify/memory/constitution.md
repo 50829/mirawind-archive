@@ -1,24 +1,28 @@
 <!--
 Sync Impact Report
-- Version change: unratified template → 1.0.0
-- Added principles:
-  - I. Authoritative Sources and Rebuildability
-  - II. Atomic Publication and Recoverability
-  - III. Security Boundaries Are End-to-End
-  - IV. Build Off the Request Path
-  - V. Evidence Before Completion
-- Added sections:
-  - Architecture Constraints
-  - Spec-Driven Delivery Gates
-- Removed sections: none; template placeholders were replaced
+- Version change: 1.0.0 → 2.0.0
+- Modified principles:
+  - I. Authoritative Sources and Rebuildability: schema evolution may use either an
+    explicit migration or an owner-approved clean switch with tested rejection and
+    remediation.
+- Rationale and impact:
+  - Feature 006 deliberately replaces the publishing format family and database baseline
+    instead of retaining a compatibility path.
+  - D-108 and the owner's explicit clean-switch instruction approve this governance change.
+- Added sections: none
+- Removed sections: none
 - Templates:
   - ✅ .specify/templates/plan-template.md
   - ✅ .specify/templates/spec-template.md
   - ✅ .specify/templates/tasks-template.md
 - Runtime guidance:
   - ✅ README.md
+- Operations guidance:
+  - ✅ docs/operations/deployment.md
+  - ✅ docs/operations/recovery.md
 - Follow-up TODOs: none
 -->
+
 # Mirawind Library Constitution
 
 ## Core Principles
@@ -29,11 +33,15 @@ Markdown and the versioned `book.yaml` MUST remain the only editable, portable s
 published book content and publishing configuration. ASTs, HTML, search indexes, resource
 maps, manifests, and other derived artifacts MUST be reproducible from authoritative inputs.
 `book.yaml` and `document-manifest.json` MUST use independent integer schema versions,
-explicit migrations, strict validation, and rejection of unsupported newer versions.
+strict validation, and rejection of unsupported newer versions. Every schema change MUST
+choose and document one transition policy: an explicit migration with compatibility
+evidence, or an owner-approved clean switch that rejects prior formats and defines tested
+data remediation. Runtime code MUST NOT silently reinterpret an unsupported format.
 Private reading data and credentials MUST NOT enter portable publishing configuration.
 
-Rationale: a single authority prevents silent divergence, makes migrations auditable, and
-allows every generated version to be rebuilt after code or storage changes.
+Rationale: a single authority prevents silent divergence. Explicit transition policy keeps
+routine upgrades recoverable while allowing a deliberate, auditable reset when retaining
+legacy compatibility would preserve the wrong system.
 
 ### II. Atomic Publication and Recoverability
 
@@ -78,11 +86,12 @@ public product responsive and isolates resource failures.
 
 Every feature MUST trace user-visible behavior to a specification requirement and MUST
 include automated evidence for its critical success and failure paths. Parser, schema,
-authorization, publication, recovery, cache, download, and migration changes require
-fixture-based integration tests; security and transaction tests MUST include negative and
-crash-boundary scenarios. Performance claims MUST be measured with representative and
-stress fixtures, not inferred from small examples. A feature is not complete while its
-specification, plan, tasks, implementation, tests, and current documentation disagree.
+authorization, publication, recovery, cache, download, migration, and clean-switch changes
+require fixture-based integration tests; security and transaction tests MUST include
+negative and crash-boundary scenarios. Performance claims MUST be measured with
+representative and stress fixtures, not inferred from small examples. A feature is not
+complete while its specification, plan, tasks, implementation, tests, and current
+documentation disagree.
 
 Rationale: this product handles hostile archives and durable publications, so happy-path
 unit tests alone cannot establish correctness.
@@ -107,14 +116,15 @@ unit tests alone cannot establish correctness.
 1. A feature starts with an approved feature specification containing independently
    testable user journeys, explicit exclusions, failure behavior, security boundaries,
    measurable outcomes, and no unresolved critical clarification markers.
-2. Planning MUST identify authoritative data, derived data, schema and migration impact,
+2. Planning MUST identify authoritative data, derived data, schema transition policy,
    transaction boundaries, recovery behavior, request-path work, resource budgets, and
    representative fixtures.
 3. Tasks MUST map to requirements and include required negative, integration, recovery,
-   migration, and performance evidence before implementation tasks are considered complete.
+   schema-transition, and performance evidence before implementation tasks are considered
+   complete.
 4. Implementation MUST proceed from failing evidence to passing behavior for
-   constitution-critical paths. Generated artifacts and migrations MUST be validated before
-   any publication pointer changes.
+   constitution-critical paths. Generated artifacts and schema transitions MUST be
+   validated before any publication pointer changes.
 5. Before implementation begins, Constitution Check MUST pass. After design and task
    generation, consistency analysis MUST report no unmitigated CRITICAL findings.
 6. Decision changes MUST first update the decision log and affected specification, then
@@ -143,4 +153,4 @@ Every feature plan and review MUST perform Constitution Check. Violations block 
 unless the constitution itself is amended; a plan's Complexity Tracking section may explain
 necessary complexity but cannot waive a MUST requirement.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-24 | **Last Amended**: 2026-07-24
+**Version**: 2.0.0 | **Ratified**: 2026-07-24 | **Last Amended**: 2026-07-26

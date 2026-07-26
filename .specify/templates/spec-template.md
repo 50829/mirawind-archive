@@ -8,7 +8,7 @@
 
 **Input**: User description: "$ARGUMENTS"
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 <!--
   IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
@@ -80,7 +80,7 @@
 - What happens after interruption or partial failure, and what remains visible?
 - How are unauthorized, hostile, malformed, and resource-limit inputs handled?
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 <!--
   ACTION REQUIRED: The content in this section represents placeholders.
@@ -102,20 +102,21 @@
 - **NFR-002**: Failure, recovery, and rollback behavior MUST be measurable and testable.
 - **NFR-003**: Performance and resource limits MUST name a workload, environment, and
   threshold rather than using qualitative terms such as "fast" or "large".
-- **NFR-004**: Authoritative data, derived data, schema compatibility, and migration
-  behavior MUST be explicit when the feature stores or transforms data.
+- **NFR-004**: Authoritative data, derived data, schema compatibility, and the migration or
+  approved clean-switch behavior MUST be explicit when the feature stores or transforms
+  data.
 
-*Example of marking unclear requirements:*
+_Example of marking unclear requirements:_
 
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
 - **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **[Entity 1]**: [What it represents, key attributes without implementation]
 - **[Entity 2]**: [What it represents, relationships to other entities]
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 <!--
   ACTION REQUIRED: Define measurable success criteria.

@@ -12,6 +12,7 @@ import { DraftRepository } from "../db/repositories/drafts.js";
 import { ImportRepository } from "../db/repositories/imports.js";
 import { JobRepository, type JobRecord } from "../db/repositories/jobs.js";
 import { SourceRepository } from "../db/repositories/sources.js";
+import { isJobPhase } from "../jobs/state-machine.js";
 import { recoverExpiredJobLeases } from "../jobs/recovery.js";
 import {
   persistAnalyzeImportArtifact,
@@ -84,7 +85,7 @@ function frozenInput(
       : null;
   const typographyProfile =
     preparation?.kind === "reprocess" &&
-    (preparation.typographyProfile === "preserve-v1" ||
+    (preparation.typographyProfile === "verbatim-v1" ||
       preparation.typographyProfile === "zh-smart-v1")
       ? preparation.typographyProfile
       : null;
@@ -137,7 +138,7 @@ async function executeClaimedJob(input: {
         leaseOwner: input.leaseOwner,
         nowMs: Date.now(),
       });
-      if (current.requestedCancelAtMs !== null) {
+      if (current.cancellationRequestedAtMs !== null) {
         childController.abort("cancellation-requested");
       }
     } catch {
@@ -168,6 +169,9 @@ async function executeClaimedJob(input: {
       {
         onProgress(progress) {
           try {
+            if (!isJobPhase(input.job.kind, progress.phase)) {
+              throw new Error("JOB_PHASE_INVALID");
+            }
             input.repository.heartbeat({
               jobId: input.job.id,
               leaseOwner: input.leaseOwner,
@@ -185,7 +189,7 @@ async function executeClaimedJob(input: {
     );
     const latest = input.repository.get(input.job.id);
     if (!latest || latest.state !== "running") return;
-    if (latest.requestedCancelAtMs !== null) {
+    if (latest.cancellationRequestedAtMs !== null) {
       input.repository.completeFailure({
         errorClass: "canceled",
         errorCode: "JOB_CANCELED",
@@ -288,6 +292,18 @@ async function executeClaimedJob(input: {
         input.job.bookId &&
         input.job.capturedConfigRevision
       ) {
+        input.repository.heartbeat({
+          jobId: input.job.id,
+          leaseOwner: input.leaseOwner,
+          nowMs: Date.now(),
+          phase: "finalize_publication",
+          progress: {
+            completed: 2,
+            processed_bytes: null,
+            total: 3,
+            unit: "steps",
+          },
+        });
         const expected = `staging/${input.job.id}/version-build-result.json`;
         if (
           execution.result.result?.versionBuildResultRelativePath !== expected
@@ -312,16 +328,15 @@ async function executeClaimedJob(input: {
         jobId: input.job.id,
         leaseOwner: input.leaseOwner,
         nowMs: Date.now(),
-        progress: execution.result.result ?? {},
       });
       return;
     }
     const errorClass =
-      latest.requestedCancelAtMs !== null
+      latest.cancellationRequestedAtMs !== null
         ? "canceled"
         : (execution.result.safeErrorClass ?? "infrastructure");
     const errorCode =
-      latest.requestedCancelAtMs !== null
+      latest.cancellationRequestedAtMs !== null
         ? "JOB_CANCELED"
         : (execution.result.safeErrorCode ?? "JOB_CHILD_FAILED");
     if (input.job.kind === "analyze_import" && input.job.importId) {

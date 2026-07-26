@@ -19,7 +19,8 @@ describe("production renderer and style asset closure", () => {
       build:
         "astro build && tsc -p tsconfig.processes.json && node scripts/copy-runtime-schemas.mjs",
       prebuild: "pnpm prepare:assets",
-      "prepare:assets": "pnpm prepare:renderer-assets && pnpm prepare:styles",
+      "prepare:assets":
+        "pnpm prepare:renderer-assets && pnpm prepare:reader-assets && pnpm prepare:styles",
       start: "node dist/server/entry.mjs",
       worker: "node dist/processes/worker/index.js",
     });
@@ -32,10 +33,10 @@ describe("production renderer and style asset closure", () => {
     expect(packageJson.scripts.start).not.toContain("prepare:");
     expect(packageJson.scripts.worker).not.toContain("prepare:");
     expect(rendererStylesheetUrl).toBe(
-      "/_astro/renderers/semantic-html-v3-katex-0.18.1/katex.css",
+      "/reader-assets/renderers/semantic-html-v4-katex-0.18.1/katex.css",
     );
     expect(readerStylesheetUrl).toBe(
-      "/_astro/styles/mirawind-reader-v1-tailwind-4.3.3.css",
+      "/reader-assets/styles/mirawind-reader-v2-tailwind-4.3.3.css",
     );
   });
 

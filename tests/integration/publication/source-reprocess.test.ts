@@ -29,7 +29,7 @@ const candidate: MarkdownCandidate = Object.freeze({
 });
 
 describe("explicit source typography reprocessing", () => {
-  it("creates a new source and v2 config revision without mutating the old snapshot", () =>
+  it("creates a new source and v3 config revision without mutating the old snapshot", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const markdown = "# 第一章\n\n中文English,测试。\n";
       const archivePath = resolve(dataRoot.path, "initial.zip");
@@ -64,7 +64,7 @@ describe("explicit source typography reprocessing", () => {
         archivePath,
         selectedCandidatePath: candidate.normalizedPath,
         stagingDirectory: resolve(dataRoot.path, "staging/initial"),
-        typographyProfile: "preserve-v1",
+        typographyProfile: "verbatim-v1",
       });
       const initial = await finalizePreparedDraft({
         artifact: initialPrepared.artifact,
@@ -86,10 +86,8 @@ describe("explicit source typography reprocessing", () => {
         bookId: book.id,
         database,
         expectedConfigRevision: 1,
-        expectedSourceId: initial.snapshot.source.id,
         layout: dataRoot.layout,
         nowMs: 6,
-        originalFileId: initial.snapshot.original.id,
         profile: "zh-smart-v1",
       });
       const reprocessImport = imports.require(queued.importId);
@@ -153,7 +151,7 @@ describe("explicit source typography reprocessing", () => {
       });
       expect(config).toMatchObject({
         revision: 2,
-        schema_version: 2,
+        schema_version: 3,
         source: {
           main_markdown_sha256: finalized.snapshot.source.mainMarkdownSha256,
           preprocessing: {
@@ -172,11 +170,9 @@ describe("explicit source typography reprocessing", () => {
           bookId: book.id,
           database,
           expectedConfigRevision: 1,
-          expectedSourceId: initial.snapshot.source.id,
           layout: dataRoot.layout,
           nowMs: 8,
-          originalFileId: initial.snapshot.original.id,
-          profile: "preserve-v1",
+          profile: "verbatim-v1",
         }),
       ).rejects.toMatchObject({ code: "REPROCESS_PRECONDITION_FAILED" });
     }));

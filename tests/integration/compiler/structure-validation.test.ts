@@ -65,12 +65,23 @@ function config(nodes: readonly TestStructureNode[] = structure()) {
       numbering: { mode: "normalized" },
     },
     revision: 2,
-    schema_version: 1,
+    schema_version: 3,
     source: {
       main_markdown: "main.md",
       main_markdown_sha256: "a".repeat(64),
       original_files: [],
+      preprocessing: {
+        typography: {
+          input_sha256: "a".repeat(64),
+          output_sha256: "a".repeat(64),
+          profile: "verbatim-v1",
+          protected_nodes: 0,
+          punctuation_converted: 0,
+          spaces_normalized: 0,
+        },
+      },
     },
+    source_regions: [],
     structure: nodes,
     title: "Configured book",
   };

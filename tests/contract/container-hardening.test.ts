@@ -102,6 +102,17 @@ describe("container deployment hardening", () => {
     expect(caddyfile).toContain("header_up X-Forwarded-Proto {scheme}");
   });
 
+  it("limits only the multipart import POST above the exact ZIP allowance", async () => {
+    const caddyfile = await readFile(caddyfilePath, "utf8");
+    expect(caddyfile).toMatch(
+      /@import_upload\s*\{\s*method POST\s*path \/api\/manage\/imports\s*\}/u,
+    );
+    expect(caddyfile).toMatch(
+      /request_body @import_upload\s*\{\s*max_size 2147549184\s*\}/u,
+    );
+    expect(caddyfile.match(/max_size/gu)).toHaveLength(1);
+  });
+
   it("copies every SQL migration into the production process build", async () => {
     const [migrations, copyScript] = await Promise.all([
       readdir(migrationDirectory),

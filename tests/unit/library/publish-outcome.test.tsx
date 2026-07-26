@@ -19,7 +19,7 @@ describe("publication outcome", () => {
     expect(publicationPhaseLabel("unknown_internal_phase")).toBe("正在构建");
   });
 
-  it("shows canonical success actions only for a committed success", () => {
+  it("silently replaces a committed success with canonical actions", () => {
     const queued = renderToStaticMarkup(
       <PublishPanel
         {...base}
@@ -54,7 +54,7 @@ describe("publication outcome", () => {
         }}
       />,
     );
-    expect(succeeded).toContain("发布完成");
+    expect(succeeded).not.toContain("发布完成");
     expect(succeeded).toContain('href="/books/published-book"');
     expect(succeeded).toContain('href="/read/published-book/1"');
     expect(succeeded).toContain('href="/library"');

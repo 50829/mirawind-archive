@@ -6,11 +6,8 @@ import { expect, test } from "@playwright/test";
 import { openDatabase } from "@/db/connection";
 import { JobRepository } from "@/db/repositories/jobs";
 
-import {
-  e2eAdministrator,
-  e2eDataRoot,
-  e2eOrigin,
-} from "../helpers/global-setup.js";
+import { e2eDataRoot, e2eOrigin } from "../helpers/global-setup.js";
+import { loginAsAdministrator } from "../helpers/e2e-login.js";
 import { startWorkerProcess } from "../helpers/processes.js";
 
 async function waitForProcessExit(pid: number): Promise<void> {
@@ -60,12 +57,7 @@ test("shows, cancels, retries and recovers durable work without changing publica
   page,
 }) => {
   test.setTimeout(90_000);
-  await page.goto("/login");
-  await page.getByText("使用备用密码", { exact: true }).click();
-  await page.getByLabel("管理员邮箱").fill(e2eAdministrator.email);
-  await page.getByLabel("备用密码").fill(e2eAdministrator.password);
-  await page.getByRole("button", { name: "使用备用密码登录" }).click();
-  await expect(page).toHaveURL(/\/manage$/u);
+  await loginAsAdministrator(page, "192.0.2.17");
 
   const before = pointerSnapshot();
   const workerPid = Number(

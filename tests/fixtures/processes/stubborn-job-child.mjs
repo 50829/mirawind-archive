@@ -28,9 +28,14 @@ process.on("message", (message) => {
     );
     process.send?.({
       jobId,
-      phase: "ready",
-      progress: {},
-      protocolVersion: 1,
+      phase: "reconcile_storage",
+      progress: {
+        completed: 0,
+        processed_bytes: null,
+        total: 1,
+        unit: "steps",
+      },
+      protocolVersion: 2,
       type: "progress",
     });
     return;

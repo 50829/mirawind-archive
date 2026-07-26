@@ -1,4 +1,14 @@
-import { type ComponentProps, useEffect, useState } from "react";
+import { type ComponentProps, useEffect, useRef, useState } from "react";
+
+import type { JobProgress } from "@/worker/protocol";
+import {
+  manageField,
+  manageFieldLabel,
+  managePanel,
+  managePrimaryButton,
+  manageSecondaryButton,
+} from "@/components/ui/manage-classes";
+import { usePolling } from "@/components/manage/use-polling";
 
 import { CandidateReview, type CandidateView } from "./CandidateReview";
 
@@ -6,30 +16,129 @@ type FormSubmitEvent = Parameters<
   NonNullable<ComponentProps<"form">["onSubmit"]>
 >[0];
 
-interface ImportView {
-  readonly book_id: number | null;
-  readonly candidates: readonly CandidateView[];
-  readonly current_job_id: string | null;
-  readonly error_code: string | null;
-  readonly import_id: string;
-  readonly state: string;
-}
+type JobState =
+  "canceled" | "failed" | "interrupted" | "queued" | "running" | "succeeded";
 
 interface JobView {
   readonly attempt: number;
+  readonly cancellation_requested_at: string | null;
   readonly error_class: string | null;
   readonly error_code: string | null;
   readonly job_id: string;
+  readonly kind: string;
   readonly phase: string;
-  readonly progress: Readonly<Record<string, boolean | number | string | null>>;
+  readonly progress: JobProgress;
+  readonly state: JobState;
+}
+
+interface ImportView {
+  readonly book_id: number | null;
+  readonly candidates: readonly CandidateView[];
+  readonly current_job: JobView | null;
+  readonly error_code: string | null;
+  readonly import_id: string;
+  readonly preview: {
+    readonly revision: number | null;
+    readonly state: "building" | "failed" | "ready" | "unavailable";
+    readonly url: string | null;
+  };
   readonly state: string;
+}
+
+interface ManagedBook {
+  readonly book_id: number;
+  readonly title: string;
+}
+
+interface UploadResult {
+  readonly body: {
+    readonly code?: string;
+    readonly import_id?: string;
+  };
+  readonly status: number;
+}
+
+const terminalJobStates = new Set<JobState>([
+  "canceled",
+  "failed",
+  "interrupted",
+  "succeeded",
+]);
+
+const workflowStages = [
+  ["upload", "上传"],
+  ["security_check", "安全检查"],
+  ["identify_document", "识别正文"],
+  ["organize_structure", "整理结构"],
+  ["build_preview", "构建预览"],
+] as const;
+
+function workflowStage(
+  uploadState: "accepting" | "idle" | "uploading",
+  imported: ImportView | null,
+): (typeof workflowStages)[number][0] {
+  if (uploadState !== "idle" || !imported) return "upload";
+  const job = imported.current_job;
+  if (job?.kind === "build_preview") return "build_preview";
+  if (job?.phase === "organize_structure") return "organize_structure";
+  if (job?.phase === "identify_document") return "identify_document";
+  if (job?.phase === "security_check" || imported.state === "analyzing") {
+    return "security_check";
+  }
+  return imported.preview.state === "ready" ? "build_preview" : "upload";
+}
+
+function sendUpload(input: {
+  readonly file: File;
+  readonly idempotencyKey: string;
+  readonly onProgress: (loaded: number, total: number) => void;
+  readonly onRequest: (request: XMLHttpRequest | null) => void;
+  readonly targetBookId: string;
+}): Promise<UploadResult> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    input.onRequest(request);
+    request.open("POST", "/api/manage/imports");
+    request.withCredentials = true;
+    request.setRequestHeader("Accept", "application/json");
+    request.setRequestHeader("Idempotency-Key", input.idempotencyKey);
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) input.onProgress(event.loaded, event.total);
+    };
+    request.onerror = () => reject(new Error("UPLOAD_NETWORK_FAILED"));
+    request.onabort = () => reject(new Error("UPLOAD_ABORTED"));
+    request.onload = () => {
+      input.onRequest(null);
+      const body = (() => {
+        try {
+          return JSON.parse(request.responseText) as UploadResult["body"];
+        } catch {
+          return {};
+        }
+      })();
+      resolve({ body, status: request.status });
+    };
+    const body = new FormData();
+    body.set("file", input.file);
+    if (input.targetBookId) body.set("target_book_id", input.targetBookId);
+    request.send(body);
+  });
 }
 
 export function ImportUploader() {
   const [busy, setBusy] = useState(false);
-  const [jobView, setJobView] = useState<JobView | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [managedBooks, setManagedBooks] = useState<readonly ManagedBook[]>([]);
   const [message, setMessage] = useState("");
   const [importView, setImportView] = useState<ImportView | null>(null);
+  const [targetBookId, setTargetBookId] = useState("");
+  const [uploadBytes, setUploadBytes] = useState({ loaded: 0, total: 0 });
+  const [uploadState, setUploadState] = useState<
+    "accepting" | "idle" | "uploading"
+  >("idle");
+  const fileInput = useRef<HTMLInputElement>(null);
+  const idempotencyKey = useRef(crypto.randomUUID());
+  const uploadRequest = useRef<XMLHttpRequest | null>(null);
 
   async function refresh(importId: string) {
     const response = await fetch(`/api/manage/imports/${importId}`, {
@@ -37,63 +146,90 @@ export function ImportUploader() {
       credentials: "same-origin",
     });
     if (!response.ok) throw new Error("IMPORT_STATUS_FAILED");
-    const next = (await response.json()) as ImportView;
-    setImportView(next);
-    if (next.current_job_id) {
-      const jobResponse = await fetch(
-        `/api/manage/jobs/${next.current_job_id}`,
-        {
-          cache: "no-store",
-          credentials: "same-origin",
-        },
-      );
-      if (jobResponse.ok) setJobView((await jobResponse.json()) as JobView);
-    }
+    setImportView((await response.json()) as ImportView);
   }
 
   useEffect(() => {
-    if (
-      !importView ||
-      ["draft_ready", "rejected", "canceled", "expired"].includes(
-        importView.state,
-      )
-    ) {
-      return;
-    }
-    const timer = window.setInterval(() => {
-      void refresh(importView.import_id).catch(() =>
-        setMessage("状态刷新失败，请稍后重试。"),
-      );
-    }, 1_500);
-    return () => window.clearInterval(timer);
-  }, [importView]);
+    const controller = new AbortController();
+    void fetch("/api/manage/library?limit=100", {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { readonly entries?: readonly ManagedBook[] } | null) => {
+        setManagedBooks(body?.entries ?? []);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  const importJobTerminal =
+    importView?.current_job &&
+    terminalJobStates.has(importView.current_job.state);
+  const shouldPoll =
+    importView !== null &&
+    importView.preview.state !== "ready" &&
+    importView.preview.state !== "failed" &&
+    !(importJobTerminal && importView.current_job?.state !== "succeeded") &&
+    !["rejected", "canceled", "expired"].includes(importView.state);
+  usePolling(shouldPoll, async () => {
+    if (!importView) return;
+    await refresh(importView.import_id).catch(() =>
+      setMessage("状态刷新失败，请稍后重试。"),
+    );
+  });
 
   async function upload(event: FormSubmitEvent) {
     event.preventDefault();
+    if (!file || busy) return;
     setBusy(true);
     setMessage("");
-    const response = await fetch("/api/manage/imports", {
-      body: new FormData(event.currentTarget),
-      credentials: "same-origin",
-      headers: { "Idempotency-Key": crypto.randomUUID() },
-      method: "POST",
-    });
-    const body = (await response.json()) as {
-      code?: string;
-      import_id?: string;
-    };
-    if (!response.ok || !body.import_id) {
-      setMessage(`上传失败：${body.code ?? "UPLOAD_FAILED"}`);
+    setUploadBytes({ loaded: 0, total: file.size });
+    setUploadState("uploading");
+    try {
+      const result = await sendUpload({
+        file,
+        idempotencyKey: idempotencyKey.current,
+        onProgress(loaded, total) {
+          setUploadBytes((current) => ({
+            loaded: Math.max(current.loaded, loaded),
+            total,
+          }));
+          if (loaded >= total) setUploadState("accepting");
+        },
+        onRequest(request) {
+          uploadRequest.current = request;
+        },
+        targetBookId,
+      });
+      if (result.status !== 202 || !result.body.import_id) {
+        setMessage(`上传失败：${result.body.code ?? "UPLOAD_FAILED"}`);
+        setUploadState("idle");
+        return;
+      }
+      await refresh(result.body.import_id);
+      idempotencyKey.current = crypto.randomUUID();
+      setFile(null);
+      if (fileInput.current) fileInput.current.value = "";
+      setUploadState("idle");
+    } catch (error) {
+      setUploadState("idle");
+      setMessage(
+        error instanceof Error && error.message === "UPLOAD_ABORTED"
+          ? "上传已取消。"
+          : "网络中断，重新提交会安全续用本次请求标识。",
+      );
+    } finally {
+      uploadRequest.current = null;
       setBusy(false);
-      return;
     }
-    await refresh(body.import_id);
-    setBusy(false);
   }
 
   async function confirm(candidateId: string) {
-    if (!importView) return;
+    if (!importView || busy) return;
     setBusy(true);
+    setMessage("");
     const response = await fetch(
       `/api/manage/imports/${importView.import_id}/main-markdown`,
       {
@@ -112,76 +248,193 @@ export function ImportUploader() {
     setBusy(false);
   }
 
+  async function cancelBackgroundJob() {
+    const job = importView?.current_job;
+    if (!job || terminalJobStates.has(job.state)) return;
+    setBusy(true);
+    const response = await fetch(`/api/manage/jobs/${job.job_id}/cancel`, {
+      credentials: "same-origin",
+      method: "POST",
+    });
+    if (!response.ok) setMessage("无法取消后台任务，请稍后重试。");
+    else await refresh(importView.import_id);
+    setBusy(false);
+  }
+
+  const currentStage = workflowStage(uploadState, importView);
+  const uploadPercent =
+    uploadBytes.total > 0
+      ? Math.min(
+          100,
+          Math.floor((uploadBytes.loaded / uploadBytes.total) * 100),
+        )
+      : 0;
+
   return (
-    <div className="import-workspace">
-      <form className="upload-card" onSubmit={upload}>
-        <p className="eyebrow">MinerU 导入</p>
-        <h1>准备一本书</h1>
-        <p>一次上传一个 ZIP。解析、图片检查和预览都在后台完成。</p>
-        <label>
+    <div className="import-workspace grid gap-6 min-[761px]:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+      <form className={`upload-card ${managePanel}`} onSubmit={upload}>
+        <p className="eyebrow text-sm font-semibold text-emerald-800">
+          MinerU 导入
+        </p>
+        <h1 className="mt-2 text-2xl font-bold text-stone-900">准备一本书</h1>
+        <p className="mt-3 text-stone-700">
+          一包一本书 · MinerU 3.4.4 · ZIP 最大 2 GiB · 后台最长 30 分钟
+        </p>
+        <details className="mt-4 border-y border-stone-200 py-3">
+          <summary className="cursor-pointer font-medium">安全限制</summary>
+          <p className="mt-2 text-sm text-stone-600">
+            解压后最多 8 GiB、20,000
+            个文件或目录条目。符号链接、特殊文件、越界路径和不完整压缩包会被拒绝。
+          </p>
+        </details>
+        <label className={manageFieldLabel}>
           MinerU ZIP
           <input
             accept=".zip,application/zip"
+            className={manageField}
+            disabled={uploadState !== "idle"}
             name="file"
+            onChange={(event) => {
+              const next = event.currentTarget.files?.[0] ?? null;
+              setFile(next);
+              idempotencyKey.current = crypto.randomUUID();
+              setMessage("");
+              setUploadBytes({ loaded: 0, total: next?.size ?? 0 });
+            }}
+            ref={fileInput}
             required
             type="file"
           />
         </label>
-        <label>
-          更新已有书籍（可选）
-          <input min="1" name="target_book_id" type="number" />
+        <label className={manageFieldLabel}>
+          重新导入到已有书籍（可选）
+          <select
+            className={manageField}
+            disabled={uploadState !== "idle"}
+            onChange={(event) => setTargetBookId(event.currentTarget.value)}
+            value={targetBookId}
+          >
+            <option value="">创建新书</option>
+            {managedBooks.map((book) => (
+              <option key={book.book_id} value={book.book_id}>
+                {book.title}
+              </option>
+            ))}
+          </select>
         </label>
-        <button disabled={busy} type="submit">
-          {busy ? "处理中…" : "上传并分析"}
-        </button>
-        {message && <p role="status">{message}</p>}
+        <div className="upload-actions flex flex-wrap gap-2">
+          <button
+            className={managePrimaryButton}
+            disabled={!file || busy}
+            type="submit"
+          >
+            {uploadState === "uploading" ? "上传中" : "上传并分析"}
+          </button>
+          {uploadState !== "idle" && (
+            <button
+              className={manageSecondaryButton}
+              onClick={() => uploadRequest.current?.abort()}
+              type="button"
+            >
+              取消
+            </button>
+          )}
+        </div>
+        {uploadState !== "idle" && (
+          <div aria-label={`上传进度 ${uploadPercent}%`} className="mt-4">
+            <progress
+              className="h-2 w-full accent-emerald-700"
+              max={100}
+              value={uploadPercent}
+            />
+            <p className="mt-2 text-sm text-stone-600">
+              {uploadState === "accepting"
+                ? "正在安全保存并排队"
+                : `${uploadBytes.loaded.toLocaleString()} / ${uploadBytes.total.toLocaleString()} 字节 · ${uploadPercent}%`}
+            </p>
+          </div>
+        )}
+        {message && (
+          <p className="mt-3 text-sm text-red-800" role="alert">
+            {message}
+          </p>
+        )}
       </form>
 
-      {importView && (
-        <section className="status-card" aria-live="polite">
-          <h2>导入状态</h2>
-          <p>
-            <code>{importView.import_id}</code> · {importView.state}
+      <section className={`status-card ${managePanel}`} aria-live="polite">
+        <h2 className="text-lg font-bold text-stone-900">处理进度</h2>
+        <ol className="import-stages mt-4 grid list-none grid-cols-1 gap-2 p-0 min-[761px]:grid-cols-5">
+          {workflowStages.map(([key, label]) => (
+            <li
+              aria-current={currentStage === key ? "step" : undefined}
+              className={`border-t-4 pt-2 text-sm ${
+                currentStage === key
+                  ? "border-emerald-700 font-semibold text-stone-900"
+                  : "border-stone-300 text-stone-600"
+              }`}
+              data-active={currentStage === key}
+              key={key}
+            >
+              {label}
+            </li>
+          ))}
+        </ol>
+        {!importView ? (
+          <p className="mt-4 text-stone-600">
+            选择 ZIP 后，处理进度会显示在这里。
           </p>
-          {importView.error_code && (
-            <p className="diagnostic">{importView.error_code}</p>
-          )}
-          {jobView && (
-            <div className="job-progress">
-              <p>
-                后台任务：{jobView.state} · {jobView.phase} · 第{" "}
-                {jobView.attempt} 次尝试
+        ) : (
+          <>
+            {importView.error_code && (
+              <p className="diagnostic mt-4 text-red-800">
+                {importView.error_code}
               </p>
-              {Object.keys(jobView.progress).length > 0 && (
-                <dl>
-                  {Object.entries(jobView.progress).map(([label, value]) => (
-                    <div key={label}>
-                      <dt>{label}</dt>
-                      <dd>{String(value)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
-              {jobView.error_class && (
-                <p className="diagnostic">
-                  {jobView.error_class} · {jobView.error_code}
+            )}
+            {importView.current_job && (
+              <div className="job-progress mt-4">
+                <p>
+                  {importView.current_job.phase} ·{" "}
+                  {importView.current_job.progress.completed}
+                  {importView.current_job.progress.total === null
+                    ? ""
+                    : ` / ${importView.current_job.progress.total}`}{" "}
+                  {importView.current_job.progress.unit}
                 </p>
-              )}
-            </div>
-          )}
-          {importView.book_id && importView.state === "draft_ready" && (
-            <a href={`/manage/books/${importView.book_id}/preview`}>
-              打开结构预览
-            </a>
-          )}
-          <CandidateReview
-            candidates={importView.candidates}
-            confirmable={importView.state === "needs_main_confirmation"}
-            disabled={busy}
-            onConfirm={confirm}
-          />
-        </section>
-      )}
+                {importView.current_job.error_class && (
+                  <p className="diagnostic text-red-800">
+                    {importView.current_job.error_class} ·{" "}
+                    {importView.current_job.error_code}
+                  </p>
+                )}
+                {!terminalJobStates.has(importView.current_job.state) && (
+                  <button
+                    className={manageSecondaryButton}
+                    disabled={busy}
+                    onClick={() => void cancelBackgroundJob()}
+                    type="button"
+                  >
+                    取消后台处理
+                  </button>
+                )}
+              </div>
+            )}
+            {importView.preview.url && (
+              <a
+                className="mt-4 inline-flex font-semibold text-emerald-800 hover:text-emerald-900"
+                href={importView.preview.url}
+              >
+                打开出版工作台
+              </a>
+            )}
+            <CandidateReview
+              candidates={importView.candidates}
+              confirmable={importView.state === "needs_main_confirmation"}
+              disabled={busy}
+              onConfirm={confirm}
+            />
+          </>
+        )}
+      </section>
     </div>
   );
 }

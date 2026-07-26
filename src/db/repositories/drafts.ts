@@ -301,7 +301,7 @@ export class DraftRepository {
             captured_current_version_id, retry_of_job_id, attempt,
             automatic_retry_count, lease_owner, lease_until, heartbeat_at,
             phase, progress_json, error_code, error_class, error_detail_json,
-            requested_cancel_at, created_at, started_at, finished_at
+            cancellation_requested_at, created_at, started_at, finished_at
           ) VALUES (
             ?, 'build_preview', 'queued', NULL, ?, NULL, ?, ?, NULL, NULL, 1,
             0, NULL, NULL, NULL, 'queued', '{}', NULL, NULL, NULL,
@@ -420,7 +420,7 @@ export class DraftRepository {
             captured_current_version_id, retry_of_job_id, attempt,
             automatic_retry_count, lease_owner, lease_until, heartbeat_at,
             phase, progress_json, error_code, error_class, error_detail_json,
-            requested_cancel_at, created_at, started_at, finished_at
+            cancellation_requested_at, created_at, started_at, finished_at
           ) VALUES (
             ?, 'build_preview', 'queued', ?, ?, NULL, ?, ?, NULL, NULL, 1,
             0, NULL, NULL, NULL, 'queued', '{}', NULL, NULL, NULL,

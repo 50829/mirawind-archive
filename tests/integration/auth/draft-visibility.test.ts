@@ -40,6 +40,7 @@ async function hiddenResponse(
     await handler({
       locals: { session: null },
       params,
+      request: new Request(`http://localhost${path}`),
     } as never);
   } catch (cause) {
     const safe = safeErrorInputFromUnknown({
@@ -200,8 +201,22 @@ describe("draft resource visibility", () => {
         params: { importId: importedId },
       } as never)) as Response;
       expect(await importResponse.json()).toMatchObject({
-        current_job_id: jobId,
+        current_job: {
+          job_id: jobId,
+          kind: "analyze_import",
+          progress: {
+            completed: 0,
+            processed_bytes: null,
+            total: null,
+            unit: "steps",
+          },
+        },
         import_id: importedId,
+        preview: {
+          revision: null,
+          state: "unavailable",
+          url: null,
+        },
       });
     } finally {
       closeRuntimeAuthForTests();

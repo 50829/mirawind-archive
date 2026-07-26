@@ -6,6 +6,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  DatabaseBaselineIncompatibleError,
   MigrationChecksumError,
   applyMigrations,
   checksumMigration,
@@ -96,12 +97,12 @@ describe("checksummed migrations", () => {
     database.close();
   });
 
-  it("applies the locked M1 schema with FTS5 and all authority tables", async () => {
+  it("applies the sole clean baseline with FTS5 and all authority tables", async () => {
     const database = await openTemporaryDatabase();
     const result = applyMigrations(database, await loadMigrationManifest());
     expect(result).toEqual({
-      applied: [1, 2, 3, 4, 5, 6, 7],
-      current: 7,
+      applied: [1],
+      current: 1,
     });
 
     const names = (
@@ -114,6 +115,7 @@ describe("checksummed migrations", () => {
     expect(names).toEqual(
       expect.arrayContaining([
         "installation",
+        "database_baseline",
         "books",
         "source_snapshots",
         "config_revisions",
@@ -178,79 +180,42 @@ describe("checksummed migrations", () => {
     database.close();
   });
 
-  it("upgrades a v6 database with active books and a content-free tombstone schema", async () => {
+  it("rejects an old migration ledger without modifying its business schema", async () => {
     const database = await openTemporaryDatabase();
-    const manifest = await loadMigrationManifest();
-    applyMigrations(database, manifest.slice(0, 6));
-    database
-      .prepare(
-        `INSERT INTO books (
-          alias, visibility, title_cache, created_at, updated_at
-        ) VALUES ('fixture', 'private', 'Fixture', 1000, 1000)`,
-      )
-      .run();
+    database.exec(`
+      CREATE TABLE schema_migrations (
+        version INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        checksum TEXT NOT NULL,
+        applied_at INTEGER NOT NULL
+      );
+      INSERT INTO schema_migrations
+        (version, name, checksum, applied_at)
+      VALUES
+        (1, 'm1_core', '${"1".repeat(64)}', 1000);
+      CREATE TABLE books (
+        id INTEGER PRIMARY KEY,
+        title TEXT NOT NULL
+      );
+      INSERT INTO books (id, title) VALUES (1, 'Legacy');
+    `);
 
-    expect(applyMigrations(database, manifest)).toEqual({
-      applied: [7],
-      current: 7,
-    });
+    const manifest = await loadMigrationManifest();
+    expect(() => applyMigrations(database, manifest)).toThrow(
+      DatabaseBaselineIncompatibleError,
+    );
+    expect(database.prepare("SELECT * FROM books").all()).toEqual([
+      { id: 1, title: "Legacy" },
+    ]);
     expect(
       database
         .prepare(
-          "SELECT title_cache, deletion_requested_at FROM books WHERE alias = 'fixture'",
+          `SELECT COUNT(*) AS count
+           FROM sqlite_master
+           WHERE type = 'table' AND name = 'database_baseline'`,
         )
         .get(),
-    ).toEqual({ deletion_requested_at: null, title_cache: "Fixture" });
-    const tombstoneColumns = (
-      database
-        .prepare("SELECT name FROM pragma_table_info('book_deletions')")
-        .all() as { name: string }[]
-    ).map((row) => row.name);
-    expect(tombstoneColumns).not.toEqual(
-      expect.arrayContaining([
-        "title",
-        "alias",
-        "path",
-        "filename",
-        "metadata_json",
-      ]),
-    );
-    expect(database.pragma("foreign_key_check")).toEqual([]);
-    expect(applyMigrations(database, manifest)).toEqual({
-      applied: [],
-      current: 7,
-    });
-    database.close();
-  });
-
-  it("upgrades a v5 database without changing existing book lineage", async () => {
-    const database = await openTemporaryDatabase();
-    const manifest = await loadMigrationManifest();
-    applyMigrations(database, manifest.slice(0, 5));
-    database
-      .prepare(
-        `INSERT INTO installation (
-          id, admin_user_id, schema_version, created_at, updated_at
-        ) VALUES (1, NULL, 1, 1000, 1000)`,
-      )
-      .run();
-
-    expect(applyMigrations(database, manifest)).toEqual({
-      applied: [6, 7],
-      current: 7,
-    });
-    expect(
-      database.prepare("SELECT * FROM installation WHERE id = 1").get(),
-    ).toMatchObject({ created_at: 1000, id: 1, updated_at: 1000 });
-    expect(
-      database
-        .prepare("SELECT COUNT(*) AS count FROM book_version_presentations")
-        .get(),
     ).toEqual({ count: 0 });
-    expect(applyMigrations(database, manifest)).toEqual({
-      applied: [],
-      current: 7,
-    });
     database.close();
   });
 
@@ -267,16 +232,16 @@ describe("checksummed migrations", () => {
         nowMs: 1_000,
       }),
     ).toMatchObject({
-      applied: [1, 2, 3, 4, 5, 6, 7],
+      applied: [1],
       backupPath: null,
-      current: 7,
+      current: 1,
     });
     const second = await runDatabaseMigrations({
       backupDirectory,
       databasePath,
       nowMs: 2_000,
     });
-    expect(second).toMatchObject({ applied: [], current: 7 });
+    expect(second).toMatchObject({ applied: [], current: 1 });
     expect(second.backupPath).not.toBeNull();
     if (!second.backupPath) throw new Error("Expected a pre-migration backup");
     await access(second.backupPath);

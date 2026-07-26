@@ -33,74 +33,20 @@ applyResponsePolicy(Astro.response.headers, "manage");
     <meta name="robots" content="noindex, nofollow" />
     <title>导入书籍 · Mirawind</title>
   </head>
-  <body>
-    <main>
+  <body class="m-0 bg-stone-100 font-sans text-stone-800">
+    <main class="mx-auto w-[min(66rem,calc(100vw-2rem))] py-16">
       <ImportUploader client:load />
-      <p>
-        <a href="/manage/tasks">后台任务</a>
+      <p class="mt-6 text-sm text-stone-600">
+        <a
+          class="font-medium text-emerald-800 hover:text-emerald-900"
+          href="/manage/tasks">后台任务</a
+        >
         ·
-        <a href="/manage/security">Passkey 安全设置</a>
+        <a
+          class="font-medium text-emerald-800 hover:text-emerald-900"
+          href="/manage/security">Passkey 安全设置</a
+        >
       </p>
     </main>
   </body>
 </html>
-
-<style>
-  :global(*) {
-    box-sizing: border-box;
-  }
-  :global(body) {
-    margin: 0;
-    color: var(--color-stone-800);
-    background: var(--color-stone-100);
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  }
-  main {
-    width: min(66rem, calc(100vw - 2rem));
-    margin: 0 auto;
-    padding: 4rem 0;
-  }
-  :global(.import-workspace) {
-    display: grid;
-    gap: 1.5rem;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  }
-  :global(.upload-card),
-  :global(.status-card),
-  :global(.candidate) {
-    padding: 1.5rem;
-    border: 1px solid var(--color-stone-300);
-    border-radius: 1rem;
-    background: var(--color-white);
-  }
-  :global(label) {
-    display: grid;
-    gap: 0.45rem;
-    margin: 1rem 0;
-  }
-  :global(input),
-  :global(button) {
-    min-height: 2.75rem;
-    padding: 0.65rem 0.8rem;
-    font: inherit;
-  }
-  :global(button) {
-    border: 0;
-    border-radius: 0.6rem;
-    color: var(--color-white);
-    background: var(--color-emerald-800);
-    cursor: pointer;
-  }
-  :global(.candidate-list) {
-    display: grid;
-    gap: 0.8rem;
-  }
-  :global(.diagnostic) {
-    color: var(--color-red-800);
-  }
-  @media (max-width: 760px) {
-    :global(.import-workspace) {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>

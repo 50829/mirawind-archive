@@ -42,90 +42,15 @@ const initialJobs = new JobRepository(database)
     <meta name="robots" content="noindex, nofollow" />
     <title>后台任务 · Mirawind</title>
   </head>
-  <body>
-    <main>
-      <nav aria-label="管理导航"><a href="/manage">返回导入</a></nav>
+  <body class="m-0 bg-stone-100 font-sans text-stone-800">
+    <main class="mx-auto w-[min(72rem,calc(100vw-2rem))] py-8 pb-16">
+      <nav aria-label="管理导航" class="mb-8">
+        <a
+          class="font-semibold text-emerald-800 hover:text-emerald-900"
+          href="/manage">返回导入</a
+        >
+      </nav>
       <TaskMonitor client:load initialJobs={initialJobs} />
     </main>
   </body>
 </html>
-
-<style>
-  :global(*) {
-    box-sizing: border-box;
-  }
-  :global(body) {
-    margin: 0;
-    color: var(--color-stone-800);
-    background: var(--color-stone-100);
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  }
-  main {
-    width: min(72rem, calc(100vw - 2rem));
-    margin: 0 auto;
-    padding: 2rem 0 4rem;
-  }
-  nav {
-    margin-bottom: 2rem;
-  }
-  :global(.task-monitor > header),
-  :global(.task-heading),
-  :global(.task-actions) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-  }
-  :global(.task-list) {
-    display: grid;
-    gap: 1rem;
-    padding: 0;
-    list-style: none;
-  }
-  :global(.task-card) {
-    padding: 1.25rem;
-    border: 1px solid var(--color-stone-300);
-    border-radius: 1rem;
-    background: var(--color-white);
-  }
-  :global(.task-heading code) {
-    display: block;
-    margin-top: 0.4rem;
-    color: var(--color-stone-600);
-  }
-  :global(.task-heading span) {
-    padding: 0.35rem 0.65rem;
-    border-radius: 999px;
-    background: var(--color-emerald-100);
-  }
-  :global(.task-facts),
-  :global(.task-progress) {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-    gap: 0.75rem;
-  }
-  :global(dt) {
-    color: var(--color-stone-600);
-    font-size: 0.85rem;
-  }
-  :global(dd) {
-    margin: 0.2rem 0 0;
-  }
-  :global(.task-error) {
-    color: var(--color-red-800);
-  }
-  :global(button) {
-    min-height: 2.5rem;
-    padding: 0.55rem 0.8rem;
-    border: 0;
-    border-radius: 0.6rem;
-    color: var(--color-white);
-    background: var(--color-emerald-800);
-    font: inherit;
-    cursor: pointer;
-  }
-  :global(button:disabled) {
-    cursor: wait;
-    opacity: 0.6;
-  }
-</style>

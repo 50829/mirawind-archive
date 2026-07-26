@@ -221,7 +221,7 @@ describe("permanent book deletion acceptance", () => {
         nowMs: 2_000,
       });
       expect(jobs.get(indirect.id)).toMatchObject({
-        requestedCancelAtMs: 2_000,
+        cancellationRequestedAtMs: 2_000,
         state: "running",
       });
       expect(jobs.get(accepted.jobId)).toMatchObject({

@@ -5,11 +5,11 @@ import { expect, test } from "@playwright/test";
 import Database from "better-sqlite3";
 
 import {
-  e2eAdministrator,
   e2eDataRoot,
   e2eFixtureRoot,
   e2eHighMarkdown,
 } from "../helpers/global-setup.js";
+import { loginAsAdministrator } from "../helpers/e2e-login.js";
 
 async function upload(page: import("@playwright/test").Page, filename: string) {
   await page
@@ -21,22 +21,16 @@ async function upload(page: import("@playwright/test").Page, filename: string) {
 test("imports high-confidence and generic books, rejects ambiguity, and preserves the source snapshot", async ({
   page,
 }) => {
-  await page.goto("/login");
-  await page.getByText("使用备用密码", { exact: true }).click();
-  await page.getByLabel("管理员邮箱").fill(e2eAdministrator.email);
-  await page.getByLabel("备用密码").fill(e2eAdministrator.password);
-  await page.getByRole("button", { name: "使用备用密码登录" }).click();
-  await expect(page).toHaveURL(/\/manage$/u);
+  await loginAsAdministrator(page, "192.0.2.12");
 
   await upload(page, "high-confidence.zip");
-  await expect(page.getByText(/draft_ready/u)).toBeVisible({
+  await expect(page.getByRole("link", { name: "打开出版工作台" })).toBeVisible({
     timeout: 30_000,
   });
-  await page.getByRole("link", { name: "打开结构预览" }).click();
-  await expect(page.getByText("预览已就绪")).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(page.getByRole("heading", { name: "目录提议" })).toBeVisible();
+  await page.getByRole("link", { name: "打开出版工作台" }).click();
+  await expect(
+    page.getByRole("heading", { name: "E2E Cloud Book" }),
+  ).toBeVisible();
   await expect(page.locator("iframe")).toBeVisible();
   await expect(
     page.frameLocator("iframe").getByText("A durable source paragraph."),
@@ -73,19 +67,22 @@ test("imports high-confidence and generic books, rejects ambiguity, and preserve
 
   await page.goto("/manage");
   await upload(page, "generic.zip");
-  await expect(page.getByText(/needs_main_confirmation/u)).toBeVisible({
+  await expect(
+    page.getByRole("button", { name: "确认使用此文件" }),
+  ).toBeVisible({
     timeout: 30_000,
   });
   await expect(page.getByText("notes.md")).toBeVisible();
   await page.getByRole("button", { name: "确认使用此文件" }).click();
-  await expect(page.getByText(/draft_ready/u)).toBeVisible({
+  await expect(page.getByRole("link", { name: "打开出版工作台" })).toBeVisible({
     timeout: 30_000,
   });
 
   await page.goto("/manage");
   await upload(page, "ambiguous.zip");
-  await expect(page.getByText(/rejected/u)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("IMPORT_AMBIGUOUS_CANDIDATES")).toBeVisible();
+  await expect(page.getByText("IMPORT_AMBIGUOUS_CANDIDATES")).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(
     page.getByRole("button", { name: "确认使用此文件" }),
   ).toHaveCount(0);

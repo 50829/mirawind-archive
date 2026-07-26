@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+
+import { usePolling } from "@/components/manage/use-polling";
+import {
+  managePrimaryButton,
+  manageQuietText,
+} from "@/components/ui/manage-classes";
 
 import { publicationPhaseLabel } from "./publication-phase.js";
 
@@ -26,7 +32,9 @@ const terminalStates = new Set([
 ]);
 
 export function PublishPanel(props: {
+  readonly blocked?: boolean;
   readonly bookId: number;
+  readonly compact?: boolean;
   readonly configRevision: number;
   readonly initialJob?: JobStatus | null;
   readonly previewReady: boolean;
@@ -37,10 +45,11 @@ export function PublishPanel(props: {
   const [submitting, setSubmitting] = useState(false);
   const idempotencyKey = useRef(crypto.randomUUID());
 
-  useEffect(() => {
-    if (!job || terminalStates.has(job.state)) return;
-    const timer = window.setInterval(() => {
-      void fetch(`/api/manage/jobs/${job.job_id}`, {
+  usePolling(
+    Boolean(job && !terminalStates.has(job.state)),
+    async () => {
+      if (!job) return;
+      await fetch(`/api/manage/jobs/${job.job_id}`, {
         cache: "no-store",
         credentials: "same-origin",
       })
@@ -49,7 +58,7 @@ export function PublishPanel(props: {
           const status = (await response.json()) as JobStatus;
           setJob(status);
           if (status.state === "succeeded") {
-            setMessage("发布完成；新请求现在读取完整的新版本。");
+            setMessage("");
           } else if (
             status.state === "failed" ||
             status.state === "interrupted" ||
@@ -61,9 +70,9 @@ export function PublishPanel(props: {
           }
         })
         .catch(() => setMessage("发布状态刷新失败；可稍后重新打开此页面。"));
-    }, 1_500);
-    return () => window.clearInterval(timer);
-  }, [job]);
+    },
+    1_000,
+  );
 
   async function publish() {
     setSubmitting(true);
@@ -115,16 +124,26 @@ export function PublishPanel(props: {
   const canPublish =
     props.previewReady &&
     !props.previewStale &&
+    !props.blocked &&
     !submitting &&
     (!job || terminalStates.has(job.state));
 
   return (
-    <section className="publish-panel" aria-labelledby="publish-title">
-      <h2 id="publish-title">发布</h2>
-      <p className="quiet">
-        系统在后台构建并验证完整版本，成功后才原子切换；失败不会影响当前读者。
-      </p>
+    <section
+      aria-label="发布"
+      className={`publish-panel ${
+        props.compact
+          ? "publish-panel-compact flex items-center gap-2 max-[850px]:row-start-2"
+          : ""
+      }`}
+    >
+      {!props.compact && (
+        <p className={`quiet ${manageQuietText}`}>
+          系统在后台构建并验证完整版本，成功后才原子切换；失败不会影响当前读者。
+        </p>
+      )}
       <button
+        className={`${managePrimaryButton} whitespace-nowrap`}
         type="button"
         disabled={!canPublish}
         onClick={() => void publish()}
@@ -136,36 +155,66 @@ export function PublishPanel(props: {
             : "发布当前修订"}
       </button>
       {!props.previewReady && (
-        <p className="quiet">预览完成并通过校验后才能发布。</p>
+        <p className={`quiet max-w-72 ${manageQuietText}`}>
+          预览完成并通过校验后才能发布。
+        </p>
       )}
       {props.previewStale && (
-        <p className="stale">当前预览已过期，请等待最新修订重建完成。</p>
+        <p className="stale max-w-72 text-sm text-amber-800">
+          当前预览已过期，请等待最新修订重建完成。
+        </p>
       )}
       {job?.state === "succeeded" && job.publication ? (
-        <div className="publish-outcome" data-state="succeeded">
-          <p>
-            <strong>发布完成。</strong>{" "}
-            当前版本已经原子切换，新的访问会读取这一版本。
-          </p>
-          <nav aria-label="发布完成后的操作">
-            <a href={job.publication.details_url}>查看图书</a>
-            <a href={job.publication.start_url}>开始阅读</a>
-            <a href={job.publication.library_url}>返回书库</a>
-          </nav>
-        </div>
+        <nav
+          aria-label="发布后的操作"
+          className="publish-actions flex flex-wrap gap-2"
+        >
+          <a
+            className="font-semibold text-emerald-800"
+            href={job.publication.details_url}
+          >
+            查看图书
+          </a>
+          <a
+            className="font-semibold text-emerald-800"
+            href={job.publication.start_url}
+          >
+            开始阅读
+          </a>
+          <a
+            className="font-semibold text-emerald-800"
+            href={job.publication.library_url}
+          >
+            返回书库
+          </a>
+        </nav>
       ) : null}
       {job && ["canceled", "failed", "interrupted"].includes(job.state) ? (
-        <div className="publish-outcome" data-state={job.state}>
+        <div
+          className="publish-outcome mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4"
+          data-state={job.state}
+        >
           <p>
             发布未完成；上一已发布版本仍保持在线。可以检查任务原因、修订预览后再试。
           </p>
-          <nav aria-label="发布失败后的操作">
-            <a href="/manage/tasks">查看后台任务</a>
-            <a href={`/manage/books/${props.bookId}/preview`}>返回预览</a>
+          <nav aria-label="发布失败后的操作" className="flex flex-wrap gap-3">
+            <a className="font-semibold text-emerald-800" href="/manage/tasks">
+              查看后台任务
+            </a>
+            <a
+              className="font-semibold text-emerald-800"
+              href={`/manage/books/${props.bookId}/preview`}
+            >
+              返回预览
+            </a>
           </nav>
         </div>
       ) : null}
-      {message && <p role="status">{message}</p>}
+      {message && (
+        <p className="max-w-72 text-sm text-stone-700" role="status">
+          {message}
+        </p>
+      )}
     </section>
   );
 }

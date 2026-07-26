@@ -5,12 +5,14 @@ import type Database from "better-sqlite3";
 import { createOpaqueId } from "../../domain/ids.js";
 import {
   assertJobTransition,
+  assertJobPhase,
   isTerminalJobState,
   jobKinds,
   type JobKind,
   type JobState,
   type TerminalJobState,
 } from "../../jobs/state-machine.js";
+import { isJobProgress, type JobProgress } from "../../worker/protocol.js";
 
 export { jobKinds, type JobKind };
 export type JobErrorClass =
@@ -41,7 +43,7 @@ interface JobRow {
   lease_until: number | null;
   phase: string;
   progress_json: string;
-  requested_cancel_at: number | null;
+  cancellation_requested_at: number | null;
   retry_of_job_id: string | null;
   started_at: number | null;
   state: JobState;
@@ -67,8 +69,8 @@ export interface JobRecord {
   readonly leaseOwner: string | null;
   readonly leaseUntilMs: number | null;
   readonly phase: string;
-  readonly progress: Readonly<Record<string, unknown>>;
-  readonly requestedCancelAtMs: number | null;
+  readonly progress: JobProgress;
+  readonly cancellationRequestedAtMs: number | null;
   readonly retryOfJobId: string | null;
   readonly startedAtMs: number | null;
   readonly state: JobState;
@@ -103,6 +105,15 @@ function parseBoundedObject(
 }
 
 function mapJob(row: JobRow): JobRecord {
+  const parsedProgress = parseBoundedObject(row.progress_json);
+  const progress = isJobProgress(parsedProgress)
+    ? parsedProgress
+    : {
+        completed: 0,
+        processed_bytes: null,
+        total: null,
+        unit: "steps" as const,
+      };
   return {
     attempt: row.attempt,
     automaticRetryCount: row.automatic_retry_count,
@@ -122,8 +133,8 @@ function mapJob(row: JobRow): JobRecord {
     leaseOwner: row.lease_owner,
     leaseUntilMs: row.lease_until,
     phase: row.phase,
-    progress: parseBoundedObject(row.progress_json) ?? {},
-    requestedCancelAtMs: row.requested_cancel_at,
+    progress,
+    cancellationRequestedAtMs: row.cancellation_requested_at,
     retryOfJobId: row.retry_of_job_id,
     startedAtMs: row.started_at,
     state: row.state,
@@ -131,12 +142,24 @@ function mapJob(row: JobRow): JobRecord {
   };
 }
 
-function boundedJson(value: Readonly<Record<string, unknown>>): string {
+function boundedJson(value: object): string {
   const json = JSON.stringify(value);
   if (Buffer.byteLength(json, "utf8") > 65_536) {
     throw new Error("JOB_JSON_TOO_LARGE");
   }
   return json;
+}
+
+const initialProgress: JobProgress = Object.freeze({
+  completed: 0,
+  processed_bytes: null,
+  total: null,
+  unit: "steps",
+});
+
+function progressJson(value: JobProgress): string {
+  if (!isJobProgress(value)) throw new Error("JOB_PROGRESS_INVALID");
+  return boundedJson(value);
 }
 
 function validateSafeCode(value: string): void {
@@ -181,11 +204,11 @@ export function createJobRepositorySchema(database: Database.Database): void {
       lease_until INTEGER,
       heartbeat_at INTEGER,
       phase TEXT NOT NULL,
-      progress_json TEXT NOT NULL DEFAULT '{}',
+      progress_json TEXT NOT NULL DEFAULT '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}',
       error_code TEXT,
       error_class TEXT,
       error_detail_json TEXT,
-      requested_cancel_at INTEGER,
+      cancellation_requested_at INTEGER,
       created_at INTEGER NOT NULL,
       started_at INTEGER,
       finished_at INTEGER
@@ -249,6 +272,8 @@ export class JobRepository {
         }
 
         const id = createOpaqueId("job");
+        const phase = input.phase ?? "queued";
+        assertJobPhase(input.kind, phase);
         this.database
           .prepare(
             `INSERT INTO jobs (
@@ -257,7 +282,7 @@ export class JobRepository {
             captured_current_version_id, attempt, automatic_retry_count,
             phase, progress_json, created_at
           ) VALUES (
-            ?, ?, 'queued', ?, ?, ?, ?, ?, ?, 1, 0, ?, '{}', ?
+            ?, ?, 'queued', ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?
           )`,
           )
           .run(
@@ -269,7 +294,8 @@ export class JobRepository {
             input.capturedSourceId ?? null,
             input.capturedConfigRevision ?? null,
             input.capturedCurrentVersionId ?? null,
-            input.phase ?? "queued",
+            phase,
+            progressJson(initialProgress),
             nowMs,
           );
         if (operation && keySha256) {
@@ -370,9 +396,13 @@ export class JobRepository {
     readonly leaseOwner: string;
     readonly nowMs: number;
     readonly phase?: string;
-    readonly progress?: Readonly<Record<string, unknown>>;
+    readonly progress?: JobProgress;
   }): JobRecord {
-    const progress = input.progress ? boundedJson(input.progress) : null;
+    if (input.phase) {
+      const job = this.getRequired(input.jobId);
+      assertJobPhase(job.kind, input.phase);
+    }
+    const progress = input.progress ? progressJson(input.progress) : null;
     const result = this.database
       .prepare(
         `UPDATE jobs SET heartbeat_at = ?, lease_until = ?,
@@ -402,7 +432,7 @@ export class JobRepository {
           assertJobTransition(current.state, "canceled");
           this.database
             .prepare(
-              `UPDATE jobs SET state = 'canceled', requested_cancel_at = ?,
+              `UPDATE jobs SET state = 'canceled', cancellation_requested_at = ?,
              finished_at = ?, error_class = 'canceled',
              error_code = 'JOB_CANCELED', phase = 'canceled'
              WHERE id = ? AND state = 'queued'`,
@@ -416,9 +446,9 @@ export class JobRepository {
         } else {
           this.database
             .prepare(
-              `UPDATE jobs SET requested_cancel_at = ?
+              `UPDATE jobs SET cancellation_requested_at = ?
              WHERE id = ? AND state = 'running'
-               AND requested_cancel_at IS NULL`,
+               AND cancellation_requested_at IS NULL`,
             )
             .run(nowMs, id);
         }
@@ -431,14 +461,14 @@ export class JobRepository {
     readonly jobId: string;
     readonly leaseOwner: string;
     readonly nowMs: number;
-    readonly progress?: Readonly<Record<string, unknown>>;
+    readonly progress?: JobProgress;
     readonly versionId?: string;
   }): JobRecord {
     return this.completeOwned({
       ...input,
       nextState: "succeeded",
       phase: "complete",
-      progress: input.progress ?? {},
+      progress: input.progress ?? this.getRequired(input.jobId).progress,
     });
   }
 
@@ -459,7 +489,7 @@ export class JobRepository {
       errorDetail: input.errorDetail ?? {},
       nextState,
       phase: nextState,
-      progress: {},
+      progress: current.progress,
     });
     this.markDeletionCleanupFailure(
       current,
@@ -504,11 +534,12 @@ export class JobRepository {
     readonly nextState: TerminalJobState;
     readonly nowMs: number;
     readonly phase: string;
-    readonly progress: Readonly<Record<string, unknown>>;
+    readonly progress: JobProgress;
     readonly versionId?: string;
   }): JobRecord {
     const current = this.getRequired(input.jobId);
     assertJobTransition(current.state, input.nextState);
+    assertJobPhase(current.kind, input.phase);
     const result = this.database
       .prepare(
         `UPDATE jobs SET state = ?, phase = ?, progress_json = ?,
@@ -520,7 +551,7 @@ export class JobRepository {
       .run(
         input.nextState,
         input.phase,
-        boundedJson(input.progress),
+        progressJson(input.progress),
         input.errorClass ?? null,
         input.errorCode ?? null,
         input.errorDetail ? boundedJson(input.errorDetail) : null,

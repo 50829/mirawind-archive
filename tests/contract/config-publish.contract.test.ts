@@ -34,20 +34,20 @@ function at(
 }
 
 describe("configuration and atomic-publication OpenAPI contract", () => {
-  it("requires a strong ETag precondition for replacing book.yaml", async () => {
+  it("requires a strong ETag precondition for patching a draft", async () => {
     const document = await contract();
     const operation = at(
       document,
       "paths",
       "/api/manage/books/{bookId}/draft",
-      "put",
+      "patch",
     );
     const parameters = operation.parameters as readonly Record<
       string,
       unknown
     >[];
 
-    expect(operation.operationId).toBe("replaceDraftConfig");
+    expect(operation.operationId).toBe("patchDraftConfig");
     expect(parameters).toContainEqual(
       expect.objectContaining({
         in: "header",
@@ -103,15 +103,10 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
     expect(operation.operationId).toBe("reprocessDraftSource");
     expect(body).toMatchObject({
       additionalProperties: false,
-      required: [
-        "expected_config_revision",
-        "expected_source_id",
-        "original_file_id",
-        "profile",
-      ],
+      required: ["expected_config_revision", "profile"],
     });
     expect(at(body, "properties", "profile").enum).toEqual([
-      "preserve-v1",
+      "verbatim-v1",
       "zh-smart-v1",
     ]);
     expect(at(operation, "responses")).toHaveProperty("202");
@@ -145,7 +140,7 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
       `${projectRoot}src/pages/api/manage/books/[bookId]/draft.ts`,
       "utf8",
     );
-    expect(draftSource).toContain("export const PUT");
+    expect(draftSource).toContain("export const PATCH");
     await Promise.all(
       [
         "src/pages/api/manage/books/[bookId]/publish.ts",

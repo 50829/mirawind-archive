@@ -30,7 +30,7 @@ describe("isolated runtime test helpers", () => {
     const database = await openMigratedTestDatabase(dataRoot);
     cleanups.push(async () => database.close());
 
-    expect(database.schemaVersion).toBe(7);
+    expect(database.schemaVersion).toBe(1);
     expect(
       database.database
         .prepare(

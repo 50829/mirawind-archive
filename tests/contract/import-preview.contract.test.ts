@@ -93,10 +93,31 @@ describe("import and draft-preview OpenAPI contract", () => {
       additionalProperties: false,
       required: expect.arrayContaining([
         "book_id",
-        "source_id",
         "config_revision",
+        "structure",
+        "regions",
         "preview_state",
       ]),
+    });
+    expect(
+      at(document, "components", "schemas", "Draft", "properties"),
+    ).not.toHaveProperty("source_id");
+    expect(
+      at(document, "components", "schemas", "Draft", "properties"),
+    ).not.toHaveProperty("config");
+  });
+
+  it("returns the current job and matching preview in one import snapshot", async () => {
+    const document = await contract();
+    const imported = at(document, "components", "schemas", "Import");
+    expect(imported).toMatchObject({
+      additionalProperties: false,
+      required: expect.arrayContaining(["current_job", "preview"]),
+    });
+    expect(at(imported, "properties")).not.toHaveProperty("current_job_id");
+    expect(at(imported, "properties", "preview")).toMatchObject({
+      additionalProperties: false,
+      required: ["state", "revision", "url"],
     });
   });
 

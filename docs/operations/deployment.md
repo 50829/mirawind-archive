@@ -55,7 +55,7 @@ the offline interactive CLI.
 
 ## 2. First installation
 
-Build the pinned image, initialize volume ownership and apply every checksummed migration:
+Build the pinned image, initialize volume ownership and apply the current database schema:
 
 ```bash
 docker compose -f docker/compose.yaml build
@@ -86,11 +86,10 @@ Web is healthy. `data-init` and `migrate` must exit successfully. Web and worker
 `healthy`. Caddy is the only public service.
 
 The image build runs `pnpm prepare:assets` before Astro compilation. That command
-deterministically prepares both the pinned KaTeX CSS/WOFF2 closure and the versioned
-Tailwind reader stylesheet. These files are read-only application assets in production;
-Web and worker never generate renderer or style assets at runtime. A build that omits
-`public/_astro/renderers/` or `public/_astro/styles/` is incomplete and must not be
-deployed.
+deterministically prepares the pinned KaTeX CSS/WOFF2 closure and versioned reader CSS/JS.
+These files are read-only application assets in production; Web and worker never generate
+reader assets at runtime. A build that omits the generated renderer, style, or script
+closure is incomplete and must not be deployed.
 
 ## 3. Container boundary
 
@@ -138,8 +137,8 @@ Published version directories are immutable. Do not edit `book.yaml`, manifest, 
 resources or `version.json` in place. Correct source/configuration through a new import or
 revision and publish a new version.
 
-The management “重新排版 Markdown” action always reads the retained original archive and
-creates a new source snapshot plus a new v2 configuration revision. It never mutates an
+The management reprocess action always reads the retained original archive and creates a new
+source snapshot plus a new v3 configuration revision. It never mutates an
 accepted source snapshot or published version. Keep the registered original archive when
 future preprocessing revisions may be needed.
 
@@ -169,7 +168,7 @@ Stop worker first when performing offline administration. A running build receiv
 cooperative shutdown; after restart an expired lease is marked interrupted and only an
 eligible infrastructure interruption is retried, at most once.
 
-## 6. Upgrade and migration
+## 6. Upgrade and schema transition
 
 Before every upgrade, take a complete persistent-volume backup as described in
 `recovery.md`. Then:
@@ -184,10 +183,12 @@ docker compose -f docker/compose.yaml up -d
 docker compose -f docker/compose.yaml ps
 ```
 
-`migrate` acquires the schema lock, creates an online SQLite backup for an existing database,
-verifies migration checksums and applies only newer versions. Migrations are forward-only.
-Do not manually edit `schema_migrations` or attempt a down migration. If new code and data
-must be rolled back together, restore the pre-upgrade complete backup.
+`migrate` acquires the schema lock and verifies that the data root belongs to the current
+release family. Follow the release's documented schema-transition policy before replacing
+the image. Feature 006 is a clean switch: initialize a new data root and administrator,
+then re-import books through the current publishing path. Keep the old complete volume as a
+read-only rollback artifact until acceptance; do not attach it to the new image or edit
+`schema_migrations`.
 
 ## 7. Monitoring
 
@@ -214,18 +215,11 @@ Unreferenced complete version directories move to per-book quarantine; old quara
 entries are removed only after 24 hours. Retention always preserves the current and newest
 previous verified version. Failed path deletion remains visible for a later retry.
 
-Schema migration 6 adds the rebuildable `book_version_presentations` table without parsing
-book files during migration. On the first worker startup after upgrade, reconciliation
-derives missing rows from each unreclaimed immutable `book.yaml` and manifest, validates
-existing projection digests, repairs the current alias, and excludes invalid projections
-from rollback. Keep the worker running until this pass completes; public `/library` omits a
-temporarily missing projection and shows only a generic partial-availability notice.
-
-Schema migration 7 adds the irreversible `books.deletion_requested_at` barrier and the
-content-free `book_deletions` tombstone table. Web and worker must be upgraded together.
-Deletion acceptance is bounded database work; a book-scoped `reclaim` task removes files
-and then ordinary content rows. Do not start an old worker against schema 7, clear the
-barrier manually, or delete tombstone rows during a failed cleanup.
+The current schema includes the rebuildable `book_version_presentations` projection,
+irreversible `books.deletion_requested_at` barrier and content-free `book_deletions`
+tombstone. Web and worker must use the same release. Startup reconciliation validates
+projection digests and current aliases; deletion cleanup remains a book-scoped worker task.
+Do not clear deletion barriers or tombstones manually.
 
 Do not manually move quarantine entries into `versions`, delete the current version, remove
 the previous verified version, or delete FTS rows. Preserve the volume and follow

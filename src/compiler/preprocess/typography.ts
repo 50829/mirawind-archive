@@ -513,7 +513,7 @@ export function preprocessMarkdownTypography(
   profile: TypographyProfile,
 ): TypographyPreprocessResult {
   const original = decode(input);
-  if (profile === "preserve-v1") {
+  if (profile === "verbatim-v1") {
     const digest = sha256(original);
     return Object.freeze({
       markdown: original,

@@ -109,7 +109,7 @@ function cancelRelatedJobs(
   database
     .prepare(
       `UPDATE jobs
-       SET state = 'canceled', requested_cancel_at = @nowMs,
+       SET state = 'canceled', cancellation_requested_at = @nowMs,
            finished_at = @nowMs, error_class = 'canceled',
            error_code = 'JOB_CANCELED', phase = 'canceled',
            progress_json = '{}', error_detail_json = NULL
@@ -119,7 +119,7 @@ function cancelRelatedJobs(
   database
     .prepare(
       `UPDATE jobs
-       SET requested_cancel_at = COALESCE(requested_cancel_at, @nowMs)
+       SET cancellation_requested_at = COALESCE(cancellation_requested_at, @nowMs)
        WHERE state = 'running' AND ${relationship}`,
     )
     .run({ bookId, cleanupJobId, nowMs });
@@ -225,7 +225,7 @@ export function acceptBookDeletion(input: {
           captured_current_version_id, retry_of_job_id, attempt,
           automatic_retry_count, lease_owner, lease_until, heartbeat_at,
           phase, progress_json, error_code, error_class, error_detail_json,
-          requested_cancel_at, created_at, started_at, finished_at
+          cancellation_requested_at, created_at, started_at, finished_at
         ) VALUES (
           ?, 'reclaim', 'queued', NULL, ?, NULL, NULL, NULL, NULL, NULL, 1,
           0, NULL, NULL, NULL, 'deletion_pending', '{}', NULL, NULL, NULL,

@@ -2,12 +2,8 @@ import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import { isAlias, isMap, isPair, isSeq, parseDocument } from "yaml";
 
 import bookSchema from "../../docs/schemas/book.schema.json" with { type: "json" };
-import bookV1Schema from "../../docs/schemas/book.v1.schema.json" with { type: "json" };
 import { SafeApplicationError } from "../domain/errors.js";
-import {
-  currentBookSchemaVersion,
-  requireSupportedBookSchemaVersion,
-} from "./versioning.js";
+import { requireSupportedBookSchemaVersion } from "./versioning.js";
 
 export interface BookConfigDiagnostic {
   readonly instancePath: string;
@@ -44,9 +40,7 @@ ajv.addKeyword({
   schemaType: "array",
   valid: true,
 });
-ajv.addSchema(bookV1Schema);
-const validateVersionOne = ajv.compile(bookV1Schema);
-const validateVersionTwo = ajv.compile(bookSchema);
+const validateVersionThree = ajv.compile(bookSchema);
 
 function freezeDeep<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
@@ -147,17 +141,15 @@ export function validateBookConfig(
   input: unknown,
 ): Readonly<Record<string, unknown>> {
   const config = objectRecord(input);
-  const version = requireSupportedBookSchemaVersion(config.schema_version);
-  const validateSchema =
-    version === 1 ? validateVersionOne : validateVersionTwo;
-  if (!validateSchema(config)) {
+  requireSupportedBookSchemaVersion(config.schema_version);
+  if (!validateVersionThree(config)) {
     throw new BookConfigValidationError(
       "BOOK_CONFIG_INVALID",
       "The book configuration does not match its schema.",
-      diagnostics(validateSchema.errors),
+      diagnostics(validateVersionThree.errors),
     );
   }
-  if (version === 2) validateVersionTwoSemantics(config);
+  validateVersionThreeSemantics(config);
   return freezeDeep(config);
 }
 
@@ -182,7 +174,7 @@ function requireIncreasingRange(
   if (range.start_byte >= range.end_byte) semanticFailure(instancePath);
 }
 
-function validateVersionTwoSemantics(config: Record<string, unknown>): void {
+function validateVersionThreeSemantics(config: Record<string, unknown>): void {
   const source = config.source as {
     readonly main_markdown: string;
     readonly main_markdown_sha256: string;
@@ -257,33 +249,6 @@ function validateVersionTwoSemantics(config: Record<string, unknown>): void {
       }
     }
   }
-}
-
-export function migrateBookConfigToCurrent(
-  input: unknown,
-): Readonly<Record<string, unknown>> {
-  const config = validateBookConfig(input);
-  if (config.schema_version === currentBookSchemaVersion) return config;
-  const source = config.source as Readonly<Record<string, unknown>>;
-  const digest = String(source.main_markdown_sha256);
-  return validateBookConfig({
-    ...config,
-    schema_version: currentBookSchemaVersion,
-    source: {
-      ...source,
-      preprocessing: {
-        typography: {
-          input_sha256: digest,
-          output_sha256: digest,
-          profile: "preserve-v1",
-          protected_nodes: 0,
-          punctuation_converted: 0,
-          spaces_normalized: 0,
-        },
-      },
-    },
-    source_regions: [],
-  });
 }
 
 export function parseBookConfigYaml(

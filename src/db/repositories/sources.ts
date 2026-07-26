@@ -171,6 +171,20 @@ export class SourceRepository {
     return row ? mapOriginal(row) : null;
   }
 
+  findMineruOriginal(
+    bookId: number,
+    sourceId: string,
+  ): OriginalFileRecord | null {
+    const row = this.database
+      .prepare(
+        `SELECT * FROM original_files
+         WHERE book_id = ? AND source_id = ? AND role = 'mineru_zip'
+         LIMIT 1`,
+      )
+      .get(bookId, sourceId) as OriginalRow | undefined;
+    return row ? mapOriginal(row) : null;
+  }
+
   requireOriginal(id: string): OriginalFileRecord {
     const original = this.findOriginal(id);
     if (!original) throw new Error("ORIGINAL_FILE_NOT_FOUND");

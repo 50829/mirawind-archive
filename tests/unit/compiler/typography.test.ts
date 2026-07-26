@@ -77,7 +77,7 @@ describe("persisted Markdown typography preprocessing", () => {
     );
   });
 
-  it("is idempotent and preserve-v1 is byte-identical", () => {
+  it("is idempotent and verbatim-v1 is byte-identical", () => {
     const input = "\uFEFF# 中文English,第1章.\r\n";
     const first = preprocessMarkdownTypography(input, "zh-smart-v1");
     const second = preprocessMarkdownTypography(first.markdown, "zh-smart-v1");
@@ -85,7 +85,7 @@ describe("persisted Markdown typography preprocessing", () => {
     expect(second.provenance.spaces_normalized).toBe(0);
     expect(second.provenance.punctuation_converted).toBe(0);
 
-    const preserved = preprocessMarkdownTypography(input, "preserve-v1");
+    const preserved = preprocessMarkdownTypography(input, "verbatim-v1");
     expect(preserved.markdown).toBe(input);
     expect(preserved.provenance.input_sha256).toBe(
       preserved.provenance.output_sha256,

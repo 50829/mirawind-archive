@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
     !body ||
     typeof body !== "object" ||
     Array.isArray(body) ||
-    Object.keys(body).length !== 4
+    Object.keys(body).length !== 2
   ) {
     throw new SafeApplicationError(
       "REQUEST_BODY_INVALID",
@@ -40,9 +40,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   const value = body as Record<string, unknown>;
   const profile = value.profile;
   if (
-    (profile !== "preserve-v1" && profile !== "zh-smart-v1") ||
-    typeof value.original_file_id !== "string" ||
-    typeof value.expected_source_id !== "string" ||
+    (profile !== "verbatim-v1" && profile !== "zh-smart-v1") ||
     !Number.isSafeInteger(value.expected_config_revision) ||
     Number(value.expected_config_revision) < 1
   ) {
@@ -56,10 +54,8 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
     bookId,
     database,
     expectedConfigRevision: Number(value.expected_config_revision),
-    expectedSourceId: value.expected_source_id,
     layout: await getRuntimeStorageLayout(),
     nowMs: Date.now(),
-    originalFileId: value.original_file_id,
     profile: profile as TypographyProfile,
   });
   const headers = new Headers();

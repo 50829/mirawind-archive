@@ -151,12 +151,23 @@ async function seedPublishedLibraryBook(input: {
       numbering: { mode: "normalized" },
     },
     revision: 1,
-    schema_version: 1,
+    schema_version: 3,
     source: {
       main_markdown: "book.md",
       main_markdown_sha256: markdownSha256,
       original_files: [],
+      preprocessing: {
+        typography: {
+          input_sha256: markdownSha256,
+          output_sha256: markdownSha256,
+          profile: "verbatim-v1",
+          protected_nodes: 0,
+          punctuation_converted: 0,
+          spaces_normalized: 0,
+        },
+      },
     },
+    source_regions: [],
     structure: [
       {
         block_id: "blk_e2e_library_opening_0001",
@@ -189,7 +200,7 @@ async function seedPublishedLibraryBook(input: {
     bookId: book.id,
     nowMs: nowMs + 3,
     revision: 1,
-    schemaVersion: 1,
+    schemaVersion: 3,
     sourceId,
     title: config.title,
     yamlRelativePath: `books/${book.id}/draft/configs/1/book.yaml`,

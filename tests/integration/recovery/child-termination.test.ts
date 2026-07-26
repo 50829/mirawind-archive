@@ -94,7 +94,7 @@ describe("job child termination", () => {
       const executionPromise = runJobChild(input("cancel"), {
         childModulePath: fixturePath,
         onProgress(progress) {
-          if (progress.phase === "ready") ready();
+          if (progress.phase === "reconcile_storage") ready();
         },
         signal: controller.signal,
         storageRoot: root,

@@ -1,5 +1,4 @@
 ---
-
 description: "Task list template for feature implementation"
 ---
 
@@ -10,8 +9,8 @@ description: "Task list template for feature implementation"
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
 **Tests**: Automated evidence is REQUIRED for schema/parser, authorization, publication,
-recovery, cache, download, migration, and performance-critical behavior. For other behavior,
-include tests when required by the feature specification.
+recovery, cache, download, migration or clean-switch behavior, and performance-critical
+behavior. For other behavior, include tests when required by the feature specification.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -159,7 +158,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX Performance optimization across all stories
 - [ ] TXXX [P] Additional unit and integration evidence in tests/
 - [ ] TXXX Security hardening
-- [ ] TXXX Validate schema migrations, crash recovery, and publication atomicity
+- [ ] TXXX Validate the selected schema transition, crash recovery, and publication atomicity
 - [ ] TXXX Run representative and stress fixture performance benchmarks
 - [ ] TXXX Run quickstart.md validation
 

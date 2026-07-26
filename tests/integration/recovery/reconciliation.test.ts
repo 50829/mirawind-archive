@@ -39,6 +39,7 @@ async function materializeVersion(
   await mkdir(sourceRoot, { mode: 0o700, recursive: true });
   const markdown = "# Recovery chapter\n\nStable published body.";
   await writeFile(resolve(sourceRoot, "book.md"), markdown, { mode: 0o400 });
+  const markdownHash = createHash("sha256").update(markdown).digest("hex");
   const config = {
     book_id: bookId,
     metadata: { language: "en" },
@@ -47,12 +48,23 @@ async function materializeVersion(
       numbering: { mode: "normalized" },
     },
     revision: 1,
-    schema_version: 1,
+    schema_version: 3,
     source: {
       main_markdown: "book.md",
-      main_markdown_sha256: createHash("sha256").update(markdown).digest("hex"),
+      main_markdown_sha256: markdownHash,
       original_files: [],
+      preprocessing: {
+        typography: {
+          input_sha256: markdownHash,
+          output_sha256: markdownHash,
+          profile: "verbatim-v1",
+          protected_nodes: 0,
+          punctuation_converted: 0,
+          spaces_normalized: 0,
+        },
+      },
     },
+    source_regions: [],
     structure: [
       {
         block_id: "blk_reconciliation_heading_0001",
@@ -231,7 +243,7 @@ describe("startup storage and current-version reconciliation", () => {
                manifest_schema_version, manifest_sha256, compiler_version,
                renderer_version, complete_at, published_at, verified_at,
                created_by_job_id
-             ) VALUES (?, ?, ?, 1, ?, 'published', ?, 1, ?, ?, ?, 23, 23, 23, ?)`,
+             ) VALUES (?, ?, ?, 1, ?, 'published', ?, 2, ?, ?, ?, 23, 23, 23, ?)`,
           )
           .run(
             replacementVersionId,
@@ -297,7 +309,7 @@ describe("startup storage and current-version reconciliation", () => {
              state, version_rel_path, manifest_schema_version, manifest_sha256,
              compiler_version, renderer_version, complete_at, published_at,
              verified_at, created_by_job_id
-           ) VALUES (?, ?, ?, 1, ?, 'ready', ?, 1, ?, ?, ?, 27, NULL, NULL, ?)`,
+           ) VALUES (?, ?, ?, 1, ?, 'ready', ?, 2, ?, ?, ?, 27, NULL, NULL, ?)`,
         )
         .run(
           readyId,

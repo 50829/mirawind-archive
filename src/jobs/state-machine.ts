@@ -24,6 +24,67 @@ export type TerminalJobState = Extract<
   "succeeded" | "failed" | "canceled" | "interrupted"
 >;
 
+const terminalPhases = [
+  "complete",
+  "failed",
+  "canceled",
+  "interrupted",
+] as const;
+
+export const jobPhases = Object.freeze({
+  analyze_import: [
+    "queued",
+    "starting",
+    "security_check",
+    "identify_document",
+    ...terminalPhases,
+  ],
+  prepare_draft: [
+    "queued",
+    "starting",
+    "security_check",
+    "identify_document",
+    "organize_structure",
+    ...terminalPhases,
+  ],
+  build_preview: ["queued", "starting", "render_pages", ...terminalPhases],
+  build_publish: [
+    "queued",
+    "starting",
+    "render_pages",
+    "build_search",
+    "finalize_publication",
+    ...terminalPhases,
+  ],
+  verify_version: ["queued", "starting", "verify_manifest", ...terminalPhases],
+  reconcile: ["queued", "starting", "reconcile_storage", ...terminalPhases],
+  reclaim: [
+    "queued",
+    "starting",
+    "reclaim_storage",
+    "permanent_book_deletion",
+    ...terminalPhases,
+  ],
+} satisfies Readonly<Record<JobKind, readonly string[]>>);
+
+export type JobPhase = (typeof jobPhases)[JobKind][number];
+
+const knownJobPhases = new Set<string>(Object.values(jobPhases).flat());
+
+export function isKnownJobPhase(phase: string): phase is JobPhase {
+  return knownJobPhases.has(phase);
+}
+
+export function isJobPhase(kind: JobKind, phase: string): phase is JobPhase {
+  return jobPhases[kind].includes(phase as never);
+}
+
+export function assertJobPhase(kind: JobKind, phase: string): void {
+  if (!isJobPhase(kind, phase)) {
+    throw new Error(`JOB_PHASE_INVALID:${kind}:${phase}`);
+  }
+}
+
 const transitions: Readonly<Record<JobState, readonly JobState[]>> = {
   canceled: [],
   failed: [],

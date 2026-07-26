@@ -51,6 +51,7 @@ function fixture() {
     include_in_toc: index !== 2,
     starts_page: index !== 2,
   }));
+  const sourceHash = createHash("sha256").update(source).digest("hex");
   const config = {
     book_id: 1,
     publishing: {
@@ -58,12 +59,23 @@ function fixture() {
       numbering: { mode: "normalized" },
     },
     revision: 2,
-    schema_version: 1,
+    schema_version: 3,
     source: {
       main_markdown: "book.md",
-      main_markdown_sha256: createHash("sha256").update(source).digest("hex"),
+      main_markdown_sha256: sourceHash,
       original_files: [],
+      preprocessing: {
+        typography: {
+          input_sha256: sourceHash,
+          output_sha256: sourceHash,
+          profile: "verbatim-v1",
+          protected_nodes: 0,
+          punctuation_converted: 0,
+          spaces_normalized: 0,
+        },
+      },
     },
+    source_regions: [],
     structure: structures,
     title: "Test Book",
   };

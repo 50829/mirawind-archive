@@ -6,6 +6,7 @@ import { dirname } from "node:path";
 import type Database from "better-sqlite3";
 
 export interface Migration {
+  readonly baselineIdentity?: string;
   readonly checksum: string;
   readonly name: string;
   readonly sql: string;
@@ -19,6 +20,15 @@ export class MigrationChecksumError extends Error {
   }
 }
 
+export class DatabaseBaselineIncompatibleError extends Error {
+  readonly code = "DATABASE_BASELINE_INCOMPATIBLE";
+
+  constructor() {
+    super("The database belongs to an incompatible Mirawind baseline.");
+    this.name = "DatabaseBaselineIncompatibleError";
+  }
+}
+
 export function checksumMigration(sql: string): string {
   return createHash("sha256").update(sql, "utf8").digest("hex");
 }
@@ -27,15 +37,6 @@ export function applyMigrations(
   database: Database.Database,
   migrations: readonly Migration[],
 ): { readonly applied: readonly number[]; readonly current: number } {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      version INTEGER PRIMARY KEY,
-      name TEXT NOT NULL,
-      checksum TEXT NOT NULL CHECK(length(checksum) = 64),
-      applied_at INTEGER NOT NULL
-    ) STRICT
-  `);
-
   const ordered = [...migrations].sort(
     (left, right) => left.version - right.version,
   );
@@ -52,14 +53,91 @@ export function applyMigrations(
     seen.add(migration.version);
   }
 
-  const existing = database
-    .prepare("SELECT version, checksum FROM schema_migrations ORDER BY version")
-    .all() as { version: number; checksum: string }[];
+  const baseline = ordered.find((migration) => migration.baselineIdentity);
+  const schemaMigrationExists =
+    (
+      database
+        .prepare(
+          `SELECT COUNT(*) AS count
+           FROM sqlite_master
+           WHERE type = 'table' AND name = 'schema_migrations'`,
+        )
+        .get() as { count: number }
+    ).count === 1;
+  let existing: { version: number; checksum: string }[] = [];
+
+  if (baseline) {
+    if (ordered.length !== 1 || baseline.version !== 1) {
+      throw new DatabaseBaselineIncompatibleError();
+    }
+    const userTables = database
+      .prepare(
+        `SELECT name
+         FROM sqlite_master
+         WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+         ORDER BY name`,
+      )
+      .all() as { name: string }[];
+    if (!schemaMigrationExists && userTables.length > 0) {
+      throw new DatabaseBaselineIncompatibleError();
+    }
+    if (schemaMigrationExists) {
+      existing = database
+        .prepare(
+          "SELECT version, checksum FROM schema_migrations ORDER BY version",
+        )
+        .all() as { version: number; checksum: string }[];
+      const isNewBaseline =
+        existing.length === 1 &&
+        existing[0]?.version === baseline.version &&
+        existing[0]?.checksum === baseline.checksum;
+      const isEmptyDatabase =
+        existing.length === 0 &&
+        userTables.every((table) => table.name === "schema_migrations");
+      if (!isNewBaseline && !isEmptyDatabase) {
+        throw new DatabaseBaselineIncompatibleError();
+      }
+      if (isNewBaseline) {
+        if (!userTables.some((table) => table.name === "database_baseline")) {
+          throw new DatabaseBaselineIncompatibleError();
+        }
+        const marker = database
+          .prepare(
+            `SELECT identity
+             FROM database_baseline
+             WHERE id = 1`,
+          )
+          .get() as { identity: string } | undefined;
+        if (marker?.identity !== baseline.baselineIdentity) {
+          throw new DatabaseBaselineIncompatibleError();
+        }
+      }
+    }
+  } else if (schemaMigrationExists) {
+    existing = database
+      .prepare(
+        "SELECT version, checksum FROM schema_migrations ORDER BY version",
+      )
+      .all() as { version: number; checksum: string }[];
+  }
+
+  if (!schemaMigrationExists) {
+    database.exec(`
+      CREATE TABLE schema_migrations (
+        version INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        checksum TEXT NOT NULL CHECK(length(checksum) = 64),
+        applied_at INTEGER NOT NULL
+      ) STRICT
+    `);
+  }
+
   for (const applied of existing) {
     const expected = ordered.find(
       (migration) => migration.version === applied.version,
     );
     if (!expected || expected.checksum !== applied.checksum) {
+      if (baseline) throw new DatabaseBaselineIncompatibleError();
       throw new MigrationChecksumError(applied.version);
     }
   }

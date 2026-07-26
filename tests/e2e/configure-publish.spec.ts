@@ -5,66 +5,66 @@ import { expect, test } from "@playwright/test";
 import Database from "better-sqlite3";
 
 import {
-  e2eAdministrator,
   e2eDataRoot,
   e2eFixtureRoot,
   e2eOrigin,
 } from "../helpers/global-setup.js";
+import { loginAsAdministrator } from "../helpers/e2e-login.js";
 
 test("edits every M1 structure override and preserves the old version on a failed rebuild", async ({
   browser,
   page,
 }) => {
   test.setTimeout(90_000);
-  await page.goto("/login");
-  await page.getByText("使用备用密码", { exact: true }).click();
-  await page.getByLabel("管理员邮箱").fill(e2eAdministrator.email);
-  await page.getByLabel("备用密码").fill(e2eAdministrator.password);
-  await page.getByRole("button", { name: "使用备用密码登录" }).click();
-  await expect(page).toHaveURL(/\/manage$/u);
+  await loginAsAdministrator(page, "192.0.2.11");
 
   await page
     .getByLabel("MinerU ZIP")
     .setInputFiles(resolve(e2eFixtureRoot, "publish.zip"));
   await page.getByRole("button", { name: "上传并分析" }).click();
-  await expect(page.getByText(/draft_ready/u)).toBeVisible({
+  await expect(page.getByRole("link", { name: "打开出版工作台" })).toBeVisible({
     timeout: 30_000,
   });
-  await page.getByRole("link", { name: "打开结构预览" }).click();
-  await expect(page.getByText("预览已就绪")).toBeVisible({
-    timeout: 30_000,
-  });
+  await page.getByRole("link", { name: "打开出版工作台" }).click();
+  await expect(page.locator("iframe")).toBeVisible();
 
-  const row = (sourceTitle: string) =>
-    page
-      .locator(".structure-edit-list > li")
-      .filter({ hasText: `源标题：${sourceTitle}` });
-  await row("Front").getByLabel("内容角色").selectOption("frontmatter");
-  await row("Main").getByLabel("显示标题").fill("Published Main");
-  await row("Main").getByLabel("内容角色").selectOption("body");
-  await row("Details").getByLabel("显示层级").selectOption("3");
-  await row("Details").getByLabel("显示在目录").uncheck();
-  await row("Details").getByLabel("从此标题开始新页面").check();
-  await row("Appendix").getByLabel("内容角色").selectOption("appendix");
-  await row("Back").getByLabel("内容角色").selectOption("backmatter");
-  await page.getByRole("button", { name: "保存并重建预览" }).click();
+  const selectStructure = async (sourceTitle: string) => {
+    await page
+      .locator(".structure-tree")
+      .getByRole("button", { exact: true, name: sourceTitle })
+      .click();
+  };
+  const selectedEditor = page.locator(".desktop-node-editor");
+  await selectStructure("Front");
+  await selectedEditor.getByLabel("内容角色").selectOption("frontmatter");
+  await selectStructure("Main");
+  await selectedEditor.getByLabel("显示标题").fill("Published Main");
+  await selectedEditor.getByLabel("内容角色").selectOption("body");
+  await selectStructure("Details");
+  await selectedEditor.getByLabel("显示层级").selectOption("3");
+  await selectedEditor.getByLabel("显示在目录").uncheck();
+  await selectedEditor.getByLabel("从此标题开始新页面").check();
+  await selectStructure("Appendix");
+  await selectedEditor.getByLabel("内容角色").selectOption("appendix");
+  await selectStructure("Back");
+  await selectedEditor.getByLabel("内容角色").selectOption("backmatter");
+  await page.getByRole("button", { name: "保存并重建" }).click();
   await expect(
-    page.getByText("配置未保存。请检查层级、角色和诊断信息。"),
+    page.getByText("修改未保存，请检查层级、角色和诊断信息。"),
   ).toBeVisible();
 
-  await row("Details").getByLabel("显示层级").selectOption("2");
-  await page.getByRole("button", { name: "保存并重建预览" }).click();
-  await expect(page.getByText(/配置修订 2/u)).toBeVisible();
-  await expect(page.getByText("预览已就绪")).toBeVisible({
+  await selectStructure("Details");
+  await selectedEditor.getByLabel("显示层级").selectOption("2");
+  await page.getByRole("button", { name: "保存并重建" }).click();
+  await expect(page.getByText("正在构建预览")).toBeVisible();
+  await expect(page.getByRole("button", { name: "发布当前修订" })).toBeEnabled({
     timeout: 30_000,
   });
 
   await page.getByRole("button", { name: "发布当前修订" }).click();
-  await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: "发布完成；新请求现在读取完整的新版本。" }),
-  ).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("link", { name: "开始阅读" })).toBeVisible({
+    timeout: 60_000,
+  });
   await expect(page.getByRole("link", { name: "查看图书" })).toHaveAttribute(
     "href",
     /\/books\/[a-z0-9-]+|\/books\/[1-9][0-9]*/u,

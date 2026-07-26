@@ -85,9 +85,9 @@ describe("global Tailwind style system", () => {
     );
     const css = await readFile(outputPath, "utf8");
 
-    expect(readerStylesheetIdentity).toBe("mirawind-reader-v1-tailwind-4.3.3");
+    expect(readerStylesheetIdentity).toBe("mirawind-reader-v2-tailwind-4.3.3");
     expect(readerStylesheetUrl).toBe(
-      "/_astro/styles/mirawind-reader-v1-tailwind-4.3.3.css",
+      "/reader-assets/styles/mirawind-reader-v2-tailwind-4.3.3.css",
     );
     expect(css).toContain(".reader-layout");
     expect(css).toContain("var(--color-emerald-800)");

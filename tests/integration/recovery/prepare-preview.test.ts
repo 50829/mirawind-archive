@@ -95,6 +95,7 @@ describe("prepare_draft and build_preview handlers", () => {
         ],
         sourceRegions: [
           {
+            applied: true,
             disposition: "reference_only",
             entries: expect.arrayContaining([
               expect.objectContaining({ reference_level: 1 }),
@@ -147,7 +148,7 @@ describe("prepare_draft and build_preview handlers", () => {
 
       expect(acceptedMarkdown).toContain("中文与 English 排版");
       expect(parsedConfig).toMatchObject({
-        schema_version: 2,
+        schema_version: 3,
         source: {
           main_markdown_sha256: finalized.snapshot.source.mainMarkdownSha256,
           preprocessing: {
@@ -159,6 +160,7 @@ describe("prepare_draft and build_preview handlers", () => {
         },
         source_regions: [
           {
+            applied: true,
             disposition: "reference_only",
             kind: "printed_toc",
             source_path: finalized.snapshot.source.mainMarkdownPath,
@@ -250,7 +252,7 @@ describe("prepare_draft and build_preview handlers", () => {
       expect(parsedConfig).toMatchObject({
         book_id: book.id,
         revision: 1,
-        schema_version: 2,
+        schema_version: 3,
         source: expect.objectContaining({
           preprocessing: {
             typography: expect.objectContaining({
@@ -328,10 +330,10 @@ describe("prepare_draft and build_preview handlers", () => {
         /Prepared Book[\s\S]*class="katex"[\s\S]*\/assets\/res_/u,
       );
       expect(`${firstPage}\n${secondPage}`).toContain(
-        'href="/_astro/renderers/semantic-html-v3-katex-0.18.1/katex.css"',
+        'href="/reader-assets/renderers/semantic-html-v4-katex-0.18.1/katex.css"',
       );
       expect(`${firstPage}\n${secondPage}`).toContain(
-        'href="/_astro/styles/mirawind-reader-v1-tailwind-4.3.3.css"',
+        'href="/reader-assets/styles/mirawind-reader-v2-tailwind-4.3.3.css"',
       );
       expect(
         JSON.parse(

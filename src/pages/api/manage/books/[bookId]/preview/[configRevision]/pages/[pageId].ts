@@ -5,10 +5,14 @@ import type { APIRoute } from "astro";
 
 import { DraftRepository } from "@/db/repositories/drafts";
 import { SafeApplicationError } from "@/domain/errors";
+import { authorizePreviewHtmlResources } from "@/http/authorization/preview-resource";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { resolveContainedPath } from "@/storage/path-resolver";
-import { getRuntimeStorageLayout } from "@/storage/runtime";
+import {
+  getRuntimeEnvironment,
+  getRuntimeStorageLayout,
+} from "@/storage/runtime";
 
 export const prerender = false;
 
@@ -18,7 +22,7 @@ function positiveInteger(value: string | undefined): number | null {
 }
 
 export const GET: APIRoute = async ({ locals, params }) => {
-  const { database } = requireRuntimeAdministrator(locals.session, {
+  const { database, session } = requireRuntimeAdministrator(locals.session, {
     hideExistence: true,
   });
   const bookId = positiveInteger(params.bookId);
@@ -31,8 +35,16 @@ export const GET: APIRoute = async ({ locals, params }) => {
       404,
     );
   }
-  const preview = new DraftRepository(database).findPreview(bookId, revision);
-  if (preview?.state !== "ready" || !preview.previewRelativePath) {
+  const drafts = new DraftRepository(database);
+  const book = drafts.findBook(bookId);
+  const preview = drafts.findPreview(bookId, revision);
+  if (
+    !session ||
+    book?.draftConfigRevision !== revision ||
+    book.readyPreviewRevision !== revision ||
+    preview?.state !== "ready" ||
+    !preview.previewRelativePath
+  ) {
     throw new SafeApplicationError(
       "NOT_FOUND",
       "The preview was not found.",
@@ -57,7 +69,32 @@ export const GET: APIRoute = async ({ locals, params }) => {
       404,
     );
   }
-  const headers = new Headers({ "Content-Type": "text/html; charset=utf-8" });
+  html = authorizePreviewHtmlResources({
+    authSecret: getRuntimeEnvironment().authSecret,
+    bookId,
+    html,
+    nowMs: Date.now(),
+    revision,
+    session,
+  });
+  const publicOrigin = getRuntimeEnvironment().publicOrigin;
+  const headers = new Headers({
+    "Content-Security-Policy": [
+      "default-src 'none'",
+      "base-uri 'none'",
+      `font-src ${publicOrigin} data:`,
+      "form-action 'none'",
+      `frame-ancestors ${publicOrigin}`,
+      `img-src ${publicOrigin} data:`,
+      "object-src 'none'",
+      `script-src ${publicOrigin}`,
+      `style-src ${publicOrigin} 'unsafe-inline'`,
+    ].join("; "),
+    "Content-Type": "text/html; charset=utf-8",
+    "Cross-Origin-Resource-Policy": "cross-origin",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+  });
   applyResponsePolicy(headers, "draft");
   return new Response(html, { headers });
 };

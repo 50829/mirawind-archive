@@ -142,7 +142,7 @@ describe("permanent book cleanup", () => {
           `INSERT INTO config_revisions (
             book_id, revision, source_id, schema_version,
             yaml_rel_path, yaml_sha256, created_at
-          ) VALUES (?, 1, ?, 2, ?, ?, 1200)`,
+          ) VALUES (?, 1, ?, 3, ?, ?, 1200)`,
         )
         .run(
           book.id,
@@ -193,7 +193,7 @@ describe("permanent book cleanup", () => {
             state, version_rel_path, manifest_schema_version, manifest_sha256,
             compiler_version, renderer_version, complete_at, published_at,
             verified_at, created_by_job_id, reclaimed_at
-          ) VALUES (?, ?, ?, 1, NULL, 'published', ?, 1, ?,
+          ) VALUES (?, ?, ?, 1, NULL, 'published', ?, 2, ?,
                     'fixture', 'fixture', 1500, 1500, 1500, ?, NULL)`,
         )
         .run(

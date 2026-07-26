@@ -64,12 +64,23 @@ describe("ready preview publication identity", () => {
           numbering: { mode: "normalized" },
         },
         revision: 1,
-        schema_version: 1,
+        schema_version: 3,
         source: {
           main_markdown: "book.md",
           main_markdown_sha256: source.mainMarkdownSha256,
           original_files: [],
+          preprocessing: {
+            typography: {
+              input_sha256: source.mainMarkdownSha256,
+              output_sha256: source.mainMarkdownSha256,
+              profile: "verbatim-v1",
+              protected_nodes: 0,
+              punctuation_converted: 0,
+              spaces_normalized: 0,
+            },
+          },
         },
+        source_regions: [],
         structure: [
           {
             block_id: "blk_preview_identity_0001",
@@ -96,7 +107,7 @@ describe("ready preview publication identity", () => {
         bookId: book.id,
         nowMs: 4,
         revision: 1,
-        schemaVersion: 1,
+        schemaVersion: 3,
         sourceId,
         title: "Preview identity",
         yamlRelativePath: `books/${book.id}/draft/configs/1/book.yaml`,

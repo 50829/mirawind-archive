@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mirawind.local/schemas/book.schema.json",
-  "title": "Mirawind book.yaml schema v2",
+  "title": "Mirawind book.yaml schema v3",
   "description": "Portable publishing configuration. It must not contain body text or private reading data.",
   "type": "object",
   "additionalProperties": false,
@@ -17,7 +17,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 2
+      "const": 3
     },
     "revision": {
       "type": "integer",
@@ -33,16 +33,16 @@
       "maxLength": 500
     },
     "alias": {
-      "$ref": "book.v1.schema.json#/$defs/structureNode/properties/alias"
+      "$ref": "#/$defs/structureNode/properties/alias"
     },
     "metadata": {
-      "$ref": "book.v1.schema.json#/$defs/metadata"
+      "$ref": "#/$defs/metadata"
     },
     "source": {
       "$ref": "#/$defs/source"
     },
     "publishing": {
-      "$ref": "book.v1.schema.json#/$defs/publishing"
+      "$ref": "#/$defs/publishing"
     },
     "source_regions": {
       "type": "array",
@@ -55,16 +55,88 @@
       "type": "array",
       "description": "Heading overrides in Markdown source order, including reference-only regions.",
       "items": {
-        "$ref": "book.v1.schema.json#/$defs/structureNode"
+        "$ref": "#/$defs/structureNode"
       },
       "maxItems": 20000
     }
   },
   "$defs": {
-    "counter": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 2147483647
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "blockId": {
+      "type": "string",
+      "pattern": "^blk_[A-Za-z0-9_-]{16,80}$"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subtitle": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "authors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "uniqueItems": true,
+          "maxItems": 100
+        },
+        "contributors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "uniqueItems": true,
+          "maxItems": 100
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "language": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+        },
+        "publisher": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "year": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9999
+        },
+        "edition": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "isbn_10": {
+          "type": "string",
+          "pattern": "^[0-9]{9}[0-9X]$"
+        },
+        "isbn_13": {
+          "type": "string",
+          "pattern": "^[0-9]{13}$"
+        },
+        "cover_resource_id": {
+          "type": "string",
+          "pattern": "^res_[A-Za-z0-9_-]{16,80}$"
+        }
+      }
     },
     "source": {
       "type": "object",
@@ -77,15 +149,15 @@
       ],
       "properties": {
         "main_markdown": {
-          "$ref": "book.v1.schema.json#/$defs/relativePath"
+          "$ref": "#/$defs/relativePath"
         },
         "main_markdown_sha256": {
-          "$ref": "book.v1.schema.json#/$defs/sha256"
+          "$ref": "#/$defs/sha256"
         },
         "original_files": {
           "type": "array",
           "items": {
-            "$ref": "book.v1.schema.json#/$defs/originalFile"
+            "$ref": "#/$defs/originalFile"
           },
           "maxItems": 100
         },
@@ -94,12 +166,123 @@
         }
       }
     },
-    "preprocessing": {
+    "originalFile": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "typography"
+        "id",
+        "role",
+        "path",
+        "filename",
+        "media_type",
+        "size",
+        "sha256"
       ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^file_[A-Za-z0-9_-]{16,80}$"
+        },
+        "role": {
+          "enum": ["mineru_zip", "pdf", "epub", "image_archive", "other"]
+        },
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483648
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "publishing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numbering", "code"],
+      "properties": {
+        "numbering": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": {
+              "enum": ["normalized", "preserve"]
+            }
+          }
+        },
+        "code": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["line_numbers"],
+          "properties": {
+            "line_numbers": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "structureNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "include_in_toc",
+        "display_level",
+        "starts_page"
+      ],
+      "properties": {
+        "block_id": {
+          "$ref": "#/$defs/blockId"
+        },
+        "include_in_toc": {
+          "type": "boolean"
+        },
+        "display_title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "display_level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "starts_page": {
+          "type": "boolean"
+        },
+        "role": {
+          "enum": ["frontmatter", "body", "appendix", "backmatter"]
+        },
+        "alias": {
+          "type": "string",
+          "pattern": "^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "maxLength": 120
+        }
+      }
+    },
+    "counter": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647
+    },
+    "preprocessing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["typography"],
       "properties": {
         "typography": {
           "$ref": "#/$defs/typographyProvenance"
@@ -119,16 +302,13 @@
       ],
       "properties": {
         "profile": {
-          "enum": [
-            "preserve-v1",
-            "zh-smart-v1"
-          ]
+          "enum": ["verbatim-v1", "zh-smart-v1"]
         },
         "input_sha256": {
-          "$ref": "book.v1.schema.json#/$defs/sha256"
+          "$ref": "#/$defs/sha256"
         },
         "output_sha256": {
-          "$ref": "book.v1.schema.json#/$defs/sha256"
+          "$ref": "#/$defs/sha256"
         },
         "spaces_normalized": {
           "$ref": "#/$defs/counter"
@@ -144,11 +324,7 @@
     "byteRange": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "start_byte",
-        "end_byte",
-        "sha256"
-      ],
+      "required": ["start_byte", "end_byte", "sha256"],
       "properties": {
         "start_byte": {
           "type": "integer",
@@ -161,17 +337,14 @@
           "maximum": 268435456
         },
         "sha256": {
-          "$ref": "book.v1.schema.json#/$defs/sha256"
+          "$ref": "#/$defs/sha256"
         }
       }
     },
     "sourceRegionEntry": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "range",
-        "reference_level"
-      ],
+      "required": ["range", "reference_level"],
       "properties": {
         "range": {
           "$ref": "#/$defs/byteRange"
@@ -182,7 +355,7 @@
           "maximum": 4
         },
         "body_heading_block_id": {
-          "$ref": "book.v1.schema.json#/$defs/blockId"
+          "$ref": "#/$defs/blockId"
         }
       }
     },
@@ -191,6 +364,7 @@
       "additionalProperties": false,
       "required": [
         "region_id",
+        "applied",
         "kind",
         "disposition",
         "source_path",
@@ -199,6 +373,9 @@
         "entries"
       ],
       "properties": {
+        "applied": {
+          "type": "boolean"
+        },
         "region_id": {
           "type": "string",
           "pattern": "^region_[A-Za-z0-9_-]{16,80}$"
@@ -210,10 +387,10 @@
           "const": "reference_only"
         },
         "source_path": {
-          "$ref": "book.v1.schema.json#/$defs/relativePath"
+          "$ref": "#/$defs/relativePath"
         },
         "source_sha256": {
-          "$ref": "book.v1.schema.json#/$defs/sha256"
+          "$ref": "#/$defs/sha256"
         },
         "range": {
           "$ref": "#/$defs/byteRange"
@@ -240,7 +417,7 @@
     "structure entries must reference all source heading blocks in source order",
     "active display levels must form a continuous valid hierarchy",
     "reference-only regions cannot remove an actively referenced definition or footnote",
-    "unknown properties are rejected for schema_version 2",
+    "unknown properties are rejected for schema_version 3",
     "body text and private notes, annotations, bookmarks, or progress are forbidden"
   ]
 }

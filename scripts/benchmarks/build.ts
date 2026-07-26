@@ -515,7 +515,7 @@ async function benchmarkFixture(
       kind: "build_publish",
       nowMs: Date.now(),
     });
-    const published = await waitForJob(jobs, publish.id, deadline);
+    await waitForJob(jobs, publish.id, deadline);
     const current = drafts.requireBook(book.id);
     if (!current.currentVersionId || current.visibility !== "public") {
       throw new Error("BENCHMARK_PUBLICATION_MISSING");
@@ -558,17 +558,20 @@ async function benchmarkFixture(
     return Object.freeze({
       archive: {
         compressed_bytes: fixture.sizeBytes,
-        entries: analyze?.progress.entries ?? null,
-        extracted_bytes: analyze?.progress.totalUncompressedBytes ?? null,
-        files: analyze?.progress.files ?? null,
+        entries:
+          analyze?.progress.unit === "items"
+            ? analyze.progress.completed
+            : null,
+        extracted_bytes: analyze?.progress.processed_bytes ?? null,
+        files: null,
         sha256: fixture.sha256,
       },
       compiler_output: {
         blocks: Object.keys(
           (manifest.blocks as Record<string, unknown> | undefined) ?? {},
         ).length,
-        bytes: published.progress.output_bytes ?? null,
-        files: published.progress.output_files ?? null,
+        bytes: null,
+        files: null,
         pages: Array.isArray(manifest.pages) ? manifest.pages.length : null,
         resources: Object.keys(
           (manifest.resources as Record<string, unknown> | undefined) ?? {},
@@ -582,10 +585,10 @@ async function benchmarkFixture(
       fixture_id: fixture.id,
       fixture_type: fixture.type,
       fts: {
-        build_ms: published.progress.fts_build_ms ?? null,
-        rows: published.progress.search_fts_rows ?? null,
-        short_rows: published.progress.search_short_rows ?? null,
-        spool_bytes: published.progress.search_spool_bytes ?? null,
+        build_ms: null,
+        rows: null,
+        short_rows: null,
+        spool_bytes: null,
       },
       memory: {
         peak_process_tree_rss_bytes: memory.peakProcessTreeRssBytes,

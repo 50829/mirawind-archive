@@ -73,14 +73,19 @@ describe("two real worker connections sharing one SQLite queue", () => {
         jobId: firstJob.id,
         leaseOwner: "worker-a",
         nowMs: 13_000,
-        phase: "rendering",
-        progress: { completed: 12, total: 40 },
+        phase: "render_pages",
+        progress: {
+          completed: 12,
+          processed_bytes: null,
+          total: 40,
+          unit: "pages",
+        },
       }),
     ).toMatchObject({
       heartbeatAtMs: 13_000,
       leaseUntilMs: 73_000,
-      phase: "rendering",
-      progress: { completed: 12, total: 40 },
+      phase: "render_pages",
+      progress: { completed: 12, total: 40, unit: "pages" },
     });
     expect(secondWorker.interruptExpired({ nowMs: 73_000 })).toEqual([]);
     expect(secondWorker.interruptExpired({ nowMs: 73_001 })).toEqual([

@@ -13,11 +13,8 @@ import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin"
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
 import { requireMutationOrigin } from "@/http/origin";
 import { readBoundedJson } from "@/http/json-body";
-import {
-  migrateBookConfigToCurrent,
-  parseBookConfigYaml,
-} from "@/schemas/book-config";
-import { replaceDraftConfig } from "@/services/config-revisions";
+import { parseBookConfigYaml } from "@/schemas/book-config";
+import { patchDraftConfig } from "@/services/config-revisions";
 import { resolveContainedPath } from "@/storage/path-resolver";
 import {
   getRuntimeEnvironment,
@@ -58,6 +55,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
     await resolveContainedPath(layout.root, config.yamlRelativePath),
     "utf8",
   );
+  const configValue = parseBookConfigYaml(configYaml);
   const readyRevision = book.readyPreviewRevision;
   const readyPreview = readyRevision
     ? drafts.findPreview(bookId, readyRevision)
@@ -65,7 +63,11 @@ export const GET: APIRoute = async ({ locals, params }) => {
   const currentPreview = drafts.findPreview(bookId, book.draftConfigRevision);
   let previewModel: Record<string, unknown> | null = null;
   let diagnostics: readonly SafeDiagnostic[] = [];
-  if (readyPreview?.state === "ready" && readyPreview.previewRelativePath) {
+  if (
+    readyRevision === book.draftConfigRevision &&
+    readyPreview?.state === "ready" &&
+    readyPreview.previewRelativePath
+  ) {
     const previewRoot = await resolveContainedPath(
       layout.root,
       readyPreview.previewRelativePath,
@@ -105,9 +107,19 @@ export const GET: APIRoute = async ({ locals, params }) => {
   return Response.json(
     {
       book_id: book.id,
-      config: migrateBookConfigToCurrent(parseBookConfigYaml(configYaml)),
       config_revision: config.revision,
       diagnostics,
+      regions: (
+        configValue.source_regions as readonly {
+          readonly applied: boolean;
+          readonly entries: readonly unknown[];
+          readonly region_id: string;
+        }[]
+      ).map((region) => ({
+        applied: region.applied,
+        entry_count: region.entries.length,
+        region_id: region.region_id,
+      })),
       preview:
         previewModel === null
           ? null
@@ -127,13 +139,14 @@ export const GET: APIRoute = async ({ locals, params }) => {
       preview_state:
         currentPreview?.state ??
         (book.draftConfigRevision ? "building" : "failed"),
-      source_id: book.draftSourceId,
+      structure: configValue.structure,
+      title: book.title,
     },
     { headers },
   );
 };
 
-export const PUT: APIRoute = async ({ locals, params, request }) => {
+export const PATCH: APIRoute = async ({ locals, params, request }) => {
   const { database } = requireRuntimeAdministrator(locals.session);
   requireMutationOrigin(request, getRuntimeEnvironment().publicOrigin);
   const bookId = positiveInteger(params.bookId);
@@ -144,13 +157,13 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       404,
     );
   }
-  const result = await replaceDraftConfig({
+  const result = await patchDraftConfig({
     bookId,
-    config: await readBoundedJson(request),
     database,
     expectedEtag: request.headers.get("if-match"),
     layout: await getRuntimeStorageLayout(),
     nowMs: Date.now(),
+    patch: await readBoundedJson(request),
   });
   const headers = new Headers({ ETag: result.etag });
   applyResponsePolicy(headers, "private-api");

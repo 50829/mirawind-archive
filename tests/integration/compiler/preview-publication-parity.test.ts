@@ -63,7 +63,7 @@ describe("preview and publication semantic parity", () => {
           numbering: { mode: "normalized" },
         },
         revision: 1,
-        schema_version: 2,
+        schema_version: 3,
         source: {
           main_markdown: "book.md",
           main_markdown_sha256: sourceSha256,
@@ -72,7 +72,7 @@ describe("preview and publication semantic parity", () => {
             typography: {
               input_sha256: sourceSha256,
               output_sha256: sourceSha256,
-              profile: "preserve-v1",
+              profile: "verbatim-v1",
               protected_nodes: 0,
               punctuation_converted: 0,
               spaces_normalized: 0,
