@@ -110,7 +110,7 @@ describe("configured document preparation", () => {
       "2.1",
       "2.2",
     ]);
-    expect(configured.pages).toHaveLength(6);
+    expect(configured.pages).toHaveLength(2);
     expect(configured.identity).toEqual(repeated.identity);
     expect(configured.identity).toMatchObject({
       compiler_version: "compiler-v4",

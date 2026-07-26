@@ -50,11 +50,11 @@ late-index, duplicate/missing and no-contents books produce exact candidate and 
 **Independent gate**: all-H2 Part/Chapter/decimal/Appendix and body-only/front-back fixtures
 produce continuous h1-h4 and exact independent split decisions.
 
-- [ ] T025 Add failing semantic-kind/context hierarchy tests in `tests/unit/compiler/structure-proposal.test.ts`
-- [ ] T026 Add failing body-only numbered and unnumbered front/back inclusion tests
-- [ ] T027 Add failing Part/adjacent-first-Chapter/later-Chapter/Appendix split tests
-- [ ] T028 Implement semantic hierarchy precedence and duplicate-safe evidence lookup
-- [ ] T029 Implement independent major-unit split pass and gap/title-only suppression
+- [x] T025 Add failing semantic-kind/context hierarchy tests in `tests/unit/compiler/structure-proposal.test.ts`
+- [x] T026 Add failing body-only numbered and unnumbered front/back inclusion tests
+- [x] T027 Add failing Part/adjacent-first-Chapter/later-Chapter/Appendix split tests
+- [x] T028 Implement semantic hierarchy precedence and duplicate-safe evidence lookup
+- [x] T029 Implement independent major-unit split pass and gap/title-only suppression
 
 ## Phase 6: Protected preprocessing
 

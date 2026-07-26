@@ -48,7 +48,7 @@ export interface PrintedContentsDetection {
   readonly candidates: readonly PrintedContentsCandidate[];
 }
 
-interface NumberingEvidence {
+export interface PrintedHeadingEvidence {
   readonly kind: "appendix" | "chapter" | "decimal" | "part";
   readonly key: string;
   readonly level: number;
@@ -57,7 +57,7 @@ interface NumberingEvidence {
 interface ExtractedEntry {
   readonly bodyHeadingBlockId?: string;
   readonly normalizedTitle: string;
-  readonly numbering?: NumberingEvidence;
+  readonly numbering?: PrintedHeadingEvidence;
   readonly range: {
     readonly end_byte: number;
     readonly sha256: string;
@@ -109,7 +109,9 @@ function plainTitle(value: string): string {
     .normalize("NFKC");
 }
 
-function numberingEvidence(value: string): NumberingEvidence | undefined {
+export function inferPrintedHeadingEvidence(
+  value: string,
+): PrintedHeadingEvidence | undefined {
   const plain = plainTitle(value)
     .replace(/[．。]/gu, ".")
     .replace(/\s*\.\s*/gu, ".");
@@ -148,7 +150,7 @@ function numberingEvidence(value: string): NumberingEvidence | undefined {
 }
 
 export function inferPrintedReferenceLevel(value: string): number | undefined {
-  return numberingEvidence(value)?.level;
+  return inferPrintedHeadingEvidence(value)?.level;
 }
 
 export function inferPrintedReferenceLevels(
@@ -158,7 +160,7 @@ export function inferPrintedReferenceLevels(
   let previousLevel = 0;
   return Object.freeze(
     values.map((value) => {
-      const numbering = numberingEvidence(value);
+      const numbering = inferPrintedHeadingEvidence(value);
       let level: number;
       if (numbering?.kind === "part") {
         insidePart = true;
@@ -226,7 +228,7 @@ function printedPageEvidence(
 function normalizedTitle(value: string): string {
   const plain = plainTitle(value);
   const withoutPage = printedPageEvidence(plain)?.title ?? plain;
-  const numbering = numberingEvidence(withoutPage);
+  const numbering = inferPrintedHeadingEvidence(withoutPage);
   const withoutNumber = numbering
     ? withoutPage.slice(
         /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|chap\.?)\s*[0-9ivxlcdm]+|part\s*[0-9ivxlcdm]+|附录\s*[A-Za-z0-9一二三四五六七八九十]*|\d+(?:\.\d+){0,3})/iu.exec(
@@ -261,7 +263,7 @@ function rootTitle(node: TransientDocumentNode): string {
 
 function contextualLevel(
   title: string,
-  numbering: NumberingEvidence | undefined,
+  numbering: PrintedHeadingEvidence | undefined,
   previousLevel: number,
 ): number {
   if (numbering) return numbering.level;
@@ -293,7 +295,7 @@ function lineEntries(input: {
   let previousLevel = input.previousLevel;
   for (const line of blockSource.split(/\n/u)) {
     const plain = plainTitle(line);
-    const numbering = numberingEvidence(plain);
+    const numbering = inferPrintedHeadingEvidence(plain);
     const hasPrintedPage = printedPageEvidence(plain) !== undefined;
     const hasDotLeader = dotLeader.test(plain);
     const plainCandidate =
@@ -354,7 +356,7 @@ function similarity(left: string, right: string): number {
 
 function matchScore(entry: ExtractedEntry, heading: NormalizedHeading): number {
   const headingTitle = normalizedTitle(heading.sourceTitle);
-  const headingNumber = numberingEvidence(heading.sourceTitle);
+  const headingNumber = inferPrintedHeadingEvidence(heading.sourceTitle);
   const titleScore = similarity(entry.normalizedTitle, headingTitle);
   const numberEqual =
     entry.numbering &&
@@ -390,7 +392,7 @@ function monotonicMatches(
   for (const [index, heading] of headings.entries()) {
     const title = normalizedTitle(heading.sourceTitle);
     exactHeadings.set(title, [...(exactHeadings.get(title) ?? []), index]);
-    const number = numberingEvidence(heading.sourceTitle);
+    const number = inferPrintedHeadingEvidence(heading.sourceTitle);
     if (number) {
       numberedHeadings.set(number.key, [
         ...(numberedHeadings.get(number.key) ?? []),
@@ -576,7 +578,8 @@ function monotonicMatches(
     if (!chosen || !entry || !heading) continue;
     const exactNumber = Boolean(
       entry.numbering &&
-      entry.numbering.key === numberingEvidence(heading.sourceTitle)?.key,
+      entry.numbering.key ===
+        inferPrintedHeadingEvidence(heading.sourceTitle)?.key,
     );
     if (
       !exactNumber &&
@@ -618,13 +621,14 @@ function layoutLevels(
   if (!evidence || evidence.records.length === 0) return new Map();
   const rows = reconstructPrintedLayoutRows(evidence).filter(
     (record) =>
-      numberingEvidence(record.text) || printedPageEvidence(record.text),
+      inferPrintedHeadingEvidence(record.text) ||
+      printedPageEvidence(record.text),
   );
   const inferredLevels = inferPrintedReferenceLevels(
     rows.map((record) => record.text),
   );
   const explicit = rows.flatMap((record, index) => {
-    const number = numberingEvidence(record.text);
+    const number = inferPrintedHeadingEvidence(record.text);
     const level = inferredLevels[index];
     return number && level ? [{ indent: record.indent, level }] : [];
   });

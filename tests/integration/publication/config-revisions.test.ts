@@ -258,6 +258,7 @@ describe("atomic draft configuration revisions", () => {
           changes: [
             {
               block_id: blockId,
+              display_level: 1,
               display_title: "Edited heading",
               include_in_toc: false,
             },
@@ -278,8 +279,10 @@ describe("atomic draft configuration revisions", () => {
       expect(persisted.structure).toEqual([
         expect.objectContaining({
           block_id: blockId,
+          display_level: 1,
           display_title: "Edited heading",
           include_in_toc: false,
+          starts_page: true,
         }),
       ]);
     }));

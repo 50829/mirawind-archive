@@ -174,7 +174,7 @@ describe("preview and publication semantic parity", () => {
         })),
       );
       expect(diagnostics).toEqual({ diagnostics: [] });
-      expect(previewPages).toHaveLength(6);
+      expect(previewPages).toHaveLength(2);
       const previewHtml = await Promise.all(
         previewPages.map((page) =>
           readFile(
