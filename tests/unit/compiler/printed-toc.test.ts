@@ -82,6 +82,17 @@ describe("printed contents detection", () => {
         "Chapter 2 Structures",
       ]),
     ).toEqual([1, 2, 3, 3, 2]);
+    expect(
+      inferPrintedReferenceLevels([
+        "Chapter 16 Learning",
+        "16.1 Training",
+        "References",
+        "Appendix A Data",
+      ]),
+    ).toEqual([1, 2, 2, 1]);
+    expect(
+      inferPrintedReferenceLevels(["附录", "A 矩阵", "B 优化", "后记"]),
+    ).toEqual([1, 2, 2, 1]);
     expect(inferPrintedHeadingEvidence("附录 4.2 因子模型")).toMatchObject({
       kind: "appendix",
       level: 2,

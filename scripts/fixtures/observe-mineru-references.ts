@@ -186,14 +186,14 @@ function headingAnchorByBlock(input: {
   );
 }
 
-function kindFor(title: string): ReferenceSemanticKind {
+function kindFor(title: string, level: number): ReferenceSemanticKind {
   const evidence = inferPrintedHeadingEvidence(title);
   if (evidence?.kind === "part") return "part";
   if (evidence?.kind === "chapter") return "chapter";
   if (evidence?.kind === "appendix") return "appendix";
   if (evidence?.kind === "decimal") return "section";
   if (frontmatter.test(title)) return "frontmatter";
-  if (backmatter.test(title)) return "backmatter";
+  if (backmatter.test(title)) return level > 1 ? "other" : "backmatter";
   return "other";
 }
 
@@ -301,7 +301,7 @@ function projectCandidates(input: {
               : ambiguous.has(entryIndex)
                 ? "ambiguous"
                 : "unmatched",
-            kind: kindFor(printed.title),
+            kind: kindFor(printed.title, entry.reference_level),
             level: entry.reference_level,
             page_label: printed.pageLabel,
             title: printed.title,

@@ -105,6 +105,8 @@ const entrySkipCost = 2.5;
 const headingSkipCost = 0.05;
 const englishOrdinalWord =
   "(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)";
+const topLevelBackmatterTitle =
+  /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|index|afterword|acknowledg(?:e)?ments?)$/iu;
 
 function hash(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -214,32 +216,42 @@ export function inferPrintedReferenceLevels(
   } = {},
 ): readonly number[] {
   let insidePart = false;
+  let insideAppendix = false;
   let previousLevel = 0;
   const hasLaterBodyMajor: boolean[] = Array.from({ length: values.length });
   let laterBodyMajor = false;
   for (let index = values.length - 1; index >= 0; index -= 1) {
     hasLaterBodyMajor[index] = laterBodyMajor;
     const kind = inferPrintedHeadingEvidence(values[index] ?? "")?.kind;
-    if (kind === "chapter" || kind === "part") laterBodyMajor = true;
+    if (kind === "chapter" || kind === "part" || kind === "appendix") {
+      laterBodyMajor = true;
+    }
   }
   return Object.freeze(
     values.map((value, index) => {
       const numbering = inferPrintedHeadingEvidence(value);
+      const semanticTitle =
+        printedPageEvidence(value)?.title ?? plainTitle(value);
       const suppliedLevel = options.referenceLevels?.get(index);
       let level: number;
       if (suppliedLevel !== undefined) {
         level = Math.min(4, Math.max(1, suppliedLevel));
-        if (
+        if (numbering?.kind === "appendix" && level === 1) {
+          insidePart = false;
+          insideAppendix = true;
+        } else if (
           numbering?.kind === "part" ||
           ((numbering?.kind === "chapter" || numbering?.kind === "decimal") &&
             level > numbering.level)
         ) {
           insidePart = true;
+          insideAppendix = false;
         } else if (
           numbering?.kind === "appendix" ||
           (numbering?.kind === "chapter" && level === numbering.level)
         ) {
           insidePart = false;
+          insideAppendix = false;
         }
       } else if (
         numbering?.kind === "part" &&
@@ -248,11 +260,12 @@ export function inferPrintedReferenceLevels(
         level = 3;
       } else if (numbering?.kind === "part") {
         insidePart = true;
+        insideAppendix = false;
         level = 1;
       } else if (numbering?.kind === "appendix") {
         const localUnnumberedAppendix =
           numbering.level === 1 &&
-          /^(?:附录|appendix)\s*[:：]/iu.test(plainTitle(value));
+          /^(?:附录|appendix)\s*[:：]/iu.test(semanticTitle);
         if (
           numbering.level > 1 ||
           (localUnnumberedAppendix && previousLevel > 1)
@@ -260,30 +273,34 @@ export function inferPrintedReferenceLevels(
           level = Math.max(2, numbering.level);
         } else {
           insidePart = false;
+          insideAppendix = true;
           level = 1;
         }
       } else if (numbering?.kind === "chapter") {
+        insideAppendix = false;
         level = insidePart ? 2 : 1;
       } else if (numbering?.kind === "decimal") {
         level = Math.min(4, numbering.level + (insidePart ? 1 : 0));
-      } else if (
-        /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|index|afterword|acknowledg(?:e)?ments?)$/iu.test(
-          plainTitle(value),
-        )
-      ) {
+      } else if (topLevelBackmatterTitle.test(semanticTitle)) {
         if (previousLevel > 1 && hasLaterBodyMajor[index]) {
           level = previousLevel;
         } else {
           insidePart = false;
+          insideAppendix = false;
           level = 1;
         }
       } else if (
         /^(?:参考文献(?:说明)?|练习题答案|家庭作业|习题|练习|bibliographic notes|exercises|review questions)$/iu.test(
-          plainTitle(value),
+          semanticTitle,
         ) &&
         previousLevel > 0
       ) {
         level = Math.min(4, 2 + (insidePart ? 1 : 0));
+      } else if (
+        insideAppendix &&
+        /^[A-Z]\s+[\p{L}\p{N}]/u.test(semanticTitle)
+      ) {
+        level = 2;
       } else {
         level = previousLevel > 0 ? previousLevel : 1;
       }
@@ -891,7 +908,12 @@ export function detectPrintedContents(input: {
         layoutLevelsForTitle?.[occurrence] ?? layoutLevelsForTitle?.at(-1);
       const proposedLevel = entry.numbering
         ? (inferredLevels[index] ?? entry.referenceLevel)
-        : (layoutLevel ?? inferredLevels[index] ?? entry.referenceLevel);
+        : topLevelBackmatterTitle.test(
+              printedPageEvidence(entry.sourceTitle)?.title ??
+                plainTitle(entry.sourceTitle),
+            )
+          ? (inferredLevels[index] ?? entry.referenceLevel)
+          : (layoutLevel ?? inferredLevels[index] ?? entry.referenceLevel);
       const referenceLevel = Math.min(
         proposedLevel,
         previousResolvedLevel === 0 ? 1 : previousResolvedLevel + 1,

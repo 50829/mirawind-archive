@@ -42,6 +42,48 @@ describe("default document structure proposal", () => {
     ]);
   });
 
+  it("carries appendix and backmatter roles through unnumbered units", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "# Chapter 1 Body",
+          "",
+          "Body",
+          "",
+          "# Appendix",
+          "",
+          "Appendix body",
+          "",
+          "# Tables",
+          "",
+          "Tables body",
+          "",
+          "# References",
+          "",
+          "References body",
+          "",
+          "# Series",
+        ].join("\n"),
+      ),
+    );
+
+    expect(
+      proposeDocumentStructure(document).nodes.map((node) => node.role),
+    ).toEqual(["body", "appendix", "appendix", "backmatter", "backmatter"]);
+  });
+
+  it("resets a carried role at a detached numeric chapter marker", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        "# References\n\nReference body\n\n# 1\n\n# 导论\n\nBody\n",
+      ),
+    );
+
+    expect(
+      proposeDocumentStructure(document).nodes.map((node) => node.role),
+    ).toEqual(["backmatter", "body", "body"]);
+  });
+
   it("keeps heading order, closes level gaps and starts only major units on pages", () => {
     const normalized = normalizeDocumentBlocks(
       parseMarkdownDocument(

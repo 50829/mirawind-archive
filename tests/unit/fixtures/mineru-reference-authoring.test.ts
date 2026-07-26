@@ -125,6 +125,30 @@ describe("Codex vision reference authoring", () => {
     ]);
   });
 
+  it("resets body role for a detached numeric chapter marker", () => {
+    const source = "# References\n\n# 1\n\n# 导论\n";
+    const pack = packFor(source);
+    const transcript: CodexVisionTranscript = {
+      fixture_id: pack.fixture_id,
+      inspected_pages: [],
+      regions: [],
+      schema_version: 1,
+      source: "codex-image-recognition",
+    };
+
+    expect(
+      authorMineruReferenceV2({
+        pack,
+        source,
+        transcript,
+      }).raw_heading_accounting.map((heading) =>
+        heading.disposition.kind === "expected_body"
+          ? heading.disposition.role
+          : "excluded",
+      ),
+    ).toEqual(["backmatter", "body", "body"]);
+  });
+
   it("binds image-inspected structure without production proposals", () => {
     const source = [
       "# Book",

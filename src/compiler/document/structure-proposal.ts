@@ -164,8 +164,7 @@ export function proposeDocumentStructure(
   const coverBoundaryIndex =
     firstBodyUnitIndex < 0
       ? -1
-      : firstFrontmatterIndex >= 0 &&
-          firstFrontmatterIndex < firstBodyUnitIndex
+      : firstFrontmatterIndex >= 0 && firstFrontmatterIndex < firstBodyUnitIndex
         ? firstFrontmatterIndex
         : firstBodyUnitIndex;
   const ordinaryLevels = continuousLevels(document.headings);
@@ -248,6 +247,23 @@ export function proposeDocumentStructure(
     return closed;
   });
   const roots = document.root.children ?? [];
+  const hasBodyBetweenHeadings = (
+    previous: NormalizedHeading,
+    current: NormalizedHeading,
+  ): boolean => {
+    const previousEnd = previous.position?.end.offset;
+    const currentStart = current.position?.start.offset;
+    if (previousEnd === undefined || currentStart === undefined) return true;
+    return roots.some(
+      (root) =>
+        root.type !== "heading" &&
+        root.position &&
+        root.position.start.offset >= previousEnd &&
+        root.position.end.offset <= currentStart &&
+        nodeText(root).length > 0,
+    );
+  };
+  let currentTopLevelRole: ContentRole = "body";
   const nodes: {
     block_id: string;
     display_level: number;
@@ -278,19 +294,39 @@ export function proposeDocumentStructure(
         appendixTitle.test(title) ||
         backmatterTitle.test(title) ||
         chapterLocalTitle.test(title));
+    let role: ContentRole | undefined;
+    if (displayLevel === 1) {
+      const classifiedRole =
+        printedRoles.get(heading.blockId) ??
+        (localBackmatterIndexes.has(index)
+          ? "body"
+          : proposedRole(heading.sourceTitle));
+      const evidence = inferPrintedHeadingEvidence(heading.sourceTitle);
+      const nextHeading = document.headings[index + 1];
+      const detachedChapterMarker = Boolean(
+        pureNumericChapterMarker.test(title) &&
+        nextHeading &&
+        /^\p{Script=Han}/u.test(nextHeading.sourceTitle.trim()) &&
+        !hasBodyBetweenHeadings(heading, nextHeading),
+      );
+      if (classifiedRole !== "body") {
+        currentTopLevelRole = classifiedRole;
+      } else if (
+        detachedChapterMarker ||
+        evidence?.kind === "part" ||
+        evidence?.kind === "chapter"
+      ) {
+        currentTopLevelRole = "body";
+      } else if (currentTopLevelRole === "frontmatter") {
+        currentTopLevelRole = "body";
+      }
+      role = currentTopLevelRole;
+    }
     return {
       block_id: heading.blockId,
       display_level: displayLevel,
       include_in_toc: includeInToc,
-      ...(displayLevel === 1
-        ? {
-            role:
-              printedRoles.get(heading.blockId) ??
-              (localBackmatterIndexes.has(index)
-                ? "body"
-                : proposedRole(heading.sourceTitle)),
-          }
-        : {}),
+      ...(role ? { role } : {}),
       starts_page: false,
     };
   });
@@ -320,22 +356,21 @@ export function proposeDocumentStructure(
     const node = nodes[index];
     if (!node) continue;
     const evidence = inferPrintedHeadingEvidence(heading.sourceTitle);
-    const printedRole = printedRoles.get(heading.blockId);
     const title = heading.sourceTitle.trim().normalize("NFKC");
     let major = node.display_level === 1;
     if (
-      (!node.include_in_toc && node.role === "body") ||
+      !node.include_in_toc ||
       localPartIndexes.has(index) ||
       (!printedHeadingIds.has(heading.blockId) &&
         nonNavigationalLocalTitle.test(title))
     ) {
       major = false;
-    } else if (printedRole === "appendix") {
+    } else if (node.role === "appendix") {
       insidePart = false;
       firstChapterInPart = false;
       partHeading = undefined;
       major = true;
-    } else if (printedRole === "frontmatter" || printedRole === "backmatter") {
+    } else if (node.role === "frontmatter" || node.role === "backmatter") {
       insidePart = false;
       firstChapterInPart = false;
       partHeading = undefined;

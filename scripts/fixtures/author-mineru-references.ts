@@ -807,6 +807,14 @@ function headingAccounting(input: {
       }
       if (kind === "part" || kind === "chapter") {
         currentRole = "body";
+      } else if (
+        /^\d{1,3}$/u.test(normalize(heading.text)) &&
+        input.headings[index + 1]?.rootIndex === heading.rootIndex + 1 &&
+        /^\p{Script=Han}/u.test(
+          normalize(input.headings[index + 1]?.text ?? ""),
+        )
+      ) {
+        currentRole = "body";
       } else if (level === 1) {
         currentRole = roleFor(kind, currentRole);
       }
