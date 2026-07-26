@@ -1,11 +1,16 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { MarkdownCandidate } from "@/compiler/document/candidate-discovery";
+import {
+  parsePrintedContentsAnalysisV2,
+  printedContentsAnalysisIdentity,
+} from "@/compiler/document/printed-contents-analysis";
+import { readPdfContentsEvidence } from "@/compiler/document/pdf-contents-evidence";
 import { DraftRepository } from "@/db/repositories/drafts";
 import { ImportRepository } from "@/db/repositories/imports";
 import {
@@ -49,7 +54,8 @@ describe("prepare_draft and build_preview handlers", () => {
         buildZip({
           entries: [
             { data: source, name: "wrapper/full.md" },
-            { data: "{}", name: "wrapper/layout.json" },
+            { data: "{", name: "wrapper/full_content_list.json" },
+            { data: "%PDF-origin", name: "wrapper/book_origin.pdf" },
           ],
         }),
       );
@@ -76,6 +82,9 @@ describe("prepare_draft and build_preview handlers", () => {
 
       const prepared = await prepareDraft({
         archivePath,
+        pdfEvidenceReader: async () => {
+          throw new Error("PDF fallback must not run for a high boundary");
+        },
         selectedCandidatePath: candidate().normalizedPath,
         stagingDirectory: resolve(
           dataRoot.path,
@@ -86,9 +95,12 @@ describe("prepare_draft and build_preview handlers", () => {
       expect(prepared.artifact).toMatchObject({
         printedContents: [
           {
+            boundaryConfidence: "high",
+            canonical: true,
             confidence: "high",
-            diagnosticCodes: [],
+            diagnostics: [],
             entryCount: 6,
+            matchConfidence: "high",
             matchedHeadingCount: 6,
             regionId: expect.stringMatching(/^region_/u),
           },
@@ -112,10 +124,14 @@ describe("prepare_draft and build_preview handlers", () => {
       expect(
         Object.keys(prepared.artifact.printedContents[0] ?? {}).sort(),
       ).toEqual([
+        "alignment",
+        "boundaryConfidence",
+        "canonical",
         "confidence",
-        "diagnosticCodes",
+        "diagnostics",
         "endByte",
         "entryCount",
+        "matchConfidence",
         "matchedHeadingCount",
         "regionId",
         "startByte",
@@ -169,7 +185,97 @@ describe("prepare_draft and build_preview handlers", () => {
         ],
         title: "第 1 章 绪论",
       });
+      const analysisPath = resolve(
+        dataRoot.layout.bookDirectory,
+        String(book.id),
+        "draft",
+        "analyses",
+        finalized.snapshot.source.id,
+        "1.json",
+      );
+      expect(
+        parsePrintedContentsAnalysisV2(
+          JSON.parse(await readFile(analysisPath, "utf8")),
+        ),
+      ).toMatchObject({
+        config_revision: 1,
+        identity: printedContentsAnalysisIdentity,
+        source_id: finalized.snapshot.source.id,
+      });
+      await expect(
+        access(
+          resolve(
+            dataRoot.layout.root,
+            finalized.snapshot.source.sourceRootRelativePath,
+            "printed-contents-analysis.json",
+          ),
+        ),
+      ).rejects.toThrow();
     }));
+
+  it("uses the unique original PDF only after automatic boundary evidence is insufficient", async () => {
+    const dataRoot = await import("../../helpers/data-root.js").then(
+      ({ createTemporaryDataRoot }) =>
+        createTemporaryDataRoot("prepare-pdf-fallback"),
+    );
+    try {
+      const archivePath = resolve(dataRoot.path, "fallback.zip");
+      await writeFile(
+        archivePath,
+        buildZip({
+          entries: [
+            {
+              data: "# Book\n\n## Chapter\n\nBody.\n",
+              name: "wrapper/full.md",
+            },
+            { data: "%PDF-origin", name: "wrapper/book_origin.pdf" },
+            { data: "%PDF-layout", name: "wrapper/book_layout.pdf" },
+          ],
+        }),
+      );
+      const reader = vi.fn(
+        async (input: Parameters<typeof readPdfContentsEvidence>[0]) => {
+          expect(input.pdfPath).toContain("book_origin.pdf");
+          return Object.freeze({
+            diagnostics: Object.freeze([
+              Object.freeze({ code: "PDF_CONTENTS_NOT_DETECTED" as const }),
+            ]),
+            inspectedPageIndices: Object.freeze([1]),
+            records: Object.freeze([
+              Object.freeze({
+                pageIndex: 1,
+                sourceOrder: 0,
+                text: "Contents",
+                type: "text",
+              }),
+            ]),
+            source: "native-pdf" as const,
+          });
+        },
+      );
+
+      const prepared = await prepareDraft({
+        archivePath,
+        pdfEvidenceReader: reader,
+        selectedCandidatePath: "wrapper/full.md",
+        stagingDirectory: resolve(
+          dataRoot.path,
+          "staging/job_prepare_pdf_fallback",
+        ),
+      });
+
+      expect(reader).toHaveBeenCalledOnce();
+      expect(reader.mock.calls[0]?.[0].pdfPath).toBe(
+        resolve(prepared.extractedRoot, "wrapper/book_origin.pdf"),
+      );
+      expect(prepared.artifact).toMatchObject({
+        layoutSource: "native-pdf",
+        pdfDiagnostics: [{ code: "PDF_CONTENTS_NOT_DETECTED" }],
+      });
+    } finally {
+      await dataRoot.cleanup();
+    }
+  });
 
   it("creates an immutable initial config and a revision-pinned ready preview", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
@@ -200,7 +306,7 @@ describe("prepare_draft and build_preview handlers", () => {
               ].join("\n"),
               name: "wrapper/full.md",
             },
-            { data: "{}", name: "wrapper/layout.json" },
+            { data: "[{}]", name: "wrapper/content_list.json" },
             { data: image, name: "wrapper/images/a.png" },
           ],
         }),
@@ -271,7 +377,7 @@ describe("prepare_draft and build_preview handlers", () => {
           expect.objectContaining({
             display_level: 2,
             include_in_toc: true,
-            starts_page: true,
+            starts_page: false,
           }),
         ],
         title: "Prepared Book",
@@ -293,6 +399,14 @@ describe("prepare_draft and build_preview handlers", () => {
         "staging/job_preview_abcdefghijklmnop",
       );
       const previewArtifact = await buildPreview({
+        analysisPath: resolve(
+          dataRoot.layout.bookDirectory,
+          String(book.id),
+          "draft",
+          "analyses",
+          finalized.snapshot.source.id,
+          "1.json",
+        ),
         bookId: book.id,
         configRevision: 1,
         configYamlPath: configPath,
@@ -300,6 +414,7 @@ describe("prepare_draft and build_preview handlers", () => {
           dataRoot.layout.root,
           finalized.snapshot.source.sourceRootRelativePath,
         ),
+        sourceId: finalized.snapshot.source.id,
         stagingDirectory: previewStaging,
       });
       await finalizeBuiltPreview({
@@ -322,17 +437,13 @@ describe("prepare_draft and build_preview handlers", () => {
         resolve(previewRoot, "pages/1.html"),
         "utf8",
       );
-      const secondPage = await readFile(
-        resolve(previewRoot, "pages/2.html"),
-        "utf8",
-      );
-      expect(`${firstPage}\n${secondPage}`).toMatch(
+      expect(firstPage).toMatch(
         /Prepared Book[\s\S]*class="katex"[\s\S]*\/assets\/res_/u,
       );
-      expect(`${firstPage}\n${secondPage}`).toContain(
+      expect(firstPage).toContain(
         'href="/reader-assets/renderers/semantic-html-v4-katex-0.18.1/katex.css"',
       );
-      expect(`${firstPage}\n${secondPage}`).toContain(
+      expect(firstPage).toContain(
         'href="/reader-assets/styles/mirawind-reader-v2-tailwind-4.3.3.css"',
       );
       expect(
@@ -343,9 +454,63 @@ describe("prepare_draft and build_preview handlers", () => {
         config_revision: 1,
         headings: [
           { display_level: 1, role: "body", starts_page: true },
-          { display_level: 2, role: "body", starts_page: true },
+          { display_level: 2, role: "body", starts_page: false },
         ],
-        pages: [{ page_id: 1 }, { page_id: 2 }],
+        pages: [{ page_id: 1 }],
+      });
+      expect(
+        JSON.parse(
+          await readFile(
+            resolve(dataRoot.layout.root, ready.diagnosticsRelativePath ?? ""),
+            "utf8",
+          ),
+        ),
+      ).toMatchObject({
+        diagnostics: [
+          expect.objectContaining({
+            code: "LAYOUT_EVIDENCE_INVALID",
+            recovery: ["reload"],
+          }),
+          expect.objectContaining({
+            code: "PDF_CONTENTS_SOURCE_UNAVAILABLE",
+            phase: "ocr",
+            recovery: ["reload"],
+          }),
+        ],
       });
     }));
+
+  it("cleans staging when preparation is canceled", async () => {
+    const dataRoot = await import("../../helpers/data-root.js").then(
+      ({ createTemporaryDataRoot }) =>
+        createTemporaryDataRoot("prepare-canceled"),
+    );
+    try {
+      const archivePath = resolve(dataRoot.path, "canceled.zip");
+      await writeFile(
+        archivePath,
+        buildZip({
+          entries: [{ data: "# Book\n\nBody.\n", name: "wrapper/full.md" }],
+        }),
+      );
+      const stagingDirectory = resolve(
+        dataRoot.path,
+        "staging/job_prepare_canceled_0001",
+      );
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        prepareDraft({
+          archivePath,
+          selectedCandidatePath: "wrapper/full.md",
+          signal: controller.signal,
+          stagingDirectory,
+        }),
+      ).rejects.toThrow();
+      await expect(access(stagingDirectory)).rejects.toThrow();
+    } finally {
+      await dataRoot.cleanup();
+    }
+  });
 });

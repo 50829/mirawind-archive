@@ -91,7 +91,7 @@ export interface ReferenceExpectedDiagnostic {
     | "typography"
     | "ocr";
   readonly recovery: readonly (
-    "select_structure" | "enable_region" | "reload" | "reprocess_verbatim"
+    "select_structure" | "reload" | "reprocess_verbatim"
   )[];
   readonly severity: "error" | "warning" | "info";
 }
@@ -534,12 +534,7 @@ function parseDiagnostic(
   const recovery = input.recovery.map((action, actionIndex) =>
     enumeration(
       action,
-      [
-        "select_structure",
-        "enable_region",
-        "reload",
-        "reprocess_verbatim",
-      ] as const,
+      ["select_structure", "reload", "reprocess_verbatim"] as const,
       `${label}.recovery[${actionIndex}]`,
     ),
   );

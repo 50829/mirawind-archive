@@ -123,6 +123,20 @@ describe("MinerU reference v2", () => {
     ).toThrow(/missing or unexpected fields/);
   });
 
+  it("rejects manual structure adjudication recoveries", () => {
+    expect(() =>
+      parseMineruReferenceV2({
+        ...reference(),
+        expected_diagnostics: [
+          {
+            ...reference().expected_diagnostics[0],
+            recovery: ["enable_region"],
+          },
+        ],
+      }),
+    ).toThrow(/recovery\[0\] is invalid/);
+  });
+
   it("requires exactly one canonical region when contents are present", () => {
     const first = reference().printed_contents.regions[0];
     expect(first).toBeDefined();

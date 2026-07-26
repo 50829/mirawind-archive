@@ -1,0 +1,242 @@
+import {
+  access,
+  chmod,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
+
+import {
+  readPdfContentsEvidence,
+  type PdfContentsEvidenceCommands,
+} from "@/compiler/document/pdf-contents-evidence";
+
+const temporaryRoots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryRoots
+      .splice(0)
+      .map((path) => rm(path, { force: true, recursive: true })),
+  );
+});
+
+async function executable(path: string, body: string): Promise<string> {
+  await writeFile(path, `#!/bin/sh\nset -eu\n${body}\n`);
+  await chmod(path, 0o700);
+  return path;
+}
+
+async function fixture(
+  input: {
+    readonly nativeText?: string;
+    readonly pages?: number;
+    readonly tesseractBody?: string;
+  } = {},
+): Promise<{
+  readonly commands: PdfContentsEvidenceCommands;
+  readonly pdfPath: string;
+  readonly root: string;
+  readonly work: string;
+}> {
+  const root = await mkdtemp(join(tmpdir(), "mirawind-ocr-test-"));
+  temporaryRoots.push(root);
+  const work = join(root, "work");
+  await import("node:fs/promises").then(({ mkdir }) => mkdir(work));
+  const pdfPath = join(root, "input.pdf");
+  await writeFile(pdfPath, "fake pdf");
+  const pdfinfo = await executable(
+    join(root, "pdfinfo"),
+    `printf 'Pages: ${input.pages ?? 2}\\n'`,
+  );
+  const escapedNative = (input.nativeText ?? "\f\f").replaceAll("'", "'\\''");
+  const pdftotext = await executable(
+    join(root, "pdftotext"),
+    `printf '${escapedNative}'`,
+  );
+  const pdftoppm = await executable(
+    join(root, "pdftoppm"),
+    'printf \'%s\\n\' "$*" >> "$0.log"\nfor last do :; done\n: > "${last}.png"',
+  );
+  const defaultTesseract = [
+    'printf \'%s\\n\' "$*" >> "$0.log"',
+    "printf 'level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n'",
+    "printf '5\\t1\\t1\\t1\\t1\\t1\\t10\\t20\\t40\\t12\\t95\\tChapter\\n'",
+    "printf '5\\t1\\t1\\t1\\t1\\t2\\t55\\t20\\t50\\t12\\t93\\tStart....1\\n'",
+  ].join("\n");
+  const tesseract = await executable(
+    join(root, "tesseract"),
+    input.tesseractBody ?? defaultTesseract,
+  );
+  return {
+    commands: { pdfinfo, pdftoppm, pdftotext, tesseract },
+    pdfPath,
+    root,
+    work,
+  };
+}
+
+describe("bounded PDF contents evidence", () => {
+  it("uses sufficient native text without rasterizing pages", async () => {
+    const value = await fixture({
+      nativeText: "Contents\\nChapter 1 Start .... 1\\nChapter 2 End .... 9\\f",
+    });
+
+    const result = await readPdfContentsEvidence({
+      commands: value.commands,
+      pdfPath: value.pdfPath,
+      temporaryRoot: value.work,
+    });
+
+    expect(result).toMatchObject({
+      diagnostics: [],
+      inspectedPageIndices: [0],
+      source: "native-pdf",
+    });
+    expect(result.records.length).toBeGreaterThanOrEqual(3);
+    await expect(access(`${value.commands.pdftoppm}.log`)).rejects.toThrow();
+    expect(await readdir(value.work)).toEqual([]);
+  });
+
+  it("uses OCR when native text exists but has no contents boundary", async () => {
+    const value = await fixture({
+      nativeText: "Cover\nCopyright\fPreface\nIntroduction\f",
+    });
+
+    const result = await readPdfContentsEvidence({
+      commands: value.commands,
+      pageIndices: [0],
+      pdfPath: value.pdfPath,
+      temporaryRoot: value.work,
+    });
+
+    expect(result.source).toBe("ocr");
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "PDF_CONTENTS_NATIVE_ABSENT" }),
+    );
+    expect(await readFile(`${value.commands.pdftoppm}.log`, "utf8")).toContain(
+      "-f 1 -l 1 -r 150",
+    );
+  });
+
+  it("rasterizes only requested front pages at 150 DPI with both languages", async () => {
+    const value = await fixture();
+
+    const result = await readPdfContentsEvidence({
+      commands: value.commands,
+      pageIndices: [0, 1],
+      pdfPath: value.pdfPath,
+      temporaryRoot: value.work,
+    });
+
+    expect(result.source).toBe("ocr");
+    expect(result.inspectedPageIndices).toEqual([0, 1]);
+    expect(result.records).toHaveLength(2);
+    const rasterLog = await readFile(`${value.commands.pdftoppm}.log`, "utf8");
+    expect(rasterLog).toContain("-f 1 -l 1 -r 150 -png -singlefile");
+    expect(rasterLog).toContain("-f 2 -l 2 -r 150 -png -singlefile");
+    const ocrLog = await readFile(`${value.commands.tesseract}.log`, "utf8");
+    expect(ocrLog).toContain("-l eng+chi_sim --psm 6 tsv");
+    expect(await readdir(value.work)).toEqual([]);
+  });
+
+  it("rejects pages outside the first 48 before rasterization", async () => {
+    const value = await fixture({ pages: 60 });
+
+    await expect(
+      readPdfContentsEvidence({
+        commands: value.commands,
+        pageIndices: [48],
+        pdfPath: value.pdfPath,
+        temporaryRoot: value.work,
+      }),
+    ).rejects.toThrow("PDF_CONTENTS_EVIDENCE_PAGE_LIMIT");
+    await expect(access(`${value.commands.pdftoppm}.log`)).rejects.toThrow();
+    expect(await readdir(value.work)).toEqual([]);
+  });
+
+  it("bounds per-page execution and removes temporary rasters", async () => {
+    const value = await fixture({ tesseractBody: "sleep 5" });
+
+    const result = await readPdfContentsEvidence({
+      commands: value.commands,
+      limits: { aggregateTimeoutMs: 120, pageTimeoutMs: 60 },
+      pageIndices: [0],
+      pdfPath: value.pdfPath,
+      temporaryRoot: value.work,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "PDF_CONTENTS_OCR_TIMEOUT",
+        pageIndex: 0,
+      }),
+    );
+    expect(result.records).toEqual([]);
+    expect(await readdir(value.work)).toEqual([]);
+  });
+
+  it("propagates cancellation and removes temporary rasters", async () => {
+    const value = await fixture({ tesseractBody: "sleep 5" });
+    const controller = new AbortController();
+    const pending = readPdfContentsEvidence({
+      commands: value.commands,
+      pageIndices: [0],
+      pdfPath: value.pdfPath,
+      signal: controller.signal,
+      temporaryRoot: value.work,
+    });
+    setTimeout(() => controller.abort(), 20).unref();
+
+    await expect(pending).rejects.toThrow();
+    expect(await readdir(value.work)).toEqual([]);
+  });
+
+  it("reports unavailable tools and low-confidence output without accepting text", async () => {
+    const unavailable = await fixture();
+    const missing = await readPdfContentsEvidence({
+      commands: {
+        ...unavailable.commands,
+        tesseract: join(unavailable.root, "missing-tesseract"),
+      },
+      pageIndices: [0],
+      pdfPath: unavailable.pdfPath,
+      temporaryRoot: unavailable.work,
+    });
+    expect(missing).toMatchObject({
+      records: [],
+      source: "none",
+    });
+    expect(missing.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "PDF_CONTENTS_TOOL_UNAVAILABLE" }),
+    );
+    expect(await readdir(unavailable.work)).toEqual([]);
+
+    const low = await fixture({
+      tesseractBody: [
+        "printf 'level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n'",
+        "printf '5\\t1\\t1\\t1\\t1\\t1\\t10\\t20\\t40\\t12\\t10\\tUnreadable\\n'",
+      ].join("\n"),
+    });
+    const lowResult = await readPdfContentsEvidence({
+      commands: low.commands,
+      pageIndices: [0],
+      pdfPath: low.pdfPath,
+      temporaryRoot: low.work,
+    });
+    expect(lowResult.records).toEqual([]);
+    expect(lowResult.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "PDF_CONTENTS_OCR_LOW_CONFIDENCE",
+        pageIndex: 0,
+      }),
+    );
+    expect(await readdir(low.work)).toEqual([]);
+  });
+});

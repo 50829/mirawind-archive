@@ -23,6 +23,14 @@ ENV HOST=0.0.0.0
 ENV NODE_ENV=production
 ENV PORT=4321
 
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes \
+      poppler-utils \
+      tesseract-ocr \
+      tesseract-ocr-chi-sim \
+      tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 10001 mirawind \
     && useradd --system --uid 10001 --gid mirawind --home-dir /nonexistent mirawind \
     && install -d -o mirawind -g mirawind -m 0700 /var/lib/mirawind

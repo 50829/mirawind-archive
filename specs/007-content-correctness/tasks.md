@@ -70,23 +70,23 @@ processing is idempotent.
 **Independent gate**: OCR runs only after insufficient native evidence and every tool absence,
 timeout, cancellation and success path respects budgets and cleans temporary files.
 
-- [ ] T033 Add Poppler and Tesseract `eng`/`chi_sim` to runtime image and document health checks
-- [ ] T034 Add failing process/budget/page-limit/cancellation/cleanup tests with fake executables
-- [ ] T035 Implement bounded first-48-page 150-DPI OCR fallback in worker-only code
-- [ ] T036 Define, validate and persist revision-pinned `printed-contents-analysis-v2`
-- [ ] T037 Verify analysis artifact is private, rebuildable and absent from published resources
+- [x] T033 Add Poppler and Tesseract `eng`/`chi_sim` to runtime image and document health checks
+- [x] T034 Add failing process/budget/page-limit/cancellation/cleanup tests with fake executables
+- [x] T035 Implement bounded first-48-page 150-DPI OCR fallback in worker-only code
+- [x] T036 Define, validate and persist revision-pinned `printed-contents-analysis-v2`
+- [x] T037 Verify analysis artifact is private, rebuildable and absent from published resources
 
 ## Phase 8: Draft identities and recovery UI
 
 **Independent gate**: v3 drafts are stale until explicit reprocess; v4 preparation/preview
 share analysis and every diagnostic activates a valid location/recovery without losing edits.
 
-- [ ] T038 Raise `prepare-draft-v4` and `draft-preview-v4` with stale-draft integration tests
-- [ ] T039 Carry preparation diagnostics through draft DTO without source/config leakage
-- [ ] T040 Implement typed block/region/page/range activation and supported recovery actions
-- [ ] T040a Remove region/canonical/body-match/hierarchy adjudication recoveries; keep
+- [x] T038 Raise `prepare-draft-v4` and `draft-preview-v4` with stale-draft integration tests
+- [x] T039 Carry preparation diagnostics through draft DTO without source/config leakage
+- [x] T040 Implement typed block/region/page/range activation and supported recovery actions
+- [x] T040a Remove region/canonical/body-match/hierarchy adjudication recoveries; keep
       structure selection as navigation plus reload/verbatim reprocess only
-- [ ] T041 Add component tests for navigation, revision pinning, dirty/conflict preservation, dialog focus restoration and verbatim reprocess
+- [x] T041 Add component tests for navigation, revision pinning, dirty/conflict preservation, dialog focus restoration and verbatim reprocess
 
 ## Phase 9: Fifteen-book references
 

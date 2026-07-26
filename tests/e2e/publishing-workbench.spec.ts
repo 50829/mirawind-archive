@@ -18,7 +18,14 @@ function draftProjection(size: number) {
       {
         blockId: structure[0]?.block_id,
         code: "WORKBENCH_TEST_DIAGNOSTIC",
+        location: {
+          blockId: structure[0]?.block_id,
+          endByte: 40,
+          regionId: "region_workbench_0001",
+          startByte: 20,
+        },
         message: "Locatable test diagnostic",
+        recovery: ["select_structure", "reload", "reprocess_verbatim"],
         severity: "warning",
       },
     ],
@@ -50,6 +57,7 @@ function draftProjection(size: number) {
     regions: [
       {
         applied: true,
+        block_id: structure[0]?.block_id,
         entry_count: 6,
         region_id: "region_workbench_0001",
       },
@@ -122,6 +130,48 @@ test("keeps representative and stress structure DOM bounded", async ({
   expect(await stressRows.count()).toBeLessThanOrEqual(30);
   await page.goto("/manage");
   await expect(page.getByRole("heading", { name: "准备一本书" })).toBeVisible();
+});
+
+test("locates diagnostics and preserves dirty edits during recovery", async ({
+  page,
+}) => {
+  let draftRequests = 0;
+  await page.route("**/api/manage/books/99/draft", (route) => {
+    draftRequests += 1;
+    return route.fulfill({
+      body: JSON.stringify(draftProjection(20)),
+      contentType: "application/json",
+      headers: { ETag: `"${"a".repeat(43)}"` },
+      status: 200,
+    });
+  });
+  await page.route("**/api/manage/books/99/preview/**", (route) =>
+    route.fulfill({
+      body: "<!doctype html><html lang='en'><body>Preview</body></html>",
+      contentType: "text/html",
+      status: 200,
+    }),
+  );
+  await loginAsAdministrator(page, "192.0.2.16");
+  await page.goto("/manage/books/99/preview");
+
+  await page.getByRole("button", { name: "定位" }).click();
+  await expect(
+    page.locator(".structure-tree [aria-current=true]"),
+  ).toContainText("Structure item 1");
+  await expect(page.locator("iframe")).toHaveAttribute(
+    "src",
+    /#blk_workbench_0000000000000000$/u,
+  );
+
+  const title = page.getByRole("textbox", { name: "显示标题" });
+  await title.fill("Unsaved local title");
+  await page.getByRole("button", { name: "重新载入" }).click();
+  await expect.poll(() => draftRequests).toBeGreaterThan(1);
+  await expect(title).toHaveValue("Unsaved local title");
+  await expect(
+    page.getByRole("button", { name: "按原文重新处理" }),
+  ).toBeDisabled();
 });
 
 test("restores focus after each mobile workbench detail dialog", async ({

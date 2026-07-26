@@ -11,6 +11,7 @@ import type {
 import type { SourceSnapshotRecord } from "../db/repositories/sources.js";
 import { SafeApplicationError } from "../domain/errors.js";
 import { previewBuildVersion } from "../jobs/handlers/build-preview.js";
+import { draftPreparationVersion } from "../jobs/handlers/prepare-draft.js";
 import { resolveContainedPath, type StorageLayout } from "../storage/layout.js";
 
 const maximumPreviewModelBytes = 8 * 1024 * 1024;
@@ -43,7 +44,8 @@ export async function assertReadyPreviewIdentity(input: {
     input.preview.configRevision !== input.config.revision ||
     input.preview.sourceId !== input.source.id ||
     input.preview.state !== "ready" ||
-    !input.preview.previewRelativePath
+    !input.preview.previewRelativePath ||
+    input.source.analysisVersion !== draftPreparationVersion
   ) {
     stale();
   }

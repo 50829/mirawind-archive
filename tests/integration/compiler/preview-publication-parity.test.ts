@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
 import { parseMarkdownDocument } from "@/compiler/document/parser";
+import { createPrintedContentsAnalysisV2 } from "@/compiler/document/printed-contents-analysis";
 import { detectPrintedContents } from "@/compiler/document/printed-toc";
 import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
 import { buildImmutableVersion } from "@/compiler/version-builder";
@@ -48,12 +49,13 @@ describe("preview and publication semantic parity", () => {
           idFactory: () => `blk_${String(++ordinal).padStart(20, "0")}`,
         },
       );
-      const regions = detectPrintedContents({
+      const detection = detectPrintedContents({
         document: proposed,
         idFactory: () => "region_abcdefghijklmnop",
         sourcePath: "book.md",
         sourceSha256,
-      }).candidates.flatMap((candidate) =>
+      });
+      const regions = detection.candidates.flatMap((candidate) =>
         candidate.proposedRegion ? [candidate.proposedRegion] : [],
       );
       const config = validateBookConfig({
@@ -89,6 +91,27 @@ describe("preview and publication semantic parity", () => {
       const configPath = resolve(draftRoot, "configs", "1", "book.yaml");
       await mkdir(resolve(configPath, ".."), { mode: 0o700, recursive: true });
       await writeFile(configPath, configYaml);
+      const analysisPath = resolve(draftRoot, "analyses", sourceId, "1.json");
+      await mkdir(resolve(analysisPath, ".."), {
+        mode: 0o700,
+        recursive: true,
+      });
+      await writeFile(
+        analysisPath,
+        JSON.stringify(
+          createPrintedContentsAnalysisV2({
+            configRevision: 1,
+            detection,
+            layoutDiagnostics: [],
+            layoutSource: "none",
+            pdfDiagnostics: [],
+            sourceId,
+            sourceSha256,
+            typographyRiskSummaries: [],
+            typographyRiskSummariesTruncated: false,
+          }),
+        ),
+      );
 
       const previewStaging = resolve(
         dataRoot.layout.temporaryDirectory,
@@ -99,10 +122,12 @@ describe("preview and publication semantic parity", () => {
         "version",
       );
       const previewArtifact = await buildPreview({
+        analysisPath,
         bookId,
         configRevision: 1,
         configYamlPath: configPath,
         sourceRoot,
+        sourceId,
         stagingDirectory: previewStaging,
       });
       const versionArtifact = await buildImmutableVersion({
@@ -117,6 +142,25 @@ describe("preview and publication semantic parity", () => {
         stagingDirectory: versionStaging,
         versionId,
       });
+      const versionEntries = await readdir(versionStaging, {
+        recursive: true,
+      });
+      expect(versionEntries.some((entry) => entry.includes("analys"))).toBe(
+        false,
+      );
+      const versionContents = await Promise.all(
+        versionEntries.map(async (entry) => {
+          const path = resolve(versionStaging, entry);
+          return (await lstat(path)).isFile()
+            ? await readFile(path)
+            : Buffer.alloc(0);
+        }),
+      );
+      expect(
+        versionContents.some((content) =>
+          content.includes("printed-contents-analysis-v2"),
+        ),
+      ).toBe(false);
       const previewModel = JSON.parse(
         await readFile(
           resolve(previewStaging, "preview", "preview-model.json"),

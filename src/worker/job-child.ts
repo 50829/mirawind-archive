@@ -295,11 +295,16 @@ async function execute(message: RunJobMessage): Promise<void> {
       message.input.kind === "build_preview" &&
       message.input.bookId &&
       message.input.capturedConfigRevision &&
+      message.input.capturedSourceId &&
       message.input.configYamlRelativePath &&
       message.input.sourceRootRelativePath
     ) {
       reportProgress("render_pages", steps(0, 1));
       await buildPreview({
+        analysisPath: await resolveContainedPath(
+          root,
+          `books/${message.input.bookId}/draft/analyses/${message.input.capturedSourceId}/${message.input.capturedConfigRevision}.json`,
+        ),
         bookId: message.input.bookId,
         configRevision: message.input.capturedConfigRevision,
         configYamlPath: await resolveContainedPath(
@@ -310,6 +315,7 @@ async function execute(message: RunJobMessage): Promise<void> {
           root,
           message.input.sourceRootRelativePath,
         ),
+        sourceId: message.input.capturedSourceId,
         stagingDirectory,
       });
       send({

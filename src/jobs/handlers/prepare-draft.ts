@@ -11,11 +11,25 @@ import {
 } from "../../compiler/archive/extractor.js";
 import { normalizeDocumentBlocks } from "../../compiler/document/normalize.js";
 import { parseMarkdownDocument } from "../../compiler/document/parser.js";
-import { readMineruLayoutEvidence } from "../../compiler/document/layout-evidence.js";
+import {
+  readMineruLayoutEvidence,
+  type LayoutEvidenceDiagnostic,
+} from "../../compiler/document/layout-evidence.js";
+import {
+  readPdfContentsEvidence,
+  type PdfContentsEvidenceDiagnostic,
+} from "../../compiler/document/pdf-contents-evidence.js";
+import {
+  findOriginalPdf,
+  type PdfSourceDiagnostic,
+} from "../../compiler/document/pdf-source.js";
+import { createPrintedContentsAnalysisV2 } from "../../compiler/document/printed-contents-analysis.js";
 import {
   detectPrintedContents,
   type PrintedContentsCandidate,
+  type PrintedContentsDetection,
 } from "../../compiler/document/printed-toc.js";
+import { canonicalJson } from "../../compiler/document/manifest.js";
 import { applySourceRegions } from "../../compiler/document/source-regions.js";
 import {
   proposeDocumentStructure,
@@ -25,6 +39,7 @@ import type { ConfirmedSourceRegion } from "../../compiler/document/types.js";
 import {
   preprocessMarkdownTypography,
   type TypographyProvenance,
+  type TypographyRiskSummary,
 } from "../../compiler/preprocess/typography.js";
 import { inspectRasterImage } from "../../compiler/resources/images.js";
 import { resolveDocumentResources } from "../../compiler/resources/resolver.js";
@@ -45,27 +60,41 @@ import {
   type SourceSnapshotResult,
 } from "../../services/source-snapshot.js";
 
-export const draftPreparationVersion = "prepare-draft-v3";
+export const draftPreparationVersion = "prepare-draft-v4";
 export const preparationArtifactFilename = "prepared-draft.json";
 
 export interface PreparedDraftArtifact {
+  readonly layoutDiagnostics: readonly LayoutEvidenceDiagnostic[];
+  readonly layoutSource: "content-list" | "native-pdf" | "none" | "ocr";
   readonly mainMarkdownRelativePath: string;
+  readonly pdfDiagnostics: readonly PreparedPdfDiagnostic[];
   readonly printedContents: readonly PreparedPrintedContentsSummary[];
   readonly sourceRegions: readonly ConfirmedSourceRegion[];
   readonly structure: readonly ProposedStructureNode[];
   readonly title: string;
   readonly typography: TypographyProvenance;
+  readonly typographyRiskSummaries: readonly TypographyRiskSummary[];
+  readonly typographyRiskSummariesTruncated: boolean;
   readonly version: typeof draftPreparationVersion;
 }
 
 export interface PreparedPrintedContentsSummary {
+  readonly alignment: PrintedContentsCandidate["alignment"];
+  readonly boundaryConfidence: PrintedContentsCandidate["boundaryConfidence"];
+  readonly canonical: boolean;
   readonly confidence: PrintedContentsCandidate["confidence"];
-  readonly diagnosticCodes: readonly string[];
+  readonly diagnostics: PrintedContentsCandidate["diagnostics"];
   readonly endByte: number;
   readonly entryCount: number;
   readonly matchedHeadingCount: number;
+  readonly matchConfidence: PrintedContentsCandidate["matchConfidence"];
   readonly regionId?: string;
   readonly startByte: number;
+}
+
+export interface PreparedPdfDiagnostic {
+  readonly code: PdfContentsEvidenceDiagnostic["code"] | PdfSourceDiagnostic;
+  readonly pageIndex?: number;
 }
 
 export interface PrepareDraftResult {
@@ -88,6 +117,7 @@ export async function prepareDraft(input: {
   readonly signal?: AbortSignal;
   readonly stagingDirectory: string;
   readonly typographyProfile?: TypographyProvenance["profile"];
+  readonly pdfEvidenceReader?: typeof readPdfContentsEvidence;
 }): Promise<PrepareDraftResult> {
   const stagingDirectory = resolve(input.stagingDirectory);
   const extractedRoot = resolve(stagingDirectory, "extracted");
@@ -132,12 +162,57 @@ export async function prepareDraft(input: {
         filename: resource.relativePath,
       });
     }
-    const printedContents = detectPrintedContents({
+    let effectiveLayoutEvidence = layoutEvidence;
+    let printedContents = detectPrintedContents({
       document: normalized,
       layoutEvidence,
       sourcePath: basename(input.selectedCandidatePath),
       sourceSha256: typography.provenance.output_sha256,
     });
+    let pdfDiagnostics: readonly PreparedPdfDiagnostic[] = Object.freeze([]);
+    if (
+      !printedContents.candidates.some(
+        (candidate) => candidate.boundaryConfidence === "high",
+      )
+    ) {
+      const discovered = await findOriginalPdf({
+        bundleRoot: dirname(markdownPath),
+        markdownPath,
+        ...(input.signal ? { signal: input.signal } : {}),
+      });
+      if ("diagnostic" in discovered) {
+        pdfDiagnostics = Object.freeze([
+          Object.freeze({ code: discovered.diagnostic }),
+        ]);
+      } else {
+        const pdfEvidence = await (
+          input.pdfEvidenceReader ?? readPdfContentsEvidence
+        )({
+          pdfPath: discovered.pdfPath,
+          ...(input.signal ? { signal: input.signal } : {}),
+          temporaryRoot: stagingDirectory,
+        });
+        pdfDiagnostics = pdfEvidence.diagnostics;
+        if (pdfEvidence.records.length > 0) {
+          effectiveLayoutEvidence = Object.freeze({
+            diagnostics: layoutEvidence.diagnostics,
+            records: Object.freeze(
+              [...layoutEvidence.records, ...pdfEvidence.records].slice(
+                0,
+                20_000,
+              ),
+            ),
+            source: pdfEvidence.source,
+          });
+          printedContents = detectPrintedContents({
+            document: normalized,
+            layoutEvidence: effectiveLayoutEvidence,
+            sourcePath: basename(input.selectedCandidatePath),
+            sourceSha256: typography.provenance.output_sha256,
+          });
+        }
+      }
+    }
     const sourceRegions = printedContents.candidates.flatMap((candidate) =>
       candidate.proposedRegion ? [candidate.proposedRegion] : [],
     );
@@ -151,17 +226,22 @@ export async function prepareDraft(input: {
       sourceRegions,
     });
     const artifact: PreparedDraftArtifact = Object.freeze({
+      layoutDiagnostics: layoutEvidence.diagnostics,
+      layoutSource: effectiveLayoutEvidence.source,
       mainMarkdownRelativePath: input.selectedCandidatePath,
+      pdfDiagnostics,
       printedContents: Object.freeze(
         printedContents.candidates.map((candidate) =>
           Object.freeze({
+            alignment: candidate.alignment,
+            boundaryConfidence: candidate.boundaryConfidence,
+            canonical: candidate.canonical,
             confidence: candidate.confidence,
-            diagnosticCodes: Object.freeze(
-              candidate.diagnostics.map((diagnostic) => diagnostic.code),
-            ),
+            diagnostics: candidate.diagnostics,
             endByte: candidate.endByte,
             entryCount: candidate.entryCount,
             matchedHeadingCount: candidate.matchedHeadingCount,
+            matchConfidence: candidate.matchConfidence,
             ...(candidate.proposedRegion
               ? { regionId: candidate.proposedRegion.region_id }
               : {}),
@@ -176,6 +256,8 @@ export async function prepareDraft(input: {
         basename(input.selectedCandidatePath, ".md").slice(0, 500) ||
         "Untitled book",
       typography: typography.provenance,
+      typographyRiskSummaries: typography.riskSummaries,
+      typographyRiskSummariesTruncated: typography.riskSummariesTruncated,
       version: draftPreparationVersion,
     });
     await atomicWriteFile(artifactPath, `${JSON.stringify(artifact)}\n`, {
@@ -206,9 +288,16 @@ export async function readPreparedDraftArtifact(
     artifact.title.length < 1 ||
     artifact.title.length > 500 ||
     !validTypographyProvenance(artifact.typography) ||
+    !Array.isArray(artifact.layoutDiagnostics) ||
+    !["content-list", "native-pdf", "none", "ocr"].includes(
+      String(artifact.layoutSource),
+    ) ||
+    !Array.isArray(artifact.pdfDiagnostics) ||
     !Array.isArray(artifact.printedContents) ||
     !Array.isArray(artifact.sourceRegions) ||
-    !Array.isArray(artifact.structure)
+    !Array.isArray(artifact.structure) ||
+    !Array.isArray(artifact.typographyRiskSummaries) ||
+    typeof artifact.typographyRiskSummariesTruncated !== "boolean"
   ) {
     throw new Error("PREPARED_DRAFT_ARTIFACT_INVALID");
   }
@@ -408,6 +497,28 @@ export async function finalizePreparedDraft(input: {
   await atomicWriteFile(yamlPath, yaml, { mode: 0o600 });
   await chmod(yamlPath, 0o400);
   const yamlRelativePath = relativePath(input.layout.root, yamlPath);
+  const analysis = createPrintedContentsAnalysisV2({
+    configRevision: revision,
+    detection: preparedDetection(input.artifact),
+    layoutDiagnostics: input.artifact.layoutDiagnostics,
+    layoutSource: input.artifact.layoutSource,
+    pdfDiagnostics: input.artifact.pdfDiagnostics,
+    sourceId: snapshot.source.id,
+    sourceSha256: snapshot.source.mainMarkdownSha256,
+    typographyRiskSummaries: input.artifact.typographyRiskSummaries,
+    typographyRiskSummariesTruncated:
+      input.artifact.typographyRiskSummariesTruncated,
+  });
+  const analysisPath = resolve(
+    input.layout.bookDirectory,
+    String(imported.bookId),
+    "draft",
+    "analyses",
+    snapshot.source.id,
+    `${revision}.json`,
+  );
+  await atomicWriteFile(analysisPath, canonicalJson(analysis), { mode: 0o600 });
+  await chmod(analysisPath, 0o400);
   let previewJob: JobRecord;
   if (reprocess && currentConfigRecord) {
     const replaced = drafts.replaceSourceConfigAndQueuePreview({
@@ -467,6 +578,39 @@ export async function finalizePreparedDraft(input: {
     configRevision: revision,
     previewJob,
     snapshot,
+  });
+}
+
+function preparedDetection(
+  artifact: PreparedDraftArtifact,
+): PrintedContentsDetection {
+  const regions = new Map(
+    artifact.sourceRegions.map((region) => [region.region_id, region] as const),
+  );
+  const candidates = artifact.printedContents.map((candidate) => {
+    const proposedRegion = candidate.regionId
+      ? regions.get(candidate.regionId)
+      : undefined;
+    return Object.freeze({
+      alignment: candidate.alignment,
+      boundaryConfidence: candidate.boundaryConfidence,
+      canonical: candidate.canonical,
+      confidence: candidate.confidence,
+      diagnostics: candidate.diagnostics,
+      endByte: candidate.endByte,
+      entryCount: candidate.entryCount,
+      matchedHeadingCount: candidate.matchedHeadingCount,
+      matchConfidence: candidate.matchConfidence,
+      ...(proposedRegion ? { proposedRegion } : {}),
+      startByte: candidate.startByte,
+    });
+  });
+  const canonicalRegionId = artifact.printedContents.find(
+    (candidate) => candidate.canonical,
+  )?.regionId;
+  return Object.freeze({
+    ...(canonicalRegionId ? { canonicalRegionId } : {}),
+    candidates: Object.freeze(candidates),
   });
 }
 

@@ -1,4 +1,5 @@
 import { accessSync, constants, readFileSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 
 const expectedUid = 10001;
 const dataDirectory = process.env.MIRAWIND_DATA_DIR ?? "/var/lib/mirawind";
@@ -23,6 +24,29 @@ function workerIsRunningAsApplicationUser() {
   return false;
 }
 
+function assertDocumentTools() {
+  for (const [command, versionArgument] of [
+    ["pdfinfo", "-v"],
+    ["pdftoppm", "-v"],
+    ["pdftotext", "-v"],
+    ["tesseract", "--version"],
+  ]) {
+    execFileSync(command, [versionArgument], {
+      stdio: "ignore",
+      timeout: 4_000,
+    });
+  }
+  const languages = execFileSync("tesseract", ["--list-langs"], {
+    encoding: "utf8",
+    timeout: 4_000,
+  });
+  for (const language of ["eng", "chi_sim"]) {
+    if (!languages.split(/\r?\n/u).includes(language)) {
+      throw new Error("WORKER_DOCUMENT_LANGUAGE_MISSING");
+    }
+  }
+}
+
 async function checkWeb() {
   const publicOrigin = new URL(
     process.env.MIRAWIND_PUBLIC_ORIGIN ?? "http://localhost",
@@ -42,6 +66,7 @@ const mode = process.argv[2];
 assertDataDirectoryAccess();
 if (mode === "web") await checkWeb();
 else if (mode === "worker") {
+  assertDocumentTools();
   if (!workerIsRunningAsApplicationUser()) {
     throw new Error("WORKER_HEALTHCHECK_FAILED");
   }

@@ -34,7 +34,7 @@ export interface LayoutEvidenceDiagnostic {
 export interface LayoutEvidence {
   readonly diagnostics: readonly LayoutEvidenceDiagnostic[];
   readonly records: readonly LayoutEvidenceRecord[];
-  readonly source: "content-list" | "none";
+  readonly source: "content-list" | "native-pdf" | "none" | "ocr";
 }
 
 export interface PrintedLayoutRow {

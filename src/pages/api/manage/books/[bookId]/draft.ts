@@ -117,6 +117,13 @@ export const GET: APIRoute = async ({ locals, params }) => {
         }[]
       ).map((region) => ({
         applied: region.applied,
+        block_id:
+          (
+            region.entries as readonly {
+              readonly body_heading_block_id?: string;
+            }[]
+          ).find((entry) => entry.body_heading_block_id)
+            ?.body_heading_block_id ?? null,
         entry_count: region.entries.length,
         region_id: region.region_id,
       })),

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/manage-classes";
 import { usePolling } from "@/components/manage/use-polling";
 
-import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import { DiagnosticsPanel, type PreviewDiagnostic } from "./DiagnosticsPanel";
 import { PublishPanel } from "./PublishPanel";
 import {
   StructureEditor,
@@ -37,16 +37,9 @@ interface PreviewPage {
   readonly title: string;
 }
 
-interface PreviewDiagnostic {
-  readonly blockId?: string;
-  readonly code: string;
-  readonly message: string;
-  readonly path?: string;
-  readonly severity?: "error" | "info" | "warning";
-}
-
 interface PreviewRegion {
   readonly applied: boolean;
+  readonly block_id?: string;
   readonly end_byte: number;
   readonly entry_count: number;
   readonly matched_heading_count: number;
@@ -94,6 +87,20 @@ interface DraftView {
   }[];
   readonly title: string;
 }
+
+interface RecoveryJob {
+  readonly error_code: string | null;
+  readonly job_id: string;
+  readonly state:
+    "canceled" | "failed" | "interrupted" | "queued" | "running" | "succeeded";
+}
+
+const terminalJobStates = new Set<RecoveryJob["state"]>([
+  "canceled",
+  "failed",
+  "interrupted",
+  "succeeded",
+]);
 
 type PreviewFrameMessageType =
   | "mirawind-preview-location"
@@ -146,6 +153,9 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   const [selectedFragment, setSelectedFragment] = useState<string | null>(null);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const [activeDiagnostic, setActiveDiagnostic] =
+    useState<PreviewDiagnostic | null>(null);
+  const [reprocessJob, setReprocessJob] = useState<RecoveryJob | null>(null);
   const [frameReady, setFrameReady] = useState(false);
   const [navigationSerial, setNavigationSerial] = useState(0);
   const [mobileMode, setMobileMode] = useState<"preview" | "structure">(
@@ -173,7 +183,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     );
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<DraftView> => {
     const response = await fetch(`/api/manage/books/${props.bookId}/draft`, {
       cache: "no-store",
       credentials: "same-origin",
@@ -185,6 +195,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     setSelectedPage(
       (current) => current ?? next.preview?.pages.at(0)?.page_id ?? null,
     );
+    return next;
   }, [props.bookId]);
 
   useEffect(() => {
@@ -198,6 +209,38 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     draft?.preview_state === "building",
     async () => {
       await refresh().catch(() => setMessage("预览状态刷新失败。"));
+    },
+    1_000,
+  );
+
+  usePolling(
+    Boolean(reprocessJob && !terminalJobStates.has(reprocessJob.state)),
+    async () => {
+      if (!reprocessJob) return;
+      try {
+        const response = await fetch(
+          `/api/manage/jobs/${reprocessJob.job_id}`,
+          { cache: "no-store", credentials: "same-origin" },
+        );
+        if (!response.ok) throw new Error("REPROCESS_STATUS_FAILED");
+        const next = (await response.json()) as RecoveryJob;
+        setReprocessJob(next);
+        if (next.state === "succeeded") {
+          setReprocessJob(null);
+          setMessage("");
+          await refresh();
+        } else if (
+          next.state === "failed" ||
+          next.state === "interrupted" ||
+          next.state === "canceled"
+        ) {
+          setMessage(
+            `按原文重新处理未完成（${next.error_code ?? next.state}）。`,
+          );
+        }
+      } catch {
+        setMessage("重新处理状态刷新失败；可稍后重新载入。");
+      }
     },
     1_000,
   );
@@ -235,19 +278,78 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   );
   const activateDiagnostic = useCallback(
     (diagnostic: PreviewDiagnostic) => {
-      if (!diagnostic.blockId) return;
+      const blockId =
+        diagnostic.location?.blockId ??
+        diagnostic.blockId ??
+        draft?.preview?.source_regions.find(
+          (region) =>
+            region.region_id === diagnostic.location?.regionId &&
+            region.block_id,
+        )?.block_id;
       diagnosticsDialog.current?.close();
-      const diagnosticPage = pageForBlock(diagnostic.blockId);
-      setFocusedBlockId(diagnostic.blockId);
+      setActiveDiagnostic(diagnostic);
+      if (!blockId) {
+        setMobileMode("structure");
+        return;
+      }
+      const diagnosticPage = pageForBlock(blockId);
+      setFocusedBlockId(blockId);
       setMobileMode("structure");
       if (diagnosticPage === null) return;
       setFrameReady(false);
       setSelectedPage(diagnosticPage);
-      setSelectedFragment(diagnostic.blockId);
+      setSelectedFragment(blockId);
       setNavigationSerial((value) => value + 1);
       setMobileMode("preview");
     },
-    [pageForBlock],
+    [draft?.preview?.source_regions, pageForBlock],
+  );
+
+  const recoverDiagnostic = useCallback(
+    async (
+      action: NonNullable<PreviewDiagnostic["recovery"]>[number],
+      diagnostic: PreviewDiagnostic,
+    ) => {
+      if (action === "select_structure") {
+        activateDiagnostic(diagnostic);
+        return;
+      }
+      setMessage("");
+      if (action === "reload") {
+        await refresh().catch(() => setMessage("重新载入草稿失败。"));
+        return;
+      }
+      if (
+        !draft ||
+        editorState.dirty ||
+        editorState.conflict ||
+        editorState.saving
+      ) {
+        setMessage("本地修改或冲突尚未处理，不能开始重新处理。");
+        return;
+      }
+      try {
+        const response = await fetch(
+          `/api/manage/books/${draft.book_id}/reprocess`,
+          {
+            body: JSON.stringify({
+              expected_config_revision: draft.config_revision,
+              profile: "verbatim-v1",
+            }),
+            cache: "no-store",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            method: "POST",
+          },
+        );
+        if (!response.ok) throw new Error("REPROCESS_FAILED");
+        const queued = (await response.json()) as RecoveryJob;
+        setReprocessJob(queued);
+      } catch {
+        setMessage("无法开始按原文重新处理。");
+      }
+    },
+    [activateDiagnostic, draft, editorState, refresh],
   );
 
   if (!draft) {
@@ -296,6 +398,11 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           {editorState.dirty && (
             <p className="text-xs text-amber-800" role="status">
               本地修改尚未反映
+            </p>
+          )}
+          {reprocessJob && !terminalJobStates.has(reprocessJob.state) && (
+            <p className="text-xs text-amber-800" role="status">
+              正在按原文重新处理
             </p>
           )}
           {message && (
@@ -378,6 +485,21 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           <h2 className="sr-only" id="structure-title">
             出版结构
           </h2>
+          {activeDiagnostic?.location && (
+            <p
+              className="mb-3 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900"
+              role="status"
+            >
+              {activeDiagnostic.location.regionId
+                ? `区域 ${activeDiagnostic.location.regionId}`
+                : activeDiagnostic.location.pageIndex !== undefined
+                  ? `原 PDF 第 ${activeDiagnostic.location.pageIndex + 1} 页`
+                  : activeDiagnostic.location.startByte !== undefined &&
+                      activeDiagnostic.location.endByte !== undefined
+                    ? `源字节 ${activeDiagnostic.location.startByte}-${activeDiagnostic.location.endByte}`
+                    : activeDiagnostic.code}
+            </p>
+          )}
           {etag && (
             <StructureEditor
               ref={editorRef}
@@ -385,7 +507,9 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
               etag={etag}
               focusedBlockId={focusedBlockId}
               headings={preview?.headings ?? []}
-              onSaved={refresh}
+              onSaved={async () => {
+                await refresh();
+              }}
               onStateChange={updateEditorState}
               regions={draft.regions}
               revision={draft.config_revision}
@@ -401,7 +525,11 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             <DiagnosticsPanel
               diagnostics={draft.diagnostics}
               onActivate={activateDiagnostic}
+              onRecover={recoverDiagnostic}
               pageForBlock={pageForBlock}
+              recoveryDisabled={
+                editorState.dirty || editorState.conflict || editorState.saving
+              }
             />
           </div>
         </aside>
@@ -506,7 +634,11 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             <DiagnosticsPanel
               diagnostics={draft.diagnostics}
               onActivate={activateDiagnostic}
+              onRecover={recoverDiagnostic}
               pageForBlock={pageForBlock}
+              recoveryDisabled={
+                editorState.dirty || editorState.conflict || editorState.saving
+              }
             />
           </div>
         </dialog>

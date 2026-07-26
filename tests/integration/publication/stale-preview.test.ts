@@ -6,6 +6,7 @@ import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
 import { compilerIdentity } from "@/compiler/document/manifest";
+import { createPrintedContentsAnalysisV2 } from "@/compiler/document/printed-contents-analysis";
 import { DraftRepository } from "@/db/repositories/drafts";
 import { ImportRepository } from "@/db/repositories/imports";
 import { JobRepository } from "@/db/repositories/jobs";
@@ -14,6 +15,7 @@ import {
   buildPreview,
   finalizeBuiltPreview,
 } from "@/jobs/handlers/build-preview";
+import { draftPreparationVersion } from "@/jobs/handlers/prepare-draft";
 import { assertReadyPreviewIdentity } from "@/services/preview-identity";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
@@ -48,7 +50,7 @@ describe("ready preview publication identity", () => {
       const markdown = "# Chapter\n\nBody.";
       await writeFile(resolve(sourceRoot, "book.md"), markdown);
       const source = new SourceRepository(database).createSnapshot({
-        analysisVersion: "test-v1",
+        analysisVersion: draftPreparationVersion,
         bookId: book.id,
         createdFromImportId: imported.id,
         id: sourceId,
@@ -103,6 +105,34 @@ describe("ready preview publication identity", () => {
       );
       await mkdir(resolve(configPath, ".."), { mode: 0o700, recursive: true });
       await writeFile(configPath, configYaml);
+      const analysisPath = resolve(
+        dataRoot.layout.bookDirectory,
+        String(book.id),
+        "draft",
+        "analyses",
+        sourceId,
+        "1.json",
+      );
+      await mkdir(resolve(analysisPath, ".."), {
+        mode: 0o700,
+        recursive: true,
+      });
+      await writeFile(
+        analysisPath,
+        JSON.stringify(
+          createPrintedContentsAnalysisV2({
+            configRevision: 1,
+            detection: { candidates: [] },
+            layoutDiagnostics: [],
+            layoutSource: "none",
+            pdfDiagnostics: [],
+            sourceId,
+            sourceSha256: source.mainMarkdownSha256,
+            typographyRiskSummaries: [],
+            typographyRiskSummariesTruncated: false,
+          }),
+        ),
+      );
       const config = drafts.addConfigRevision({
         bookId: book.id,
         nowMs: 4,
@@ -131,10 +161,12 @@ describe("ready preview publication identity", () => {
         "preview-identity",
       );
       const artifact = await buildPreview({
+        analysisPath,
         bookId: book.id,
         configRevision: 1,
         configYamlPath: configPath,
         sourceRoot,
+        sourceId,
         stagingDirectory,
       });
       await finalizeBuiltPreview({
@@ -160,6 +192,12 @@ describe("ready preview publication identity", () => {
         compiler_version: compilerIdentity.version,
         renderer_version: compilerIdentity.renderer_version,
       });
+      await expect(
+        assertReadyPreviewIdentity({
+          ...input,
+          source: { ...source, analysisVersion: "prepare-draft-v3" },
+        }),
+      ).rejects.toMatchObject({ code: "PUBLISH_PREVIEW_STALE" });
       const previewRoot = resolve(
         dataRoot.layout.root,
         preview.previewRelativePath ?? "",
