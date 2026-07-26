@@ -7,6 +7,7 @@ import { JSONParser, TokenType } from "@streamparser/json";
 const maximumSidecarBytes = 128 * 1024 * 1024;
 const maximumRecords = 20_000;
 const maximumTextLength = 4_000;
+const maximumStringTokenLength = 64 * 1024;
 const maximumJsonDepth = 32;
 
 type BoundingBox = readonly [number, number, number, number];
@@ -131,13 +132,16 @@ function projectRecord(
   const base = baseRecord(value);
   if (!base) return { invalid: true, records: Object.freeze([]) };
   const rawListItems = base.value.list_items;
+  const oversizedText =
+    typeof base.value.text === "string" &&
+    base.value.text.length > maximumTextLength;
   if (rawListItems !== undefined) {
     if (!Array.isArray(rawListItems)) {
       return { invalid: true, records: Object.freeze([]) };
     }
     if (rawListItems.length > maximumRecords) throw new EvidenceLimitError();
     const records: LayoutEvidenceRecord[] = [];
-    let invalid = false;
+    let invalid = oversizedText;
     for (const [itemIndex, item] of rawListItems.entries()) {
       if (
         typeof item !== "string" ||
@@ -166,7 +170,7 @@ function projectRecord(
     return { invalid, records: Object.freeze(records) };
   }
   return {
-    invalid: false,
+    invalid: oversizedText,
     records: Object.freeze([
       Object.freeze({
         ...(base.bbox ? { bbox: base.bbox } : {}),
@@ -212,7 +216,7 @@ async function streamFlatRecords(
     if (partial) {
       if (
         token === TokenType.STRING &&
-        String(value).length > maximumTextLength
+        String(value).length > maximumStringTokenLength
       ) {
         throw new EvidenceLimitError();
       }
@@ -230,7 +234,7 @@ async function streamFlatRecords(
     } else if (
       token === TokenType.STRING &&
       typeof value === "string" &&
-      value.length > maximumTextLength
+      value.length > maximumStringTokenLength
     ) {
       throw new EvidenceLimitError();
     }

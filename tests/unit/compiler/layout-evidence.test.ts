@@ -131,6 +131,32 @@ describe("bounded MinerU layout evidence", () => {
     });
   });
 
+  it("drops an overlong body row without discarding later bounded evidence", async () => {
+    const root = await fixtureRoot();
+    await writeFile(
+      join(root, "book_content_list.json"),
+      JSON.stringify([
+        { page_idx: 0, text: "x".repeat(4_001), type: "text" },
+        { page_idx: 1, text: "Chapter 1 Start .... 1", type: "text" },
+      ]),
+    );
+
+    await expect(
+      readMineruLayoutEvidence(join(root, "book.md")),
+    ).resolves.toMatchObject({
+      diagnostics: [{ code: "LAYOUT_EVIDENCE_INVALID" }],
+      records: [
+        { pageIndex: 0, type: "text" },
+        {
+          pageIndex: 1,
+          text: "Chapter 1 Start .... 1",
+          type: "text",
+        },
+      ],
+      source: "content-list",
+    });
+  });
+
   it("rejects sidecars above the record limit", async () => {
     const root = await fixtureRoot();
     await writeFile(
