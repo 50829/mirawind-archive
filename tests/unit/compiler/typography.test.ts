@@ -1,8 +1,17 @@
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import { preprocessMarkdownTypography } from "@/compiler/preprocess/typography";
+
+const protectedTokensPath = fileURLToPath(
+  new URL(
+    "../../fixtures/mineru/synthetic/protected-tokens.md",
+    import.meta.url,
+  ),
+);
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -60,6 +69,65 @@ describe("persisted Markdown typography preprocessing", () => {
     expect(result.provenance.protected_nodes).toBeGreaterThan(0);
   });
 
+  it("keeps Unicode paths and command arguments byte-identical", () => {
+    const protectedValues = [
+      "/资料/第1章/API,v1.2.3.md",
+      "./目录/配置.json",
+      "../源码/模块.ts",
+      "--output=/资料/结果,a.txt",
+      "--define=中文API,3.14",
+      '--label="中文API,3.14"',
+      "C:\\资料\\第1章\\配置.json",
+    ];
+    const input = `运行 ${protectedValues.join(" 再运行 ")} 完成.\n`;
+    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+
+    for (const value of protectedValues) {
+      expect(Buffer.from(result.markdown).includes(Buffer.from(value))).toBe(
+        true,
+      );
+    }
+  });
+
+  it("preserves the synthetic protected-token fixture", async () => {
+    const input = await readFile(protectedTokensPath, "utf8");
+    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+
+    for (const token of [
+      "/资料/第1章/API,v1.2.3.md",
+      "./目录/配置.json",
+      "--output=/资料/结果,a.txt",
+      "--define=中文API,3.14",
+      '--label="中文API,3.14"',
+      "C:\\资料\\第1章\\配置.json",
+      "$path=/资料/公式.md$",
+      "https://example.com/a,b",
+    ]) {
+      expect(result.markdown).toContain(token);
+    }
+  });
+
+  it("emits bounded locatable summaries without source content", () => {
+    const input = `${Array.from(
+      { length: 150 },
+      () => "中文English,测试.",
+    ).join("\n\n")}\n`;
+    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+
+    expect(result.riskSummaries).toHaveLength(100);
+    expect(result.riskSummariesTruncated).toBe(true);
+    for (const summary of result.riskSummaries) {
+      expect(summary).toMatchObject({
+        code: expect.stringMatching(/^TYPOGRAPHY_/u),
+        end_byte: expect.any(Number),
+        start_byte: expect.any(Number),
+      });
+      expect(summary.end_byte).toBeGreaterThan(summary.start_byte);
+      expect(JSON.stringify(summary)).not.toContain("中文");
+      expect(summary.end_byte).toBeLessThanOrEqual(Buffer.byteLength(input));
+    }
+  });
+
   it("handles transparent emphasis and link-label boundaries without changing destinations", () => {
     const input = "中文**English**中文与[API](https://example.com/a,b)中文\n";
     const result = preprocessMarkdownTypography(input, "zh-smart-v1");
@@ -87,6 +155,8 @@ describe("persisted Markdown typography preprocessing", () => {
 
     const preserved = preprocessMarkdownTypography(input, "verbatim-v1");
     expect(preserved.markdown).toBe(input);
+    expect(preserved.riskSummaries).toEqual([]);
+    expect(preserved.riskSummariesTruncated).toBe(false);
     expect(preserved.provenance.input_sha256).toBe(
       preserved.provenance.output_sha256,
     );

@@ -175,5 +175,81 @@ describe("explicit source typography reprocessing", () => {
           profile: "verbatim-v1",
         }),
       ).rejects.toMatchObject({ code: "REPROCESS_PRECONDITION_FAILED" });
+
+      const revertQueued = await queueSourceReprocess({
+        bookId: book.id,
+        database,
+        expectedConfigRevision: 2,
+        layout: dataRoot.layout,
+        nowMs: 9,
+        profile: "verbatim-v1",
+      });
+      const revertImport = imports.require(revertQueued.importId);
+      const revertCandidate = imports
+        .candidates(revertImport.id)
+        .find((value) => value.id === revertImport.selectedCandidateId);
+      if (!revertCandidate) throw new Error("Verbatim candidate missing");
+      const reverted = await prepareDraft({
+        archivePath: resolve(
+          dataRoot.layout.root,
+          revertImport.uploadRelativePath,
+        ),
+        selectedCandidatePath: revertCandidate.normalizedPath,
+        stagingDirectory: resolve(dataRoot.path, "staging/revert"),
+        typographyProfile: "verbatim-v1",
+      });
+      const revertedFinal = await finalizePreparedDraft({
+        artifact: reverted.artifact,
+        database,
+        extractedRoot: reverted.extractedRoot,
+        importId: revertImport.id,
+        layout: dataRoot.layout,
+        nowMs: 10,
+        originalArchivePath: resolve(
+          dataRoot.layout.root,
+          revertImport.uploadRelativePath,
+        ),
+      });
+      const revertedMarkdown = await readFile(
+        resolve(
+          dataRoot.layout.root,
+          revertedFinal.snapshot.source.sourceRootRelativePath,
+          revertedFinal.snapshot.source.mainMarkdownPath,
+        ),
+        "utf8",
+      );
+
+      expect(revertedMarkdown).toBe(markdown);
+      expect(await readFile(oldMarkdownPath, "utf8")).toBe(markdown);
+      expect(
+        await readFile(
+          resolve(
+            dataRoot.layout.root,
+            finalized.snapshot.source.sourceRootRelativePath,
+            finalized.snapshot.source.mainMarkdownPath,
+          ),
+          "utf8",
+        ),
+      ).toBe(normalizedMarkdown);
+      expect(drafts.requireBook(book.id)).toMatchObject({
+        draftConfigRevision: 3,
+        draftSourceId: revertedFinal.snapshot.source.id,
+      });
+      expect(
+        parseBookConfigYaml(
+          await readFile(
+            resolve(
+              dataRoot.layout.root,
+              drafts.requireConfig(book.id, 3).yamlRelativePath,
+            ),
+            "utf8",
+          ),
+        ),
+      ).toMatchObject({
+        revision: 3,
+        source: {
+          preprocessing: { typography: { profile: "verbatim-v1" } },
+        },
+      });
     }));
 });

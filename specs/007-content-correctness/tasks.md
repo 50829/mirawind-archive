@@ -61,9 +61,9 @@ produce continuous h1-h4 and exact independent split decisions.
 **Independent gate**: every adversarial and image-derived protected range is byte-identical and
 processing is idempotent.
 
-- [ ] T030 Expand failing code/path/formula/link/CLI/version/token interval tests
-- [ ] T031 Apply every punctuation/spacing edit only inside eligible segments
-- [ ] T032 Emit bounded locatable risk summaries and verify verbatim rebuild from retained input
+- [x] T030 Expand failing code/path/formula/link/CLI/version/token interval tests
+- [x] T031 Apply every punctuation/spacing edit only inside eligible segments
+- [x] T032 Emit bounded locatable risk summaries and verify verbatim rebuild from retained input
 
 ## Phase 7: OCR and private analysis v2
 

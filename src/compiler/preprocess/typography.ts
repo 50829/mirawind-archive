@@ -12,6 +12,19 @@ export type { TypographyProfile, TypographyProvenance };
 export interface TypographyPreprocessResult {
   readonly markdown: string;
   readonly provenance: TypographyProvenance;
+  readonly riskSummaries: readonly TypographyRiskSummary[];
+  readonly riskSummariesTruncated: boolean;
+}
+
+export interface TypographyRiskSummary {
+  readonly code:
+    | "TYPOGRAPHY_MIXED_REWRITE"
+    | "TYPOGRAPHY_PUNCTUATION_REWRITE"
+    | "TYPOGRAPHY_SPACING_REWRITE";
+  readonly end_byte: number;
+  readonly punctuation_converted: number;
+  readonly spaces_normalized: number;
+  readonly start_byte: number;
 }
 
 interface TextLeaf {
@@ -41,6 +54,7 @@ interface ProtectedRange {
 }
 
 const maximumCounter = 2_147_483_647;
+const maximumRiskSummaries = 100;
 const horizontalWhitespace =
   "[\\t\\f\\v \\u00a0\\u1680\\u2000-\\u200a\\u202f\\u205f\\u3000]";
 const hanPattern = /\p{Script=Han}/u;
@@ -56,7 +70,7 @@ const opaqueTypes = new Set([
 ]);
 
 const technicalTokenPattern =
-  /(?:10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+)|(?:ISBN(?:-1[03])?:?\s*(?:97[89][-\s]?)?\d(?:[-\s]?\d){8,12}[\dX])|(?:(?:https?|ftp):\/\/|www\.)[^\s<>\p{Script=Han}]+|(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})|(?:(?:[A-Za-z]:\\|\.{0,2}\/|\/)[A-Za-z0-9._~!$&'()*+,;=:@%/\\-]+)|(?:\bv?\d+(?:\.\d+){1,}\b)|(?:\b(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?\b)|(?:\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b)|(?:\b\d+\.\d+\b)|(?:\b[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,12}\b)/gu;
+  /(?:10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+)|(?:ISBN(?:-1[03])?:?\s*(?:97[89][-\s]?)?\d(?:[-\s]?\d){8,12}[\dX])|(?:(?:https?|ftp):\/\/|www\.)[^\s<>\p{Script=Han}]+|(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})|(?:--?[A-Za-z][A-Za-z0-9_-]*(?:=(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s<>`]+))?)|(?:(?:[A-Za-z]:\\|\.{0,2}\/|\/)[^\s<>"'`]*?\.[A-Za-z0-9]{1,12}(?=$|\s|\p{Script=Han}))|(?:(?:[A-Za-z]:\\|\.{0,2}\/|\/)[^\s<>"'`，。；：？！]+)|(?:\bv?\d+(?:\.\d+){1,}\b)|(?:\b(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?\b)|(?:\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b)|(?:\b\d+\.\d+\b)|(?:\b[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,12}\b)/gu;
 
 function clampCounter(value: number): number {
   return Math.min(value, maximumCounter);
@@ -87,7 +101,33 @@ function isProtected(
   ranges: readonly ProtectedRange[],
   index: number,
 ): boolean {
-  return ranges.some((range) => index >= range.start && index < range.end);
+  let low = 0;
+  let high = ranges.length - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const range = ranges[middle];
+    if (!range) return false;
+    if (index < range.start) high = middle - 1;
+    else if (index >= range.end) low = middle + 1;
+    else return true;
+  }
+  return false;
+}
+
+function transformUnprotected(
+  value: string,
+  transform: (segment: string) => string,
+): string {
+  const ranges = protectedRanges(value);
+  if (ranges.length === 0) return transform(value);
+  let cursor = 0;
+  let output = "";
+  for (const range of ranges) {
+    output += transform(value.slice(cursor, range.start));
+    output += value.slice(range.start, range.end);
+    cursor = range.end;
+  }
+  return output + transform(value.slice(cursor));
 }
 
 function previousVisibleCharacter(value: string, index: number): string {
@@ -224,33 +264,34 @@ function normalizePunctuation(value: string): {
 
   return Object.freeze({
     converted,
-    value: withPeriods
-      .join("")
-      .replace(
-        new RegExp(
-          `${horizontalWhitespace}+(?=[，。；：？！）》」』】])`,
-          "gu",
+    value: transformUnprotected(withPeriods.join(""), (segment) =>
+      segment
+        .replace(
+          new RegExp(
+            `${horizontalWhitespace}+(?=[，。；：？！）》」』】])`,
+            "gu",
+          ),
+          "",
+        )
+        .replace(
+          new RegExp(`(?<=[（《“‘「『【])${horizontalWhitespace}+`, "gu"),
+          "",
+        )
+        .replace(
+          new RegExp(
+            `(?<=[，。；：？！）》」』】])${horizontalWhitespace}+(?=[\\p{Script=Han}（《“‘「『【])`,
+            "gu",
+          ),
+          "",
+        )
+        .replace(
+          new RegExp(
+            `(?<=[\\p{Script=Han}）》」』】”’])${horizontalWhitespace}+(?=[（《“‘「『【])`,
+            "gu",
+          ),
+          "",
         ),
-        "",
-      )
-      .replace(
-        new RegExp(`(?<=[（《“‘「『【])${horizontalWhitespace}+`, "gu"),
-        "",
-      )
-      .replace(
-        new RegExp(
-          `(?<=[，。；：？！）》」』】])${horizontalWhitespace}+(?=[\\p{Script=Han}（《“‘「『【])`,
-          "gu",
-        ),
-        "",
-      )
-      .replace(
-        new RegExp(
-          `(?<=[\\p{Script=Han}）》」』】”’])${horizontalWhitespace}+(?=[（《“‘「『【])`,
-          "gu",
-        ),
-        "",
-      ),
+    ),
   });
 }
 
@@ -259,6 +300,7 @@ function normalizeUnprotectedSpacing(value: string): {
   readonly value: string;
 } {
   let normalized = 0;
+  const ranges = protectedRanges(value);
   const forward = new RegExp(
     `(\\p{Script=Han})(${horizontalWhitespace}*)([\\p{Script=Latin}0-9])`,
     "gu",
@@ -267,20 +309,53 @@ function normalizeUnprotectedSpacing(value: string): {
     `([\\p{Script=Latin}0-9])(${horizontalWhitespace}*)(\\p{Script=Han})`,
     "gu",
   );
-  let output = value.replace(
-    forward,
-    (_match, left: string, spaces: string, right: string) => {
-      if (spaces !== " ") normalized += 1;
-      return `${left} ${right}`;
-    },
-  );
-  output = output.replace(
-    backward,
-    (_match, left: string, spaces: string, right: string) => {
-      if (spaces !== " ") normalized += 1;
-      return `${left} ${right}`;
-    },
-  );
+  const normalizeSegment = (segment: string): string => {
+    let output = segment.replace(
+      forward,
+      (_match, left: string, spaces: string, right: string) => {
+        if (spaces !== " ") normalized += 1;
+        return `${left} ${right}`;
+      },
+    );
+    output = output.replace(
+      backward,
+      (_match, left: string, spaces: string, right: string) => {
+        if (spaces !== " ") normalized += 1;
+        return `${left} ${right}`;
+      },
+    );
+    return output;
+  };
+  let cursor = 0;
+  let output = "";
+  for (const [rangeIndex, range] of ranges.entries()) {
+    let before = normalizeSegment(value.slice(cursor, range.start));
+    const token = value.slice(range.start, range.end);
+    const left = boundaryCharacters(before).last;
+    const tokenFirst = boundaryCharacters(token).first;
+    if (
+      before &&
+      needsMixedSpace(left, tokenFirst) &&
+      !new RegExp(`${horizontalWhitespace}$`, "u").test(before)
+    ) {
+      before += " ";
+      normalized += 1;
+    }
+    output += before + token;
+    cursor = range.end;
+    const next = value.slice(cursor, ranges[rangeIndex + 1]?.start);
+    const tokenLast = boundaryCharacters(token).last;
+    const nextFirst = boundaryCharacters(next).first;
+    if (
+      next &&
+      needsMixedSpace(tokenLast, nextFirst) &&
+      !new RegExp(`^${horizontalWhitespace}`, "u").test(next)
+    ) {
+      output += " ";
+      normalized += 1;
+    }
+  }
+  output += normalizeSegment(value.slice(cursor));
   return Object.freeze({ normalized, value: output });
 }
 
@@ -408,6 +483,8 @@ function preprocessBody(source: string): {
   readonly markdown: string;
   readonly protectedNodes: number;
   readonly punctuationConverted: number;
+  readonly riskSummaries: readonly TypographyRiskSummary[];
+  readonly riskSummariesTruncated: boolean;
   readonly spacesNormalized: number;
 } {
   const document = parseMarkdownDocument(source);
@@ -421,9 +498,43 @@ function preprocessBody(source: string): {
 
   let spacesNormalized = 0;
   let punctuationConverted = 0;
+  const riskSummaries: TypographyRiskSummary[] = [];
+  let riskSummaryCount = 0;
+  const addRiskSummary = (input: {
+    readonly end: number;
+    readonly punctuationConverted: number;
+    readonly spacesNormalized: number;
+    readonly start: number;
+  }) => {
+    riskSummaryCount += 1;
+    if (riskSummaries.length >= maximumRiskSummaries) return;
+    const code =
+      input.punctuationConverted > 0 && input.spacesNormalized > 0
+        ? "TYPOGRAPHY_MIXED_REWRITE"
+        : input.punctuationConverted > 0
+          ? "TYPOGRAPHY_PUNCTUATION_REWRITE"
+          : "TYPOGRAPHY_SPACING_REWRITE";
+    riskSummaries.push(
+      Object.freeze({
+        code,
+        end_byte: Buffer.byteLength(source.slice(0, input.end), "utf8"),
+        punctuation_converted: clampCounter(input.punctuationConverted),
+        spaces_normalized: clampCounter(input.spacesNormalized),
+        start_byte: Buffer.byteLength(source.slice(0, input.start), "utf8"),
+      }),
+    );
+  };
   for (const leaf of leaves) {
     if (!isTextLeaf(leaf)) continue;
     const normalized = normalizeText(leaf.transformed);
+    if (normalized.value !== leaf.transformed) {
+      addRiskSummary({
+        end: leaf.end,
+        punctuationConverted: normalized.punctuationConverted,
+        spacesNormalized: normalized.spacesNormalized,
+        start: leaf.start,
+      });
+    }
     leaf.transformed = normalized.value;
     spacesNormalized += normalized.spacesNormalized;
     punctuationConverted += normalized.punctuationConverted;
@@ -465,6 +576,12 @@ function preprocessBody(source: string): {
           leaf.start;
         insertions.set(offset, " ");
         spacesNormalized += 1;
+        addRiskSummary({
+          end: Math.min(source.length, offset + 1),
+          punctuationConverted: 0,
+          spacesNormalized: 1,
+          start: Math.max(0, offset - 1),
+        });
       }
     }
     previous = leaf;
@@ -504,6 +621,8 @@ function preprocessBody(source: string): {
     markdown,
     protectedNodes: clampCounter(protectedNodes),
     punctuationConverted: clampCounter(punctuationConverted),
+    riskSummaries: Object.freeze(riskSummaries),
+    riskSummariesTruncated: riskSummaryCount > maximumRiskSummaries,
     spacesNormalized: clampCounter(spacesNormalized),
   });
 }
@@ -525,6 +644,8 @@ export function preprocessMarkdownTypography(
         punctuation_converted: 0,
         spaces_normalized: 0,
       }),
+      riskSummaries: Object.freeze([]),
+      riskSummariesTruncated: false,
     });
   }
   if (profile !== "zh-smart-v1") {
@@ -534,6 +655,7 @@ export function preprocessMarkdownTypography(
   const body = bom ? original.slice(1) : original;
   const transformed = preprocessBody(body);
   const markdown = `${bom}${transformed.markdown}`;
+  const bomBytes = Buffer.byteLength(bom, "utf8");
   return Object.freeze({
     markdown,
     provenance: Object.freeze({
@@ -544,5 +666,15 @@ export function preprocessMarkdownTypography(
       punctuation_converted: transformed.punctuationConverted,
       spaces_normalized: transformed.spacesNormalized,
     }),
+    riskSummaries: Object.freeze(
+      transformed.riskSummaries.map((summary) =>
+        Object.freeze({
+          ...summary,
+          end_byte: summary.end_byte + bomBytes,
+          start_byte: summary.start_byte + bomBytes,
+        }),
+      ),
+    ),
+    riskSummariesTruncated: transformed.riskSummariesTruncated,
   });
 }
