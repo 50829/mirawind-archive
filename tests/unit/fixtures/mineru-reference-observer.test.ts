@@ -100,7 +100,7 @@ describe("real MinerU production observer", () => {
       "",
       "## 1.1 Basics",
       "",
-      "Body.",
+      "Body with `/资料/a,b.md` and $x=/公式/a.md$.",
     ].join("\n");
     const root = await mkdtemp(join(tmpdir(), "reference-observer-test-"));
     roots.push(root);
@@ -155,5 +155,16 @@ describe("real MinerU production observer", () => {
         (heading) => heading.disposition.kind === "excluded",
       ),
     ).toHaveLength(3);
+    expect(observed.protected_ranges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "code" }),
+        expect.objectContaining({ kind: "formula" }),
+      ]),
+    );
+    expect(
+      observed.protected_ranges.every(
+        (range) => range.sha256 === range.output_sha256,
+      ),
+    ).toBe(true);
   });
 });

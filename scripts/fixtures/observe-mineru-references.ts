@@ -22,7 +22,10 @@ import {
   type ContentRole,
 } from "../../src/compiler/document/structure-proposal.js";
 import type { NormalizedDocument } from "../../src/compiler/document/types.js";
-import { preprocessMarkdownTypography } from "../../src/compiler/preprocess/typography.js";
+import {
+  findTypographyProtectedRanges,
+  preprocessMarkdownTypography,
+} from "../../src/compiler/preprocess/typography.js";
 import { resolveContainedPath } from "../../src/storage/layout.js";
 import type { MineruReferencePack } from "./create-mineru-reference-pack.js";
 import type {
@@ -464,6 +467,45 @@ function diagnosticsFor(
   );
 }
 
+function observedProtectedRanges(
+  input: string,
+  output: string,
+): readonly ObservedProtectedRange[] {
+  const inputBytes = Buffer.from(input, "utf8");
+  const outputBytes = Buffer.from(output, "utf8");
+  let outputCursor = 0;
+  return Object.freeze(
+    findTypographyProtectedRanges(input).map((range) => {
+      const protectedInput = inputBytes.subarray(
+        range.start_byte,
+        range.end_byte,
+      );
+      const outputStart = outputBytes.indexOf(protectedInput, outputCursor);
+      const protectedOutput =
+        outputStart >= 0
+          ? outputBytes.subarray(
+              outputStart,
+              outputStart + protectedInput.byteLength,
+            )
+          : outputBytes.subarray(
+              outputCursor,
+              Math.min(
+                outputBytes.byteLength,
+                outputCursor + protectedInput.byteLength,
+              ),
+            );
+      if (outputStart >= 0) {
+        outputCursor = outputStart + protectedInput.byteLength;
+      }
+      return Object.freeze({
+        ...range,
+        output_sha256: sha256(protectedOutput),
+        sha256: sha256(protectedInput),
+      });
+    }),
+  );
+}
+
 export async function observeRealMineruFixture(input: {
   readonly archivePath: string;
   readonly pack: MineruReferencePack;
@@ -550,7 +592,7 @@ export async function observeRealMineruFixture(input: {
       regions,
       state: regions.length > 0 ? "present" : "absent",
     }),
-    protected_ranges: Object.freeze([]) as readonly ObservedProtectedRange[],
+    protected_ranges: observedProtectedRanges(rawSource, typography.markdown),
     raw_heading_accounting: rawHeadingAccounting({
       activeDocument,
       originalDocument,

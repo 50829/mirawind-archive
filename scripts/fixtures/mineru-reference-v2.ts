@@ -122,6 +122,7 @@ const sha256Pattern = /^[a-f0-9]{64}$/u;
 const fixtureIdPattern = /^real-mineru-[a-z0-9]{6,32}$/u;
 const localKeyPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const diagnosticCodePattern = /^[A-Z][A-Z0-9_]{2,79}$/u;
+const maximumProtectedRanges = 100_000;
 
 function object(
   value: unknown,
@@ -750,7 +751,7 @@ export function parseMineruReferenceV2(value: unknown): MineruReferenceV2 {
 
   if (
     !Array.isArray(input.protected_ranges) ||
-    input.protected_ranges.length > 20_000
+    input.protected_ranges.length > maximumProtectedRanges
   ) {
     throw new Error("reference.protected_ranges is invalid");
   }

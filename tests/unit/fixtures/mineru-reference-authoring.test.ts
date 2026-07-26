@@ -90,6 +90,41 @@ describe("Codex vision reference authoring", () => {
     });
   }
 
+  it("derives protected evidence from source independently of proposals", () => {
+    const source =
+      "# Book\n\n运行 `/资料/a,b.md` 与 $x=/公式/a.md$、[API](https://example.com/a,b)。\n";
+    const pack = packFor(source);
+    const transcript: CodexVisionTranscript = {
+      fixture_id: pack.fixture_id,
+      inspected_pages: [],
+      regions: [],
+      schema_version: 1,
+      source: "codex-image-recognition",
+    };
+
+    const reference = authorMineruReferenceV2({ pack, source, transcript });
+    const bytes = Buffer.from(source, "utf8");
+    expect(
+      reference.protected_ranges.map((range) => ({
+        hashMatches:
+          range.sha256 ===
+          hash(bytes.subarray(range.start_byte, range.end_byte).toString()),
+        kind: range.kind,
+        value: bytes
+          .subarray(range.start_byte, range.end_byte)
+          .toString("utf8"),
+      })),
+    ).toEqual([
+      { hashMatches: true, kind: "code", value: "`/资料/a,b.md`" },
+      { hashMatches: true, kind: "formula", value: "$x=/公式/a.md$" },
+      {
+        hashMatches: true,
+        kind: "link_destination",
+        value: "https://example.com/a,b",
+      },
+    ]);
+  });
+
   it("binds image-inspected structure without production proposals", () => {
     const source = [
       "# Book",

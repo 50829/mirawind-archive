@@ -27,6 +27,19 @@ export interface TypographyRiskSummary {
   readonly start_byte: number;
 }
 
+export interface TypographyProtectedRange {
+  readonly end_byte: number;
+  readonly kind:
+    | "code"
+    | "formula"
+    | "html"
+    | "link_destination"
+    | "path"
+    | "command"
+    | "technical_token";
+  readonly start_byte: number;
+}
+
 interface TextLeaf {
   readonly end: number;
   readonly path: readonly TransientDocumentNode[];
@@ -53,7 +66,14 @@ interface ProtectedRange {
   readonly start: number;
 }
 
+interface DetectedProtectedRange {
+  readonly end: number;
+  readonly kind: TypographyProtectedRange["kind"];
+  readonly start: number;
+}
+
 const maximumCounter = 2_147_483_647;
+const maximumProtectedRanges = 100_000;
 const maximumRiskSummaries = 100;
 const horizontalWhitespace =
   "[\\t\\f\\v \\u00a0\\u1680\\u2000-\\u200a\\u202f\\u205f\\u3000]";
@@ -71,6 +91,155 @@ const opaqueTypes = new Set([
 
 const technicalTokenPattern =
   /(?:10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+)|(?:ISBN(?:-1[03])?:?\s*(?:97[89][-\s]?)?\d(?:[-\s]?\d){8,12}[\dX])|(?:(?:https?|ftp):\/\/|www\.)[^\s<>\p{Script=Han}]+|(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})|(?:--?[A-Za-z][A-Za-z0-9_-]*(?:=(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s<>`]+))?)|(?:(?:[A-Za-z]:\\|\.{0,2}\/|\/)[^\s<>"'`]*?\.[A-Za-z0-9]{1,12}(?=$|\s|\p{Script=Han}))|(?:(?:[A-Za-z]:\\|\.{0,2}\/|\/)[^\s<>"'`，。；：？！]+)|(?:\bv?\d+(?:\.\d+){1,}\b)|(?:\b(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?\b)|(?:\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b)|(?:\b\d+\.\d+\b)|(?:\b[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,12}\b)/gu;
+
+function technicalKind(value: string): "command" | "path" | "technical_token" {
+  if (/^--?[A-Za-z]/u.test(value)) return "command";
+  if (/^(?:[A-Za-z]:\\|\.{0,2}\/|\/)/u.test(value)) return "path";
+  return "technical_token";
+}
+
+function nodeRange(
+  node: TransientDocumentNode,
+): { readonly end: number; readonly start: number } | undefined {
+  const start = node.position?.start.offset;
+  const end = node.position?.end.offset;
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    Number(end) <= Number(start)
+  ) {
+    return;
+  }
+  return Object.freeze({ end: Number(end), start: Number(start) });
+}
+
+function linkDestinationRange(
+  node: TransientDocumentNode,
+  source: string,
+): DetectedProtectedRange | undefined {
+  const range = nodeRange(node);
+  if (!range || !node.url) return;
+  const raw = source.slice(range.start, range.end);
+  const relativeStart = raw.indexOf(node.url);
+  if (relativeStart < 0) return;
+  return Object.freeze({
+    end: range.start + relativeStart + node.url.length,
+    kind: "link_destination" as const,
+    start: range.start + relativeStart,
+  });
+}
+
+function byteOffsets(
+  source: string,
+  values: readonly number[],
+): ReadonlyMap<number, number> {
+  const offsets = [...new Set(values)].sort((left, right) => left - right);
+  const result = new Map<number, number>();
+  let byteCursor = 0;
+  let characterCursor = 0;
+  for (const offset of offsets) {
+    byteCursor += Buffer.byteLength(
+      source.slice(characterCursor, offset),
+      "utf8",
+    );
+    characterCursor = offset;
+    result.set(offset, byteCursor);
+  }
+  return result;
+}
+
+export function findTypographyProtectedRanges(
+  source: string,
+): readonly TypographyProtectedRange[] {
+  const document = parseMarkdownDocument(source);
+  const detected: DetectedProtectedRange[] = [];
+  const addNode = (
+    node: TransientDocumentNode,
+    kind: TypographyProtectedRange["kind"],
+  ): void => {
+    const range = nodeRange(node);
+    if (range) detected.push(Object.freeze({ ...range, kind }));
+  };
+  const visit = (node: TransientDocumentNode): void => {
+    if (node.type === "code" || node.type === "inlineCode") {
+      addNode(node, "code");
+      return;
+    }
+    if (node.type === "math" || node.type === "inlineMath") {
+      addNode(node, "formula");
+      return;
+    }
+    if (node.type === "html") {
+      addNode(node, "html");
+      return;
+    }
+    if (node.type === "image") {
+      const destination = linkDestinationRange(node, source);
+      if (destination) detected.push(destination);
+      return;
+    }
+    if (node.type === "link") {
+      const destination = linkDestinationRange(node, source);
+      if (destination) detected.push(destination);
+      const range = nodeRange(node);
+      const raw = range ? source.slice(range.start, range.end) : "";
+      if (!raw.includes("[")) return;
+    }
+    if (
+      node.type === "text" &&
+      node.position &&
+      typeof node.value === "string"
+    ) {
+      const raw = source.slice(
+        node.position.start.offset,
+        node.position.end.offset,
+      );
+      if (raw === node.value) {
+        technicalTokenPattern.lastIndex = 0;
+        for (const match of raw.matchAll(technicalTokenPattern)) {
+          const start = node.position.start.offset + (match.index ?? 0);
+          detected.push(
+            Object.freeze({
+              end: start + match[0].length,
+              kind: technicalKind(match[0]),
+              start,
+            }),
+          );
+        }
+      }
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(document.root);
+  detected.sort(
+    (left, right) =>
+      left.start - right.start ||
+      right.end - left.end ||
+      left.kind.localeCompare(right.kind, "en"),
+  );
+  const nonOverlapping: DetectedProtectedRange[] = [];
+  for (const range of detected) {
+    const previous = nonOverlapping.at(-1);
+    if (previous && range.start < previous.end) continue;
+    nonOverlapping.push(range);
+    if (nonOverlapping.length > maximumProtectedRanges) {
+      throw new Error("TYPOGRAPHY_PROTECTED_RANGE_LIMIT_EXCEEDED");
+    }
+  }
+  const offsets = byteOffsets(
+    source,
+    nonOverlapping.flatMap((range) => [range.start, range.end]),
+  );
+  return Object.freeze(
+    nonOverlapping.map((range) =>
+      Object.freeze({
+        end_byte: offsets.get(range.end) ?? 0,
+        kind: range.kind,
+        start_byte: offsets.get(range.start) ?? 0,
+      }),
+    ),
+  );
+}
 
 function clampCounter(value: number): number {
   return Math.min(value, maximumCounter);

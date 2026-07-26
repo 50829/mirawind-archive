@@ -255,4 +255,19 @@ describe("MinerU reference v2", () => {
       }),
     ).toThrow(/matched entries require a body heading anchor/);
   });
+
+  it("rejects more than the bounded protected-range limit", () => {
+    const item = reference().protected_ranges[0];
+    if (!item) throw new Error("test fixture is incomplete");
+    expect(() =>
+      parseMineruReferenceV2({
+        ...reference(),
+        protected_ranges: Array.from({ length: 100_001 }, (_, index) => ({
+          ...item,
+          end_byte: index * 2 + 1,
+          start_byte: index * 2,
+        })),
+      }),
+    ).toThrow(/protected_ranges is invalid/);
+  });
 });

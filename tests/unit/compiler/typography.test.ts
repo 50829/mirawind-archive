@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { preprocessMarkdownTypography } from "@/compiler/preprocess/typography";
+import {
+  findTypographyProtectedRanges,
+  preprocessMarkdownTypography,
+} from "@/compiler/preprocess/typography";
 
 const protectedTokensPath = fileURLToPath(
   new URL(
@@ -67,6 +70,29 @@ describe("persisted Markdown typography preprocessing", () => {
     expect(result.markdown).toContain("`中文API,3.14` $中文API,3.14$");
     expect(result.markdown).toContain("const 中文API = 3.14;");
     expect(result.provenance.protected_nodes).toBeGreaterThan(0);
+  });
+
+  it("reports exact non-overlapping protected byte ranges", () => {
+    const input =
+      "中文 `/资料/a,b.md` 与 $x=/公式/a.md$、[API](https://example.com/a,b) 和 --output=/资料/a.txt。\n";
+    const bytes = Buffer.from(input, "utf8");
+    const ranges = findTypographyProtectedRanges(input);
+    const values = ranges.map((range) => ({
+      kind: range.kind,
+      value: bytes.subarray(range.start_byte, range.end_byte).toString("utf8"),
+    }));
+
+    expect(values).toEqual([
+      { kind: "code", value: "`/资料/a,b.md`" },
+      { kind: "formula", value: "$x=/公式/a.md$" },
+      { kind: "link_destination", value: "https://example.com/a,b" },
+      { kind: "command", value: "--output=/资料/a.txt。" },
+    ]);
+    for (let index = 1; index < ranges.length; index += 1) {
+      expect(ranges[index]?.start_byte).toBeGreaterThanOrEqual(
+        ranges[index - 1]?.end_byte ?? 0,
+      );
+    }
   });
 
   it("keeps Unicode paths and command arguments byte-identical", () => {

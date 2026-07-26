@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 
 import { extractZipFile } from "../../src/compiler/archive/extractor.js";
 import { parseMarkdownDocument } from "../../src/compiler/document/parser.js";
+import type { TransientDocumentNode } from "../../src/compiler/document/types.js";
 import { resolveContainedPath } from "../../src/storage/layout.js";
 import type { MineruReferencePack } from "./create-mineru-reference-pack.js";
 import {
@@ -14,6 +15,7 @@ import {
   type ReferenceAnchor,
   type ReferenceContentsEntry,
   type ReferenceHeadingAccounting,
+  type ReferenceProtectedRange,
   type ReferenceSemanticKind,
 } from "./mineru-reference-v2.js";
 import {
@@ -106,6 +108,179 @@ const localPartSubdivision =
 
 function sha256(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+interface ReferenceCharacterRange {
+  readonly end: number;
+  readonly kind: ReferenceProtectedRange["kind"];
+  readonly start: number;
+}
+
+const maximumReferenceProtectedRanges = 100_000;
+
+const referenceTechnicalPattern =
+  /(?:10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+)|(?:ISBN(?:-1[03])?:?\s*(?:97[89][-\s]?)?\d(?:[-\s]?\d){8,12}[\dX])|(?:(?:https?|ftp):\/\/|www\.)[^\s<>\p{Script=Han}]+|(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})|(?:--?[A-Za-z][A-Za-z0-9_-]*(?:=(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s<>`]+))?)|(?:(?:[A-Za-z]:\\|\.{0,2}\/|\/)[^\s<>"'`]*?\.[A-Za-z0-9]{1,12}(?=$|\s|\p{Script=Han}))|(?:(?:[A-Za-z]:\\|\.{0,2}\/|\/)[^\s<>"'`，。；：？！]+)|(?:\bv?\d+(?:\.\d+){1,}\b)|(?:\b(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?\b)|(?:\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b)|(?:\b\d+\.\d+\b)|(?:\b[A-Za-z0-9_-]+\.[A-Za-z0-9]{1,12}\b)/gu;
+
+function referenceTechnicalKind(
+  value: string,
+): "command" | "path" | "technical_token" {
+  if (/^--?[A-Za-z]/u.test(value)) return "command";
+  if (/^(?:[A-Za-z]:\\|\.{0,2}\/|\/)/u.test(value)) return "path";
+  return "technical_token";
+}
+
+function referenceNodeRange(
+  node: TransientDocumentNode,
+): { readonly end: number; readonly start: number } | undefined {
+  const start = node.position?.start.offset;
+  const end = node.position?.end.offset;
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    Number(end) <= Number(start)
+  ) {
+    return;
+  }
+  return Object.freeze({ end: Number(end), start: Number(start) });
+}
+
+function referenceLinkDestination(
+  node: TransientDocumentNode,
+  source: string,
+): ReferenceCharacterRange | undefined {
+  const range = referenceNodeRange(node);
+  if (!range || !node.url) return;
+  const relativeStart = source.slice(range.start, range.end).indexOf(node.url);
+  if (relativeStart < 0) return;
+  return Object.freeze({
+    end: range.start + relativeStart + node.url.length,
+    kind: "link_destination" as const,
+    start: range.start + relativeStart,
+  });
+}
+
+function referenceByteOffsets(
+  source: string,
+  values: readonly number[],
+): ReadonlyMap<number, number> {
+  const result = new Map<number, number>();
+  let byteCursor = 0;
+  let characterCursor = 0;
+  for (const offset of [...new Set(values)].sort(
+    (left, right) => left - right,
+  )) {
+    byteCursor += Buffer.byteLength(
+      source.slice(characterCursor, offset),
+      "utf8",
+    );
+    characterCursor = offset;
+    result.set(offset, byteCursor);
+  }
+  return result;
+}
+
+function referenceProtectedRanges(
+  source: string,
+): readonly ReferenceProtectedRange[] {
+  const ranges: ReferenceCharacterRange[] = [];
+  const addNode = (
+    node: TransientDocumentNode,
+    kind: ReferenceProtectedRange["kind"],
+  ): void => {
+    const range = referenceNodeRange(node);
+    if (range) ranges.push(Object.freeze({ ...range, kind }));
+  };
+  const visit = (node: TransientDocumentNode): void => {
+    if (node.type === "code" || node.type === "inlineCode") {
+      addNode(node, "code");
+      return;
+    }
+    if (node.type === "math" || node.type === "inlineMath") {
+      addNode(node, "formula");
+      return;
+    }
+    if (node.type === "html") {
+      addNode(node, "html");
+      return;
+    }
+    if (node.type === "image") {
+      const destination = referenceLinkDestination(node, source);
+      if (destination) ranges.push(destination);
+      return;
+    }
+    if (node.type === "link") {
+      const destination = referenceLinkDestination(node, source);
+      if (destination) ranges.push(destination);
+      const range = referenceNodeRange(node);
+      if (range && !source.slice(range.start, range.end).includes("[")) return;
+    }
+    if (
+      node.type === "text" &&
+      node.position &&
+      typeof node.value === "string"
+    ) {
+      const raw = source.slice(
+        node.position.start.offset,
+        node.position.end.offset,
+      );
+      if (raw === node.value) {
+        referenceTechnicalPattern.lastIndex = 0;
+        for (const match of raw.matchAll(referenceTechnicalPattern)) {
+          const start = node.position.start.offset + (match.index ?? 0);
+          ranges.push(
+            Object.freeze({
+              end: start + match[0].length,
+              kind: referenceTechnicalKind(match[0]),
+              start,
+            }),
+          );
+        }
+      }
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(parseMarkdownDocument(source).root);
+  const priority = new Map<ReferenceProtectedRange["kind"], number>([
+    ["code", 0],
+    ["formula", 1],
+    ["html", 2],
+    ["link_destination", 3],
+    ["command", 4],
+    ["path", 5],
+    ["technical_token", 6],
+  ]);
+  ranges.sort(
+    (left, right) =>
+      left.start - right.start ||
+      right.end - left.end ||
+      (priority.get(left.kind) ?? 99) - (priority.get(right.kind) ?? 99),
+  );
+  const accepted: ReferenceCharacterRange[] = [];
+  for (const range of ranges) {
+    const previous = accepted.at(-1);
+    if (previous && range.start < previous.end) continue;
+    accepted.push(range);
+    if (accepted.length > maximumReferenceProtectedRanges) {
+      throw new Error("VISION_REFERENCE_PROTECTED_RANGE_LIMIT_EXCEEDED");
+    }
+  }
+  const offsets = referenceByteOffsets(
+    source,
+    accepted.flatMap((range) => [range.start, range.end]),
+  );
+  const bytes = Buffer.from(source, "utf8");
+  return Object.freeze(
+    accepted.map((range) => {
+      const startByte = offsets.get(range.start) ?? 0;
+      const endByte = offsets.get(range.end) ?? 0;
+      return Object.freeze({
+        end_byte: endByte,
+        kind: range.kind,
+        sha256: sha256(bytes.subarray(startByte, endByte)),
+        start_byte: startByte,
+      });
+    }),
+  );
 }
 
 function visibleText(node: unknown): string {
@@ -669,6 +844,7 @@ function headingAccounting(input: {
 
 export function authorMineruReferenceV2(input: {
   readonly pack: MineruReferencePack;
+  readonly source?: string;
   readonly transcript: CodexVisionTranscript;
 }): MineruReferenceV2 {
   const transcript = parseCodexVisionTranscript(input.transcript);
@@ -681,6 +857,12 @@ export function authorMineruReferenceV2(input: {
   );
   if (!markdown || input.pack.markdown_documents.length !== 1 || !original) {
     throw new Error("VISION_REFERENCE_PRIMARY_INPUT_INVALID");
+  }
+  if (
+    input.source !== undefined &&
+    sha256(input.source) !== markdown.input_sha256
+  ) {
+    throw new Error("VISION_REFERENCE_MARKDOWN_HASH_MISMATCH");
   }
   const allHeadings: HeadingText[] = markdown.headings.map((heading) => ({
     anchor: Object.freeze({
@@ -768,7 +950,8 @@ export function authorMineruReferenceV2(input: {
       regions,
       state: regions.length > 0 ? ("present" as const) : ("absent" as const),
     },
-    protected_ranges: [],
+    protected_ranges:
+      input.source === undefined ? [] : referenceProtectedRanges(input.source),
     raw_heading_accounting: headingAccounting({
       headings: allHeadings,
       regions,
@@ -963,6 +1146,7 @@ export async function reauthorRealMineruReferences(input: {
       await readFile(join(root, "real-fixtures.json"), "utf8"),
     ) as unknown,
   );
+  await verifyRealMineruFixtures(root);
   if (manifest.fixtures.length !== 15) {
     throw new Error("VISION_REFERENCE_SET_MUST_CONTAIN_FIFTEEN_FIXTURES");
   }
@@ -987,12 +1171,33 @@ export async function reauthorRealMineruReferences(input: {
         await readFile(join(transcriptDirectory, `${fixture.id}.json`), "utf8"),
       ) as unknown,
     );
-    const reference = authorMineruReferenceV2({ pack, transcript });
-    await writeFile(
-      join(referenceDirectory, `${fixture.id}.json`),
-      `${JSON.stringify(reference, null, 2)}\n`,
-      { mode: 0o600 },
+    const temporaryRoot = await mkdtemp(
+      join(tmpdir(), "mirawind-reference-authoring-"),
     );
+    try {
+      const extractedRoot = join(temporaryRoot, "extracted");
+      await extractZipFile({
+        archivePath: join(root, fixture.file_name),
+        destination: extractedRoot,
+      });
+      const markdown = pack.markdown_documents[0];
+      if (!markdown || pack.markdown_documents.length !== 1) {
+        throw new Error("VISION_REFERENCE_PRIMARY_INPUT_INVALID");
+      }
+      const markdownPath = await resolveContainedPath(
+        extractedRoot,
+        markdown.relative_path,
+      );
+      const source = await readFile(markdownPath, "utf8");
+      const reference = authorMineruReferenceV2({ pack, source, transcript });
+      await writeFile(
+        join(referenceDirectory, `${fixture.id}.json`),
+        `${JSON.stringify(reference, null, 2)}\n`,
+        { mode: 0o600 },
+      );
+    } finally {
+      await rm(temporaryRoot, { force: true, recursive: true });
+    }
   }
 }
 
