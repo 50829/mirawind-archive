@@ -30,7 +30,7 @@ uncached public read p95 no more than 300 ms
 **Constraints**: hostile ZIP/PDF/sidecar input, streaming limits, cancellation, immutable
 published versions, no analysis on reader requests, no new service/database
 
-**Scale/Scope**: fifteen correctness books (at least 73 reviewed printed pages); separate
+**Scale/Scope**: fifteen correctness books (at least 73 image-recognized printed pages); separate
 three-real-book plus 500-page synthetic performance suite; up to 20,000 sidecar rows
 
 ## Constitution Check

@@ -6,7 +6,7 @@
 
 **Status**: Approved
 
-**Input**: Rebuild MinerU import preprocessing around fifteen Codex image-reviewed books so the
+**Input**: Rebuild MinerU import preprocessing around fifteen Codex image-derived books so the
 main document, printed contents, heading hierarchy, page splits, protected technical text
 and administrator recovery diagnostics are correct on the first preparation pass.
 
@@ -27,7 +27,7 @@ match and proposed level with its independently image-derived reference v2.
    numbers, multiple columns or wrapped rows, **When** the draft is prepared, **Then** the
    complete frontmatter contents regions are identified without consuming body content.
 2. **Given** a brief and a full contents, **When** both are recognized, **Then** both regions
-   are excluded and exactly one reviewed canonical region supplies structure.
+   are excluded and exactly one Codex-recognized canonical region supplies structure.
 3. **Given** a late index that resembles a contents, **When** candidates are scored, **Then**
    frontmatter position and later monotonic body recurrence prevent the index from winning.
 4. **Given** OCR spacing, punctuation, line breaks, numbering differences, duplicate titles
@@ -48,7 +48,7 @@ As the administrator, I receive page boundaries at major reading units rather th
 for nearly every MinerU heading.
 
 **Independent Test**: Compare every proposed split in the fifteen references and verify that
-level edits never toggle an independently confirmed split.
+level edits never toggle an independently image-derived split.
 
 **Acceptance Scenarios**:
 
@@ -192,13 +192,13 @@ activate each diagnostic from the workbench and execute its offered recovery.
 
 - **SC-001**: All fifteen books exactly match reference v2 for main document, printed state,
   all region boundaries, canonical choice and raw-heading accounting.
-- **SC-002**: All fifteen exactly match every reviewed body association, hierarchy, role and
+- **SC-002**: All fifteen exactly match every image-derived body association, hierarchy, role and
   TOC decision; no printed row survives in preview, publication, search or navigation.
-- **SC-003**: All fifteen exactly match reviewed splits with zero empty or adjacent title-only
+- **SC-003**: All fifteen exactly match image-derived splits with zero empty or adjacent title-only
   pages.
 - **SC-004**: Protected ranges from all fifteen and adversarial fixtures remain byte-identical
   and a second typography pass changes zero bytes.
-- **SC-005**: Every warning/error in the reference set has the reviewed code/location/recovery
+- **SC-005**: Every warning/error in the reference set has the expected code/location/recovery
   and workbench activation reaches it without losing dirty edits.
 - **SC-006**: Missing OCR tools, per-page/aggregate timeout, malformed sidecar and cancellation
   leave no partial accepted source or temporary raster files.

@@ -8,8 +8,8 @@ pnpm fixtures:reference-pack --fixture real-mineru-example
 pnpm fixtures:compare-references --reference-dir references-v2 --observed-dir observed-v2
 ```
 
-The pack command emits observations only. A reviewer completes each ignored
-`references-v2/<fixture-id>.json` after inspecting every listed PDF page. The compare command
+The pack command emits observations only. Codex completes each ignored
+`references-v2/<fixture-id>.json` by opening every listed PDF page with image recognition. The compare command
 fails unless all fifteen registered books have valid v2 files and every expected decision
 matches. v1 and unknown schemas are rejected.
 

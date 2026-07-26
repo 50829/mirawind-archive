@@ -91,5 +91,5 @@ directories are deleted on success, failure and cancellation.
 
 All fifteen references are an exact content-correctness gate. Performance remains a separate
 suite using the established 441-page and 583-page books, one other representative real book,
-the 500-page synthetic book and uncached reader p95. Conflating these sets would make manual
+the 500-page synthetic book and uncached reader p95. Conflating these sets would make local
 correctness data a performance dependency and would weaken both signals.

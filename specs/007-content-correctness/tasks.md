@@ -37,13 +37,13 @@ order, 1-3 column reading order and wrapped rows match synthetic expectations.
 **Independent gate**: synthetic labelled/unlabelled, spaced leader, right-page, multiple-region,
 late-index, duplicate/missing and no-contents books produce exact candidate and local states.
 
-- [ ] T018 Add failing boundary tests for labels, leaders, ordinary page suffixes and repeated title runs
-- [ ] T019 Add failing multi-region/canonical/full-versus-brief and no-fixed-window tests
-- [ ] T020 Add failing late-index and boundary-confidence-independent-of-match tests
-- [ ] T021 Add failing sparse alignment skip/margin/duplicate/missing tests
-- [ ] T022 Implement multi-region discovery/scoring in `src/compiler/document/printed-toc.ts`
-- [ ] T023 Implement sparse best/second-best sequence alignment with local diagnostics
-- [ ] T024 Apply all accepted exclusions and only canonical hierarchy evidence in source-region handling
+- [x] T018 Add failing boundary tests for labels, leaders, ordinary page suffixes and repeated title runs
+- [x] T019 Add failing multi-region/canonical/full-versus-brief and no-fixed-window tests
+- [x] T020 Add failing late-index and boundary-confidence-independent-of-match tests
+- [x] T021 Add failing sparse alignment skip/margin/duplicate/missing tests
+- [x] T022 Implement multi-region discovery/scoring in `src/compiler/document/printed-toc.ts`
+- [x] T023 Implement sparse best/second-best sequence alignment with local diagnostics
+- [x] T024 Apply all accepted exclusions and only canonical hierarchy evidence in source-region handling
 
 ## Phase 5: Hierarchy and splits
 
@@ -58,7 +58,7 @@ produce continuous h1-h4 and exact independent split decisions.
 
 ## Phase 6: Protected preprocessing
 
-**Independent gate**: every adversarial and reviewed protected range is byte-identical and
+**Independent gate**: every adversarial and image-derived protected range is byte-identical and
 processing is idempotent.
 
 - [ ] T030 Expand failing code/path/formula/link/CLI/version/token interval tests
