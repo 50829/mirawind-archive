@@ -294,13 +294,13 @@ export function proposeDocumentStructure(
         appendixTitle.test(title) ||
         backmatterTitle.test(title));
     let role: ContentRole | undefined;
+    const evidence = inferPrintedHeadingEvidence(heading.sourceTitle);
     if (displayLevel === 1) {
       const classifiedRole =
         printedRoles.get(heading.blockId) ??
         (localBackmatterIndexes.has(index)
           ? "body"
           : proposedRole(heading.sourceTitle));
-      const evidence = inferPrintedHeadingEvidence(heading.sourceTitle);
       const nextHeading = document.headings[index + 1];
       const detachedChapterMarker = Boolean(
         pureNumericChapterMarker.test(title) &&
@@ -320,6 +320,9 @@ export function proposeDocumentStructure(
         currentTopLevelRole = "body";
       }
       role = currentTopLevelRole;
+    } else if (evidence?.kind === "part" || evidence?.kind === "chapter") {
+      currentTopLevelRole = "body";
+      role = "body";
     }
     return {
       block_id: heading.blockId,

@@ -84,6 +84,18 @@ describe("default document structure proposal", () => {
     ).toEqual(["backmatter", "body", "body"]);
   });
 
+  it("resets a carried role at a nested chapter", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        "# References\n\nReference body\n\n## Chapter 1 Start\n\nBody\n",
+      ),
+    );
+
+    expect(
+      proposeDocumentStructure(document).nodes.map((node) => node.role),
+    ).toEqual(["backmatter", "body"]);
+  });
+
   it("keeps heading order, closes level gaps and starts only major units on pages", () => {
     const normalized = normalizeDocumentBlocks(
       parseMarkdownDocument(
