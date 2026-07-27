@@ -96,6 +96,61 @@ describe("default document structure proposal", () => {
     ).toEqual(["backmatter", "body"]);
   });
 
+  it("resets a carried role from a matched printed chapter", () => {
+    const source = [
+      "# References",
+      "",
+      "Reference body",
+      "",
+      "Chapter 1 Introduction ........ 1",
+      "",
+      "## Introduction",
+      "",
+      "Body",
+    ].join("\n");
+    const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
+    const chapter = document.headings[1];
+    if (!chapter) throw new Error("expected chapter heading");
+    const entryText = "Chapter 1 Introduction ........ 1";
+    const entryStart = Buffer.from(source.slice(0, source.indexOf(entryText)), "utf8")
+      .byteLength;
+    const entryEnd = entryStart + Buffer.from(entryText, "utf8").byteLength;
+
+    const proposal = proposeDocumentStructure(document, {
+      sourceRegions: [
+        {
+          applied: true,
+          disposition: "reference_only",
+          entries: [
+            {
+              body_heading_block_id: chapter.blockId,
+              range: {
+                end_byte: entryEnd,
+                sha256: "a".repeat(64),
+                start_byte: entryStart,
+              },
+              reference_level: 2,
+            },
+          ],
+          kind: "printed_toc",
+          range: {
+            end_byte: entryEnd,
+            sha256: "b".repeat(64),
+            start_byte: entryStart,
+          },
+          region_id: "region_0123456789abcdef",
+          source_path: "book.md",
+          source_sha256: "c".repeat(64),
+        },
+      ],
+    });
+
+    expect(proposal.nodes.map((node) => node.role)).toEqual([
+      "backmatter",
+      "body",
+    ]);
+  });
+
   it("keeps heading order, closes level gaps and starts only major units on pages", () => {
     const normalized = normalizeDocumentBlocks(
       parseMarkdownDocument(

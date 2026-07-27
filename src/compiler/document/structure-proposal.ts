@@ -79,11 +79,15 @@ function printedEntryRole(
     .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)、]\s*)/u, "")
     .replace(/\s*(?:\.{2,}|…+|\s{2,})\s*(?:\d+|[ivxlcdm]+)\s*$/iu, "")
     .trim();
-  if (inferPrintedHeadingEvidence(title)?.kind === "appendix") {
+  const evidence = inferPrintedHeadingEvidence(title);
+  if (evidence?.kind === "appendix") {
     return "appendix";
   }
   const role = proposedRole(title);
-  return role === "body" ? undefined : role;
+  if (role !== "body") return role;
+  return evidence?.kind === "part" || evidence?.kind === "chapter"
+    ? "body"
+    : undefined;
 }
 
 function continuousLevels(
@@ -295,12 +299,15 @@ export function proposeDocumentStructure(
         backmatterTitle.test(title));
     let role: ContentRole | undefined;
     const evidence = inferPrintedHeadingEvidence(heading.sourceTitle);
-    if (displayLevel === 1) {
+    const matchedPrintedRole = printedRoles.get(heading.blockId);
+    if (matchedPrintedRole !== undefined) {
+      currentTopLevelRole = matchedPrintedRole;
+      role = matchedPrintedRole;
+    } else if (displayLevel === 1) {
       const classifiedRole =
-        printedRoles.get(heading.blockId) ??
-        (localBackmatterIndexes.has(index)
+        localBackmatterIndexes.has(index)
           ? "body"
-          : proposedRole(heading.sourceTitle));
+          : proposedRole(heading.sourceTitle);
       const nextHeading = document.headings[index + 1];
       const detachedChapterMarker = Boolean(
         pureNumericChapterMarker.test(title) &&
