@@ -67,7 +67,7 @@ interface CandidateProjection {
 }
 
 const frontmatter =
-  /^(?:序|序言|前言|译者序|出版者的话|作者简介|preface|foreword|prologue)$/iu;
+  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|preface|foreword|prologue)$/iu;
 const backmatter =
   /^(?:参考文献|参考资料|索引|(?:译)?后记|致谢|术语表|图片来源|符号索引|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 
@@ -198,26 +198,41 @@ function headingAnchorByBlock(input: {
   );
 }
 
-function kindFor(title: string, level: number): ReferenceSemanticKind {
+function kindFor(
+  title: string,
+  level: number,
+  beforeFirstBodyUnit: boolean,
+): ReferenceSemanticKind {
   const evidence = inferPrintedHeadingEvidence(title);
   if (evidence?.kind === "part") return "part";
   if (evidence?.kind === "chapter") return "chapter";
   if (evidence?.kind === "appendix") return "appendix";
   if (evidence?.kind === "decimal") return "section";
   if (frontmatter.test(title)) return "frontmatter";
+  if (
+    beforeFirstBodyUnit &&
+    /^(?:致谢|acknowledg(?:e)?ments?)$/iu.test(title)
+  ) {
+    return "frontmatter";
+  }
   if (backmatter.test(title)) return level > 1 ? "other" : "backmatter";
   return "other";
 }
 
 function pageRows(input: {
   readonly layout: Awaited<ReturnType<typeof readMineruLayoutEvidence>>;
-}): readonly { readonly page: number; readonly title: string }[] {
+}): readonly {
+  readonly page: number;
+  readonly printedPageLabel: boolean;
+  readonly title: string;
+}[] {
   return Object.freeze(
     input.layout.records.flatMap((record) => {
       if (!record.text) return [];
       return [
         Object.freeze({
           page: record.pageIndex,
+          printedPageLabel: stripPageLabel(record.text).pageLabel !== null,
           title: comparison(record.text),
         }),
       ];
@@ -227,9 +242,50 @@ function pageRows(input: {
 
 function pagesForEntries(input: {
   readonly entries: readonly ReferenceContentsEntry[];
-  readonly rows: readonly { readonly page: number; readonly title: string }[];
+  readonly rows: readonly {
+    readonly page: number;
+    readonly printedPageLabel: boolean;
+    readonly title: string;
+  }[];
   readonly startCursor: number;
 }): { readonly cursor: number; readonly pages: readonly number[] } {
+  const expectedTitles = new Set(
+    input.entries.map((entry) => comparison(entry.title)),
+  );
+  const printedMatches = new Map<number, number>();
+  for (const row of input.rows.slice(input.startCursor)) {
+    if (!row.printedPageLabel || !expectedTitles.has(row.title)) continue;
+    printedMatches.set(row.page, (printedMatches.get(row.page) ?? 0) + 1);
+  }
+  if (printedMatches.size > 0) {
+    const maximumMatches = Math.max(...printedMatches.values());
+    const threshold = Math.max(1, Math.ceil(maximumMatches * 0.2));
+    const eligiblePages = [...printedMatches]
+      .filter(([, count]) => count >= threshold)
+      .map(([page]) => page)
+      .sort((left, right) => left - right);
+    const runs: number[][] = [];
+    for (const page of eligiblePages) {
+      const run = runs.at(-1);
+      if (!run || page > (run.at(-1) ?? page) + 1) runs.push([page]);
+      else run.push(page);
+    }
+    const selected = runs.sort((left, right) => {
+      const score = (pages: readonly number[]) =>
+        pages.reduce((sum, page) => sum + (printedMatches.get(page) ?? 0), 0);
+      return score(right) - score(left) || (left[0] ?? 0) - (right[0] ?? 0);
+    })[0];
+    if (selected && selected.length > 0) {
+      const lastPage = selected.at(-1) ?? -1;
+      const lastIndex = input.rows.findLastIndex(
+        (row, index) => index >= input.startCursor && row.page === lastPage,
+      );
+      return Object.freeze({
+        cursor: lastIndex >= 0 ? lastIndex + 1 : input.startCursor,
+        pages: Object.freeze(selected),
+      });
+    }
+  }
   let cursor = input.startCursor;
   const pages = new Set<number>();
   for (const entry of input.entries) {
@@ -295,6 +351,14 @@ function projectCandidates(input: {
           return Number.isSafeInteger(index) ? [index] : [];
         }),
       );
+      const firstBodyEntryIndex = candidate.logicalEntries.findIndex(
+        (entry) => {
+          const kind = inferPrintedHeadingEvidence(
+            stripPageLabel(entry.sourceTitle).title,
+          )?.kind;
+          return kind === "part" || kind === "chapter";
+        },
+      );
       const entries = candidate.logicalEntries.map((entry, entryIndex) => {
         const printed = stripPageLabel(entry.sourceTitle);
         const anchor = entry.bodyHeadingBlockId
@@ -308,7 +372,11 @@ function projectCandidates(input: {
             : ambiguous.has(entryIndex)
               ? "ambiguous"
               : "unmatched",
-          kind: kindFor(printed.title, entry.referenceLevel),
+          kind: kindFor(
+            printed.title,
+            entry.referenceLevel,
+            firstBodyEntryIndex >= 0 && entryIndex < firstBodyEntryIndex,
+          ),
           level: entry.referenceLevel,
           page_label: printed.pageLabel,
           title: printed.title,

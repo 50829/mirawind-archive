@@ -100,7 +100,7 @@ const contentsLabel =
 const backmatter =
   /^(?:参考文献|参考资料|索引|后记|致谢|术语表|图片来源|符号索引|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 const frontmatter =
-  /^(?:序|序言|前言|译者序|出版者的话|作者简介|preface|foreword|prologue)$/iu;
+  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|preface|foreword|prologue)$/iu;
 const auxiliary =
   /^(?:思考题|本章注记|附录注记|自测题|习题|练习|课后习题和问题|复习题|人物专访|编程作业|practice exercises|further reading|review questions|exercises)$/iu;
 const localPartSubdivision =

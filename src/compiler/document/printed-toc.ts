@@ -99,7 +99,7 @@ const contentsTitle =
   /^(?:(?:目\s*录|简\s*(?:明\s*)?目(?:\s*录)?)(?:\s+(?:brief\s+contents|contents))?|(?:brief\s+contents|contents|table\s+of\s+contents)(?:\s+(?:目\s*录|简\s*(?:明\s*)?目(?:\s*录)?))?)$/iu;
 const dotLeader = /(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+)/u;
 const frontmatterEntryTitle =
-  /^(?:序|序言|前言|译者序|出版者的话|作者简介|译者简介|教学建议|preface|foreword|prologue)$/iu;
+  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|译者简介|教学建议|preface|foreword|prologue)$/iu;
 const contextualEntryTitle =
   /^(?:参考文献|参考资料|索引|后记|致谢|术语表|图片来源|符号索引|思考题|本章注记|附录注记|自测题|习题|练习|课后习题和问题|复习题|人物专访|编程作业|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits|practice exercises|further reading|review questions|exercises)$/iu;
 const chapterReviewParentTitle =
@@ -583,6 +583,45 @@ function mergeDetachedSourceEntries(
       continue;
     }
     const review = truncatedReview.exec(plainTitle(current.sourceTitle));
+    const currentPrinted = printedPageEvidence(current.sourceTitle);
+    const nextPrinted = next
+      ? printedPageEvidence(next.sourceTitle)
+      : undefined;
+    const sourceGap = next
+      ? next.range.start_byte - current.range.end_byte
+      : Number.POSITIVE_INFINITY;
+    if (
+      current.numbering &&
+      !currentPrinted &&
+      next &&
+      nextPrinted &&
+      !next.numbering &&
+      sourceGap >= 0 &&
+      sourceGap <= 4 &&
+      !frontmatterEntryTitle.test(nextPrinted.title) &&
+      !contextualEntryTitle.test(nextPrinted.title)
+    ) {
+      const sourceTitle = `${plainTitle(current.sourceTitle)} ${plainTitle(next.sourceTitle)}`;
+      merged.push(
+        Object.freeze({
+          ...current,
+          normalizedTitle: normalizedTitle(sourceTitle),
+          range: Object.freeze({
+            end_byte: next.range.end_byte,
+            sha256: hash(
+              sourceBytes.subarray(
+                current.range.start_byte,
+                next.range.end_byte,
+              ),
+            ),
+            start_byte: current.range.start_byte,
+          }),
+          sourceTitle,
+        }),
+      );
+      index += 1;
+      continue;
+    }
     if (review?.groups?.suffix) {
       const previous = merged.at(-1);
       const previousTitle = previous

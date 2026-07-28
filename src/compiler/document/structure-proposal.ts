@@ -27,12 +27,13 @@ export interface StructureProposal {
 }
 
 const frontmatterTitle =
-  /^(?:序(?:言|章)?|前言|导读|凡例|符号(?:表|说明)|出版者的话|作者简介|译者简介|preface|foreword|prologue)$/iu;
+  /^(?:序(?:言|章)?|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|导读|凡例|符号(?:表|说明)|出版者的话|专家指导委员会|作者简介|译者简介|preface|foreword|prologue)$/iu;
 const appendixTitle =
   /^(?:附录|附表|appendix)(?:\s|[A-Z一二三四五六七八九十0-9]|$)/iu;
 const backmatterTitle =
   /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 const optionalBackmatterTitle = /^(?:glossary)$/iu;
+const acknowledgementTitle = /^(?:致谢|acknowledg(?:e)?ments?)$/iu;
 const chapterLocalTitle =
   /^(?:简要回顾|供讨论的问题|延伸思考|习题|练习|家庭作业|参考文献(?:说明)?|阅读材料|休息一会儿|bibliographic notes|exercises|review questions)$/iu;
 const nonNavigationalLocalTitle =
@@ -83,14 +84,6 @@ function proposedRole(title: string): ContentRole {
   return "body";
 }
 
-function printedEntryRole(
-  source: string,
-  entry: ConfirmedSourceRegion["entries"][number],
-): ContentRole | undefined {
-  const title = printedEntryTitle(source, entry);
-  return title === undefined ? undefined : printedTitleRole(title);
-}
-
 function printedEntryTitle(
   source: string,
   entry: ConfirmedSourceRegion["entries"][number],
@@ -112,10 +105,16 @@ function printedEntryTitle(
     .trim();
 }
 
-function printedTitleRole(title: string): ContentRole | undefined {
+function printedTitleRole(
+  title: string,
+  beforeFirstBodyUnit = false,
+): ContentRole | undefined {
   const evidence = inferPrintedHeadingEvidence(title);
   if (evidence?.kind === "appendix") {
     return "appendix";
+  }
+  if (beforeFirstBodyUnit && acknowledgementTitle.test(title)) {
+    return "frontmatter";
   }
   const role = proposedRole(title);
   if (role !== "body") return role;
@@ -174,18 +173,36 @@ export function proposeDocumentStructure(
       (entry) => [entry.bodyHeadingBlockId, entry.referenceLevel] as const,
     ),
   ]);
-  const printedRoles = new Map([
-    ...(options.sourceRegions ?? []).flatMap((region) =>
-      region.entries.flatMap((entry) => {
-        if (!entry.body_heading_block_id) return [];
-        const role = printedEntryRole(document.source, entry);
-        return role ? [[entry.body_heading_block_id, role] as const] : [];
-      }),
-    ),
-    ...(options.printedEntries ?? []).flatMap((entry) => {
-      const role = printedTitleRole(entry.sourceTitle);
+  const sourceRegionRoles = (options.sourceRegions ?? []).flatMap((region) => {
+    let beforeFirstBodyUnit = true;
+    return region.entries.flatMap((entry) => {
+      const title = printedEntryTitle(document.source, entry);
+      const kind = title ? inferPrintedHeadingEvidence(title)?.kind : undefined;
+      const role = title
+        ? printedTitleRole(title, beforeFirstBodyUnit)
+        : undefined;
+      if (kind === "part" || kind === "chapter") beforeFirstBodyUnit = false;
+      if (!entry.body_heading_block_id || !role) return [];
+      return [[entry.body_heading_block_id, role] as const];
+    });
+  });
+  let beforeFirstPrintedBodyUnit = true;
+  const projectedPrintedRoles = (options.printedEntries ?? []).flatMap(
+    (entry) => {
+      const kind = inferPrintedHeadingEvidence(entry.sourceTitle)?.kind;
+      const role = printedTitleRole(
+        entry.sourceTitle,
+        beforeFirstPrintedBodyUnit,
+      );
+      if (kind === "part" || kind === "chapter") {
+        beforeFirstPrintedBodyUnit = false;
+      }
       return role ? [[entry.bodyHeadingBlockId, role] as const] : [];
-    }),
+    },
+  );
+  const printedRoles = new Map([
+    ...sourceRegionRoles,
+    ...projectedPrintedRoles,
   ]);
   const printedKinds = new Map([
     ...(options.sourceRegions ?? []).flatMap((region) =>

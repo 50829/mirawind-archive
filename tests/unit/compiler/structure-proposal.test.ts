@@ -919,6 +919,55 @@ describe("default document structure proposal", () => {
     ]);
   });
 
+  it("treats acknowledgements before the first printed chapter as frontmatter", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 专家指导委员会",
+          "",
+          "正文",
+          "",
+          "## 第2版前言",
+          "",
+          "正文",
+          "",
+          "## 致谢",
+          "",
+          "正文",
+          "",
+          "## 第1章 开始",
+          "",
+          "正文",
+        ].join("\n"),
+      ),
+    );
+    const printedTitles = ["专家指导委员会", "第2版前言", "致谢", "第1章 开始"];
+    const printedEntries = document.headings.map((heading, index) => {
+      const sourceTitle = printedTitles[index];
+      if (!sourceTitle) throw new Error("PRINTED_TITLE_MISSING");
+      return {
+        bodyHeadingBlockId: heading.blockId,
+        referenceLevel: 1,
+        sourceTitle,
+      };
+    });
+
+    const proposal = proposeDocumentStructure(document, { printedEntries });
+
+    expect(proposal.nodes.map((node) => node.role)).toEqual([
+      "frontmatter",
+      "frontmatter",
+      "frontmatter",
+      "body",
+    ]);
+    expect(proposal.nodes.map((node) => node.starts_page)).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+  });
+
   it("starts later chapters at their own heading rather than at the first section", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(

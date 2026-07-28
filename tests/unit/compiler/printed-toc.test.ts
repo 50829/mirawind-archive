@@ -789,6 +789,110 @@ describe("printed contents detection", () => {
     expect(supplementalPdfPageIndices(result)).toEqual([0]);
   });
 
+  it("retains edition prefaces and governance units before the first chapter", () => {
+    const source = [
+      "## 目录",
+      "",
+      "出版者的话",
+      "",
+      "专家指导委员会",
+      "",
+      "第2版前言",
+      "",
+      "第1版前言",
+      "",
+      "致谢",
+      "",
+      "第1章 开始 ...... 1",
+      "",
+      "## 出版者的话",
+      "",
+      "正文",
+      "",
+      "## 专家指导委员会",
+      "",
+      "正文",
+      "",
+      "## 第2版前言",
+      "",
+      "正文",
+      "",
+      "## 第1版前言",
+      "",
+      "正文",
+      "",
+      "## 致谢",
+      "",
+      "正文",
+      "",
+      "## 第1章 开始",
+      "",
+      "正文",
+    ].join("\n");
+
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) =>
+        entry.sourceTitle.trim(),
+      ),
+    ).toEqual([
+      "出版者的话",
+      "专家指导委员会",
+      "第2版前言",
+      "第1版前言",
+      "致谢",
+      "第1章 开始 ...... 1",
+    ]);
+  });
+
+  it("joins a numbered title to its same-paragraph page-label continuation", () => {
+    const source = [
+      "## 目录",
+      "",
+      "3.5.4 流和延时求值 ...... 241",
+      "",
+      "3.5.5 函数式程序的模块化和对象的",
+      "模块化 ...... 245",
+      "",
+      "第4章 元语言抽象 ...... 249",
+      "",
+      "## 3.5.4 流和延时求值",
+      "",
+      "正文",
+      "",
+      "## 3.5.5 函数式程序的模块化和对象的模块化",
+      "",
+      "正文",
+      "",
+      "## 第4章 元语言抽象",
+      "",
+      "正文",
+    ].join("\n");
+
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) =>
+        entry.sourceTitle.trim(),
+      ),
+    ).toEqual([
+      "3.5.4 流和延时求值 ...... 241",
+      "3.5.5 函数式程序的模块化和对象的 模块化 ...... 245",
+      "第4章 元语言抽象 ...... 249",
+    ]);
+  });
+
   it("recognizes an early unlabelled chapter list without page suffixes", async () => {
     const source = await readFile(unlabelledPath, "utf8");
     const result = detectPrintedContents({

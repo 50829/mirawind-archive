@@ -113,6 +113,20 @@ describe("real MinerU production observer", () => {
           data: JSON.stringify([
             {
               bbox: [100, 100, 800, 140],
+              page_idx: 0,
+              text: "Chapter 1 Start",
+              text_level: 1,
+              type: "text",
+            },
+            {
+              bbox: [130, 150, 800, 190],
+              page_idx: 1,
+              text: "1.1 Basics",
+              text_level: 2,
+              type: "text",
+            },
+            {
+              bbox: [100, 100, 800, 140],
               page_idx: 2,
               text: "Chapter 1 Start .... 1",
               text_level: 2,
