@@ -594,6 +594,47 @@ describe("printed contents detection", () => {
     );
   });
 
+  it("withholds bilingual body matches when numbering is the only strong evidence", () => {
+    const source = [
+      "## Contents",
+      "",
+      "1.1 河内塔 ...... 1",
+      "",
+      "1.2 平面上的直线 ...... 4",
+      "",
+      "1.3 约瑟夫问题 ...... 7",
+      "",
+      "## 1.1 河内塔 THE TOWER OF HANOI",
+      "",
+      "Body",
+      "",
+      "## 1.2 平面上的直线 LINES IN THE PLANE",
+      "",
+      "Body",
+      "",
+      "## 1.3 约瑟夫问题 THE JOSEPHUS PROBLEM",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+    const candidate = result.candidates[0];
+
+    expect(candidate?.logicalEntries).toHaveLength(3);
+    expect(
+      candidate?.logicalEntries.map((entry) => entry.bodyHeadingBlockId),
+    ).toEqual([undefined, undefined, undefined]);
+    expect(
+      candidate?.diagnostics.filter(
+        (diagnostic) => diagnostic.code === "PRINTED_TOC_UNMATCHED_ENTRY",
+      ),
+    ).toHaveLength(3);
+  });
+
   it("normalizes bounded TeX display artifacts in printed rows", () => {
     const source = [
       "## Contents",
@@ -629,6 +670,44 @@ describe("printed contents detection", () => {
       "2.3.3 用多项式逼近幂级数 \\dots 59",
       "4.8.1 引言 ...... 182",
       "5.8 E' = E 的几何解法 ...... 206",
+    ]);
+  });
+
+  it("keeps an appendix letter with its following title", () => {
+    const source = [
+      "## Contents",
+      "",
+      "Appendix B References ...... 508",
+      "",
+      "Appendix C Credits for Exercises ...... 536",
+      "",
+      "Index ...... 543",
+      "",
+      "## Appendix B References",
+      "",
+      "Body",
+      "",
+      "## Appendix C Credits for Exercises",
+      "",
+      "Body",
+      "",
+      "## Index",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
+      "Appendix B References ...... 508",
+      "Appendix C Credits for Exercises ...... 536",
+      "Index ...... 543",
     ]);
   });
 

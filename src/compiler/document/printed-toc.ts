@@ -491,6 +491,13 @@ function splitPrintedLogicalLine(value: string): readonly {
   for (const match of value.matchAll(boundary)) {
     const end = (match.index ?? 0) + match[0].length;
     if (end <= cursor || end >= value.length) continue;
+    if (
+      /(?:附录|appendix)\s+[A-Z一二三四五六七八九十]\s*$/iu.test(
+        value.slice(cursor, end),
+      )
+    ) {
+      continue;
+    }
     segments.push({ end, start: cursor, text: value.slice(cursor, end) });
     cursor = end;
   }
@@ -768,11 +775,12 @@ function matchScore(
     titleScore >= 0.7;
   const genericAppendix =
     entry.numbering?.kind === "appendix" && entry.numbering.key === "appendix";
+  const acceptsNumberOnly = allowNumberOnly || entry.normalizedTitle.length < 2;
   if (
     numberConflict ||
     (genericAppendix && titleScore < 0.62) ||
     (!numberEqual && titleScore < 0.62) ||
-    (numberEqual && !allowNumberOnly && titleScore < 0.2)
+    (numberEqual && !acceptsNumberOnly && titleScore < 0.55)
   ) {
     return 0;
   }
@@ -1440,6 +1448,19 @@ export function detectPrintedContents(input: {
           ? normalizedTitle(rootTitle(nextBlock))
           : "";
       const currentKind = inferPrintedHeadingEvidence(rootTitle(block))?.kind;
+      const currentNumbering = inferPrintedHeadingEvidence(rootTitle(block));
+      if (
+        sourceEntries.length > 0 &&
+        !printedRowsContinue &&
+        block.type === "heading" &&
+        currentNumbering &&
+        printedPageEvidence(rootTitle(block)) === undefined &&
+        sourceEntries.some(
+          (entry) => entry.numbering?.key === currentNumbering.key,
+        )
+      ) {
+        break;
+      }
       if (
         sourceEntries.length > 0 &&
         !printedRowsContinue &&
@@ -1557,7 +1578,7 @@ export function detectPrintedContents(input: {
       );
     });
     const alignment = monotonicMatches(entries, bodyHeadings, {
-      allowNumberOnly: true,
+      allowNumberOnly: false,
     });
     const resolvedMatches = new Map(alignment.matches);
     const ambiguousEntries = new Set(alignment.ambiguousEntries);

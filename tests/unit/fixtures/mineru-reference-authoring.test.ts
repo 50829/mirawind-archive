@@ -149,6 +149,30 @@ describe("Codex vision reference authoring", () => {
     ).toEqual(["backmatter", "body", "body"]);
   });
 
+  it("classifies translator biography as frontmatter", () => {
+    const source = "# 译者简介\n\nBiography.\n";
+    const pack = packFor(source);
+    const transcript: CodexVisionTranscript = {
+      fixture_id: pack.fixture_id,
+      inspected_pages: [],
+      regions: [],
+      schema_version: 1,
+      source: "codex-image-recognition",
+    };
+
+    expect(
+      authorMineruReferenceV2({ pack, source, transcript })
+        .raw_heading_accounting[0]?.disposition,
+    ).toEqual({
+      display_level: 1,
+      display_title: null,
+      include_in_toc: true,
+      kind: "expected_body",
+      role: "frontmatter",
+      starts_page: true,
+    });
+  });
+
   it("keeps a detached part label in body hierarchy after a printed index", () => {
     const source = [
       "## Contents",
@@ -226,6 +250,8 @@ describe("Codex vision reference authoring", () => {
       "",
       "# 统计分布表",
       "",
+      "# Bibliography",
+      "",
       "Body.",
     ].join("\n");
     const pack = packFor(source);
@@ -264,7 +290,7 @@ describe("Codex vision reference authoring", () => {
           ? heading.disposition.starts_page
           : false,
       ),
-    ).toEqual([true, false]);
+    ).toEqual([true, false, false]);
   });
 
   it("binds image-inspected structure without production proposals", () => {
@@ -579,6 +605,50 @@ describe("Codex vision reference authoring", () => {
     expect(
       authorMineruReferenceV2({ pack, transcript }).expected_diagnostics,
     ).toHaveLength(100);
+  });
+
+  it("records low aggregate coverage after local unmatched diagnostics", () => {
+    const source = [
+      "# Book",
+      "",
+      "## Contents",
+      "",
+      "## Chapter 1 Missing .... 1",
+      "",
+      "## Chapter 2 Missing .... 9",
+    ].join("\n");
+    const pack = packFor(source);
+    const transcript = reviewed(
+      createVisionTranscriptTemplate({
+        decision: {
+          fixture_id: pack.fixture_id,
+          printed_contents: {
+            regions: [
+              {
+                canonical: true,
+                end_root: 3,
+                pdf_page_indices: [2],
+                region_key: "full-contents",
+                start_root: 1,
+              },
+            ],
+            state: "present",
+          },
+        },
+        document: parseMarkdownDocument(source),
+        pack,
+      }),
+    );
+
+    expect(
+      authorMineruReferenceV2({ pack, transcript }).expected_diagnostics.map(
+        (diagnostic) => diagnostic.code,
+      ),
+    ).toEqual([
+      "PRINTED_TOC_UNMATCHED_ENTRY",
+      "PRINTED_TOC_UNMATCHED_ENTRY",
+      "PRINTED_TOC_LOW_COVERAGE",
+    ]);
   });
 
   it("rejects an unreviewed Markdown-derived transcript", () => {

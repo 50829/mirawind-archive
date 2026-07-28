@@ -98,9 +98,9 @@ interface ParsedEntry {
 const contentsLabel =
   /^(?:目\s*录|简\s*目|brief\s+contents|contents|table\s+of\s+contents)$/iu;
 const backmatter =
-  /^(?:参考文献|参考资料|索引|后记|致谢|术语表|图片来源|符号索引|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
+  /^(?:参考文献|参考资料|(?:表|图|主题|作者)?索引|后记|致谢|术语表|图片来源|符号索引|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 const frontmatter =
-  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|preface|foreword|prologue)$/iu;
+  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|译者简介|preface|foreword|prologue)$/iu;
 const auxiliary =
   /^(?:思考题|本章注记|附录注记|自测题|习题|练习|课后习题和问题|复习题|人物专访|编程作业|practice exercises|further reading|review questions|exercises)$/iu;
 const localPartSubdivision =
@@ -775,7 +775,7 @@ function headingAccounting(input: {
     "frontmatter";
   let previousLevel = 0;
   let firstChapterInPart = false;
-  let lastStartedRootIndex: number | undefined;
+  let majorGroupLastRootIndex: number | undefined;
   return Object.freeze(
     input.headings.map((heading, index) => {
       const excluded = exclusions.find(
@@ -875,14 +875,21 @@ function headingAccounting(input: {
         kind === "backmatter" ||
         kind === "frontmatter" ||
         kind === "chapter";
+      const continuesMajorGroup =
+        majorGroupLastRootIndex !== undefined &&
+        heading.rootIndex === majorGroupLastRootIndex + 1;
+      const appendixMarkerContinuation =
+        continuesMajorGroup &&
+        /^[A-Z一二三四五六七八九十]$/u.test(normalize(heading.text));
       const startsPage =
         index === 0 ||
         (major &&
-          lastStartedRootIndex !== heading.rootIndex - 1 &&
+          !continuesMajorGroup &&
           !(kind === "chapter" && insidePart && firstChapterInPart));
       if (kind === "chapter" && insidePart) firstChapterInPart = false;
       if (detachedPartLabel) currentRole = "body";
-      if (startsPage) lastStartedRootIndex = heading.rootIndex;
+      majorGroupLastRootIndex =
+        major || appendixMarkerContinuation ? heading.rootIndex : undefined;
       previousLevel = level;
       return Object.freeze({
         anchor: heading.anchor,
@@ -963,12 +970,13 @@ export function authorMineruReferenceV2(input: {
   });
   const value = {
     archive_sha256: input.pack.archive_sha256,
-    expected_diagnostics: regions.flatMap((region) => {
-      const hasMatchedEntry = region.entries.some(
-        (entry) => entry.expected_match === "matched",
-      );
-      return region.entries
-        .flatMap((entry) =>
+    expected_diagnostics: regions
+      .flatMap((region) => {
+        const matchedCount = region.entries.filter(
+          (entry) => entry.expected_match === "matched",
+        ).length;
+        const hasMatchedEntry = matchedCount > 0;
+        const localDiagnostics = region.entries.flatMap((entry) =>
           entry.expected_match === "matched"
             ? []
             : [
@@ -990,9 +998,30 @@ export function authorMineruReferenceV2(input: {
                   severity: "info" as const,
                 },
               ],
-        )
-        .slice(0, 100);
-    }),
+        );
+        const coverage =
+          region.entries.length === 0
+            ? 0
+            : matchedCount / region.entries.length;
+        return [
+          ...localDiagnostics,
+          ...(coverage < 0.6
+            ? [
+                {
+                  code: "PRINTED_TOC_LOW_COVERAGE",
+                  location: {
+                    kind: "region" as const,
+                    region_key: region.region_key,
+                  },
+                  phase: "contents" as const,
+                  recovery: ["reload" as const],
+                  severity: "warning" as const,
+                },
+              ]
+            : []),
+        ];
+      })
+      .slice(0, 100),
     fixture_id: input.pack.fixture_id,
     main_markdown: {
       input_sha256: markdown.input_sha256,
