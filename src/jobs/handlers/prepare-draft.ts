@@ -13,6 +13,7 @@ import { normalizeDocumentBlocks } from "../../compiler/document/normalize.js";
 import { parseMarkdownDocument } from "../../compiler/document/parser.js";
 import {
   readMineruLayoutEvidence,
+  supplementMissingListPageLabels,
   type LayoutEvidenceDiagnostic,
 } from "../../compiler/document/layout-evidence.js";
 import {
@@ -27,6 +28,7 @@ import { createPrintedContentsAnalysisV2 } from "../../compiler/document/printed
 import {
   detectPrintedContents,
   requiresSupplementalPdfEvidence,
+  supplementalPdfPageIndices,
   type PrintedContentsCandidate,
   type PrintedContentsDetection,
 } from "../../compiler/document/printed-toc.js";
@@ -173,6 +175,10 @@ export async function prepareDraft(input: {
     const hasHighBoundary = printedContents.candidates.some(
       (candidate) => candidate.boundaryConfidence === "high",
     );
+    const requiresLineRepair = printedContents.candidates.some(
+      (candidate) =>
+        candidate.proposedRegion !== undefined && candidate.requiresPdfEvidence,
+    );
     let pdfDiagnostics: readonly PreparedPdfDiagnostic[] = Object.freeze([]);
     if (requiresSupplementalPdfEvidence(printedContents)) {
       const discovered = await findOriginalPdf({
@@ -185,21 +191,31 @@ export async function prepareDraft(input: {
           Object.freeze({ code: discovered.diagnostic }),
         ]);
       } else {
+        const pageIndices = supplementalPdfPageIndices(printedContents);
         const pdfEvidence = await (
           input.pdfEvidenceReader ?? readPdfContentsEvidence
         )({
-          allowOcr: !hasHighBoundary,
+          allowOcr: !hasHighBoundary || requiresLineRepair,
+          ...(pageIndices ? { pageIndices } : {}),
           pdfPath: discovered.pdfPath,
           ...(input.signal ? { signal: input.signal } : {}),
           temporaryRoot: stagingDirectory,
         });
         pdfDiagnostics = pdfEvidence.diagnostics;
         if (pdfEvidence.records.length > 0) {
-          effectiveLayoutEvidence = Object.freeze({
+          const pdfLayoutEvidence = Object.freeze({
             diagnostics: layoutEvidence.diagnostics,
             records: pdfEvidence.records,
             source: pdfEvidence.source,
           });
+          const repairedLayoutEvidence = supplementMissingListPageLabels(
+            layoutEvidence,
+            pdfLayoutEvidence,
+          );
+          effectiveLayoutEvidence =
+            repairedLayoutEvidence === layoutEvidence
+              ? pdfLayoutEvidence
+              : repairedLayoutEvidence;
           printedContents = detectPrintedContents({
             document: normalized,
             layoutEvidence: effectiveLayoutEvidence,

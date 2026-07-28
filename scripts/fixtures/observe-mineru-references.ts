@@ -5,7 +5,10 @@ import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { extractZipFile } from "../../src/compiler/archive/extractor.js";
-import { readMineruLayoutEvidence } from "../../src/compiler/document/layout-evidence.js";
+import {
+  readMineruLayoutEvidence,
+  supplementMissingListPageLabels,
+} from "../../src/compiler/document/layout-evidence.js";
 import { normalizeDocumentBlocks } from "../../src/compiler/document/normalize.js";
 import { parseMarkdownDocument } from "../../src/compiler/document/parser.js";
 import { readPdfContentsEvidence } from "../../src/compiler/document/pdf-contents-evidence.js";
@@ -13,6 +16,7 @@ import {
   detectPrintedContents,
   inferPrintedHeadingEvidence,
   requiresSupplementalPdfEvidence,
+  supplementalPdfPageIndices,
   type PrintedContentsCandidate,
 } from "../../src/compiler/document/printed-toc.js";
 import {
@@ -65,7 +69,7 @@ interface CandidateProjection {
 const frontmatter =
   /^(?:序|序言|前言|译者序|出版者的话|作者简介|preface|foreword|prologue)$/iu;
 const backmatter =
-  /^(?:参考文献|参考资料|索引|后记|致谢|术语表|图片来源|符号索引|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
+  /^(?:参考文献|参考资料|索引|(?:译)?后记|致谢|术语表|图片来源|符号索引|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 
 function sha256(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
@@ -576,21 +580,29 @@ export async function observeRealMineruFixture(input: {
     const hasHighBoundary = detection.candidates.some(
       (candidate) => candidate.boundaryConfidence === "high",
     );
+    const requiresLineRepair = detection.candidates.some(
+      (candidate) =>
+        candidate.proposedRegion !== undefined && candidate.requiresPdfEvidence,
+    );
     const pdfPath = await resolveContainedPath(
       extractedRoot,
       originalPdf.relative_path,
     );
+    const pageIndices = supplementalPdfPageIndices(detection);
     const pdfEvidence = await readPdfContentsEvidence({
-      allowOcr: !hasHighBoundary,
+      allowOcr: !hasHighBoundary || requiresLineRepair,
+      ...(pageIndices ? { pageIndices } : {}),
       pdfPath,
       temporaryRoot: input.stagingDirectory,
     });
     if (pdfEvidence.records.length > 0) {
-      effectiveLayout = Object.freeze({
+      const pdfLayout = Object.freeze({
         diagnostics: layout.diagnostics,
         records: pdfEvidence.records,
         source: pdfEvidence.source,
       });
+      const repairedLayout = supplementMissingListPageLabels(layout, pdfLayout);
+      effectiveLayout = repairedLayout === layout ? pdfLayout : repairedLayout;
       regionCounter = 0;
       detection = detectPrintedContents({
         document: originalDocument,

@@ -775,6 +775,7 @@ function headingAccounting(input: {
     "frontmatter";
   let previousLevel = 0;
   let firstChapterInPart = false;
+  let lastStartedRootIndex: number | undefined;
   return Object.freeze(
     input.headings.map((heading, index) => {
       const excluded = exclusions.find(
@@ -876,9 +877,12 @@ function headingAccounting(input: {
         kind === "chapter";
       const startsPage =
         index === 0 ||
-        (major && !(kind === "chapter" && insidePart && firstChapterInPart));
+        (major &&
+          lastStartedRootIndex !== heading.rootIndex - 1 &&
+          !(kind === "chapter" && insidePart && firstChapterInPart));
       if (kind === "chapter" && insidePart) firstChapterInPart = false;
       if (detachedPartLabel) currentRole = "body";
+      if (startsPage) lastStartedRootIndex = heading.rootIndex;
       previousLevel = level;
       return Object.freeze({
         anchor: heading.anchor,

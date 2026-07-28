@@ -419,7 +419,7 @@ function tsvRecords(
     const key = `${word.block}/${word.paragraph}/${word.line}`;
     groups.set(key, [...(groups.get(key) ?? []), word]);
   }
-  const records = [...groups.values()].flatMap((line, sourceOrder) => {
+  const lineRecords = [...groups.values()].flatMap((line, sourceOrder) => {
     const confidence =
       line.reduce((sum, word) => sum + word.confidence, 0) / line.length;
     const text = line
@@ -446,6 +446,35 @@ function tsvRecords(
       }),
     ];
   });
+  const maximumRight = Math.max(
+    0,
+    ...words.map((word) => word.left + word.width),
+  );
+  const rightColumnStart = maximumRight - Math.max(80, maximumRight * 0.12);
+  const pageLabelRecords = words.flatMap((word, index) => {
+    if (
+      word.confidence < 60 ||
+      word.left < rightColumnStart ||
+      !/^(?:\d{1,5}|[ivxlcdm]+)$/iu.test(word.text)
+    ) {
+      return [];
+    }
+    return [
+      Object.freeze({
+        bbox: Object.freeze([
+          word.left,
+          word.top,
+          word.left + word.width,
+          word.top + word.height,
+        ]) as readonly [number, number, number, number],
+        pageIndex,
+        sourceOrder: lineRecords.length + index,
+        text: word.text,
+        type: "page-label",
+      }),
+    ];
+  });
+  const records = [...lineRecords, ...pageLabelRecords];
   return Object.freeze({
     lowConfidence: words.length > 0 && records.length === 0,
     records: Object.freeze(records.slice(0, maximumRecords)),
@@ -588,7 +617,7 @@ export async function readPdfContentsEvidence(input: {
           limits.pageTimeoutMs - (Date.now() - pageStartedAt),
         );
         const tsv = await runBounded({
-          args: [imagePath, "stdout", "-l", "eng+chi_sim", "--psm", "6", "tsv"],
+          args: [imagePath, "stdout", "-l", "eng+chi_sim", "--psm", "3", "tsv"],
           command: commands.tesseract,
           ...(input.signal ? { signal: input.signal } : {}),
           timeoutMs: remainingTimeout(

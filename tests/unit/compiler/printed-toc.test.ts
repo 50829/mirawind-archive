@@ -10,6 +10,7 @@ import {
   detectPrintedContents,
   inferPrintedHeadingEvidence,
   inferPrintedReferenceLevels,
+  supplementalPdfPageIndices,
 } from "@/compiler/document/printed-toc";
 import { applySourceRegions } from "@/compiler/document/source-regions";
 import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
@@ -66,6 +67,8 @@ describe("printed contents detection", () => {
       kind: "part",
       level: 1,
     });
+    expect(inferPrintedHeadingEvidence("Chapter")).toBeUndefined();
+    expect(inferPrintedHeadingEvidence("CHAPTER OBJECTIVES")).toBeUndefined();
     expect(
       inferPrintedReferenceLevels([
         "PART ONE OVERVIEW",
@@ -732,6 +735,56 @@ describe("printed contents detection", () => {
     ]);
   });
 
+  it("restores a missing printed page label from an aligned layout row", () => {
+    const source = [
+      "## 目录",
+      "",
+      "1 导论 ...... 1",
+      "",
+      "1.1 什么是计量经济学?",
+      "",
+      "1.2 数据类型 ...... 3",
+      "",
+      "## 1 导论",
+      "",
+      "正文",
+      "",
+      "## 1.1 什么是计量经济学?",
+      "",
+      "正文",
+      "",
+      "## 1.2 数据类型",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          "1 导论 ...... 1",
+          "1.1 什么是计量经济学? ...... 1",
+          "1.2 数据类型 ...... 3",
+        ].map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          ...(index === 1 ? { pageLabelSupplemented: true } : {}),
+          text,
+          type: "text" as const,
+        })),
+        source: "content-list",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toBe(
+      "1.1 什么是计量经济学?  1",
+    );
+    expect(supplementalPdfPageIndices(result)).toEqual([0]);
+  });
+
   it("recognizes an early unlabelled chapter list without page suffixes", async () => {
     const source = await readFile(unlabelledPath, "utf8");
     const result = detectPrintedContents({
@@ -1075,6 +1128,9 @@ describe("printed contents detection", () => {
     expect(detect("...... 4").candidates[0]?.requiresPdfEvidence).toBe(true);
     expect(detect("A ......").candidates[0]?.requiresPdfEvidence).toBe(true);
     expect(detect("A ...... 4").candidates[0]?.requiresPdfEvidence).toBe(false);
+    expect(
+      detect("1.1 Missing page label").candidates[0]?.requiresPdfEvidence,
+    ).toBe(true);
     const merged = detect(
       "2.11 Summary 100 Practice Exercises 101 Further Reading 101",
     ).candidates[0];

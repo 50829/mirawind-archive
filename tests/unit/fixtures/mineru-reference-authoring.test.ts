@@ -216,6 +216,57 @@ describe("Codex vision reference authoring", () => {
     });
   });
 
+  it("does not split adjacent pieces of one appendix title twice", () => {
+    const source = [
+      "## 目录",
+      "",
+      "## 附录 2 统计分布表 ...... 5",
+      "",
+      "# 附录 2",
+      "",
+      "# 统计分布表",
+      "",
+      "Body.",
+    ].join("\n");
+    const pack = packFor(source);
+    const transcript = reviewed(
+      createVisionTranscriptTemplate({
+        decision: {
+          fixture_id: pack.fixture_id,
+          printed_contents: {
+            regions: [
+              {
+                canonical: true,
+                end_root: 1,
+                pdf_page_indices: [2],
+                region_key: "full-contents",
+                start_root: 0,
+              },
+            ],
+            state: "present",
+          },
+        },
+        document: parseMarkdownDocument(source),
+        pack,
+      }),
+    );
+
+    const headings = authorMineruReferenceV2({
+      pack,
+      source,
+      transcript,
+    }).raw_heading_accounting.filter(
+      (heading) => heading.disposition.kind === "expected_body",
+    );
+    expect(
+      headings.map((heading) =>
+        heading.disposition.kind === "expected_body"
+          ? heading.disposition.starts_page
+          : false,
+      ),
+    ).toEqual([true, false]);
+  });
+
   it("binds image-inspected structure without production proposals", () => {
     const source = [
       "# Book",

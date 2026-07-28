@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   readMineruLayoutEvidence,
   reconstructPrintedLayoutRows,
+  supplementMissingListPageLabels,
   type LayoutEvidence,
 } from "@/compiler/document/layout-evidence";
 
@@ -110,6 +111,100 @@ describe("bounded MinerU layout evidence", () => {
         "1.2 What Does RStudio Look Like? . 1",
       ],
     );
+  });
+
+  it("supplements one missing list page label from aligned right-column OCR", () => {
+    const base: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        "1.1 Missing page",
+        "1.2 Existing 2",
+        "1.3 Existing 3",
+        "1.4 Existing 6",
+        "1.5 Existing 9",
+      ].map((text, groupItemIndex) => ({
+        groupBbox: [77, 373, 958, 598] as const,
+        groupId: 4,
+        groupItemCount: 5,
+        groupItemIndex,
+        pageIndex: 8,
+        sourceOrder: groupItemIndex,
+        text,
+        type: "list",
+      })),
+      source: "content-list",
+    };
+    const supplemental: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        [615, "1"],
+        [687, "2"],
+        [759, "3"],
+        [831, "6"],
+        [903, "9"],
+      ].map(([top, text], sourceOrder) => ({
+        bbox: [985, Number(top), 1006, Number(top) + 17] as const,
+        pageIndex: 8,
+        sourceOrder,
+        text: String(text),
+        type: "page-label",
+      })),
+      source: "ocr",
+    };
+
+    const result = supplementMissingListPageLabels(base, supplemental);
+
+    expect(result.records.map((record) => record.text)).toEqual([
+      "1.1 Missing page  1",
+      "1.2 Existing 2",
+      "1.3 Existing 3",
+      "1.4 Existing 6",
+      "1.5 Existing 9",
+    ]);
+    expect(result.records[0]).toMatchObject({ pageLabelSupplemented: true });
+    expect(result.source).toBe("content-list");
+  });
+
+  it("does not infer a missing page label without two geometric anchors", () => {
+    const base: LayoutEvidence = {
+      diagnostics: [],
+      records: ["1.1 Missing page", "1.2 Existing 2"].map(
+        (text, groupItemIndex) => ({
+          groupBbox: [77, 373, 958, 598] as const,
+          groupId: 4,
+          groupItemCount: 2,
+          groupItemIndex,
+          pageIndex: 8,
+          text,
+          type: "list",
+        }),
+      ),
+      source: "content-list",
+    };
+    const supplemental: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        {
+          bbox: [985, 615, 1006, 632],
+          pageIndex: 8,
+          text: "1",
+          type: "page-label",
+        },
+        {
+          bbox: [985, 687, 1006, 704],
+          pageIndex: 8,
+          text: "2",
+          type: "page-label",
+        },
+      ],
+      source: "ocr",
+    };
+
+    expect(
+      supplementMissingListPageLabels(base, supplemental).records.map(
+        (record) => record.text,
+      ),
+    ).toEqual(["1.1 Missing page", "1.2 Existing 2"]);
   });
 
   it("returns recoverable diagnostics for missing and malformed evidence", async () => {

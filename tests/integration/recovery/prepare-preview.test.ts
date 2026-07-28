@@ -277,6 +277,91 @@ describe("prepare_draft and build_preview handlers", () => {
     }
   });
 
+  it("allows bounded OCR for a damaged row inside a high-confidence boundary", async () => {
+    const dataRoot = await import("../../helpers/data-root.js").then(
+      ({ createTemporaryDataRoot }) =>
+        createTemporaryDataRoot("prepare-pdf-line-repair"),
+    );
+    try {
+      const source = [
+        "## Contents",
+        "",
+        "1 Start ...... 1",
+        "",
+        "1.1 Missing page",
+        "",
+        "1.2 End ...... 3",
+        "",
+        "## 1 Start",
+        "",
+        "Body.",
+        "",
+        "## 1.1 Missing page",
+        "",
+        "Body.",
+        "",
+        "## 1.2 End",
+        "",
+        "Body.",
+      ].join("\n");
+      const archivePath = resolve(dataRoot.path, "line-repair.zip");
+      await writeFile(
+        archivePath,
+        buildZip({
+          entries: [
+            { data: source, name: "wrapper/full.md" },
+            { data: "%PDF-origin", name: "wrapper/book_origin.pdf" },
+          ],
+        }),
+      );
+      const reader = vi.fn(
+        async (input: Parameters<typeof readPdfContentsEvidence>[0]) => {
+          expect(input.allowOcr).toBe(true);
+          return Object.freeze({
+            diagnostics: Object.freeze([]),
+            inspectedPageIndices: Object.freeze([0]),
+            records: Object.freeze(
+              [
+                "1 Start ...... 1",
+                "1.1 Missing page ...... 2",
+                "1.2 End ...... 3",
+              ].map((text, index) =>
+                Object.freeze({
+                  bbox: [20, 20 + index * 40, 700, 40 + index * 40] as const,
+                  pageIndex: 0,
+                  sourceOrder: index,
+                  text,
+                  type: "text" as const,
+                }),
+              ),
+            ),
+            source: "native-pdf" as const,
+          });
+        },
+      );
+
+      const prepared = await prepareDraft({
+        archivePath,
+        pdfEvidenceReader: reader,
+        selectedCandidatePath: "wrapper/full.md",
+        stagingDirectory: resolve(
+          dataRoot.path,
+          "staging/job_prepare_pdf_line_repair",
+        ),
+      });
+
+      expect(reader).toHaveBeenCalledOnce();
+      expect(prepared.artifact).toMatchObject({
+        layoutSource: "native-pdf",
+        printedContents: [
+          expect.objectContaining({ boundaryConfidence: "high" }),
+        ],
+      });
+    } finally {
+      await dataRoot.cleanup();
+    }
+  });
+
   it("creates an immutable initial config and a revision-pinned ready preview", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const image = await sharp({

@@ -19,6 +19,7 @@ export interface LayoutEvidenceRecord {
   readonly groupItemCount?: number;
   readonly groupItemIndex?: number;
   readonly pageIndex: number;
+  readonly pageLabelSupplemented?: boolean;
   readonly sourceOrder?: number;
   readonly text?: string;
   readonly textLevel?: number;
@@ -50,6 +51,9 @@ const numberingPrefix =
   /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|part)\s*[0-9ivxlcdm]+|附录|\d+(?:\s*\.\s*\d+){0,3})(?:\s|、|:|：|$)/iu;
 const detachedSectionNumber = /^\d+(?:\s*\.\s*\d+){1,3}\s*\.?\s*$/u;
 const leadingTechnicalNumber = /^\d{2,}(?:\s*\.\s*\d+)+\s+/u;
+const standalonePageLabel = /^(?:\d{1,5}|[ivxlcdm]+)$/iu;
+const trailingPageLabel =
+  /^(?<title>.+?)(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+|\s+)\s*(?<page>\d{1,5}|[ivxlcdm]+)\s*$/iu;
 
 class EvidenceLimitError extends Error {}
 class EvidenceInvalidError extends Error {}
@@ -321,6 +325,246 @@ function placement(record: LayoutEvidenceRecord): BoundingBox | undefined {
   return record.bbox ?? record.groupBbox;
 }
 
+function pageLabel(value: string | undefined): string | undefined {
+  const match = value?.trim().match(trailingPageLabel);
+  if (!match?.groups?.title || !match.groups.page) return;
+  const title = match.groups.title.trim();
+  if (title.length < 2 || /^\d+(?:\s*\.\s*\d+){0,3}$/u.test(title)) return;
+  return match.groups.page.toLocaleLowerCase("und");
+}
+
+function numericPageLabel(value: string): number | undefined {
+  if (/^\d{1,5}$/u.test(value)) return Number(value);
+  if (!/^[ivxlcdm]+$/iu.test(value)) return;
+  const values: Readonly<Record<string, number>> = Object.freeze({
+    c: 100,
+    d: 500,
+    i: 1,
+    l: 50,
+    m: 1_000,
+    v: 5,
+    x: 10,
+  });
+  let total = 0;
+  let previous = 0;
+  for (const character of [...value.toLocaleLowerCase("und")].reverse()) {
+    const current = values[character];
+    if (!current) return;
+    total += current < previous ? -current : current;
+    previous = current;
+  }
+  return total > 0 ? total : undefined;
+}
+
+interface PageLabelCandidate {
+  readonly centerY: number;
+  readonly label: string;
+}
+
+function supplementalPageLabels(
+  evidence: LayoutEvidence,
+  pageIndex: number,
+): readonly PageLabelCandidate[] {
+  return Object.freeze(
+    evidence.records
+      .flatMap((record) => {
+        const text = record.text?.trim().toLocaleLowerCase("und");
+        if (
+          record.pageIndex !== pageIndex ||
+          record.type !== "page-label" ||
+          !text ||
+          !standalonePageLabel.test(text) ||
+          !record.bbox
+        ) {
+          return [];
+        }
+        return [
+          Object.freeze({
+            centerY: (record.bbox[1] + record.bbox[3]) / 2,
+            label: text,
+          }),
+        ];
+      })
+      .sort((left, right) => left.centerY - right.centerY),
+  );
+}
+
+function maximumPageBottom(
+  records: readonly LayoutEvidenceRecord[],
+  pageIndex: number,
+): number | undefined {
+  const bottoms = records.flatMap((record) => {
+    const box = placement(record);
+    return record.pageIndex === pageIndex && box ? [box[3]] : [];
+  });
+  return bottoms.length > 0 ? Math.max(...bottoms) : undefined;
+}
+
+function monotonicPageLabel(
+  records: readonly LayoutEvidenceRecord[],
+  itemIndex: number,
+  candidate: string,
+): boolean {
+  const value = numericPageLabel(candidate);
+  if (value === undefined) return false;
+  const before = [...records]
+    .slice(0, itemIndex)
+    .reverse()
+    .map((record) => pageLabel(record.text))
+    .find((label) => label !== undefined);
+  const after = records
+    .slice(itemIndex + 1)
+    .map((record) => pageLabel(record.text))
+    .find((label) => label !== undefined);
+  const beforeValue = before ? numericPageLabel(before) : undefined;
+  const afterValue = after ? numericPageLabel(after) : undefined;
+  return (
+    (beforeValue === undefined || value >= beforeValue) &&
+    (afterValue === undefined || value <= afterValue)
+  );
+}
+
+/**
+ * Fills absent list-item page labels only when sidecar order and right-column
+ * PDF tokens establish a bounded, monotonic one-to-one geometric mapping.
+ */
+export function supplementMissingListPageLabels(
+  base: LayoutEvidence,
+  supplemental: LayoutEvidence,
+): LayoutEvidence {
+  if (base.source !== "content-list" || supplemental.records.length < 1) {
+    return base;
+  }
+  const groups = new Map<string, LayoutEvidenceRecord[]>();
+  for (const record of base.records) {
+    if (
+      record.groupId === undefined ||
+      record.groupItemCount === undefined ||
+      record.groupItemIndex === undefined ||
+      !record.groupBbox ||
+      !record.text
+    ) {
+      continue;
+    }
+    const key = `${record.pageIndex}/${record.groupId}`;
+    groups.set(key, [...(groups.get(key) ?? []), record]);
+  }
+  const replacements = new Map<LayoutEvidenceRecord, LayoutEvidenceRecord>();
+  for (const records of groups.values()) {
+    records.sort(
+      (left, right) => (left.groupItemIndex ?? 0) - (right.groupItemIndex ?? 0),
+    );
+    const first = records[0];
+    if (!first?.groupBbox || records.length !== first.groupItemCount) continue;
+    const candidates = supplementalPageLabels(supplemental, first.pageIndex);
+    if (candidates.length < 3) continue;
+    const baseBottom = maximumPageBottom(base.records, first.pageIndex);
+    const supplementalBottom = maximumPageBottom(
+      supplemental.records,
+      first.pageIndex,
+    );
+    if (!baseBottom || !supplementalBottom) continue;
+    const groupHeight = first.groupBbox[3] - first.groupBbox[1];
+    const roughSpacing =
+      (groupHeight / records.length) * (supplementalBottom / baseBottom);
+    if (!Number.isFinite(roughSpacing) || roughSpacing <= 0) continue;
+    const used = new Set<PageLabelCandidate>();
+    const anchors: { readonly index: number; readonly y: number }[] = [];
+    let previousY = Number.NEGATIVE_INFINITY;
+    for (const [index, record] of records.entries()) {
+      const label = pageLabel(record.text);
+      if (!label) continue;
+      const roughY =
+        (first.groupBbox[1] + ((index + 0.5) * groupHeight) / records.length) *
+        (supplementalBottom / baseBottom);
+      const match = candidates
+        .filter(
+          (candidate) =>
+            !used.has(candidate) &&
+            candidate.label === label &&
+            candidate.centerY > previousY &&
+            Math.abs(candidate.centerY - roughY) <= roughSpacing * 0.8,
+        )
+        .sort(
+          (left, right) =>
+            Math.abs(left.centerY - roughY) - Math.abs(right.centerY - roughY),
+        )[0];
+      if (!match) continue;
+      used.add(match);
+      previousY = match.centerY;
+      anchors.push(Object.freeze({ index, y: match.centerY }));
+    }
+    if (anchors.length < 2) continue;
+    const meanIndex =
+      anchors.reduce((sum, anchor) => sum + anchor.index, 0) / anchors.length;
+    const meanY =
+      anchors.reduce((sum, anchor) => sum + anchor.y, 0) / anchors.length;
+    const denominator = anchors.reduce(
+      (sum, anchor) => sum + (anchor.index - meanIndex) ** 2,
+      0,
+    );
+    if (denominator <= 0) continue;
+    const slope =
+      anchors.reduce(
+        (sum, anchor) => sum + (anchor.index - meanIndex) * (anchor.y - meanY),
+        0,
+      ) / denominator;
+    const intercept = meanY - slope * meanIndex;
+    const residual = Math.max(
+      ...anchors.map((anchor) =>
+        Math.abs(anchor.y - (intercept + slope * anchor.index)),
+      ),
+    );
+    if (
+      slope < roughSpacing * 0.55 ||
+      slope > roughSpacing * 1.8 ||
+      residual > Math.max(8, slope * 0.35)
+    ) {
+      continue;
+    }
+    for (const [index, record] of records.entries()) {
+      if (
+        pageLabel(record.text) ||
+        !record.text ||
+        !numberingPrefix.test(record.text.trim())
+      ) {
+        continue;
+      }
+      const expectedY = intercept + slope * index;
+      const match = candidates
+        .filter(
+          (candidate) =>
+            !used.has(candidate) &&
+            monotonicPageLabel(records, index, candidate.label) &&
+            Math.abs(candidate.centerY - expectedY) <=
+              Math.max(10, slope * 0.45),
+        )
+        .sort(
+          (left, right) =>
+            Math.abs(left.centerY - expectedY) -
+            Math.abs(right.centerY - expectedY),
+        )[0];
+      if (!match) continue;
+      used.add(match);
+      replacements.set(
+        record,
+        Object.freeze({
+          ...record,
+          pageLabelSupplemented: true,
+          text: `${record.text.trim()}  ${match.label}`,
+        }),
+      );
+    }
+  }
+  if (replacements.size === 0) return base;
+  return Object.freeze({
+    ...base,
+    records: Object.freeze(
+      base.records.map((record) => replacements.get(record) ?? record),
+    ),
+  });
+}
+
 function columnStarts(
   records: readonly LayoutEvidenceRecord[],
 ): readonly number[] {
@@ -442,7 +686,13 @@ export function reconstructPrintedLayoutRows(
 ): readonly PrintedLayoutRow[] {
   const byPage = new Map<number, LayoutEvidenceRecord[]>();
   for (const record of evidence.records) {
-    if (!record.text?.trim() || !placement(record)) continue;
+    if (
+      record.type === "page-label" ||
+      !record.text?.trim() ||
+      !placement(record)
+    ) {
+      continue;
+    }
     const page = byPage.get(record.pageIndex) ?? [];
     page.push(record);
     byPage.set(record.pageIndex, page);

@@ -182,7 +182,7 @@ export function inferPrintedHeadingEvidence(
     });
   }
   const named = new RegExp(
-    `^(?:第\\s*([0-9零〇一二三四五六七八九十百千]+)\\s*(章|篇|部分|部)|(?:chapter|chap\\.?)\\s*([0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})|part\\s*([0-9ivxlcdm]+|${englishOrdinalWord}))`,
+    `^(?:第\\s*([0-9零〇一二三四五六七八九十百千]+)\\s*(章|篇|部分|部)|(?:chapter|chap\\.?)\\s*([0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})(?=\\s|$)|part\\s*([0-9ivxlcdm]+|${englishOrdinalWord})(?=\\s|$))`,
     "iu",
   ).exec(plain);
   if (named) {
@@ -641,6 +641,13 @@ function requiresPdfLineRepair(
     .some((line) => {
       const plain = plainTitle(line);
       if (embeddedPrintedEntryBoundary.test(plain)) return true;
+      if (
+        inferPrintedHeadingEvidence(plain) !== undefined &&
+        printedPageEvidence(plain) === undefined &&
+        !standaloneMajorLabel.test(plain)
+      ) {
+        return true;
+      }
       if (new RegExp(`${dotLeader.source}\\s*$`, "iu").test(plain)) {
         return true;
       }
@@ -999,7 +1006,9 @@ function layoutLogicalEntries(
 ): readonly Omit<ExtractedEntry, "range">[] {
   if (
     !evidence ||
-    (evidence.source !== "native-pdf" && evidence.source !== "ocr")
+    (evidence.source !== "native-pdf" &&
+      evidence.source !== "ocr" &&
+      !evidence.records.some((record) => record.pageLabelSupplemented))
   ) {
     return Object.freeze([]);
   }
@@ -1086,7 +1095,9 @@ function recoverLayoutLogicalEntries(
         textFingerprint: "",
       }),
   );
-  const alignment = monotonicMatches(sourceEntries, layoutHeadings);
+  const alignment = monotonicMatches(sourceEntries, layoutHeadings, {
+    allowNumberOnly: true,
+  });
   const anchors = [...alignment.matches]
     .map(([sourceIndex, layoutIndex]) => ({ layoutIndex, sourceIndex }))
     .sort(
@@ -1168,15 +1179,28 @@ function recoverLayoutLogicalEntries(
       throw new Error("PRINTED_TOC_LAYOUT_PROVENANCE_MISSING");
     }
     const sourceAnchorDamaged = sourceEntry.normalizedTitle.length < 3;
+    const sourcePrinted = printedPageEvidence(sourceEntry.sourceTitle);
+    const layoutPrinted = printedPageEvidence(layoutEntry.sourceTitle);
     const layoutHasMissingPage =
-      printedPageEvidence(sourceEntry.sourceTitle) === undefined &&
-      new RegExp(`${dotLeader.source}\\s*$`, "iu").test(
+      sourcePrinted === undefined &&
+      layoutPrinted !== undefined &&
+      (new RegExp(`${dotLeader.source}\\s*$`, "iu").test(
         plainTitle(sourceEntry.sourceTitle),
-      ) &&
-      printedPageEvidence(layoutEntry.sourceTitle) !== undefined;
+      ) ||
+        similarity(
+          sourceEntry.normalizedTitle,
+          normalizedTitle(layoutPrinted.title),
+        ) >= 0.9);
     recovered.push(
       sourceAnchorDamaged || layoutHasMissingPage
-        ? Object.freeze({ ...layoutEntry, range: sourceEntry.range })
+        ? Object.freeze({
+            ...layoutEntry,
+            range: sourceEntry.range,
+            sourceTitle:
+              layoutHasMissingPage && layoutPrinted
+                ? `${plainTitle(sourceEntry.sourceTitle)}  ${layoutPrinted.pageLabel}`
+                : layoutEntry.sourceTitle,
+          })
         : Object.freeze({
             ...sourceEntry,
             ...(layoutEntry.pageIndex === undefined
@@ -1748,4 +1772,23 @@ export function requiresSupplementalPdfEvidence(
         candidate.proposedRegion !== undefined && candidate.requiresPdfEvidence,
     )
   );
+}
+
+export function supplementalPdfPageIndices(
+  detection: PrintedContentsDetection,
+): readonly number[] | undefined {
+  const pageIndices = [
+    ...new Set(
+      detection.candidates.flatMap((candidate) =>
+        candidate.logicalEntries.flatMap((entry) =>
+          entry.pageIndex === undefined ||
+          entry.pageIndex < 0 ||
+          entry.pageIndex >= 48
+            ? []
+            : [entry.pageIndex],
+        ),
+      ),
+    ),
+  ].sort((left, right) => left - right);
+  return pageIndices.length > 0 ? Object.freeze(pageIndices) : undefined;
 }
