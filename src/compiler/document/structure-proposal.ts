@@ -27,11 +27,11 @@ export interface StructureProposal {
 }
 
 const frontmatterTitle =
-  /^(?:序(?:言|章)?|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|导读|凡例|符号(?:表|说明)|出版者的话|专家指导委员会|作者简介|译者简介|preface|foreword|prologue)$/iu;
+  /^(?:序(?:言|章)?|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|导读|凡例|符号(?:表|说明)|出版者的话|专家指导委员会|作者简介|译者简介|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
 const appendixTitle =
   /^(?:附录|附表|appendix)(?:\s|[A-Z一二三四五六七八九十0-9]|$)/iu;
 const backmatterTitle =
-  /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
+  /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|(?:author|subject)\s+index|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 const optionalBackmatterTitle = /^(?:glossary)$/iu;
 const acknowledgementTitle = /^(?:致谢|acknowledg(?:e)?ments?)$/iu;
 const chapterLocalTitle =
@@ -541,7 +541,7 @@ export function proposeDocumentStructure(
     } else if (semanticKind === "appendix") {
       insidePart = false;
       firstChapterInPart = false;
-      major = true;
+      major = node.display_level === 1;
     } else if (semanticKind === "chapter") {
       major = !insidePart || !firstChapterInPart;
       firstChapterInPart = false;

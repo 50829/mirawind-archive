@@ -72,6 +72,26 @@ describe("default document structure proposal", () => {
     ).toEqual(["body", "appendix", "appendix", "backmatter", "backmatter"]);
   });
 
+  it("treats named author and subject indexes as top-level backmatter", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        "# 1 Body\n\nBody\n\n# Author Index\n\nNames\n\n# Subject Index\n",
+      ),
+    );
+
+    expect(
+      proposeDocumentStructure(document).nodes.map((node) => ({
+        level: node.display_level,
+        role: node.role,
+        starts: node.starts_page,
+      })),
+    ).toEqual([
+      { level: 1, role: "body", starts: true },
+      { level: 1, role: "backmatter", starts: true },
+      { level: 1, role: "backmatter", starts: true },
+    ]);
+  });
+
   it("resets a carried role at a detached numeric chapter marker", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
@@ -966,6 +986,30 @@ describe("default document structure proposal", () => {
       true,
       true,
     ]);
+  });
+
+  it("classifies edition-specific English prefaces as frontmatter", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## Preface to the Second Edition",
+          "",
+          "Front matter.",
+          "",
+          "## Preface to the First Edition",
+          "",
+          "Front matter.",
+          "",
+          "## 1 Introduction",
+          "",
+          "Body.",
+        ].join("\n"),
+      ),
+    );
+
+    expect(
+      proposeDocumentStructure(document).nodes.map((node) => node.role),
+    ).toEqual(["frontmatter", "frontmatter", "body"]);
   });
 
   it("starts later chapters at their own heading rather than at the first section", () => {

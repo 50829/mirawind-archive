@@ -67,9 +67,9 @@ interface CandidateProjection {
 }
 
 const frontmatter =
-  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|preface|foreword|prologue)$/iu;
+  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
 const backmatter =
-  /^(?:参考文献|参考资料|索引|(?:译)?后记|致谢|术语表|图片来源|符号索引|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
+  /^(?:参考文献|参考资料|索引|(?:译)?后记|致谢|术语表|图片来源|符号索引|bibliography|references|(?:author|subject)\s+index|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 
 function sha256(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
@@ -96,7 +96,7 @@ function stripPageLabel(value: string): {
   const match =
     /^(?<title>.+?)(?:\.(?:\s*\.)+|…+|·(?:\s*·)+|\s{2,}|\s)\s*(?<page>[ivxlcdm]+|\d{1,5})\s*$/iu.exec(
       text,
-    );
+    ) ?? /^(?<title>.+[)\]}>])(?<page>\d{1,5})\s*$/u.exec(text);
   if (!match?.groups?.title || !match.groups.page) {
     return Object.freeze({ pageLabel: null, title: text });
   }
@@ -206,7 +206,9 @@ function kindFor(
   const evidence = inferPrintedHeadingEvidence(title);
   if (evidence?.kind === "part") return "part";
   if (evidence?.kind === "chapter") return "chapter";
-  if (evidence?.kind === "appendix") return "appendix";
+  if (evidence?.kind === "appendix") {
+    return level > 1 ? "other" : "appendix";
+  }
   if (evidence?.kind === "decimal") return "section";
   if (frontmatter.test(title)) return "frontmatter";
   if (

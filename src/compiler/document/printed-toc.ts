@@ -99,9 +99,9 @@ const contentsTitle =
   /^(?:(?:目\s*录|简\s*(?:明\s*)?目(?:\s*录)?)(?:\s+(?:brief\s+contents|contents))?|(?:brief\s+contents|contents|table\s+of\s+contents)(?:\s+(?:目\s*录|简\s*(?:明\s*)?目(?:\s*录)?))?)$/iu;
 const dotLeader = /(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+)/u;
 const frontmatterEntryTitle =
-  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|译者简介|教学建议|preface|foreword|prologue)$/iu;
+  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|译者简介|教学建议|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
 const contextualEntryTitle =
-  /^(?:参考文献|参考资料|索引|后记|致谢|术语表|图片来源|符号索引|思考题|本章注记|附录注记|自测题|习题|练习|课后习题和问题|复习题|人物专访|编程作业|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits|practice exercises|further reading|review questions|exercises)$/iu;
+  /^(?:参考文献|参考资料|索引|后记|致谢|术语表|图片来源|符号索引|思考题|本章注记|附录注记|自测题|习题|练习|课后习题和问题|复习题|人物专访|编程作业|bibliographic notes|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits|practice exercises|further reading|review questions|exercises)$/iu;
 const chapterReviewParentTitle =
   /^(?:课后习题和问题|end-of-chapter questions)$/iu;
 const chapterReviewChildTitle =
@@ -134,7 +134,7 @@ const standaloneMajorLabel = new RegExp(
   "iu",
 );
 const topLevelBackmatterTitle =
-  /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
+  /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|(?:author|subject)\s+index|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 
 function hash(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -260,6 +260,7 @@ export function inferPrintedReferenceLevels(
 ): readonly number[] {
   let insidePart = false;
   let insideAppendix = false;
+  let insideLocalAppendixGroup = false;
   let reviewGroupLevel: number | undefined;
   let previousLevel = 0;
   const hasLaterBodyMajor: boolean[] = Array.from({ length: values.length });
@@ -313,25 +314,30 @@ export function inferPrintedReferenceLevels(
       } else if (numbering?.kind === "part") {
         insidePart = true;
         insideAppendix = false;
+        insideLocalAppendixGroup = false;
         level = 1;
       } else if (numbering?.kind === "appendix") {
         const localUnnumberedAppendix =
           numbering.level === 1 &&
           /^(?:附录|appendix)\s*[:：]/iu.test(semanticTitle);
-        if (
-          numbering.level > 1 ||
-          (localUnnumberedAppendix && previousLevel > 1)
-        ) {
+        if (localUnnumberedAppendix && previousLevel > 1) {
+          level = insideLocalAppendixGroup ? 3 : 2;
+          insideLocalAppendixGroup = true;
+        } else if (numbering.level > 1) {
           level = Math.max(2, numbering.level);
+          insideLocalAppendixGroup = false;
         } else {
           insidePart = false;
           insideAppendix = true;
+          insideLocalAppendixGroup = false;
           level = 1;
         }
       } else if (numbering?.kind === "chapter") {
         insideAppendix = false;
+        insideLocalAppendixGroup = false;
         level = insidePart ? 2 : 1;
       } else if (numbering?.kind === "decimal") {
+        insideLocalAppendixGroup = false;
         level = Math.min(4, numbering.level + (insidePart ? 1 : 0));
       } else if (topLevelBackmatterTitle.test(semanticTitle)) {
         if (previousLevel > 1 && hasLaterBodyMajor[index]) {
@@ -339,8 +345,14 @@ export function inferPrintedReferenceLevels(
         } else {
           insidePart = false;
           insideAppendix = false;
+          insideLocalAppendixGroup = false;
           level = 1;
         }
+      } else if (
+        /^(?:bibliographic notes|exercises)$/iu.test(semanticTitle) &&
+        previousLevel > 0
+      ) {
+        level = Math.min(4, Math.max(2, previousLevel));
       } else if (
         /^(?:课后习题和问题|end-of-chapter questions|参考文献(?:说明)?|练习题答案|家庭作业|习题|练习|bibliographic notes|exercises|review questions)$/iu.test(
           semanticTitle,
@@ -381,6 +393,13 @@ function printedPageEvidence(
     return Object.freeze({
       pageLabel: leader.groups.page,
       title: leader.groups.title.trim(),
+    });
+  }
+  const attached = /^(?<title>.+[)\]}>])(?<page>\d{1,5})\s*$/u.exec(plain);
+  if (attached?.groups?.title && attached.groups.page) {
+    return Object.freeze({
+      pageLabel: attached.groups.page,
+      title: attached.groups.title.trim(),
     });
   }
   const ordinary = /^(?<title>.+?)\s+(?<page>\d+|[ivxlcdm]+)\s*$/iu.exec(plain);
@@ -740,8 +759,11 @@ function matchScore(
     (entry.numbering?.kind === "part" || entry.numbering?.kind === "chapter") &&
     headingNumber === undefined &&
     titleScore >= 0.7;
+  const genericAppendix =
+    entry.numbering?.kind === "appendix" && entry.numbering.key === "appendix";
   if (
     numberConflict ||
+    (genericAppendix && titleScore < 0.62) ||
     (!numberEqual && titleScore < 0.62) ||
     (numberEqual && !allowNumberOnly && titleScore < 0.2)
   ) {
@@ -1195,8 +1217,17 @@ function recoverLayoutLogicalEntries(
       layoutGap.length >= sourceGap.length &&
       layoutGap.length <= sourceGap.length + 8;
     if (layoutGap.length > 0 && (fillsEmptyGap || replacesDamagedGap)) {
+      const acceptedLayoutGap = layoutGap
+        .map((entry, offset) => ({ entry, offset }))
+        .filter(({ entry }) => {
+          if (!fillsEmptyGap) return true;
+          const title =
+            printedPageEvidence(entry.sourceTitle)?.title ??
+            plainTitle(entry.sourceTitle);
+          return !contextualEntryTitle.test(title);
+        });
       recovered.push(
-        ...layoutGap.map((entry, offset) => {
+        ...acceptedLayoutGap.map(({ entry, offset }) => {
           const sourceEntry =
             sourceEntries[nearestSourceIndex(layoutCursor + offset)];
           if (!sourceEntry) {
@@ -1226,10 +1257,11 @@ function recoverLayoutLogicalEntries(
       (new RegExp(`${dotLeader.source}\\s*$`, "iu").test(
         plainTitle(sourceEntry.sourceTitle),
       ) ||
-        similarity(
-          sourceEntry.normalizedTitle,
-          normalizedTitle(layoutPrinted.title),
-        ) >= 0.9);
+        (evidence?.source === "content-list" &&
+          similarity(
+            sourceEntry.normalizedTitle,
+            normalizedTitle(layoutPrinted.title),
+          ) >= 0.9));
     recovered.push(
       sourceAnchorDamaged || layoutHasMissingPage
         ? Object.freeze({
@@ -1440,10 +1472,18 @@ export function detectPrintedContents(input: {
       const semanticTitle =
         printedPageEvidence(entry.sourceTitle)?.title ??
         plainTitle(entry.sourceTitle);
-      const proposedLevel =
-        entry.numbering ||
-        chapterReviewChildTitle.test(semanticTitle) ||
-        contextualEntryTitle.test(semanticTitle)
+      const layoutSensitiveLocal =
+        /^(?:bibliographic notes|exercises|appendix\s*[:：])/iu.test(
+          semanticTitle,
+        );
+      const proposedLevel = layoutSensitiveLocal
+        ? Math.max(
+            inferredLevels[index] ?? entry.referenceLevel,
+            layoutLevel ?? 0,
+          )
+        : entry.numbering ||
+            chapterReviewChildTitle.test(semanticTitle) ||
+            contextualEntryTitle.test(semanticTitle)
           ? (inferredLevels[index] ?? entry.referenceLevel)
           : topLevelBackmatterTitle.test(semanticTitle)
             ? (inferredLevels[index] ?? entry.referenceLevel)
@@ -1488,11 +1528,16 @@ export function detectPrintedContents(input: {
       allowNumberOnly: true,
     });
     const resolvedMatches = new Map(alignment.matches);
+    const ambiguousEntries = new Set(alignment.ambiguousEntries);
     const usedHeadingIndexes = new Set(resolvedMatches.values());
     for (const [entryIndex, entry] of entries.entries()) {
+      const localAppendix =
+        entry.numbering?.kind === "appendix" &&
+        entry.numbering.key === "appendix";
       if (
         resolvedMatches.has(entryIndex) ||
-        (entry.numbering?.kind !== "part" &&
+        (!localAppendix &&
+          entry.numbering?.kind !== "part" &&
           entry.numbering?.kind !== "chapter")
       ) {
         continue;
@@ -1526,14 +1571,21 @@ export function detectPrintedContents(input: {
         );
       const best = candidates[0];
       const second = candidates[1];
-      if (best && best.score >= 16 && best.score - (second?.score ?? 0) >= 4) {
+      const minimumScore = localAppendix ? 6 : 16;
+      const minimumMargin = localAppendix ? 2 : 4;
+      if (
+        best &&
+        best.score >= minimumScore &&
+        best.score - (second?.score ?? 0) >= minimumMargin
+      ) {
         resolvedMatches.set(entryIndex, best.headingIndex);
         usedHeadingIndexes.add(best.headingIndex);
+        ambiguousEntries.delete(entryIndex);
       }
     }
     const diagnostics: PrintedContentsDiagnostic[] = [];
     const matchedEntries = entries.flatMap((entry, entryIndex) => {
-      if (alignment.ambiguousEntries.has(entryIndex)) {
+      if (ambiguousEntries.has(entryIndex)) {
         if (entry.layoutOnly) return [];
         diagnostics.push(
           diagnostic(

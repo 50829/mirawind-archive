@@ -270,6 +270,101 @@ describe("printed contents detection", () => {
     });
   });
 
+  it("drops unresolved dotted local rows while keeping labelled neighbors", () => {
+    const source = [
+      "# Contents",
+      "",
+      "## 2 Overview ...... 9",
+      "",
+      "Bibliographic Notes . . . . .",
+      "",
+      "Exercises . . . . . 39",
+      "",
+      "## 3 Regression ...... 43",
+      "",
+      "## 2 Overview",
+      "",
+      "Body",
+      "",
+      "## Bibliographic Notes",
+      "",
+      "Body",
+      "",
+      "## Exercises",
+      "",
+      "Body",
+      "",
+      "## 3 Regression",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) =>
+        entry.sourceTitle.replace(/^#{1,6}\s+/u, ""),
+      ),
+    ).toEqual([
+      "2 Overview ...... 9",
+      "Exercises . . . . . 39",
+      "3 Regression ...... 43",
+    ]);
+  });
+
+  it("merges a wrapped chapter title split across adjacent Markdown headings", () => {
+    const source = [
+      "# Contents",
+      "",
+      "## 11 Neural Networks ...... 389",
+      "",
+      "## 12 Support Vector Machines and",
+      "",
+      "## Flexible Discriminants 417",
+      "",
+      "## 12.1 Introduction ...... 417",
+      "",
+      "## 13 Prototype Methods ...... 459",
+      "",
+      "## 11 Neural Networks",
+      "",
+      "Body",
+      "",
+      "## 12 Support Vector Machines and Flexible Discriminants",
+      "",
+      "Body",
+      "",
+      "## 12.1 Introduction",
+      "",
+      "Body",
+      "",
+      "## 13 Prototype Methods",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) =>
+        entry.sourceTitle.replace(/^#{1,6}\s+/u, ""),
+      ),
+    ).toContain("12 Support Vector Machines and Flexible Discriminants 417");
+    expect(
+      result.candidates[0]?.logicalEntries.some((entry) =>
+        entry.sourceTitle.includes("## Flexible Discriminants"),
+      ),
+    ).toBe(false);
+  });
+
   it("bridges a bounded run of non-entry blocks inside printed contents", () => {
     const source = [
       "# Contents",
@@ -676,6 +771,75 @@ describe("printed contents detection", () => {
     ).toBe(candidate?.proposedRegion?.entries.length);
   });
 
+  it("does not let fused layout invent chapter-local rows between source anchors", () => {
+    const source = [
+      "# Contents",
+      "",
+      "## 2 Overview ...... 9",
+      "",
+      "Bibliographic Notes . . . . .",
+      "",
+      "Exercises . . . . .",
+      "",
+      "## 3 Regression ...... 43",
+      "",
+      "## 4 Classification ...... 101",
+      "",
+      "## 2 Overview",
+      "",
+      "Body",
+      "",
+      "## Bibliographic Notes",
+      "",
+      "Body",
+      "",
+      "## Exercises",
+      "",
+      "Body",
+      "",
+      "## 3 Regression",
+      "",
+      "Body",
+      "",
+      "## 4 Classification",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          "2 Overview ...... 9",
+          "Bibliographic Notes ...... 39",
+          "Exercises ...... 39",
+          "3 Regression ...... 43",
+          "4 Classification ...... 101",
+        ].map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          ...(index === 0 ? { pageLabelSupplemented: true } : {}),
+          text,
+          type: "text" as const,
+        })),
+        source: "content-list",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) =>
+        entry.sourceTitle.replace(/^#{1,6}\s+/u, ""),
+      ),
+    ).toEqual([
+      "2 Overview ...... 9",
+      "3 Regression ...... 43",
+      "4 Classification ...... 101",
+    ]);
+  });
+
   it("fills a small layout-only gap between reliable source anchors", () => {
     const source = [
       "# Contents",
@@ -787,6 +951,107 @@ describe("printed contents detection", () => {
       "1.1 什么是计量经济学?  1",
     );
     expect(supplementalPdfPageIndices(result)).toEqual([0]);
+  });
+
+  it("does not infer a native page label from a lone trailing period", () => {
+    const source = [
+      "## Contents",
+      "",
+      "14.3.4 Previous ...... 503",
+      "",
+      "14.3.5 Combinatorial Algorithms .",
+      "",
+      "14.3.6 Next ...... 511",
+      "",
+      "## 14.3.4 Previous",
+      "",
+      "Body",
+      "",
+      "## 14.3.5 Combinatorial Algorithms .",
+      "",
+      "Body",
+      "",
+      "## 14.3.6 Next",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          "14.3.4 Previous ...... 503",
+          "14.3.5 Combinatorial Algorithms ...... 507",
+          "14.3.6 Next ...... 511",
+        ].map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toBe(
+      "14.3.5 Combinatorial Algorithms .",
+    );
+  });
+
+  it("matches a nested printed appendix group without treating it as top-level", () => {
+    const source = [
+      "## Contents",
+      "",
+      "5.9.2 Adaptive Filtering ...... 179",
+      "",
+      "Appendix: Computational Considerations for Splines ...... 186",
+      "",
+      "Appendix: B-splines ...... 186",
+      "",
+      "Appendix: Computations for Smoothing Splines ...... 189",
+      "",
+      "6 Kernel Methods ...... 191",
+      "",
+      "## 5.9.2 Adaptive Filtering",
+      "",
+      "Body",
+      "",
+      "## Appendix: Computations for Splines",
+      "",
+      "Body",
+      "",
+      "## B-splines",
+      "",
+      "Body",
+      "",
+      "## Computations for Smoothing Splines",
+      "",
+      "Body",
+      "",
+      "## 6 Kernel Methods",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.slice(1, 4).map((entry) => ({
+        matched: Boolean(entry.bodyHeadingBlockId),
+        level: entry.referenceLevel,
+      })),
+    ).toEqual([
+      { level: 2, matched: true },
+      { level: 3, matched: true },
+      { level: 3, matched: true },
+    ]);
   });
 
   it("retains edition prefaces and governance units before the first chapter", () => {
