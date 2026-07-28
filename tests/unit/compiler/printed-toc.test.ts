@@ -560,6 +560,136 @@ describe("printed contents detection", () => {
     });
   });
 
+  it("preserves a reliable short printed title instead of rewriting it from the body", () => {
+    const source = [
+      "## Contents",
+      "",
+      "10.2.1 Previous ...... 409",
+      "",
+      "10.2.2 庞加菜怎样看指数 ...... 410",
+      "",
+      "10.2.3 Next ...... 411",
+      "",
+      "## 10.2.1 Previous",
+      "",
+      "Body",
+      "",
+      "## 10.2.2 庞加莱怎样看指数",
+      "",
+      "Body",
+      "",
+      "## 10.2.3 Next",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toContain(
+      "庞加菜怎样看指数",
+    );
+  });
+
+  it("normalizes bounded TeX display artifacts in printed rows", () => {
+    const source = [
+      "## Contents",
+      "",
+      "2.3.3 用多项式逼近幂级数 $\\dots 59$",
+      "",
+      "4.8.1 引言 ^{1} ...... 182",
+      "",
+      "5.8 E^{\\prime} = E 的几何解法 ...... 206",
+      "",
+      "## 2.3.3 用多项式逼近幂级数",
+      "",
+      "Body",
+      "",
+      "## 4.8.1 引言 ^{1}",
+      "",
+      "Body",
+      "",
+      "## 5.8 E' = E 的几何解法",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
+      "2.3.3 用多项式逼近幂级数 \\dots 59",
+      "4.8.1 引言 ...... 182",
+      "5.8 E' = E 的几何解法 ...... 206",
+    ]);
+  });
+
+  it("does not insert an unnumbered PDF fragment between reliable numbered rows", () => {
+    const source = [
+      "## Contents",
+      "",
+      "7.4 一个拓扑辐角原理 ...... 307",
+      "",
+      "7.4.5 两个例子 ...... 312",
+      "",
+      "7.5 鲁歇定理 ...... 314",
+      "",
+      "7.5.1 结果 ...... 314",
+      "",
+      "7.6 最大值与最小值 ...... 316",
+      "",
+      "## 7.4.5 两个例子",
+      "",
+      "Body",
+      "",
+      "## 7.5 鲁歇定理",
+      "",
+      "Body",
+      "",
+      "## 7.5.1 结果",
+      "",
+      "Body",
+      "",
+      "## 7.6 最大值与最小值",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          "7.4 一个拓扑辐角原理 ...... 307",
+          "7.4.5 两个例子 ...... 312",
+          "* ...... 鲁歇定理 ...... 314",
+          "7.5.1 结果 ...... 314",
+          "7.6 最大值与最小值 ...... 316",
+        ].map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.referenceLevel),
+    ).toEqual([1, 2, 2, 3, 2]);
+  });
+
   it("nests chapters below parts while keeping earlier chapters and appendices at the top level", () => {
     const contents = [
       "第 1 章 计算机系统漫游 ...... 1",

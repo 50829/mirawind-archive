@@ -157,10 +157,16 @@ function withoutControlCharacters(value: string): string {
 
 function plainTitle(value: string): string {
   return withoutControlCharacters(value)
+    .normalize("NFKC")
     .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "")
+    .replace(/\$(\\(?:dots|ldots|cdots)\s+(?:\d{1,5}|[ivxlcdm]+))\$/giu, "$1")
+    .replace(/\^\{\\prime\}/gu, "'")
+    .replace(
+      /\s+\^\{\d+\}(?=\s*(?:(?:\.(?:\s*\.)+|…+|·(?:\s*·)+|_(?:\s*_)+)|$))/gu,
+      "",
+    )
     .replace(/[ \t]{2,}$/u, "")
-    .trim()
-    .normalize("NFKC");
+    .trim();
 }
 
 export function inferPrintedHeadingEvidence(
@@ -433,6 +439,7 @@ function normalizedTitle(value: string, removePageLabel = true): string {
     : withoutPage;
   const comparisonTitle = withoutNumber.trim() ? withoutNumber : withoutPage;
   return comparisonTitle
+    .replace(/\\(?:dots|ldots|cdots)\b/giu, "")
     .replace(/^[\s、:：.\-—]+/u, "")
     .replace(/[，,。.;；:：!?！？'"“”‘’()（）[\]【】\-—_]/gu, "")
     .replace(/\s+/gu, "")
@@ -792,7 +799,7 @@ function recoveredMatchedSourceTitle(
   if (similarity(entry.normalizedTitle, headingTitle) >= 0.9) {
     return sourceTitle;
   }
-  if (entry.normalizedTitle.length > 12) return sourceTitle;
+  if (entry.normalizedTitle.length >= 3) return sourceTitle;
   const printed = printedPageEvidence(sourceTitle);
   const bodyTitle = plainTitle(heading.sourceTitle);
   if (!printed) return bodyTitle;
@@ -806,7 +813,10 @@ function recoveredMatchedSourceTitle(
 function monotonicMatches(
   entries: readonly ExtractedEntry[],
   headings: readonly NormalizedHeading[],
-  options: { readonly allowNumberOnly?: boolean } = {},
+  options: {
+    readonly allowNumberOnly?: boolean;
+    readonly requireNumberingForNumberedEntries?: boolean;
+  } = {},
 ): {
   readonly bestScore: number;
   readonly ambiguousEntries: ReadonlySet<number>;
@@ -850,6 +860,13 @@ function monotonicMatches(
     for (const headingIndex of indexes) {
       const heading = headings[headingIndex];
       if (!heading) continue;
+      if (
+        options.requireNumberingForNumberedEntries &&
+        entry.numbering &&
+        !inferPrintedHeadingEvidence(heading.sourceTitle)
+      ) {
+        continue;
+      }
       const score = matchScore(entry, heading, options.allowNumberOnly);
       if (score > 0) candidates.push({ entryIndex, headingIndex, score });
       if (candidates.length >= maximumMatchCandidates) break;
@@ -1158,6 +1175,7 @@ function recoverLayoutLogicalEntries(
   );
   const alignment = monotonicMatches(sourceEntries, layoutHeadings, {
     allowNumberOnly: true,
+    requireNumberingForNumberedEntries: true,
   });
   const anchors = [...alignment.matches]
     .map(([sourceIndex, layoutIndex]) => ({ layoutIndex, sourceIndex }))
@@ -1219,27 +1237,41 @@ function recoverLayoutLogicalEntries(
     if (layoutGap.length > 0 && (fillsEmptyGap || replacesDamagedGap)) {
       const acceptedLayoutGap = layoutGap
         .map((entry, offset) => ({ entry, offset }))
-        .filter(({ entry }) => {
-          if (!fillsEmptyGap) return true;
+        .filter(({ entry, offset }) => {
+          if (!fillsEmptyGap) {
+            const sourceEntry =
+              sourceGap[Math.min(offset, sourceGap.length - 1)];
+            return !sourceEntry?.numbering || entry.numbering !== undefined;
+          }
           const title =
             printedPageEvidence(entry.sourceTitle)?.title ??
             plainTitle(entry.sourceTitle);
-          return !contextualEntryTitle.test(title);
+          const numbering = inferPrintedHeadingEvidence(title);
+          return (
+            (numbering !== undefined ||
+              frontmatterEntryTitle.test(title) ||
+              topLevelBackmatterTitle.test(title)) &&
+            !contextualEntryTitle.test(title)
+          );
         });
-      recovered.push(
-        ...acceptedLayoutGap.map(({ entry, offset }) => {
-          const sourceEntry =
-            sourceEntries[nearestSourceIndex(layoutCursor + offset)];
-          if (!sourceEntry) {
-            throw new Error("PRINTED_TOC_LAYOUT_PROVENANCE_MISSING");
-          }
-          return Object.freeze({
-            ...entry,
-            ...(fillsEmptyGap ? { layoutOnly: true } : {}),
-            range: sourceEntry.range,
-          });
-        }),
-      );
+      if (acceptedLayoutGap.length === 0) {
+        recovered.push(...sourceGap);
+      } else {
+        recovered.push(
+          ...acceptedLayoutGap.map(({ entry, offset }) => {
+            const sourceEntry =
+              sourceEntries[nearestSourceIndex(layoutCursor + offset)];
+            if (!sourceEntry) {
+              throw new Error("PRINTED_TOC_LAYOUT_PROVENANCE_MISSING");
+            }
+            return Object.freeze({
+              ...entry,
+              ...(fillsEmptyGap ? { layoutOnly: true } : {}),
+              range: sourceEntry.range,
+            });
+          }),
+        );
+      }
     } else {
       recovered.push(...sourceGap);
     }
