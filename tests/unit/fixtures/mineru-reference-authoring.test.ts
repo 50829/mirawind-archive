@@ -149,6 +149,73 @@ describe("Codex vision reference authoring", () => {
     ).toEqual(["backmatter", "body", "body"]);
   });
 
+  it("keeps a detached part label in body hierarchy after a printed index", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## PART ONE OVERVIEW .... 1",
+      "",
+      "# Index",
+      "",
+      "# Part One",
+      "",
+      "# Overview",
+      "",
+      "Body.",
+    ].join("\n");
+    const pack = packFor(source);
+    const template = createVisionTranscriptTemplate({
+      decision: {
+        fixture_id: pack.fixture_id,
+        printed_contents: {
+          regions: [
+            {
+              canonical: true,
+              end_root: 1,
+              pdf_page_indices: [2],
+              region_key: "full-contents",
+              start_root: 0,
+            },
+          ],
+          state: "present",
+        },
+      },
+      document: parseMarkdownDocument(source),
+      pack,
+    });
+    const region = template.regions[0];
+    if (!region) throw new Error("expected contents region");
+    const transcript = reviewed({
+      ...template,
+      regions: [
+        {
+          ...region,
+          entries: region.entries.map((entry) => ({
+            ...entry,
+            kind: "part" as const,
+            level: 1,
+          })),
+        },
+      ],
+    });
+
+    const headings = authorMineruReferenceV2({
+      pack,
+      source,
+      transcript,
+    }).raw_heading_accounting;
+    expect(
+      headings.find((heading) => heading.anchor.root_index === 3)?.disposition,
+    ).toEqual({
+      display_level: 1,
+      display_title: null,
+      include_in_toc: false,
+      kind: "expected_body",
+      role: "body",
+      starts_page: false,
+    });
+  });
+
   it("binds image-inspected structure without production proposals", () => {
     const source = [
       "# Book",
@@ -267,6 +334,70 @@ describe("Codex vision reference authoring", () => {
       body_heading_anchor: { root_index: 3 },
       expected_match: "matched",
     });
+  });
+
+  it("binds repeated short titles by their exact section numbers", () => {
+    const source = [
+      "# Book",
+      "",
+      "## 目录",
+      "",
+      "## 4.2.1 输入 .... 10",
+      "",
+      "## 4.2.2 交换 .... 11",
+      "",
+      "## 4.2.3 输出 .... 12",
+      "",
+      "## 4. 2. 1 输入",
+      "",
+      "Body.",
+      "",
+      "## 1. 交换步骤",
+      "",
+      "Body.",
+      "",
+      "## 4. 2. 2 交换",
+      "",
+      "Body.",
+      "",
+      "## 4. 2. 3 输出",
+      "",
+      "Body.",
+    ].join("\n");
+    const pack = packFor(source);
+    const transcript = reviewed(
+      createVisionTranscriptTemplate({
+        decision: {
+          fixture_id: pack.fixture_id,
+          printed_contents: {
+            regions: [
+              {
+                canonical: true,
+                end_root: 4,
+                pdf_page_indices: [2],
+                region_key: "full-contents",
+                start_root: 1,
+              },
+            ],
+            state: "present",
+          },
+        },
+        document: parseMarkdownDocument(source),
+        pack,
+      }),
+    );
+
+    const reference = authorMineruReferenceV2({ pack, transcript });
+    expect(
+      reference.printed_contents.regions[0]?.entries.map(
+        (entry) => entry.body_heading_anchor?.root_index,
+      ),
+    ).toEqual([5, 9, 11]);
+    expect(
+      reference.raw_heading_accounting.find(
+        (heading) => heading.anchor.root_index === 7,
+      )?.disposition,
+    ).toMatchObject({ include_in_toc: false, kind: "expected_body" });
   });
 
   it("records an inspected frontmatter set for a no-contents book", () => {

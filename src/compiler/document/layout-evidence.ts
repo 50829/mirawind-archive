@@ -47,7 +47,9 @@ export interface PrintedLayoutRow {
 const pageSuffix =
   /(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+|\s{2,})\s*(?:\d+|[ivxlcdm]+)\s*$/iu;
 const numberingPrefix =
-  /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|part)\s*[0-9ivxlcdm]+|附录|\d+(?:\.\d+){0,3})(?:\s|、|:|：|$)/iu;
+  /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|part)\s*[0-9ivxlcdm]+|附录|\d+(?:\s*\.\s*\d+){0,3})(?:\s|、|:|：|$)/iu;
+const detachedSectionNumber = /^\d+(?:\s*\.\s*\d+){1,3}\s*\.?\s*$/u;
+const leadingTechnicalNumber = /^\d{2,}(?:\s*\.\s*\d+)+\s+/u;
 
 class EvidenceLimitError extends Error {}
 class EvidenceInvalidError extends Error {}
@@ -322,10 +324,21 @@ function placement(record: LayoutEvidenceRecord): BoundingBox | undefined {
 function columnStarts(
   records: readonly LayoutEvidenceRecord[],
 ): readonly number[] {
-  const boxes = records.flatMap((record) => {
-    const box = placement(record);
-    return box ? [box] : [];
+  const contentRecords = records.filter(
+    (record) => !/^\s*(?:\d+|[ivxlcdm]+)\s*$/iu.test(record.text ?? ""),
+  );
+  const entryRecords = contentRecords.filter((record) => {
+    const text = record.text?.trim() ?? "";
+    return numberingPrefix.test(text) || pageSuffix.test(text);
   });
+  const columnRecords =
+    entryRecords.length >= 2 ? entryRecords : contentRecords;
+  const boxes = (columnRecords.length > 0 ? columnRecords : records).flatMap(
+    (record) => {
+      const box = placement(record);
+      return box ? [box] : [];
+    },
+  );
   if (boxes.length === 0) return Object.freeze([]);
   const left = Math.min(...boxes.map((box) => box[0]));
   const right = Math.max(...boxes.map((box) => box[2]));
@@ -388,6 +401,41 @@ interface PositionedRecord {
   readonly text: string;
 }
 
+function detachedTechnicalToken(
+  first: PositionedRecord,
+  second: PositionedRecord,
+): { readonly main: PositionedRecord; readonly text: string } | undefined {
+  for (const [main, fragment] of [
+    [first, second],
+    [second, first],
+  ] as const) {
+    const token = fragment.text.trim();
+    const numbered =
+      /^(?<prefix>\d+(?:\s*\.\s*\d+){0,3})(?<rest>\s+.*)?$/u.exec(main.text);
+    if (
+      !numbered?.groups?.prefix ||
+      token.length < 2 ||
+      token.length > 16 ||
+      !/^[A-Za-z0-9+./-]+$/u.test(token) ||
+      !/[A-Z]/u.test(token) ||
+      /^[IVXLCDM]+$/u.test(token) ||
+      fragment.box[0] < main.box[0] - 4 ||
+      fragment.box[2] > main.box[2] + 4 ||
+      new RegExp(
+        `(?:^|\\s)${token.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}(?:\\s|$)`,
+        "u",
+      ).test(main.text)
+    ) {
+      continue;
+    }
+    return Object.freeze({
+      main,
+      text: `${numbered.groups.prefix} ${token}${numbered.groups.rest ?? ""}`,
+    });
+  }
+  return;
+}
+
 /** Produces column-first reading-order rows for printed-contents analysis. */
 export function reconstructPrintedLayoutRows(
   evidence: LayoutEvidence,
@@ -427,6 +475,77 @@ export function reconstructPrintedLayoutRows(
         (left.record.sourceOrder ?? 0) - (right.record.sourceOrder ?? 0) ||
         left.box[0] - right.box[0],
     );
+    const coalesced: PositionedRecord[] = [];
+    for (const item of positioned) {
+      const previous = coalesced.at(-1);
+      const overlap = previous
+        ? Math.max(
+            0,
+            Math.min(previous.box[3], item.box[3]) -
+              Math.max(previous.box[1], item.box[1]),
+          )
+        : 0;
+      const minimumHeight = previous
+        ? Math.min(previous.box[3] - previous.box[1], item.box[3] - item.box[1])
+        : 0;
+      const horizontalOverlap = previous
+        ? Math.max(
+            0,
+            Math.min(previous.box[2], item.box[2]) -
+              Math.max(previous.box[0], item.box[0]),
+          )
+        : 0;
+      const minimumWidth = previous
+        ? Math.min(previous.box[2] - previous.box[0], item.box[2] - item.box[0])
+        : 0;
+      const restoredToken = previous
+        ? detachedTechnicalToken(previous, item)
+        : undefined;
+      if (
+        previous &&
+        previous.column === item.column &&
+        previous.record.groupId === undefined &&
+        item.record.groupId === undefined &&
+        overlap >= minimumHeight * 0.7 &&
+        restoredToken
+      ) {
+        coalesced[coalesced.length - 1] = {
+          box: Object.freeze([
+            Math.min(previous.box[0], item.box[0]),
+            Math.min(previous.box[1], item.box[1]),
+            Math.max(previous.box[2], item.box[2]),
+            Math.max(previous.box[3], item.box[3]),
+          ]),
+          column: restoredToken.main.column,
+          record: restoredToken.main.record,
+          text: restoredToken.text,
+        };
+      } else if (
+        previous &&
+        previous.column === item.column &&
+        previous.record.groupId === undefined &&
+        item.record.groupId === undefined &&
+        overlap >= minimumHeight * 0.7 &&
+        horizontalOverlap <= minimumWidth * 0.15
+      ) {
+        const fragments = [previous, item].sort(
+          (left, right) => left.box[0] - right.box[0],
+        );
+        coalesced[coalesced.length - 1] = {
+          box: Object.freeze([
+            Math.min(previous.box[0], item.box[0]),
+            Math.min(previous.box[1], item.box[1]),
+            Math.max(previous.box[2], item.box[2]),
+            Math.max(previous.box[3], item.box[3]),
+          ]),
+          column: previous.column,
+          record: previous.record,
+          text: fragments.map((fragment) => fragment.text).join(" "),
+        };
+      } else {
+        coalesced.push(item);
+      }
+    }
     const columnLefts = new Map<number, number>();
     for (const item of positioned) {
       columnLefts.set(
@@ -435,7 +554,7 @@ export function reconstructPrintedLayoutRows(
       );
     }
     let previousPositioned: PositionedRecord | undefined;
-    for (const positionedRecord of positioned) {
+    for (const positionedRecord of coalesced) {
       const previous = output.at(-1);
       const verticalGap = previousPositioned
         ? positionedRecord.box[1] - previousPositioned.box[3]
@@ -449,11 +568,18 @@ export function reconstructPrintedLayoutRows(
         !groupItem &&
         previous.pageIndex === pageIndex &&
         previousPositioned.column === positionedRecord.column &&
-        verticalGap >= -2 &&
+        verticalGap >=
+          -Math.min(
+            20,
+            (previousPositioned.box[3] - previousPositioned.box[1]) * 0.75,
+          ) &&
         verticalGap <= 30 &&
         numberingPrefix.test(previous.text) &&
         !pageSuffix.test(previous.text) &&
-        !numberingPrefix.test(positionedRecord.text) &&
+        (!numberingPrefix.test(positionedRecord.text) ||
+          verticalGap < 0 ||
+          (detachedSectionNumber.test(previous.text) &&
+            leadingTechnicalNumber.test(positionedRecord.text))) &&
         pageSuffix.test(positionedRecord.text)
       ) {
         output[output.length - 1] = Object.freeze({

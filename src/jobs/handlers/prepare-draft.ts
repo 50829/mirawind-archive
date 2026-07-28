@@ -218,7 +218,23 @@ export async function prepareDraft(input: {
       mainMarkdownSha256: typography.provenance.output_sha256,
       regions: sourceRegions,
     }).document;
+    const printedEntries = printedContents.candidates.flatMap((candidate) =>
+      candidate.canonical
+        ? candidate.logicalEntries.flatMap((entry) =>
+            entry.bodyHeadingBlockId
+              ? [
+                  Object.freeze({
+                    bodyHeadingBlockId: entry.bodyHeadingBlockId,
+                    referenceLevel: entry.referenceLevel,
+                    sourceTitle: entry.sourceTitle,
+                  }),
+                ]
+              : [],
+          )
+        : [],
+    );
     const proposal = proposeDocumentStructure(activeDocument, {
+      printedEntries,
       sourceRegions,
     });
     const artifact: PreparedDraftArtifact = Object.freeze({
@@ -595,6 +611,7 @@ function preparedDetection(
       diagnostics: candidate.diagnostics,
       endByte: candidate.endByte,
       entryCount: candidate.entryCount,
+      logicalEntries: Object.freeze([]),
       matchedHeadingCount: candidate.matchedHeadingCount,
       matchConfidence: candidate.matchConfidence,
       ...(proposedRegion ? { proposedRegion } : {}),

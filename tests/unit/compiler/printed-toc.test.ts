@@ -423,6 +423,41 @@ describe("printed contents detection", () => {
     ).toBe(true);
   });
 
+  it("recovers an OCR-damaged printed title from a unique matching body number", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## 1.1.1 具体构成描述 ...... 2",
+      "",
+      "## 1.1.2 务 ...... 4",
+      "",
+      "## 1.1.3 什么是协议 ...... 6",
+      "",
+      "## 1.1.1 具体构成描述",
+      "",
+      "Body",
+      "",
+      "## 1.1.2 服务描述",
+      "",
+      "Body",
+      "",
+      "## 1.1.3 什么是协议",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
+      bodyHeadingBlockId: expect.stringMatching(/^blk_/u),
+      sourceTitle: expect.stringContaining("1.1.2 服务描述"),
+    });
+  });
+
   it("nests chapters below parts while keeping earlier chapters and appendices at the top level", () => {
     const contents = [
       "第 1 章 计算机系统漫游 ...... 1",
@@ -529,6 +564,7 @@ describe("printed contents detection", () => {
       "1.1.1 细节 ...... 3",
       "课后习题和问题 ...... 8",
       "复习题 ...... 8",
+      "Wireshark 实验 ...... 9",
     ];
     const body = contents.map((entry) =>
       entry.replace(/\s+\.{2,}\s+\d+$/u, ""),
@@ -539,7 +575,7 @@ describe("printed contents detection", () => {
       ...contents.flatMap((entry) => [`## ${entry}`, ""]),
       ...body.flatMap((entry) => [`## ${entry}`, "", "正文", ""]),
     ].join("\n");
-    const indents = [20, 30, 40, 30, 40];
+    const indents = [20, 30, 40, 30, 40, 30];
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
@@ -566,7 +602,134 @@ describe("printed contents detection", () => {
       result.candidates[0]?.proposedRegion?.entries.map(
         (entry) => entry.reference_level,
       ),
-    ).toEqual([1, 2, 3, 2, 3]);
+    ).toEqual([1, 2, 3, 2, 3, 3]);
+  });
+
+  it("recovers layout-only logical entries between reliable Markdown anchors", () => {
+    const markdownEntries = [
+      "Chapter 1 Start ...... 1",
+      "1.1 Basics ...... 2",
+      "评 .................................... 44",
+      "Chapter 2 Continue ...... 53",
+    ];
+    const layoutEntries = [
+      "Chapter 1 Start ...... 1",
+      "1.1 Basics ...... 2",
+      "课后习题和问题 ...... 44",
+      "复习题 ...... 44",
+      "习题 ...... 46",
+      "Chapter 2 Continue ...... 53",
+    ];
+    const bodyEntries = layoutEntries.map((entry) =>
+      entry.replace(/\s+\.{2,}\s+\d+$/u, ""),
+    );
+    const source = [
+      "# Contents",
+      "",
+      ...markdownEntries.flatMap((entry) => [`## ${entry}`, ""]),
+      ...bodyEntries.flatMap((entry) => [`## ${entry}`, "", "Body", ""]),
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: layoutEntries.map((text, index) => ({
+          bbox: [
+            index === 0 || index === layoutEntries.length - 1 ? 20 : 40,
+            20 + index * 30,
+            700,
+            40 + index * 30,
+          ] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    const candidate = result.candidates[0];
+    expect(candidate?.logicalEntries.map((entry) => entry.sourceTitle)).toEqual(
+      layoutEntries,
+    );
+    expect(candidate).toMatchObject({
+      entryCount: 6,
+      matchedHeadingCount: 6,
+    });
+    expect(candidate?.proposedRegion?.entries.length).toBeGreaterThanOrEqual(3);
+    expect(
+      new Set(
+        candidate?.proposedRegion?.entries.map(
+          (entry) => `${entry.range.start_byte}:${entry.range.end_byte}`,
+        ),
+      ).size,
+    ).toBe(candidate?.proposedRegion?.entries.length);
+  });
+
+  it("fills a small layout-only gap between reliable source anchors", () => {
+    const source = [
+      "# Contents",
+      "",
+      "## 6.2 Difference detection ...... 297",
+      "",
+      "## 6.2.2 Checksum ...... 299",
+      "",
+      "## 6.3 Access links ...... 301",
+      "",
+      "## 6.2 Difference detection",
+      "",
+      "Body",
+      "",
+      "## 6.2.1 Parity",
+      "",
+      "Body",
+      "",
+      "## 6.2.2 Checksum",
+      "",
+      "Body",
+      "",
+      "## 6.3 Access links",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          "6.2 Difference detection ...... 297",
+          "6.2.1 Parity ...... 298",
+          "6.2.2 Checksum ...... 299",
+          "6.3 Access links ...... 301",
+        ].map((text, index) => ({
+          bbox: [
+            20 + (index === 1 ? 20 : 0),
+            20 + index * 30,
+            700,
+            40 + index * 30,
+          ] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
+      "6.2 Difference detection ...... 297",
+      "6.2.1 Parity ...... 298",
+      "6.2.2 Checksum ...... 299",
+      "6.3 Access links ...... 301",
+    ]);
   });
 
   it("recognizes an early unlabelled chapter list without page suffixes", async () => {
@@ -634,6 +797,46 @@ describe("printed contents detection", () => {
         }),
       }),
     });
+  });
+
+  it("matches a printed frontmatter entry before the contents region", () => {
+    const source = [
+      "# Book",
+      "",
+      "## 作者简介",
+      "",
+      "正文",
+      "",
+      "## 目录",
+      "",
+      "## 作者简介 ...... vii",
+      "",
+      "## 第1章 起步 ...... 1",
+      "",
+      "## 1.1 基础 ...... 2",
+      "",
+      "## 第1章 起步",
+      "",
+      "正文",
+      "",
+      "## 1.1 基础",
+      "",
+      "正文",
+    ].join("\n");
+    const document = documentFor(source);
+    const frontmatter = document.headings.find(
+      (heading) => heading.sourceTitle === "作者简介",
+    );
+    const result = detectPrintedContents({
+      document,
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[0]?.bodyHeadingBlockId).toBe(
+      frontmatter?.blockId,
+    );
   });
 
   it("recognizes bilingual brief and full contents labels", () => {
@@ -842,7 +1045,7 @@ describe("printed contents detection", () => {
     });
   });
 
-  it("requests PDF repair only for leader rows with no title", () => {
+  it("requests PDF repair only when the printed row itself is damaged", () => {
     const detect = (firstRow: string) => {
       const source = [
         "## Contents",
@@ -870,7 +1073,66 @@ describe("printed contents detection", () => {
     };
 
     expect(detect("...... 4").candidates[0]?.requiresPdfEvidence).toBe(true);
+    expect(detect("A ......").candidates[0]?.requiresPdfEvidence).toBe(true);
     expect(detect("A ...... 4").candidates[0]?.requiresPdfEvidence).toBe(false);
+    const merged = detect(
+      "2.11 Summary 100 Practice Exercises 101 Further Reading 101",
+    ).candidates[0];
+    expect(merged?.requiresPdfEvidence).toBe(true);
+    expect(
+      merged?.logicalEntries
+        .slice(0, 3)
+        .map((entry) => entry.sourceTitle.trim()),
+    ).toEqual([
+      "2.11 Summary 100",
+      "Practice Exercises 101",
+      "Further Reading 101",
+    ]);
+    const spacedNumbering = detect("1. 1. 2 服务描述 6").candidates[0];
+    expect(spacedNumbering?.requiresPdfEvidence).toBe(false);
+    expect(spacedNumbering?.logicalEntries[0]?.sourceTitle.trim()).toBe(
+      "1. 1. 2 服务描述 6",
+    );
+  });
+
+  it("joins a detached Markdown section number to a technical-number title", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## 7.3 WiFi ...... 356",
+      "",
+      "## 7.3.1",
+      "",
+      "## 802.11 wireless architecture ...... 357",
+      "",
+      "## 7.3.2 MAC protocol ...... 359",
+      "",
+      "## 7.3 WiFi",
+      "",
+      "Body",
+      "",
+      "## 7.3.1 802.11 wireless architecture",
+      "",
+      "Body",
+      "",
+      "## 7.3.2 MAC protocol",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
+      expect.stringContaining("7.3 WiFi"),
+      "7.3.1 802.11 wireless architecture ...... 357",
+      expect.stringContaining("7.3.2 MAC protocol"),
+    ]);
   });
 
   it("keeps brief and full contents as disjoint exclusions with one canonical region", () => {
@@ -970,6 +1232,39 @@ describe("printed contents detection", () => {
       proposedRegion: expect.objectContaining({ applied: true }),
     });
     expect(result.candidates[0]?.proposedRegion?.range.sha256).toBeDefined();
+  });
+
+  it("ends before a detached body part label whose title matches the contents", () => {
+    const source = [
+      "## Contents",
+      "",
+      "Part One Overview .... 1",
+      "",
+      "Chapter 1 Start .... 3",
+      "",
+      "Chapter 2 Continue .... 9",
+      "",
+      "# Part One",
+      "",
+      "# Overview",
+      "",
+      "Body",
+      "",
+      "## Chapter 1 Start",
+      "",
+      "## Chapter 2 Continue",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.endByte).toBeLessThan(
+      Buffer.byteLength(source.slice(0, source.indexOf("# Part One")), "utf8") +
+        1,
+    );
   });
 
   it("rejects a late index-shaped Contents block without later body recurrence", () => {

@@ -464,6 +464,41 @@ describe("default document structure proposal", () => {
     });
   });
 
+  it("keeps a detached English part label level with its canonical title", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        "# Preface\n\nFront matter.\n\n# Part One\n\n# Overview\n\nBody.\n",
+      ),
+    );
+    const overview = document.headings[2];
+    if (!overview) throw new Error("expected overview heading");
+
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: overview.blockId,
+          referenceLevel: 1,
+          sourceTitle: "PART ONE OVERVIEW",
+        },
+      ],
+    });
+
+    expect(proposal.nodes.slice(1)).toMatchObject([
+      {
+        display_level: 1,
+        include_in_toc: false,
+        role: "body",
+        starts_page: false,
+      },
+      {
+        display_level: 1,
+        include_in_toc: true,
+        role: "body",
+        starts_page: true,
+      },
+    ]);
+  });
+
   it("joins a detached numeric chapter marker into the following title", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
@@ -562,6 +597,30 @@ describe("default document structure proposal", () => {
     });
   });
 
+  it("uses transient logical-entry semantics when Markdown provenance is damaged", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument("## 本书中用到的数据来源\n\n正文"),
+    );
+    const heading = document.headings[0];
+    if (!heading) throw new Error("expected body heading");
+
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: heading.blockId,
+          referenceLevel: 1,
+          sourceTitle: "附录 1 数据来源 ...... 99",
+        },
+      ],
+    });
+
+    expect(proposal.nodes[0]).toMatchObject({
+      display_level: 1,
+      include_in_toc: true,
+      role: "appendix",
+    });
+  });
+
   it("keeps a nested printed appendix inside the body role", () => {
     const source = [
       "## Chapter 4 Models",
@@ -633,6 +692,93 @@ describe("default document structure proposal", () => {
       include_in_toc: false,
       starts_page: false,
     });
+  });
+
+  it("keeps local headings outside the canonical printed hierarchy", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 第1章 基础",
+          "",
+          "### 1.1 起步",
+          "",
+          "#### 课后习题和问题",
+          "",
+          "## 复习题",
+          "",
+          "# 1.1 节",
+          "",
+          "### 1. HTTP/2 成帧",
+          "",
+          "正文",
+        ].join("\n"),
+      ),
+    );
+    const [chapter, section, review, reviewChild] = document.headings;
+    expect(chapter && section && review && reviewChild).toBeTruthy();
+
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: chapter?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "第1章 基础",
+        },
+        {
+          bodyHeadingBlockId: section?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "1.1 起步",
+        },
+        {
+          bodyHeadingBlockId: review?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "课后习题和问题",
+        },
+        {
+          bodyHeadingBlockId: reviewChild?.blockId ?? "",
+          referenceLevel: 3,
+          sourceTitle: "复习题",
+        },
+      ],
+    });
+
+    expect(proposal.nodes.slice(4).map((node) => node.display_level)).toEqual([
+      3, 3,
+    ]);
+    expect(proposal.nodes.slice(4).map((node) => node.include_in_toc)).toEqual([
+      false,
+      false,
+    ]);
+  });
+
+  it("classifies a matched author biography as frontmatter", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument("## 作者简介\n\n正文\n\n## 第1章 起步\n\n正文"),
+    );
+    const [biography, chapter] = document.headings;
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: biography?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "作者简介",
+        },
+        {
+          bodyHeadingBlockId: chapter?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "第1章 起步",
+        },
+      ],
+    });
+
+    expect(proposal.nodes.map((node) => node.role)).toEqual([
+      "frontmatter",
+      "body",
+    ]);
+    expect(proposal.nodes.map((node) => node.starts_page)).toEqual([
+      true,
+      true,
+    ]);
   });
 
   it("does not invent a display-title override from a short heading fragment", () => {

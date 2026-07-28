@@ -105,6 +105,26 @@ const auxiliary =
   /^(?:思考题|本章注记|附录注记|自测题|习题|练习|课后习题和问题|复习题|人物专访|编程作业|practice exercises|further reading|review questions|exercises)$/iu;
 const localPartSubdivision =
   /^第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:篇|部分|部)\s*[（(]/u;
+const purePartLabel =
+  /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:篇|部分|部)|part\s*(?:[0-9ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty))$/iu;
+const sectionRangeReferenceTitle =
+  /^\d+(?:\s*\.\s*\d+)+(?:\s*[-~～—]\s*\d+(?:\s*\.\s*\d+)*)?\s*节$/u;
+
+function localOrdinalTitle(value: string): boolean {
+  if (
+    sectionRangeReferenceTitle.test(value) ||
+    /^\d{1,3}[.)、]\s+/u.test(value)
+  ) {
+    return true;
+  }
+  const decimal = /^(\d+(?:\s*\.\s*\d+)+)/u.exec(value)?.[1];
+  if (!decimal) return false;
+  const components = decimal.split(/\s*\.\s*/u).map(Number);
+  return (
+    components.slice(1).some((component) => component >= 100) ||
+    /^\d+\s*\.\s*\d+[A-Za-z]/u.test(value)
+  );
+}
 
 function sha256(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
@@ -327,6 +347,7 @@ function normalize(value: string): string {
     .normalize("NFKC")
     .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "")
     .replace(/\s+/gu, " ")
+    .replace(/(\d)\s*\.\s*(?=\d)/gu, "$1.")
     .trim();
 }
 
@@ -772,17 +793,37 @@ function headingAccounting(input: {
       const matchedEntry = matched.get(
         `${heading.anchor.root_index}:${heading.anchor.sha256}`,
       );
-      const numbered = numberedKind(heading.text);
+      const nextHeading = input.headings[index + 1];
+      const nextMatchedEntry = nextHeading
+        ? matched.get(
+            `${nextHeading.anchor.root_index}:${nextHeading.anchor.sha256}`,
+          )
+        : undefined;
+      const detachedPartLabel = Boolean(
+        !matchedEntry &&
+        nextHeading &&
+        nextHeading.rootIndex === heading.rootIndex + 1 &&
+        nextMatchedEntry?.kind === "part" &&
+        purePartLabel.test(normalize(heading.text)),
+      );
+      const localOrdinal =
+        input.regions.length > 0 &&
+        !matchedEntry &&
+        localOrdinalTitle(normalize(heading.text));
+      const numbered = localOrdinal ? undefined : numberedKind(heading.text);
       const localPart = Boolean(
         !matchedEntry &&
         numbered?.kind === "part" &&
         localPartSubdivision.test(normalize(heading.text)),
       );
-      const inferred = localPart
-        ? undefined
-        : entryFor(heading.text, insidePart, previousLevel);
+      const inferred =
+        localPart || localOrdinal
+          ? undefined
+          : entryFor(heading.text, insidePart, previousLevel);
       let kind =
-        matchedEntry?.kind ?? (localPart ? "other" : inferred?.kind) ?? "other";
+        matchedEntry?.kind ??
+        (localPart || detachedPartLabel ? "other" : inferred?.kind) ??
+        "other";
       if (
         !matchedEntry &&
         (kind === "backmatter" || kind === "frontmatter") &&
@@ -792,11 +833,13 @@ function headingAccounting(input: {
       }
       let level = localPart
         ? 3
-        : (matchedEntry?.level ??
-          (kind === "other" && inferred?.kind !== "other"
-            ? previousLevel
-            : inferred?.level) ??
-          Math.min(4, Math.max(1, previousLevel || heading.depth)));
+        : detachedPartLabel
+          ? (nextMatchedEntry?.level ?? 1)
+          : (matchedEntry?.level ??
+            (kind === "other" && inferred?.kind !== "other"
+              ? previousLevel
+              : inferred?.level) ??
+            Math.min(4, Math.max(1, previousLevel || heading.depth)));
       level = previousLevel === 0 ? 1 : Math.min(level, previousLevel + 1);
       if (kind === "part") {
         insidePart = true;
@@ -819,10 +862,11 @@ function headingAccounting(input: {
         currentRole = roleFor(kind, currentRole);
       }
       const include = Boolean(
-        matchedEntry ||
-        (!localPart && numbered) ||
-        frontmatter.test(heading.text) ||
-        backmatter.test(heading.text),
+        !detachedPartLabel &&
+        (matchedEntry ||
+          (!localPart && numbered) ||
+          frontmatter.test(heading.text) ||
+          backmatter.test(heading.text)),
       );
       const major =
         (!localPart && kind === "part") ||
@@ -834,6 +878,7 @@ function headingAccounting(input: {
         index === 0 ||
         (major && !(kind === "chapter" && insidePart && firstChapterInPart));
       if (kind === "chapter" && insidePart) firstChapterInPart = false;
+      if (detachedPartLabel) currentRole = "body";
       previousLevel = level;
       return Object.freeze({
         anchor: heading.anchor,
@@ -842,7 +887,7 @@ function headingAccounting(input: {
           display_title: null,
           include_in_toc: include,
           kind: "expected_body" as const,
-          role: currentRole,
+          role: detachedPartLabel ? "body" : currentRole,
           starts_page: startsPage,
         }),
       });

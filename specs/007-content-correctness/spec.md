@@ -51,7 +51,7 @@ As the administrator, I receive page boundaries at major reading units rather th
 for nearly every MinerU heading.
 
 **Independent Test**: Compare every proposed split in the fifteen references and verify that
-level edits never toggle an independently image-derived split.
+automatic hierarchy inference never toggles an independently image-derived split.
 
 **Acceptance Scenarios**:
 
@@ -61,8 +61,9 @@ level edits never toggle an independently image-derived split.
    Chapter starts a page while ordinary sections do not.
 3. **Given** an Appendix or standalone major front/back unit, **When** it is proposed, **Then**
    it starts a page and resets the relevant hierarchy context.
-4. **Given** an administrator level override, **When** it is saved, **Then** the explicit
-   split choice remains unchanged.
+4. **Given** the same heading evidence, **When** automatic hierarchy and split proposal run,
+   **Then** each phase produces its own deterministic result and a level change does not
+   implicitly toggle the split decision.
 
 ---
 

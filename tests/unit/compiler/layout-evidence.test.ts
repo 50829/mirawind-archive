@@ -246,6 +246,105 @@ describe("bounded MinerU layout evidence", () => {
     ]);
   });
 
+  it("joins native PDF fragments on one baseline and across a wrapped row", () => {
+    const evidence: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        {
+          bbox: [20, 20, 500, 40],
+          pageIndex: 0,
+          text: "1.4 A long title",
+          type: "text",
+        },
+        {
+          bbox: [620, 21, 650, 41],
+          pageIndex: 0,
+          text: "24",
+          type: "text",
+        },
+        {
+          bbox: [20, 80, 500, 100],
+          pageIndex: 0,
+          text: "1. 7. 1 Development: 1961~",
+          type: "text",
+        },
+        {
+          bbox: [40, 90, 400, 110],
+          pageIndex: 0,
+          text: "1972 ...... 39",
+          type: "text",
+        },
+      ],
+      source: "native-pdf",
+    };
+
+    expect(
+      reconstructPrintedLayoutRows(evidence).map((row) => row.text),
+    ).toEqual([
+      "1.4 A long title 24",
+      "1. 7. 1 Development: 1961~ 1972 ...... 39",
+    ]);
+  });
+
+  it("restores a detached technical token inside a numbered PDF row", () => {
+    const evidence: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        {
+          bbox: [80, 15, 330, 40],
+          pageIndex: 0,
+          sourceOrder: 0,
+          text: "between routes: BGP .... 262",
+          type: "text",
+        },
+        {
+          bbox: [20, 24, 45, 34],
+          pageIndex: 0,
+          sourceOrder: 1,
+          text: "5. 4",
+          type: "text",
+        },
+        {
+          bbox: [52, 24, 70, 34],
+          pageIndex: 0,
+          sourceOrder: 2,
+          text: "ISP",
+          type: "text",
+        },
+      ],
+      source: "native-pdf",
+    };
+
+    expect(
+      reconstructPrintedLayoutRows(evidence).map((row) => row.text),
+    ).toEqual(["5. 4 ISP between routes: BGP .... 262"]);
+  });
+
+  it("joins a detached section number to a technical-number title", () => {
+    const evidence: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        {
+          bbox: [20, 20, 80, 40],
+          pageIndex: 0,
+          text: "7. 3. 1",
+          type: "text",
+        },
+        {
+          bbox: [40, 42, 520, 62],
+          pageIndex: 0,
+          text: "802. 11 wireless architecture ...... 357",
+          type: "text",
+        },
+      ],
+      source: "native-pdf",
+    };
+
+    expect(
+      reconstructPrintedLayoutRows(evidence).map((row) => row.text),
+    ).toEqual(["7. 3. 1 802. 11 wireless architecture ...... 357"]);
+  });
+
   it("normalizes indentation independently inside each column", () => {
     const evidence: LayoutEvidence = {
       diagnostics: [],
@@ -281,6 +380,55 @@ describe("bounded MinerU layout evidence", () => {
     expect(
       reconstructPrintedLayoutRows(evidence).map((row) => row.indent),
     ).toEqual([0, 20, 0, 20]);
+  });
+
+  it("does not let a centered part title collapse two contents columns", () => {
+    const evidence: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        {
+          bbox: [96, 20, 180, 30],
+          pageIndex: 0,
+          text: "9.1 Left .... 1",
+          type: "text",
+        },
+        {
+          bbox: [210, 32, 405, 42],
+          pageIndex: 0,
+          text: "MEMORY MANAGEMENT",
+          type: "text",
+        },
+        {
+          bbox: [96, 50, 220, 60],
+          pageIndex: 0,
+          text: "9.2 Left child .... 2",
+          type: "text",
+        },
+        {
+          bbox: [280, 20, 410, 30],
+          pageIndex: 0,
+          text: "9.3 Right .... 3",
+          type: "text",
+        },
+        {
+          bbox: [280, 50, 420, 60],
+          pageIndex: 0,
+          text: "9.4 Right child .... 4",
+          type: "text",
+        },
+      ],
+      source: "native-pdf",
+    };
+
+    expect(
+      reconstructPrintedLayoutRows(evidence).map((row) => row.text),
+    ).toEqual([
+      "9.1 Left .... 1",
+      "9.2 Left child .... 2",
+      "9.3 Right .... 3",
+      "MEMORY MANAGEMENT",
+      "9.4 Right child .... 4",
+    ]);
   });
 
   it("orders three columns without interleaving their vertical positions", () => {

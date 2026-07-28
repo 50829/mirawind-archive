@@ -86,6 +86,9 @@ function stripPageLabel(value: string): {
   readonly title: string;
 } {
   const text = normalize(value);
+  if (/^(?:chapter|part)\s+/iu.test(text)) {
+    return Object.freeze({ pageLabel: null, title: text });
+  }
   const match =
     /^(?<title>.+?)(?:\.(?:\s*\.)+|…+|·(?:\s*·)+|\s{2,}|\s)\s*(?<page>[ivxlcdm]+|\d{1,5})\s*$/iu.exec(
       text,
@@ -94,7 +97,10 @@ function stripPageLabel(value: string): {
     return Object.freeze({ pageLabel: null, title: text });
   }
   const title = match.groups.title.trim();
-  if (title.length < 2) {
+  if (
+    title.length < 2 ||
+    /^(?:chapter|part|第\s*\d+\s*(?:章|部分))$/iu.test(title)
+  ) {
     return Object.freeze({ pageLabel: null, title: text });
   }
   return Object.freeze({ pageLabel: match.groups.page, title });
@@ -256,7 +262,6 @@ function projectCandidates(input: {
   readonly pack: MineruReferencePack;
 }): readonly CandidateProjection[] {
   const roots = rootRanges(input.document);
-  const sourceBytes = Buffer.from(input.document.source, "utf8");
   const anchors = headingAnchorByBlock({
     document: input.document,
     pack: input.pack,
@@ -286,42 +291,46 @@ function projectCandidates(input: {
           return Number.isSafeInteger(index) ? [index] : [];
         }),
       );
-      const entries = candidate.proposedRegion.entries.map(
-        (entry, entryIndex) => {
-          const source = sourceBytes
-            .subarray(entry.range.start_byte, entry.range.end_byte)
-            .toString("utf8");
-          const printed = stripPageLabel(source);
-          const anchor = entry.body_heading_block_id
-            ? (anchors.get(entry.body_heading_block_id) ?? null)
-            : null;
-          return Object.freeze({
-            body_heading_anchor: anchor,
-            entry_key: `${key}-entry-${String(entryIndex + 1).padStart(5, "0")}`,
-            expected_match: anchor
-              ? "matched"
-              : ambiguous.has(entryIndex)
-                ? "ambiguous"
-                : "unmatched",
-            kind: kindFor(printed.title, entry.reference_level),
-            level: entry.reference_level,
-            page_label: printed.pageLabel,
-            title: printed.title,
-          }) as ReferenceContentsEntry;
-        },
-      );
+      const entries = candidate.logicalEntries.map((entry, entryIndex) => {
+        const printed = stripPageLabel(entry.sourceTitle);
+        const anchor = entry.bodyHeadingBlockId
+          ? (anchors.get(entry.bodyHeadingBlockId) ?? null)
+          : null;
+        return Object.freeze({
+          body_heading_anchor: anchor,
+          entry_key: `${key}-entry-${String(entryIndex + 1).padStart(5, "0")}`,
+          expected_match: anchor
+            ? "matched"
+            : ambiguous.has(entryIndex)
+              ? "ambiguous"
+              : "unmatched",
+          kind: kindFor(printed.title, entry.referenceLevel),
+          level: entry.referenceLevel,
+          page_label: printed.pageLabel,
+          title: printed.title,
+        }) as ReferenceContentsEntry;
+      });
       const pageProjection = pagesForEntries({
         entries,
         rows,
         startCursor: rowCursor,
       });
       rowCursor = pageProjection.cursor;
+      const evidencePages = [
+        ...new Set(
+          candidate.logicalEntries.flatMap((entry) =>
+            entry.pageIndex === undefined ? [] : [entry.pageIndex],
+          ),
+        ),
+      ].sort((left, right) => left - right);
       return Object.freeze({
         candidate,
         endRoot: range.endRoot,
         entries: Object.freeze(entries),
         key,
-        pages: pageProjection.pages,
+        pages: Object.freeze(
+          evidencePages.length > 0 ? evidencePages : pageProjection.pages,
+        ),
         startRoot: range.startRoot,
       });
     }),
@@ -370,6 +379,21 @@ function rawHeadingAccounting(input: {
   if (!markdown) throw new Error("OBSERVED_REFERENCE_MARKDOWN_MISSING");
   const activeByBlock = new Map(
     proposeDocumentStructure(input.activeDocument, {
+      printedEntries: input.projections.flatMap((projection) =>
+        projection.candidate.canonical
+          ? projection.candidate.logicalEntries.flatMap((entry) =>
+              entry.bodyHeadingBlockId
+                ? [
+                    {
+                      bodyHeadingBlockId: entry.bodyHeadingBlockId,
+                      referenceLevel: entry.referenceLevel,
+                      sourceTitle: entry.sourceTitle,
+                    },
+                  ]
+                : [],
+            )
+          : [],
+      ),
       sourceRegions: input.projections.flatMap((projection) =>
         projection.candidate.proposedRegion
           ? [projection.candidate.proposedRegion]
