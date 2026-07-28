@@ -1005,6 +1005,66 @@ describe("printed contents detection", () => {
     ).toBe(candidate?.proposedRegion?.entries.length);
   });
 
+  it("recovers unnumbered native rows from an empty source gap", () => {
+    const markdownEntries = [
+      "第 1 章 向量空间 ...... 1",
+      "1A 向量 ...... 2",
+      "第 2 章 线性映射 ...... 20",
+    ];
+    const layoutEntries = [
+      "目录 v",
+      "第 1 章 向量空间 ...... 1",
+      "1A 向量 ...... 2",
+      "复数 ...... 2",
+      "习题 1A ...... 9",
+      "第 2 章 线性映射 ...... 20",
+    ];
+    const bodyEntries = layoutEntries
+      .slice(1)
+      .map((entry) => entry.replace(/\s+\.{2,}\s+\d+$/u, ""));
+    const source = [
+      "# 目录",
+      "",
+      ...markdownEntries.flatMap((entry) => [`## ${entry}`, ""]),
+      ...bodyEntries.flatMap((entry) => [`## ${entry}`, "", "正文", ""]),
+    ].join("\n");
+    const indents = [0, 0, 20, 45, 45, 0];
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: layoutEntries.map((text, index) => ({
+          bbox: [
+            indents[index] ?? 0,
+            20 + index * 30,
+            700,
+            40 + index * 30,
+          ] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => ({
+        level: entry.referenceLevel,
+        title: entry.sourceTitle,
+      })),
+    ).toEqual([
+      { level: 1, title: "第 1 章 向量空间 ...... 1" },
+      { level: 2, title: "1A 向量 ...... 2" },
+      { level: 3, title: "复数 ...... 2" },
+      { level: 3, title: "习题 1A ...... 9" },
+      { level: 1, title: "第 2 章 线性映射 ...... 20" },
+    ]);
+  });
+
   it("does not let fused layout invent chapter-local rows between source anchors", () => {
     const source = [
       "# Contents",

@@ -1072,11 +1072,15 @@ function layoutLevels(
   evidence: LayoutEvidence | undefined,
 ): ReadonlyMap<string, readonly number[]> {
   if (!evidence || evidence.records.length === 0) return new Map();
-  const rows = reconstructPrintedLayoutRows(evidence).filter(
-    (record) =>
-      inferPrintedHeadingEvidence(record.text) ||
-      printedPageEvidence(record.text),
-  );
+  const rows = reconstructPrintedLayoutRows(evidence).filter((record) => {
+    const printed = printedPageEvidence(record.text);
+    const title = printed?.title ?? plainTitle(record.text);
+    return (
+      !contentsTitle.test(title.trim().normalize("NFKC")) &&
+      (inferPrintedHeadingEvidence(record.text) !== undefined ||
+        printed !== undefined)
+    );
+  });
   const inferredLevels = inferPrintedReferenceLevels(
     rows.map((record) => record.text),
   );
@@ -1095,9 +1099,31 @@ function layoutLevels(
     if (value !== undefined) medians.set(level, value);
   }
   const output = new Map<string, number[]>();
+  const numberedParentByPage = new Map<
+    number,
+    { readonly indent: number; readonly level: number }
+  >();
   for (const [index, row] of rows.entries()) {
     const numbering = inferPrintedHeadingEvidence(row.text);
     let level = numbering ? inferredLevels[index] : undefined;
+    if (numbering && level) {
+      numberedParentByPage.set(row.pageIndex, {
+        indent: row.indent,
+        level,
+      });
+    }
+    const semanticTitle =
+      printedPageEvidence(row.text)?.title ?? plainTitle(row.text);
+    const parent = numberedParentByPage.get(row.pageIndex);
+    if (
+      !numbering &&
+      !frontmatterEntryTitle.test(semanticTitle) &&
+      !topLevelBackmatterTitle.test(semanticTitle) &&
+      parent &&
+      row.indent >= parent.indent + 8
+    ) {
+      level = Math.min(4, parent.level + 1);
+    }
     if (!level && medians.size > 0) {
       level = [...medians].sort(
         (left, right) =>
@@ -1147,12 +1173,14 @@ function layoutLogicalEntries(
       stats.labelled || stats.printedRows >= 2 ? [pageIndex] : [],
     ),
   );
-  const selected = rows.filter(
-    (row) =>
+  const selected = rows.filter((row) => {
+    const printed = printedPageEvidence(row.text);
+    return (
       candidatePages.has(row.pageIndex) &&
-      !contentsTitle.test(row.text.trim().normalize("NFKC")) &&
-      printedPageEvidence(row.text) !== undefined,
-  );
+      printed !== undefined &&
+      !contentsTitle.test(printed.title.trim().normalize("NFKC"))
+    );
+  });
   if (selected.length < 3) return Object.freeze([]);
   const levelsByTitle = layoutLevels(evidence);
   const occurrences = new Map<string, number>();
@@ -1164,7 +1192,6 @@ function layoutLogicalEntries(
           const title = normalizedTitle(row.text);
           const occurrence = occurrences.get(title) ?? 0;
           occurrences.set(title, occurrence + 1);
-          if (!inferPrintedHeadingEvidence(row.text)) return [];
           const levels = levelsByTitle.get(title);
           const level = levels?.[occurrence] ?? levels?.at(-1);
           return level === undefined ? [] : [[index, level] as const];
@@ -1281,6 +1308,14 @@ function recoverLayoutLogicalEntries(
             printedPageEvidence(entry.sourceTitle)?.title ??
             plainTitle(entry.sourceTitle);
           const numbering = inferPrintedHeadingEvidence(title);
+          if (evidence?.source === "native-pdf" || evidence?.source === "ocr") {
+            return (
+              entry.referenceLevel > 1 ||
+              numbering !== undefined ||
+              frontmatterEntryTitle.test(title) ||
+              topLevelBackmatterTitle.test(title)
+            );
+          }
           return (
             (numbering !== undefined ||
               frontmatterEntryTitle.test(title) ||
