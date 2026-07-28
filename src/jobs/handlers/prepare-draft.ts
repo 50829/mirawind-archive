@@ -198,6 +198,7 @@ export async function prepareDraft(input: {
           allowOcr: !hasHighBoundary || requiresLineRepair,
           ...(pageIndices ? { pageIndices } : {}),
           pdfPath: discovered.pdfPath,
+          recoverPageLabels: requiresLineRepair,
           ...(input.signal ? { signal: input.signal } : {}),
           temporaryRoot: stagingDirectory,
         });

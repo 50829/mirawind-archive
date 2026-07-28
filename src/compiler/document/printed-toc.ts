@@ -182,7 +182,7 @@ export function inferPrintedHeadingEvidence(
     });
   }
   const named = new RegExp(
-    `^(?:第\\s*([0-9零〇一二三四五六七八九十百千]+)\\s*(章|篇|部分|部)|(?:chapter|chap\\.?)\\s*([0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})(?=\\s|$)|part\\s*([0-9ivxlcdm]+|${englishOrdinalWord})(?=\\s|$))`,
+    `^(?:第\\s*([0-9零〇一二三四五六七八九十百千]+)\\s*(章|篇|部分|部)|(?:chapter|chap\\.?)\\s*([0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})(?=\\s|$|[—–:：.-])|part\\s*([0-9ivxlcdm]+|${englishOrdinalWord})(?=\\s|$|[—–:：.-]))`,
     "iu",
   ).exec(plain);
   if (named) {

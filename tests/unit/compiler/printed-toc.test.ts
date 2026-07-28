@@ -69,6 +69,10 @@ describe("printed contents detection", () => {
     });
     expect(inferPrintedHeadingEvidence("Chapter")).toBeUndefined();
     expect(inferPrintedHeadingEvidence("CHAPTER OBJECTIVES")).toBeUndefined();
+    expect(inferPrintedHeadingEvidence("Part I—Assignment")).toMatchObject({
+      kind: "part",
+      level: 1,
+    });
     expect(
       inferPrintedReferenceLevels([
         "PART ONE OVERVIEW",

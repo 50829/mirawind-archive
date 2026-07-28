@@ -202,13 +202,14 @@ describe("bounded PDF contents evidence", () => {
     expect(rasterLog).toContain("-f 1 -l 1 -r 150 -png -singlefile");
     expect(rasterLog).toContain("-f 2 -l 2 -r 150 -png -singlefile");
     const ocrLog = await readFile(`${value.commands.tesseract}.log`, "utf8");
-    expect(ocrLog).toContain("-l eng+chi_sim --psm 3 tsv");
+    expect(ocrLog).toContain("-l eng+chi_sim --psm 6 tsv");
     expect(await readdir(value.work)).toEqual([]);
   });
 
   it("retains a confident right-column page digit when its OCR line is noisy", async () => {
     const value = await fixture({
       tesseractBody: [
+        'printf \'%s\\n\' "$*" >> "$0.log"',
         "printf 'level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n'",
         "printf '5\\t1\\t1\\t1\\t1\\t1\\t60\\t100\\t300\\t18\\t0\\tUnreadable\\n'",
         "printf '5\\t1\\t1\\t1\\t1\\t2\\t980\\t100\\t12\\t18\\t92\\t1\\n'",
@@ -221,6 +222,7 @@ describe("bounded PDF contents evidence", () => {
       commands: value.commands,
       pageIndices: [0],
       pdfPath: value.pdfPath,
+      recoverPageLabels: true,
       temporaryRoot: value.work,
     });
 
@@ -233,6 +235,9 @@ describe("bounded PDF contents evidence", () => {
         }),
       ]),
     );
+    const ocrLog = await readFile(`${value.commands.tesseract}.log`, "utf8");
+    expect(ocrLog).toContain("-l eng+chi_sim --psm 6 tsv");
+    expect(ocrLog).toContain("-l eng+chi_sim --psm 3 tsv");
   });
 
   it("rejects pages outside the first 48 before rasterization", async () => {

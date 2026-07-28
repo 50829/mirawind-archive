@@ -497,6 +497,7 @@ export async function readPdfContentsEvidence(input: {
   readonly limits?: Partial<PdfContentsEvidenceLimits>;
   readonly pageIndices?: readonly number[];
   readonly pdfPath: string;
+  readonly recoverPageLabels?: boolean;
   readonly signal?: AbortSignal;
   readonly temporaryRoot: string;
 }): Promise<PdfContentsEvidence> {
@@ -617,7 +618,7 @@ export async function readPdfContentsEvidence(input: {
           limits.pageTimeoutMs - (Date.now() - pageStartedAt),
         );
         const tsv = await runBounded({
-          args: [imagePath, "stdout", "-l", "eng+chi_sim", "--psm", "3", "tsv"],
+          args: [imagePath, "stdout", "-l", "eng+chi_sim", "--psm", "6", "tsv"],
           command: commands.tesseract,
           ...(input.signal ? { signal: input.signal } : {}),
           timeoutMs: remainingTimeout(
@@ -627,12 +628,67 @@ export async function readPdfContentsEvidence(input: {
           ),
         });
         const parsed = tsvRecords(tsv, pageIndex);
-        if (parsed.lowConfidence) {
+        const pageRecords = [...parsed.records];
+        if (input.recoverPageLabels) {
+          try {
+            const pageLabelTsv = await runBounded({
+              args: [
+                imagePath,
+                "stdout",
+                "-l",
+                "eng+chi_sim",
+                "--psm",
+                "3",
+                "tsv",
+              ],
+              command: commands.tesseract,
+              ...(input.signal ? { signal: input.signal } : {}),
+              timeoutMs: remainingTimeout(
+                startedAt,
+                limits.aggregateTimeoutMs,
+                Math.max(
+                  1,
+                  limits.pageTimeoutMs - (Date.now() - pageStartedAt),
+                ),
+              ),
+            });
+            const supplementalLabels = tsvRecords(
+              pageLabelTsv,
+              pageIndex,
+            ).records.filter((record) => record.type === "page-label");
+            const existing = new Set(
+              pageRecords.map(
+                (record) =>
+                  `${record.type}/${record.text ?? ""}/${record.bbox?.join(",") ?? ""}`,
+              ),
+            );
+            pageRecords.push(
+              ...supplementalLabels.filter(
+                (record) =>
+                  !existing.has(
+                    `${record.type}/${record.text ?? ""}/${record.bbox?.join(",") ?? ""}`,
+                  ),
+              ),
+            );
+          } catch (error) {
+            if (error instanceof EvidenceCanceledError) throw error;
+            if (error instanceof ToolUnavailableError) throw error;
+            diagnostics.push(
+              diagnostic(
+                error instanceof ProcessTimeoutError
+                  ? "PDF_CONTENTS_OCR_TIMEOUT"
+                  : "PDF_CONTENTS_EVIDENCE_INVALID",
+                pageIndex,
+              ),
+            );
+          }
+        }
+        if (parsed.lowConfidence && pageRecords.length === 0) {
           diagnostics.push(
             diagnostic("PDF_CONTENTS_OCR_LOW_CONFIDENCE", pageIndex),
           );
         }
-        records.push(...parsed.records);
+        records.push(...pageRecords);
         inspected.push(pageIndex);
         if (records.length > maximumRecords) throw new ProcessOutputError();
       } catch (error) {

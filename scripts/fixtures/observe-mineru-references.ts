@@ -90,7 +90,7 @@ function stripPageLabel(value: string): {
   readonly title: string;
 } {
   const text = normalize(value);
-  if (/^(?:chapter|part)\s+/iu.test(text)) {
+  if (/^(?:chapter|part)\s+(?:\d+|[ivxlcdm]+)$/iu.test(text)) {
     return Object.freeze({ pageLabel: null, title: text });
   }
   const match =
@@ -568,7 +568,6 @@ export async function observeRealMineruFixture(input: {
   );
   const layout = await readMineruLayoutEvidence(markdownPath);
   let regionCounter = 0;
-  let effectiveLayout = layout;
   let detection = detectPrintedContents({
     document: originalDocument,
     idFactory: () => `region_${String(++regionCounter).padStart(16, "0")}`,
@@ -593,6 +592,7 @@ export async function observeRealMineruFixture(input: {
       allowOcr: !hasHighBoundary || requiresLineRepair,
       ...(pageIndices ? { pageIndices } : {}),
       pdfPath,
+      recoverPageLabels: requiresLineRepair,
       temporaryRoot: input.stagingDirectory,
     });
     if (pdfEvidence.records.length > 0) {
@@ -602,7 +602,8 @@ export async function observeRealMineruFixture(input: {
         source: pdfEvidence.source,
       });
       const repairedLayout = supplementMissingListPageLabels(layout, pdfLayout);
-      effectiveLayout = repairedLayout === layout ? pdfLayout : repairedLayout;
+      const effectiveLayout =
+        repairedLayout === layout ? pdfLayout : repairedLayout;
       regionCounter = 0;
       detection = detectPrintedContents({
         document: originalDocument,
@@ -628,7 +629,7 @@ export async function observeRealMineruFixture(input: {
   const projections = projectCandidates({
     candidates: detection.candidates,
     document: originalDocument,
-    layout: effectiveLayout,
+    layout,
     pack: input.pack,
   });
   const sourceRegions = projections.flatMap((projection) =>
