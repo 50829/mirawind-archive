@@ -176,7 +176,7 @@ export function inferPrintedHeadingEvidence(
     .replace(/[．。]/gu, ".")
     .replace(/\s*\.\s*/gu, ".");
   const appendix =
-    /^(?:附录|appendix)\s*(?<number>[A-Za-z0-9一二三四五六七八九十]+(?:\.\d+){0,3})?/iu.exec(
+    /^(?:附录(?=\s|[:：]|$|[A-Za-z0-9一二三四五六七八九十])|appendix\b)\s*(?<number>[A-Za-z0-9一二三四五六七八九十]+(?:\.\d+){0,3})?/iu.exec(
       plain,
     );
   if (appendix) {
@@ -265,6 +265,7 @@ export function inferPrintedReferenceLevels(
   } = {},
 ): readonly number[] {
   let insidePart = false;
+  let insideSupplementalPart = false;
   let insideAppendix = false;
   let insideLocalAppendixGroup = false;
   let reviewGroupLevel: number | undefined;
@@ -297,6 +298,7 @@ export function inferPrintedReferenceLevels(
         level = Math.min(4, Math.max(1, suppliedLevel));
         if (numbering?.kind === "appendix" && level === 1) {
           insidePart = false;
+          insideSupplementalPart = false;
           insideAppendix = true;
         } else if (
           numbering?.kind === "part" ||
@@ -304,12 +306,16 @@ export function inferPrintedReferenceLevels(
             level > numbering.level)
         ) {
           insidePart = true;
+          insideSupplementalPart =
+            numbering?.kind === "part" &&
+            /(?:附录|appendix)/iu.test(semanticTitle);
           insideAppendix = false;
         } else if (
           numbering?.kind === "appendix" ||
           (numbering?.kind === "chapter" && level === numbering.level)
         ) {
           insidePart = false;
+          insideSupplementalPart = false;
           insideAppendix = false;
         }
       } else if (
@@ -319,6 +325,7 @@ export function inferPrintedReferenceLevels(
         level = 3;
       } else if (numbering?.kind === "part") {
         insidePart = true;
+        insideSupplementalPart = /(?:附录|appendix)/iu.test(semanticTitle);
         insideAppendix = false;
         insideLocalAppendixGroup = false;
         level = 1;
@@ -326,14 +333,32 @@ export function inferPrintedReferenceLevels(
         const localUnnumberedAppendix =
           numbering.level === 1 &&
           /^(?:附录|appendix)\s*[:：]/iu.test(semanticTitle);
+        const chapterScopedAppendix =
+          numbering.level === 1 &&
+          /^(?:附录|appendix)\s*\d{1,3}[A-Z](?=\s|$|[.:：])/iu.test(
+            semanticTitle,
+          );
         if (localUnnumberedAppendix && previousLevel > 1) {
           level = insideLocalAppendixGroup ? 3 : 2;
           insideLocalAppendixGroup = true;
+        } else if (chapterScopedAppendix) {
+          level = insidePart ? 3 : 2;
+          insideAppendix = false;
+          insideLocalAppendixGroup = false;
         } else if (numbering.level > 1) {
-          level = Math.max(2, numbering.level);
+          level = Math.min(
+            4,
+            Math.max(2, numbering.level + (insidePart ? 1 : 0)),
+          );
+          insideAppendix = false;
+          insideLocalAppendixGroup = false;
+        } else if (insideSupplementalPart) {
+          level = 2;
+          insideAppendix = false;
           insideLocalAppendixGroup = false;
         } else {
           insidePart = false;
+          insideSupplementalPart = false;
           insideAppendix = true;
           insideLocalAppendixGroup = false;
           level = 1;
@@ -350,6 +375,7 @@ export function inferPrintedReferenceLevels(
           level = previousLevel;
         } else {
           insidePart = false;
+          insideSupplementalPart = false;
           insideAppendix = false;
           insideLocalAppendixGroup = false;
           level = 1;

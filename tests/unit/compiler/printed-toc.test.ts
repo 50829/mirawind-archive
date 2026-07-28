@@ -116,6 +116,31 @@ describe("printed contents detection", () => {
     ).toEqual([1, 2, 2, 2, 1, 1]);
   });
 
+  it("keeps appendix notes and nested appendices in their structural context", () => {
+    expect(inferPrintedHeadingEvidence("附录注记")).toBeUndefined();
+    expect(
+      inferPrintedReferenceLevels([
+        "第八部分 附录:数学基础知识",
+        "附录 A 求和",
+        "A.1 求和公式及其性质",
+        "附录注记",
+        "附录 B 集合等离散数学内容",
+        "B.1 集合",
+      ]),
+    ).toEqual([1, 2, 3, 3, 2, 3]);
+    expect(
+      inferPrintedReferenceLevels([
+        "第二部分 资产组合理论",
+        "第6章 风险资产配置",
+        "6.1 风险与风险厌恶",
+        "附录 6A 风险厌恶",
+        "附录 6B 效用函数",
+        "第7章 最优风险资产组合",
+        "7.1 分散化与组合风险",
+      ]),
+    ).toEqual([1, 2, 3, 3, 3, 2, 3]);
+  });
+
   it("produces a high-confidence title-free region with monotonic body matches", async () => {
     const source = await readFile(fixturePath, "utf8");
     const digest = createHash("sha256").update(source).digest("hex");
