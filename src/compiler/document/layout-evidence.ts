@@ -427,6 +427,13 @@ export function reconstructPrintedLayoutRows(
         (left.record.sourceOrder ?? 0) - (right.record.sourceOrder ?? 0) ||
         left.box[0] - right.box[0],
     );
+    const columnLefts = new Map<number, number>();
+    for (const item of positioned) {
+      columnLefts.set(
+        item.column,
+        Math.min(columnLefts.get(item.column) ?? item.box[0], item.box[0]),
+      );
+    }
     let previousPositioned: PositionedRecord | undefined;
     for (const positionedRecord of positioned) {
       const previous = output.at(-1);
@@ -456,7 +463,12 @@ export function reconstructPrintedLayoutRows(
       } else {
         output.push(
           Object.freeze({
-            indent: positionedRecord.box[0],
+            indent:
+              evidence.source === "native-pdf" || evidence.source === "ocr"
+                ? positionedRecord.box[0] -
+                  (columnLefts.get(positionedRecord.column) ??
+                    positionedRecord.box[0])
+                : positionedRecord.box[0],
             pageIndex,
             text: positionedRecord.text,
           }),

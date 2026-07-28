@@ -104,6 +104,47 @@ describe("bounded PDF contents evidence", () => {
     expect(await readdir(value.work)).toEqual([]);
   });
 
+  it("preserves native PDF line boxes from Poppler TSV output", async () => {
+    const value = await fixture({
+      nativeText: [
+        "level\tpage_num\tpar_num\tblock_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext",
+        "1\t1\t0\t0\t0\t0\t0\t0\t600\t800\t-1\t###PAGE###",
+        "5\t1\t1\t1\t1\t1\t10\t20\t55\t12\t100\tContents",
+        "5\t1\t1\t1\t2\t1\t10\t40\t45\t12\t100\tChapter",
+        "5\t1\t1\t1\t2\t2\t60\t40\t10\t12\t100\t1",
+        "5\t1\t1\t1\t2\t3\t75\t40\t40\t12\t100\tStart",
+        "5\t1\t1\t1\t2\t4\t120\t40\t40\t12\t100\t....1",
+        "5\t1\t2\t1\t1\t1\t320\t20\t45\t12\t100\tChapter",
+        "5\t1\t2\t1\t1\t2\t370\t20\t10\t12\t100\t2",
+        "5\t1\t2\t1\t1\t3\t385\t20\t35\t12\t100\tEnd",
+        "5\t1\t2\t1\t1\t4\t425\t20\t35\t12\t100\t....9",
+      ].join("\n"),
+    });
+
+    const result = await readPdfContentsEvidence({
+      commands: value.commands,
+      pdfPath: value.pdfPath,
+      temporaryRoot: value.work,
+    });
+
+    expect(result.source).toBe("native-pdf");
+    expect(result.inspectedPageIndices).toEqual([0]);
+    expect(result.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          bbox: [10, 40, 160, 52],
+          pageIndex: 0,
+          text: "Chapter 1 Start ....1",
+        }),
+        expect.objectContaining({
+          bbox: [320, 20, 460, 32],
+          pageIndex: 0,
+          text: "Chapter 2 End ....9",
+        }),
+      ]),
+    );
+  });
+
   it("uses OCR when native text exists but has no contents boundary", async () => {
     const value = await fixture({
       nativeText: "Cover\nCopyright\fPreface\nIntroduction\f",
@@ -123,6 +164,25 @@ describe("bounded PDF contents evidence", () => {
     expect(await readFile(`${value.commands.pdftoppm}.log`, "utf8")).toContain(
       "-f 1 -l 1 -r 150",
     );
+  });
+
+  it("can stop after native evidence without rasterizing supplemental pages", async () => {
+    const value = await fixture({
+      nativeText: "Cover\nCopyright\fPreface\nIntroduction\f",
+    });
+
+    const result = await readPdfContentsEvidence({
+      allowOcr: false,
+      commands: value.commands,
+      pdfPath: value.pdfPath,
+      temporaryRoot: value.work,
+    });
+
+    expect(result).toMatchObject({ records: [], source: "none" });
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "PDF_CONTENTS_NATIVE_ABSENT" }),
+    );
+    await expect(access(`${value.commands.pdftoppm}.log`)).rejects.toThrow();
   });
 
   it("rasterizes only requested front pages at 150 DPI with both languages", async () => {

@@ -153,7 +153,7 @@ function pageCountFromPdfInfo(value: string): number {
   return count;
 }
 
-function nativeRecords(
+function legacyNativeRecords(
   value: string,
   pageLimit: number,
 ): {
@@ -191,6 +191,156 @@ function nativeRecords(
     candidatePages: Object.freeze(candidatePages),
     records: Object.freeze(records.slice(0, maximumRecords)),
   });
+}
+
+interface NativePdfWord {
+  readonly bottom: number;
+  readonly left: number;
+  readonly pageIndex: number;
+  readonly right: number;
+  readonly text: string;
+  readonly top: number;
+}
+
+function nativeTsvRecords(
+  value: string,
+  pageLimit: number,
+):
+  | {
+      readonly candidatePages: readonly number[];
+      readonly records: readonly LayoutEvidenceRecord[];
+    }
+  | undefined {
+  const rows = value.split(/\r?\n/u);
+  const header = rows.shift()?.split("\t");
+  if (
+    !header ||
+    ![
+      "level",
+      "page_num",
+      "par_num",
+      "block_num",
+      "line_num",
+      "left",
+      "top",
+      "width",
+      "height",
+      "conf",
+      "text",
+    ].every((name) => header.includes(name))
+  ) {
+    return;
+  }
+  const indexes = new Map(header.map((name, index) => [name, index]));
+  const groups = new Map<string, NativePdfWord[]>();
+  for (const row of rows) {
+    if (!row.trim()) continue;
+    const fields = row.split("\t");
+    if (fields[indexes.get("level") ?? -1] !== "5") continue;
+    const text = fields[indexes.get("text") ?? -1]?.trim() ?? "";
+    const pageNumber = Number(fields[indexes.get("page_num") ?? -1]);
+    const confidence = Number(fields[indexes.get("conf") ?? -1]);
+    const left = Number(fields[indexes.get("left") ?? -1]);
+    const top = Number(fields[indexes.get("top") ?? -1]);
+    const width = Number(fields[indexes.get("width") ?? -1]);
+    const height = Number(fields[indexes.get("height") ?? -1]);
+    if (
+      !text ||
+      text.length > maximumTextLength ||
+      !Number.isSafeInteger(pageNumber) ||
+      pageNumber < 1 ||
+      pageNumber > pageLimit ||
+      !Number.isFinite(confidence) ||
+      confidence < 0 ||
+      ![left, top, width, height].every(Number.isFinite) ||
+      left < 0 ||
+      top < 0 ||
+      width <= 0 ||
+      height <= 0
+    ) {
+      continue;
+    }
+    const key = [
+      pageNumber,
+      fields[indexes.get("par_num") ?? -1] ?? "",
+      fields[indexes.get("block_num") ?? -1] ?? "",
+      fields[indexes.get("line_num") ?? -1] ?? "",
+    ].join("/");
+    groups.set(key, [
+      ...(groups.get(key) ?? []),
+      Object.freeze({
+        bottom: top + height,
+        left,
+        pageIndex: pageNumber - 1,
+        right: left + width,
+        text,
+        top,
+      }),
+    ]);
+  }
+  const allRecords = [...groups.values()].flatMap((words, sourceOrder) => {
+    const first = words[0];
+    if (!first) return [];
+    const text = words
+      .map((word) => word.text)
+      .join(" ")
+      .slice(0, maximumTextLength);
+    return [
+      Object.freeze({
+        bbox: Object.freeze([
+          Math.min(...words.map((word) => word.left)),
+          Math.min(...words.map((word) => word.top)),
+          Math.max(...words.map((word) => word.right)),
+          Math.max(...words.map((word) => word.bottom)),
+        ]) as readonly [number, number, number, number],
+        pageIndex: first.pageIndex,
+        sourceOrder,
+        text,
+        type: "text",
+      }),
+    ];
+  });
+  const recordsByPage = new Map<number, LayoutEvidenceRecord[]>();
+  for (const record of allRecords) {
+    recordsByPage.set(record.pageIndex, [
+      ...(recordsByPage.get(record.pageIndex) ?? []),
+      record,
+    ]);
+  }
+  const candidatePages = [...recordsByPage]
+    .filter(([, records]) => {
+      const rowCount = records.filter((record) =>
+        printedRow.test(record.text ?? ""),
+      ).length;
+      return (
+        records.some((record) =>
+          contentsLabel.test((record.text ?? "").normalize("NFKC")),
+        ) || rowCount >= 2
+      );
+    })
+    .map(([pageIndex]) => pageIndex)
+    .sort((left, right) => left - right);
+  const candidatePageSet = new Set(candidatePages);
+  return Object.freeze({
+    candidatePages: Object.freeze(candidatePages),
+    records: Object.freeze(
+      allRecords
+        .filter((record) => candidatePageSet.has(record.pageIndex))
+        .slice(0, maximumRecords),
+    ),
+  });
+}
+
+function nativeRecords(
+  value: string,
+  pageLimit: number,
+): {
+  readonly candidatePages: readonly number[];
+  readonly records: readonly LayoutEvidenceRecord[];
+} {
+  return (
+    nativeTsvRecords(value, pageLimit) ?? legacyNativeRecords(value, pageLimit)
+  );
 }
 
 interface TsvWord {
@@ -313,6 +463,7 @@ function diagnostic(
 }
 
 export async function readPdfContentsEvidence(input: {
+  readonly allowOcr?: boolean;
   readonly commands?: Partial<PdfContentsEvidenceCommands>;
   readonly limits?: Partial<PdfContentsEvidenceLimits>;
   readonly pageIndices?: readonly number[];
@@ -367,7 +518,7 @@ export async function readPdfContentsEvidence(input: {
       throw new RangeError("PDF_CONTENTS_EVIDENCE_PAGE_LIMIT");
     }
     const nativeText = await runBounded({
-      args: ["-f", "1", "-l", String(pageLimit), "-layout", pdfPath, "-"],
+      args: ["-f", "1", "-l", String(pageLimit), "-tsv", pdfPath, "-"],
       command: commands.pdftotext,
       ...(input.signal ? { signal: input.signal } : {}),
       timeoutMs: remainingTimeout(
@@ -386,6 +537,14 @@ export async function readPdfContentsEvidence(input: {
       });
     }
     diagnostics.push(diagnostic("PDF_CONTENTS_NATIVE_ABSENT"));
+    if (input.allowOcr === false) {
+      return Object.freeze({
+        diagnostics: Object.freeze(diagnostics),
+        inspectedPageIndices: Object.freeze([]),
+        records: Object.freeze([]),
+        source: "none" as const,
+      });
+    }
     workspace = await mkdtemp(join(temporaryRoot, "ocr-"));
     const records: LayoutEvidenceRecord[] = [];
     const inspected: number[] = [];

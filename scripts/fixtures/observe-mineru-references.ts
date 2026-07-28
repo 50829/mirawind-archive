@@ -8,9 +8,11 @@ import { extractZipFile } from "../../src/compiler/archive/extractor.js";
 import { readMineruLayoutEvidence } from "../../src/compiler/document/layout-evidence.js";
 import { normalizeDocumentBlocks } from "../../src/compiler/document/normalize.js";
 import { parseMarkdownDocument } from "../../src/compiler/document/parser.js";
+import { readPdfContentsEvidence } from "../../src/compiler/document/pdf-contents-evidence.js";
 import {
   detectPrintedContents,
   inferPrintedHeadingEvidence,
+  requiresSupplementalPdfEvidence,
   type PrintedContentsCandidate,
 } from "../../src/compiler/document/printed-toc.js";
 import {
@@ -538,13 +540,43 @@ export async function observeRealMineruFixture(input: {
   );
   const layout = await readMineruLayoutEvidence(markdownPath);
   let regionCounter = 0;
-  const detection = detectPrintedContents({
+  let effectiveLayout = layout;
+  let detection = detectPrintedContents({
     document: originalDocument,
     idFactory: () => `region_${String(++regionCounter).padStart(16, "0")}`,
     layoutEvidence: layout,
     sourcePath: basename(markdown.relative_path),
     sourceSha256: typography.provenance.output_sha256,
   });
+  if (requiresSupplementalPdfEvidence(detection)) {
+    const hasHighBoundary = detection.candidates.some(
+      (candidate) => candidate.boundaryConfidence === "high",
+    );
+    const pdfPath = await resolveContainedPath(
+      extractedRoot,
+      originalPdf.relative_path,
+    );
+    const pdfEvidence = await readPdfContentsEvidence({
+      allowOcr: !hasHighBoundary,
+      pdfPath,
+      temporaryRoot: input.stagingDirectory,
+    });
+    if (pdfEvidence.records.length > 0) {
+      effectiveLayout = Object.freeze({
+        diagnostics: layout.diagnostics,
+        records: pdfEvidence.records,
+        source: pdfEvidence.source,
+      });
+      regionCounter = 0;
+      detection = detectPrintedContents({
+        document: originalDocument,
+        idFactory: () => `region_${String(++regionCounter).padStart(16, "0")}`,
+        layoutEvidence: effectiveLayout,
+        sourcePath: basename(markdown.relative_path),
+        sourceSha256: typography.provenance.output_sha256,
+      });
+    }
+  }
   process.stderr.write(
     `${JSON.stringify({
       candidates: detection.candidates.map((candidate) => ({
@@ -560,7 +592,7 @@ export async function observeRealMineruFixture(input: {
   const projections = projectCandidates({
     candidates: detection.candidates,
     document: originalDocument,
-    layout,
+    layout: effectiveLayout,
     pack: input.pack,
   });
   const sourceRegions = projections.flatMap((projection) =>

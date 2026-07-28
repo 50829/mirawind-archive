@@ -40,6 +40,7 @@ export interface PrintedContentsCandidate {
   readonly matchedHeadingCount: number;
   readonly matchConfidence: "high" | "low" | "medium";
   readonly proposedRegion?: ConfirmedSourceRegion;
+  readonly requiresPdfEvidence?: boolean;
   readonly startByte: number;
 }
 
@@ -456,6 +457,26 @@ function hasPrintedPageLine(
     .some((line) => printedPageEvidence(line) !== undefined);
 }
 
+function requiresPdfLineRepair(
+  block: TransientDocumentNode,
+  source: string,
+): boolean {
+  if (!block.position) return false;
+  return source
+    .slice(block.position.start.offset, block.position.end.offset)
+    .split(/\n/u)
+    .some((line) => {
+      const plain = plainTitle(line);
+      const pageLike = new RegExp(
+        `${dotLeader.source}\\s*(?:\\d+|[ivxlcdm]+)\\s*$`,
+        "iu",
+      ).test(plain);
+      if (!pageLike) return false;
+      const evidence = printedPageEvidence(plain);
+      return !evidence || /^[.…·_\s]+$/u.test(evidence.title);
+    });
+}
+
 function similarity(left: string, right: string): number {
   if (left === right) return 1;
   if (!left || !right || Math.min(left.length, right.length) < 3) return 0;
@@ -739,13 +760,15 @@ function layoutLevels(
   }
   const output = new Map<string, number[]>();
   for (const [index, row] of rows.entries()) {
-    let level = inferredLevels[index];
+    const numbering = inferPrintedHeadingEvidence(row.text);
+    let level = numbering ? inferredLevels[index] : undefined;
     if (!level && medians.size > 0) {
       level = [...medians].sort(
         (left, right) =>
           Math.abs(left[1] - row.indent) - Math.abs(right[1] - row.indent),
       )[0]?.[0];
     }
+    level ??= inferredLevels[index];
     if (level) {
       const key = normalizedTitle(row.text);
       output.set(key, [...(output.get(key) ?? []), level]);
@@ -848,6 +871,7 @@ export function detectPrintedContents(input: {
     let candidateEndIndex = range.startIndex;
     let richContent = false;
     let noiseBlocks = 0;
+    let requiresPdfEvidence = false;
     for (
       let index = range.firstEntryIndex;
       index <= range.endIndex;
@@ -883,6 +907,9 @@ export function detectPrintedContents(input: {
         source: input.document.source,
         sourceBytes,
       });
+      if (requiresPdfLineRepair(block, input.document.source)) {
+        requiresPdfEvidence = true;
+      }
       if (containsRichContent(block)) richContent = true;
       if (extracted.length > 0) {
         entries.push(...extracted);
@@ -1114,6 +1141,7 @@ export function detectPrintedContents(input: {
         matchedHeadingCount: matchedCount,
         matchConfidence,
         ...(proposedRegion ? { proposedRegion } : {}),
+        requiresPdfEvidence,
         startByte,
       }),
     );
@@ -1156,4 +1184,18 @@ export function detectPrintedContents(input: {
     ...(canonicalRegionId ? { canonicalRegionId } : {}),
     candidates: Object.freeze(finalized),
   });
+}
+
+export function requiresSupplementalPdfEvidence(
+  detection: PrintedContentsDetection,
+): boolean {
+  return (
+    !detection.candidates.some(
+      (candidate) => candidate.boundaryConfidence === "high",
+    ) ||
+    detection.candidates.some(
+      (candidate) =>
+        candidate.proposedRegion !== undefined && candidate.requiresPdfEvidence,
+    )
+  );
 }

@@ -26,6 +26,7 @@ import {
 import { createPrintedContentsAnalysisV2 } from "../../compiler/document/printed-contents-analysis.js";
 import {
   detectPrintedContents,
+  requiresSupplementalPdfEvidence,
   type PrintedContentsCandidate,
   type PrintedContentsDetection,
 } from "../../compiler/document/printed-toc.js";
@@ -169,12 +170,11 @@ export async function prepareDraft(input: {
       sourcePath: basename(input.selectedCandidatePath),
       sourceSha256: typography.provenance.output_sha256,
     });
+    const hasHighBoundary = printedContents.candidates.some(
+      (candidate) => candidate.boundaryConfidence === "high",
+    );
     let pdfDiagnostics: readonly PreparedPdfDiagnostic[] = Object.freeze([]);
-    if (
-      !printedContents.candidates.some(
-        (candidate) => candidate.boundaryConfidence === "high",
-      )
-    ) {
+    if (requiresSupplementalPdfEvidence(printedContents)) {
       const discovered = await findOriginalPdf({
         bundleRoot: dirname(markdownPath),
         markdownPath,
@@ -188,6 +188,7 @@ export async function prepareDraft(input: {
         const pdfEvidence = await (
           input.pdfEvidenceReader ?? readPdfContentsEvidence
         )({
+          allowOcr: !hasHighBoundary,
           pdfPath: discovered.pdfPath,
           ...(input.signal ? { signal: input.signal } : {}),
           temporaryRoot: stagingDirectory,
@@ -196,12 +197,7 @@ export async function prepareDraft(input: {
         if (pdfEvidence.records.length > 0) {
           effectiveLayoutEvidence = Object.freeze({
             diagnostics: layoutEvidence.diagnostics,
-            records: Object.freeze(
-              [...layoutEvidence.records, ...pdfEvidence.records].slice(
-                0,
-                20_000,
-              ),
-            ),
+            records: pdfEvidence.records,
             source: pdfEvidence.source,
           });
           printedContents = detectPrintedContents({

@@ -300,14 +300,16 @@ export function proposeDocumentStructure(
     let role: ContentRole | undefined;
     const evidence = inferPrintedHeadingEvidence(heading.sourceTitle);
     const matchedPrintedRole = printedRoles.get(heading.blockId);
-    if (matchedPrintedRole !== undefined) {
+    if (matchedPrintedRole === "body") {
+      currentTopLevelRole = matchedPrintedRole;
+      role = matchedPrintedRole;
+    } else if (matchedPrintedRole !== undefined && displayLevel === 1) {
       currentTopLevelRole = matchedPrintedRole;
       role = matchedPrintedRole;
     } else if (displayLevel === 1) {
-      const classifiedRole =
-        localBackmatterIndexes.has(index)
-          ? "body"
-          : proposedRole(heading.sourceTitle);
+      const classifiedRole = localBackmatterIndexes.has(index)
+        ? "body"
+        : proposedRole(heading.sourceTitle);
       const nextHeading = document.headings[index + 1];
       const detachedChapterMarker = Boolean(
         pureNumericChapterMarker.test(title) &&

@@ -246,6 +246,43 @@ describe("bounded MinerU layout evidence", () => {
     ]);
   });
 
+  it("normalizes indentation independently inside each column", () => {
+    const evidence: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        {
+          bbox: [20, 20, 200, 40],
+          pageIndex: 0,
+          text: "1 Left .... 1",
+          type: "text",
+        },
+        {
+          bbox: [40, 50, 200, 70],
+          pageIndex: 0,
+          text: "1.1 Left child .... 2",
+          type: "text",
+        },
+        {
+          bbox: [550, 20, 800, 40],
+          pageIndex: 0,
+          text: "2 Right .... 3",
+          type: "text",
+        },
+        {
+          bbox: [570, 50, 800, 70],
+          pageIndex: 0,
+          text: "2.1 Right child .... 4",
+          type: "text",
+        },
+      ],
+      source: "native-pdf",
+    };
+
+    expect(
+      reconstructPrintedLayoutRows(evidence).map((row) => row.indent),
+    ).toEqual([0, 20, 0, 20]);
+  });
+
   it("orders three columns without interleaving their vertical positions", () => {
     const records = [
       [680, 30, "C1"],

@@ -522,6 +522,53 @@ describe("printed contents detection", () => {
     expect(levelForTitle("第 2 章 信息的表示和处理")).toBe(2);
   });
 
+  it("uses local indentation for unnumbered printed entries", () => {
+    const contents = [
+      "第 1 章 导论 ...... 1",
+      "1.1 基础 ...... 2",
+      "1.1.1 细节 ...... 3",
+      "课后习题和问题 ...... 8",
+      "复习题 ...... 8",
+    ];
+    const body = contents.map((entry) =>
+      entry.replace(/\s+\.{2,}\s+\d+$/u, ""),
+    );
+    const source = [
+      "## 目录",
+      "",
+      ...contents.flatMap((entry) => [`## ${entry}`, ""]),
+      ...body.flatMap((entry) => [`## ${entry}`, "", "正文", ""]),
+    ].join("\n");
+    const indents = [20, 30, 40, 30, 40];
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: contents.map((text, index) => ({
+          bbox: [
+            indents[index] ?? 20,
+            20 + index * 30,
+            500,
+            40 + index * 30,
+          ] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.proposedRegion?.entries.map(
+        (entry) => entry.reference_level,
+      ),
+    ).toEqual([1, 2, 3, 2, 3]);
+  });
+
   it("recognizes an early unlabelled chapter list without page suffixes", async () => {
     const source = await readFile(unlabelledPath, "utf8");
     const result = detectPrintedContents({
@@ -793,6 +840,37 @@ describe("printed contents detection", () => {
       entryCount: 3,
       matchedHeadingCount: 3,
     });
+  });
+
+  it("requests PDF repair only for leader rows with no title", () => {
+    const detect = (firstRow: string) => {
+      const source = [
+        "## Contents",
+        "",
+        firstRow,
+        "",
+        "Chapter 1 Start .... 1",
+        "",
+        "Chapter 2 Middle .... 9",
+        "",
+        "Chapter 3 End .... 20",
+        "",
+        "## Chapter 1 Start",
+        "",
+        "## Chapter 2 Middle",
+        "",
+        "## Chapter 3 End",
+      ].join("\n");
+      return detectPrintedContents({
+        document: documentFor(source),
+        idFactory: () => "region_abcdefghijklmnop",
+        sourcePath: "source/full.md",
+        sourceSha256: createHash("sha256").update(source).digest("hex"),
+      });
+    };
+
+    expect(detect("...... 4").candidates[0]?.requiresPdfEvidence).toBe(true);
+    expect(detect("A ...... 4").candidates[0]?.requiresPdfEvidence).toBe(false);
   });
 
   it("keeps brief and full contents as disjoint exclusions with one canonical region", () => {

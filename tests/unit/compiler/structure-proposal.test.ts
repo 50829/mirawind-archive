@@ -112,8 +112,10 @@ describe("default document structure proposal", () => {
     const chapter = document.headings[1];
     if (!chapter) throw new Error("expected chapter heading");
     const entryText = "Chapter 1 Introduction ........ 1";
-    const entryStart = Buffer.from(source.slice(0, source.indexOf(entryText)), "utf8")
-      .byteLength;
+    const entryStart = Buffer.from(
+      source.slice(0, source.indexOf(entryText)),
+      "utf8",
+    ).byteLength;
     const entryEnd = entryStart + Buffer.from(entryText, "utf8").byteLength;
 
     const proposal = proposeDocumentStructure(document, {
@@ -558,6 +560,66 @@ describe("default document structure proposal", () => {
       include_in_toc: true,
       role: "appendix",
     });
+  });
+
+  it("keeps a nested printed appendix inside the body role", () => {
+    const source = [
+      "## Chapter 4 Models",
+      "",
+      "正文",
+      "",
+      "附录 4.1 Derivation ...... 99",
+      "",
+      "## Derivation",
+      "",
+      "正文",
+      "",
+      "## Exercises",
+    ].join("\n");
+    const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
+    const bodyHeading = document.headings[1];
+    if (!bodyHeading) throw new Error("expected appendix heading");
+    const entryText = "附录 4.1 Derivation ...... 99";
+    const entryStart = Buffer.from(
+      source.slice(0, source.indexOf(entryText)),
+      "utf8",
+    ).byteLength;
+    const entryEnd = entryStart + Buffer.from(entryText, "utf8").byteLength;
+
+    const proposal = proposeDocumentStructure(document, {
+      sourceRegions: [
+        {
+          applied: true,
+          disposition: "reference_only",
+          entries: [
+            {
+              body_heading_block_id: bodyHeading.blockId,
+              range: {
+                end_byte: entryEnd,
+                sha256: "a".repeat(64),
+                start_byte: entryStart,
+              },
+              reference_level: 2,
+            },
+          ],
+          kind: "printed_toc",
+          range: {
+            end_byte: entryEnd,
+            sha256: "b".repeat(64),
+            start_byte: entryStart,
+          },
+          region_id: "region_0123456789abcdef",
+          source_path: "book.md",
+          source_sha256: "c".repeat(64),
+        },
+      ],
+    });
+
+    expect(proposal.nodes.map((node) => node.role)).toEqual([
+      "body",
+      undefined,
+      undefined,
+    ]);
   });
 
   it("keeps an unmatched learning objective in body but out of navigation", () => {
