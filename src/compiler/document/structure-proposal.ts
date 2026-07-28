@@ -27,7 +27,7 @@ export interface StructureProposal {
 }
 
 const frontmatterTitle =
-  /^(?:序(?:言|章)?|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|导读|凡例|符号(?:表|说明)|出版者的话|专家指导委员会|作者简介|译者简介|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
+  /^(?:序(?:言|章)?|前言|译者序|致学生|致教师|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|导读|凡例|符号(?:表|说明)|出版者的话|专家指导委员会|作者简介|译者简介|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
 const appendixTitle =
   /^(?:附录|附表|appendix)(?:\s|[A-Z一二三四五六七八九十0-9]|$)/iu;
 const backmatterTitle =

@@ -159,6 +159,7 @@ function plainTitle(value: string): string {
   return withoutControlCharacters(value)
     .normalize("NFKC")
     .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "")
+    .replace(/^\\+\s*(?=(?:[A-Z]\s*\.\s*)?\d)/u, "")
     .replace(/\$(\\(?:dots|ldots|cdots)\s+(?:\d{1,5}|[ivxlcdm]+))\$/giu, "$1")
     .replace(/\^\{\\prime\}/gu, "'")
     .replace(
@@ -386,7 +387,7 @@ export function inferPrintedReferenceLevels(
       ) {
         level = Math.min(4, Math.max(2, previousLevel));
       } else if (
-        /^(?:课后习题和问题|end-of-chapter questions|参考文献(?:说明)?|练习题答案|家庭作业|习题|练习|bibliographic notes|exercises|review questions)$/iu.test(
+        /^(?:课后习题和问题|end-of-chapter questions|参考文献(?:说明)?|练习题答案|家庭作业|思考题|本章注记|附录注记|习题|练习|bibliographic notes|exercises|review questions)$/iu.test(
           semanticTitle,
         ) &&
         previousLevel > 0
@@ -1289,7 +1290,10 @@ function recoverLayoutLogicalEntries(
         (entry.normalizedTitle.length <= 4 &&
           dotLeader.test(entry.sourceTitle)),
     );
-    const fillsEmptyGap = sourceGap.length === 0 && layoutGap.length <= 2;
+    const maximumEmptyLayoutGap =
+      evidence?.source === "native-pdf" || evidence?.source === "ocr" ? 8 : 2;
+    const fillsEmptyGap =
+      sourceGap.length === 0 && layoutGap.length <= maximumEmptyLayoutGap;
     const replacesDamagedGap =
       damagedSourceGap &&
       sourceGap.length <= 2 &&

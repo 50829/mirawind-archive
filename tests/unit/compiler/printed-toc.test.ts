@@ -73,6 +73,10 @@ describe("printed contents detection", () => {
       kind: "part",
       level: 1,
     });
+    expect(inferPrintedHeadingEvidence("\\ 4.6 证明主定理")).toMatchObject({
+      kind: "decimal",
+      level: 2,
+    });
     expect(
       inferPrintedReferenceLevels([
         "PART ONE OVERVIEW",
@@ -133,12 +137,15 @@ describe("printed contents detection", () => {
         "第二部分 资产组合理论",
         "第6章 风险资产配置",
         "6.1 风险与风险厌恶",
+        "6.1.1 效用函数",
+        "思考题",
+        "本章注记",
         "附录 6A 风险厌恶",
         "附录 6B 效用函数",
         "第7章 最优风险资产组合",
         "7.1 分散化与组合风险",
       ]),
-    ).toEqual([1, 2, 3, 3, 3, 2, 3]);
+    ).toEqual([1, 2, 3, 4, 3, 3, 3, 3, 2, 3]);
   });
 
   it("produces a high-confidence title-free region with monotonic body matches", async () => {
@@ -1016,6 +1023,8 @@ describe("printed contents detection", () => {
       "第 1 章 向量空间 ...... 1",
       "1A 向量 ...... 2",
       "复数 ...... 2",
+      "向量组 ...... 4",
+      "向量空间 ...... 5",
       "习题 1A ...... 9",
       "第 2 章 线性映射 ...... 20",
     ];
@@ -1028,7 +1037,7 @@ describe("printed contents detection", () => {
       ...markdownEntries.flatMap((entry) => [`## ${entry}`, ""]),
       ...bodyEntries.flatMap((entry) => [`## ${entry}`, "", "正文", ""]),
     ].join("\n");
-    const indents = [0, 0, 20, 45, 45, 0];
+    const indents = [0, 0, 20, 45, 45, 45, 45, 0];
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
@@ -1060,6 +1069,8 @@ describe("printed contents detection", () => {
       { level: 1, title: "第 1 章 向量空间 ...... 1" },
       { level: 2, title: "1A 向量 ...... 2" },
       { level: 3, title: "复数 ...... 2" },
+      { level: 3, title: "向量组 ...... 4" },
+      { level: 3, title: "向量空间 ...... 5" },
       { level: 3, title: "习题 1A ...... 9" },
       { level: 1, title: "第 2 章 线性映射 ...... 20" },
     ]);

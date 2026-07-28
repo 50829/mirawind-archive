@@ -67,7 +67,7 @@ interface CandidateProjection {
 }
 
 const frontmatter =
-  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
+  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|致学生|致教师|出版者的话|专家指导委员会|作者简介|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
 const backmatter =
   /^(?:参考文献|参考资料|(?:表|图|主题|作者)?索引|(?:译)?后记|致谢|术语表|图片来源|符号索引|bibliography|references|(?:author|subject)\s+index|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 
@@ -206,9 +206,7 @@ function kindFor(
   const evidence = inferPrintedHeadingEvidence(title);
   if (evidence?.kind === "part") return "part";
   if (evidence?.kind === "chapter") return "chapter";
-  if (evidence?.kind === "appendix") {
-    return level > 1 ? "other" : "appendix";
-  }
+  if (evidence?.kind === "appendix") return "appendix";
   if (evidence?.kind === "decimal") return "section";
   if (frontmatter.test(title)) return "frontmatter";
   if (

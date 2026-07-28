@@ -1012,6 +1012,28 @@ describe("default document structure proposal", () => {
     ).toEqual(["frontmatter", "frontmatter", "body"]);
   });
 
+  it("keeps audience notes before the first chapter in frontmatter", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 译者序",
+          "",
+          "## 致学生",
+          "",
+          "## 致教师",
+          "",
+          "## 第1章 开始",
+          "",
+          "正文",
+        ].join("\n"),
+      ),
+    );
+
+    expect(
+      proposeDocumentStructure(document).nodes.map((node) => node.role),
+    ).toEqual(["frontmatter", "frontmatter", "frontmatter", "body"]);
+  });
+
   it("starts later chapters at their own heading rather than at the first section", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
