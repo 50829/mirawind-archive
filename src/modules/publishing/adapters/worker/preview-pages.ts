@@ -6,6 +6,7 @@ import type { CompiledBook } from "@/modules/publishing/core/publication/compile
 import { pageMetadata } from "@/modules/publishing/core/publication/compiled-book";
 import { renderPages } from "@/modules/publishing/core/publication/render-pages";
 import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
+import { materializeRouteNeutralHtml } from "@/modules/publishing/adapters/reader-html/materialize-route-neutral-html";
 import {
   profilePipelineStage,
   recordPipelineProfileMetrics,
@@ -78,20 +79,22 @@ export async function renderPreviewPages(input: {
     await profilePipelineStage("page_render", async () => {
       for await (const rendered of renderPages({
         book: compiled,
-        headingHref(blockId) {
-          const pageId = pageByHeading.get(blockId);
-          if (!pageId) throw new Error("PREVIEW_HEADING_PAGE_MISSING");
-          return `${pageHref(pageId)}#${blockId}`;
-        },
-        publishedResourceUrl: (resourceId) =>
-          `/api/manage/books/${input.bookId}/preview/${input.configRevision}/assets/${resourceId}`,
         resourceResolution: input.resolution,
       })) {
         diagnostics.push(...rendered.diagnostics);
         if (rendered.css) styles.add(rendered.css);
         await atomicWriteFile(
           resolve(bodyDirectory, `${rendered.page.pageId}.html`),
-          rendered.html,
+          materializeRouteNeutralHtml({
+            headingHref(blockId) {
+              const pageId = pageByHeading.get(blockId);
+              if (!pageId) throw new Error("PREVIEW_HEADING_PAGE_MISSING");
+              return `${pageHref(pageId)}#${blockId}`;
+            },
+            html: rendered.html,
+            resourceUrl: (resourceId) =>
+              `/api/manage/books/${input.bookId}/preview/${input.configRevision}/assets/${resourceId}`,
+          }),
           { mode: 0o600 },
         );
       }

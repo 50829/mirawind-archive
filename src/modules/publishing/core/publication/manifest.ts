@@ -35,6 +35,21 @@ export interface ManifestResource extends ResolvedResource {
   readonly width: number;
 }
 
+export function buildManifestPageRecord(
+  book: CompiledBook,
+  page: CompiledBook["pages"][number],
+): Readonly<Record<string, unknown>> {
+  const metadata = pageMetadata(book, page);
+  return Object.freeze({
+    ...(metadata.alias ? { alias: metadata.alias } : {}),
+    block_ids: pageBlockIds(book, page),
+    first_block_id: page.firstBlockId,
+    output_path: pageOutputPath(page),
+    page_id: page.pageId,
+    title: metadata.title,
+  });
+}
+
 const kindByNodeType: Readonly<Record<string, string>> = {
   blockquote: "blockquote",
   code: "code",
@@ -171,17 +186,9 @@ export function buildDocumentManifest(input: {
     compiler: compilerIdentity,
     config_revision: input.configRevision,
     created_at: input.createdAt,
-    pages: input.book.pages.map((page) => {
-      const metadata = pageMetadata(input.book, page);
-      return {
-        ...(metadata.alias ? { alias: metadata.alias } : {}),
-        block_ids: pageBlockIds(input.book, page),
-        first_block_id: page.firstBlockId,
-        output_path: pageOutputPath(page),
-        page_id: page.pageId,
-        title: metadata.title,
-      };
-    }),
+    pages: input.book.pages.map((page) =>
+      buildManifestPageRecord(input.book, page),
+    ),
     resources: Object.fromEntries(
       [...input.resources]
         .sort((left, right) =>

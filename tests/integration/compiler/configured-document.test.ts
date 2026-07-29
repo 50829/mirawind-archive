@@ -14,7 +14,7 @@ import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/n
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { detectPrintedContents } from "@/modules/publishing/core/preparation/printed-contents";
 import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
-import { buildSearchSpool } from "@/modules/publishing/adapters/filesystem/search-spool";
+import { buildSearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
 
 const fixturePath = fileURLToPath(

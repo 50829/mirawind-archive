@@ -10,6 +10,10 @@ import {
   type SemanticRenderResult,
 } from "@/modules/publishing/core/publication/render-document";
 import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
+import {
+  routeNeutralHeadingHref,
+  routeNeutralResourceUrl,
+} from "@/modules/publishing/core/publication/route-neutral-links";
 
 const maximumConcurrentPages = 4;
 
@@ -29,7 +33,9 @@ export interface RenderedPage {
   readonly page: PagePlan;
 }
 
-type PageRenderer = (input: RenderPageInput) => Promise<SemanticRenderResult>;
+export type PageRenderer = (
+  input: RenderPageInput,
+) => Promise<SemanticRenderResult>;
 
 type RenderSettlement =
   | { readonly ok: true; readonly value: RenderedPage }
@@ -45,8 +51,6 @@ function throwIfCancelled(signal: AbortSignal | undefined): void {
 
 export async function* renderPages(input: {
   readonly book: CompiledBook;
-  readonly headingHref: (blockId: string) => string;
-  readonly publishedResourceUrl: (resourceId: string) => string;
   readonly renderPage?: PageRenderer;
   readonly resourceResolution: ResourceResolution;
   readonly signal?: AbortSignal;
@@ -73,10 +77,10 @@ export async function* renderPages(input: {
         throwIfCancelled(input.signal);
         const rendered = await renderer({
           document: documentForPage(input.book, page),
-          headingHref: input.headingHref,
+          headingHref: routeNeutralHeadingHref,
           headingOverrides: input.book.headingOverrides,
           page,
-          publishedResourceUrl: input.publishedResourceUrl,
+          publishedResourceUrl: routeNeutralResourceUrl,
           resourceResolution: input.resourceResolution,
         });
         throwIfCancelled(input.signal);

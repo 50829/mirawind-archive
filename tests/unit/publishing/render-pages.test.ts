@@ -79,8 +79,6 @@ describe("bounded ordered page rendering", () => {
     let maximumActive = 0;
     const iterator = renderPages({
       book,
-      headingHref: (blockId) => `/${blockId}`,
-      publishedResourceUrl: (resourceId) => `/assets/${resourceId}`,
       renderPage: async ({ page }) => {
         started.push(page.pageId);
         active += 1;
@@ -160,8 +158,6 @@ describe("bounded ordered page rendering", () => {
     const renderPage = vi.fn();
     const iterator = renderPages({
       book: fixture(),
-      headingHref: (blockId) => `/${blockId}`,
-      publishedResourceUrl: (resourceId) => `/assets/${resourceId}`,
       renderPage,
       resourceResolution: { diagnostics: [], references: [], resources: [] },
       signal: controller.signal,

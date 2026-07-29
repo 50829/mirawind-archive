@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 import type { BookVersionPresentation } from "@/modules/catalog/application/public";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
-import type { SearchSpool } from "@/modules/publishing/adapters/filesystem/search-spool";
+import type { SearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { SearchIndexRepository } from "@/modules/publishing/adapters/sqlite/search-index";
 import type {
   BookVersionRecord,

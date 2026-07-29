@@ -4,7 +4,7 @@ import type {
   SearchFtsRow,
   SearchShortRow,
   SearchSpool,
-} from "@/modules/publishing/adapters/filesystem/search-spool";
+} from "@/modules/publishing/core/publication/search-model";
 
 function requireSequentialOrdinals(
   rows: readonly { readonly ordinal: number }[],

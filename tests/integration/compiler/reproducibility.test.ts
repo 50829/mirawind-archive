@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import { buildSearchSpool } from "@/modules/publishing/adapters/filesystem/search-spool";
+import { buildSearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import {
   pageBlockIds,

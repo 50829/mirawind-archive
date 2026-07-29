@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type Database from "better-sqlite3";
 
-import type { SearchSpool } from "@/modules/publishing/adapters/filesystem/search-spool";
+import type { SearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";

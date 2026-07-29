@@ -112,7 +112,7 @@ single-book regression.
 - [x] T038 [P] [US1] Add page-plan range coverage, heading/page lookup and no-page-AST-copy tests in `tests/unit/publishing/compiled-book.test.ts`
 - [x] T039 [P] [US1] Add ordered four-page backpressure, bounded retention, deterministic diagnostics and cancellation tests in `tests/unit/publishing/render-pages.test.ts`
 - [x] T040 [P] [US1] Add strict `BuildCandidateCommand` and bounded `CandidateBuildArtifact` contract tests in `tests/contract/build-candidate-protocol.test.ts`
-- [ ] T041 [P] [US1] Add candidate preview auth, sandbox resource, cache/noindex and semantic-page integration tests in `tests/integration/publication/candidate-preview.test.ts`
+- [x] T041 [P] [US1] Add candidate preview auth, sandbox resource, cache/noindex and semantic-page integration tests in `tests/integration/publication/candidate-preview.test.ts`
 
 ### Implementation for User Story 1
 
@@ -123,7 +123,7 @@ single-book regression.
 - [x] T046 [US1] Represent pagination only as ordered `PagePlan` block intervals and IDs in `src/modules/publishing/core/publication/compiled-book.ts`
 - [x] T047 [US1] Replace pagination, outline, structure-proposal and manifest lookup rescans with the shared internal indexes in `src/modules/publishing/core/preparation/structure-proposal.ts`, `src/modules/publishing/core/publication/compile-book.ts` and `src/modules/publishing/core/publication/manifest.ts`
 - [x] T048 [US1] Implement the ordered at-most-four-page async generator with cancellation probes in `src/modules/publishing/core/publication/render-pages.ts`
-- [ ] T049 [US1] Materialize preview/public ReaderShell policies and incremental search/manifest spools from each route-neutral page in `src/modules/publishing/adapters/reader-html/candidate-materializer.ts`
+- [x] T049 [US1] Materialize preview/public ReaderShell policies and incremental search/manifest spools from each route-neutral page in `src/modules/publishing/adapters/reader-html/candidate-materializer.ts`
 - [ ] T050 [US1] Implement strict command/artifact types and validators in `src/modules/publishing/application/commands/build-candidate.ts` and `src/entrypoints/worker/protocol.ts`
 - [ ] T051 [US1] Implement the isolated child candidate builder and stage telemetry in `src/entrypoints/worker/handlers/build-candidate.ts`
 - [ ] T052 [US1] Add bounded current-candidate fields to draft queries and workbench DTOs in `src/modules/publishing/application/queries/get-draft.ts` and `src/web/contracts/publishing.ts`
@@ -145,6 +145,14 @@ fifteen real books is 15/15 reference-v2 exact; this run also added a regression
 explicit body role when a nested chapter follows appendix material inside a part. Pagination now
 finds first headings without page slices and manifest resource IDs use one position index instead of
 rescanning every reference for every block.
+
+Candidate page materialization now renders each page once with validated logical heading/resource
+tokens, rewrites only parsed HTML URL attributes, and emits preview/public ReaderShell documents
+from the same route-neutral body. Page bodies remain disk-backed until the shared renderer CSS is
+known, then are read and released one at a time. Manifest page records and search rows are buffered
+to incremental NDJSON spools; integration evidence compares every emitted search row with the
+existing canonical spool and verifies preview authorization signing, private no-store/noindex
+policy, disabled public-only capabilities, semantic-page parity and temporary-body cleanup.
 
 **Checkpoint**: Candidate core is reference-exact and measurably linear but is not yet a second
 user-selectable runtime path. Do not commit the cutover until US2 removes both old job kinds.

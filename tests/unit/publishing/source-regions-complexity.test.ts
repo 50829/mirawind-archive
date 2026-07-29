@@ -38,7 +38,7 @@ describe("source-region compilation complexity", () => {
 
   it("keeps fourfold input growth below the sixfold scale gate", () => {
     const measurements = [500, 1_000, 2_000, 4_000].map((rootCount) =>
-      runSourceRegionCase(rootCount, 3),
+      runSourceRegionCase(rootCount, 11),
     );
 
     expect(evaluateSourceRegionScale(measurements)).toMatchObject({
