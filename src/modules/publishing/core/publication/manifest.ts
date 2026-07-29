@@ -4,13 +4,14 @@ import type {
   ResourceReference,
   ResolvedResource,
 } from "@/modules/publishing/core/publication/resource-model";
+import type { CompiledBook } from "@/modules/publishing/core/publication/compiled-book";
+import {
+  pageBlockIds,
+  pageMetadata,
+  pageOutputPath,
+} from "@/modules/publishing/core/publication/compiled-book";
 import { validateDocumentManifest } from "@/modules/publishing/core/publication/document-manifest-schema";
-import type {
-  NormalizedDocument,
-  TransientDocumentNode,
-} from "@/modules/publishing/core/preparation/document-model";
-import type { NumberedHeading } from "@/modules/publishing/core/publication/numbering";
-import type { CompiledDocumentPage } from "@/modules/publishing/core/publication/pages";
+import type { TransientDocumentNode } from "@/modules/publishing/core/preparation/document-model";
 
 export const compilerIdentity = Object.freeze({
   name: "mirawind-book-compiler" as const,
@@ -103,29 +104,22 @@ function resourceIdsFor(
 
 export function buildDocumentManifest(input: {
   readonly bookId: number;
+  readonly book: CompiledBook;
   readonly configRevision: number;
   readonly createdAt: string;
-  readonly document: NormalizedDocument;
-  readonly headings: readonly NumberedHeading[];
   readonly mainMarkdownOutputPath: string;
-  readonly pages: readonly CompiledDocumentPage[];
   readonly resourceReferences: readonly ResourceReference[];
   readonly resources: readonly ManifestResource[];
   readonly sourceFiles: readonly ManifestSourceFile[];
   readonly versionId: string;
 }): Readonly<Record<string, unknown>> {
-  const pageByBlockId = new Map(
-    input.pages.flatMap((page) =>
-      page.blockIds.map((blockId) => [blockId, page.pageId] as const),
-    ),
-  );
   const blocks = Object.fromEntries(
-    input.document.blocks.map((block) => {
+    input.book.document.blocks.map((block) => {
       if (!block.blockId || !block.position) {
         throw new Error("MANIFEST_BLOCK_ID_OR_POSITION_MISSING");
       }
       const kind = kindByNodeType[block.type];
-      const pageId = pageByBlockId.get(block.blockId);
+      const pageId = input.book.pageByBlockId.get(block.blockId)?.pageId;
       if (!kind || !pageId) throw new Error("MANIFEST_BLOCK_UNSUPPORTED");
       return [
         block.blockId,
@@ -154,23 +148,23 @@ export function buildDocumentManifest(input: {
       ];
     }),
   );
-  const headings = new Map(
-    input.headings.map((heading) => [heading.block_id, heading]),
-  );
   const manifest = {
     blocks,
     book_id: input.bookId,
     compiler: compilerIdentity,
     config_revision: input.configRevision,
     created_at: input.createdAt,
-    pages: input.pages.map((page) => ({
-      ...(page.alias ? { alias: page.alias } : {}),
-      block_ids: page.blockIds,
-      first_block_id: page.firstBlockId,
-      output_path: page.outputPath,
-      page_id: page.pageId,
-      title: page.title,
-    })),
+    pages: input.book.pages.map((page) => {
+      const metadata = pageMetadata(input.book, page);
+      return {
+        ...(metadata.alias ? { alias: metadata.alias } : {}),
+        block_ids: pageBlockIds(input.book, page),
+        first_block_id: page.firstBlockId,
+        output_path: pageOutputPath(page),
+        page_id: page.pageId,
+        title: metadata.title,
+      };
+    }),
     resources: Object.fromEntries(
       [...input.resources]
         .sort((left, right) =>
@@ -193,12 +187,16 @@ export function buildDocumentManifest(input: {
     source_files: [...input.sourceFiles].sort((left, right) =>
       Buffer.from(left.path).compare(Buffer.from(right.path)),
     ),
-    toc: input.headings
+    toc: input.book.headings
       .filter((heading) => heading.include_in_toc)
       .map((heading) => {
-        const pageId = pageByBlockId.get(heading.block_id);
+        const pageId = input.book.pageByHeadingId.get(heading.block_id)?.pageId;
         const block = blocks[heading.block_id];
-        if (!pageId || !block || !headings.has(heading.block_id)) {
+        if (
+          !pageId ||
+          !block ||
+          !input.book.headingByBlockId.has(heading.block_id)
+        ) {
           throw new Error("MANIFEST_TOC_REFERENCE_MISSING");
         }
         return {

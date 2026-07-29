@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
-import { prepareConfiguredDocument } from "@/modules/publishing/core/publication/configured-document";
+import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import {
   buildDocumentManifest,
   canonicalJson,
@@ -76,12 +76,12 @@ describe("configured document preparation", () => {
     });
     const configSha256 = sha256(stringify(config, { lineWidth: 0 }));
 
-    const configured = prepareConfiguredDocument({
+    const configured = compileBook({
       config,
       configSha256,
       markdownBytes: markdown,
     });
-    const repeated = prepareConfiguredDocument({
+    const repeated = compileBook({
       config,
       configSha256,
       markdownBytes: markdown,
@@ -121,13 +121,11 @@ describe("configured document preparation", () => {
     });
 
     const manifest = buildDocumentManifest({
+      book: configured,
       bookId: 1,
       configRevision: 2,
       createdAt: "2026-07-25T00:00:00.000Z",
-      document: configured.document,
-      headings: configured.headings,
       mainMarkdownOutputPath: "source/book.md",
-      pages: configured.pages,
       resourceReferences: [],
       resources: [],
       sourceFiles: [
@@ -141,10 +139,8 @@ describe("configured document preparation", () => {
     });
     const search = buildSearchSpool({
       authors: [],
+      book: configured,
       bookId: 1,
-      document: configured.document,
-      headings: configured.headings,
-      pages: configured.pages,
       title: "机器学习",
       versionId: "ver_abcdefghijklmnop",
     });

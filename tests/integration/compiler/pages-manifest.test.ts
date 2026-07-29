@@ -6,11 +6,15 @@ import {
   buildDocumentManifest,
   canonicalJson,
 } from "@/modules/publishing/core/publication/manifest";
+import { compileBook } from "@/modules/publishing/core/publication/compile-book";
+import {
+  documentForPage,
+  pageBlockIds,
+  pageMetadata,
+  pageOutputPath,
+} from "@/modules/publishing/core/publication/compiled-book";
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { numberConfiguredHeadings } from "@/modules/publishing/core/publication/numbering";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
-import { splitDocumentPages } from "@/modules/publishing/core/publication/pages";
-import { validateDocumentConfig } from "@/modules/publishing/core/publication/validate-config";
 import { renderSemanticDocument } from "@/modules/publishing/core/publication/render-document";
 
 const versionId = "ver_pages_manifest_test_0001";
@@ -79,49 +83,49 @@ function fixture() {
     structure: structures,
     title: "Test Book",
   };
-  const validated = validateDocumentConfig({ config, document });
-  const headings = numberConfiguredHeadings(validated.headings, "normalized");
-  const pages = splitDocumentPages({
-    bookTitle: "Test Book",
-    document,
-    headings,
+  const book = compileBook({
+    config,
+    configSha256: createHash("sha256")
+      .update(JSON.stringify(config))
+      .digest("hex"),
+    markdownBytes: source,
   });
-  return { document, headings, pages, source };
+  return { book, source };
 }
 
 describe("deterministic publication pages and manifest", () => {
   it("splits only at configured headings and applies role-aware numbering", () => {
-    const { headings, pages } = fixture();
+    const { book } = fixture();
 
-    expect(pages).toHaveLength(3);
-    expect(pages.map((page) => page.title)).toEqual([
+    expect(book.pages).toHaveLength(3);
+    expect(book.pages.map((page) => pageMetadata(book, page).title)).toEqual([
       "Introduction",
       "Chapter",
       "Appendix",
     ]);
-    expect(pages.map((page) => page.outputPath)).toEqual([
+    expect(book.pages.map(pageOutputPath)).toEqual([
       "published/pages/1.html",
       "published/pages/2.html",
       "published/pages/3.html",
     ]);
-    expect(headings.map((heading) => heading.number)).toEqual([
+    expect(book.headings.map((heading) => heading.number)).toEqual([
       null,
       "1",
       "1.1",
       "A",
     ]);
-    expect(new Set(pages.flatMap((page) => page.blockIds)).size).toBe(
-      pages.flatMap((page) => page.blockIds).length,
-    );
+    expect(
+      new Set(book.pages.flatMap((page) => pageBlockIds(book, page))).size,
+    ).toBe(book.pages.flatMap((page) => pageBlockIds(book, page)).length);
   });
 
   it("renders each page and creates a strict closed canonical manifest", async () => {
-    const { document, headings, pages, source } = fixture();
+    const { book, source } = fixture();
     const rendered = await Promise.all(
-      pages.map((page) =>
+      book.pages.map((page) =>
         renderSemanticDocument({
-          document: page.document,
-          headingOverrides: page.headingOverrides,
+          document: documentForPage(book, page),
+          headingOverrides: book.headingOverrides,
           publishedResourceUrl: () => {
             throw new Error("No resource expected");
           },
@@ -137,13 +141,11 @@ describe("deterministic publication pages and manifest", () => {
     expect(rendered[1]?.html).toContain("Details");
 
     const manifest = buildDocumentManifest({
+      book,
       bookId: 1,
       configRevision: 2,
       createdAt: "2026-07-24T00:00:00.000Z",
-      document,
-      headings,
       mainMarkdownOutputPath: "source/book.md",
-      pages,
       resourceReferences: [],
       resources: [],
       sourceFiles: [

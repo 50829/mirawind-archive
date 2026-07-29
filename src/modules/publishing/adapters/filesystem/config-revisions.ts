@@ -9,7 +9,7 @@ import {
   parsePrintedContentsAnalysisV2,
   type PrintedContentsAnalysisV2,
 } from "@/modules/publishing/core/preparation/printed-contents-analysis";
-import { prepareConfiguredDocument } from "@/modules/publishing/core/publication/configured-document";
+import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
@@ -362,7 +362,7 @@ export async function replaceDraftConfig(input: {
     );
   }
   const yamlSha256 = createHash("sha256").update(yaml).digest("hex");
-  prepareConfiguredDocument({
+  compileBook({
     config: next,
     configSha256: yamlSha256,
     markdownBytes,

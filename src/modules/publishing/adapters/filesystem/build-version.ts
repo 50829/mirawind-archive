@@ -11,7 +11,7 @@ import {
 } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
-import { prepareConfiguredDocument } from "@/modules/publishing/core/publication/configured-document";
+import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import {
   buildDocumentManifest,
   canonicalJson,
@@ -238,7 +238,7 @@ export async function buildImmutableVersion(input: {
     });
     recordPipelineProfileMetrics({ markdown_bytes: markdownBytes.byteLength });
     const configured = await profilePipelineStage("configured_document", () =>
-      prepareConfiguredDocument({
+      compileBook({
         config,
         configSha256: sha256(configYaml),
         markdownBytes,
@@ -343,8 +343,8 @@ export async function buildImmutableVersion(input: {
 
     await materializeVersionPages({
       bookId: input.bookId,
+      compiled: configured,
       config,
-      configured,
       originalFiles,
       resourceResolution,
       versionDirectory,
@@ -356,13 +356,11 @@ export async function buildImmutableVersion(input: {
       "manifest_build",
       async () => {
         const manifest = buildDocumentManifest({
+          book: configured,
           bookId: input.bookId,
           configRevision: input.configRevision,
           createdAt,
-          document,
-          headings,
           mainMarkdownOutputPath: `source/${mainMarkdownRelativePath}`,
-          pages,
           resourceReferences: resourceResolution.references,
           resources: manifestResources,
           sourceFiles,
@@ -388,10 +386,8 @@ export async function buildImmutableVersion(input: {
     const searchSpool = await profilePipelineStage("search_build", async () => {
       const spool = buildSearchSpool({
         authors,
+        book: configured,
         bookId: input.bookId,
-        document,
-        headings,
-        pages,
         title: String(config.title),
         versionId: input.versionId,
       });

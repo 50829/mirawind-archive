@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { prepareConfiguredDocument } from "@/modules/publishing/core/publication/configured-document";
+import { compileBook } from "@/modules/publishing/core/publication/compile-book";
+import { pageMetadata } from "@/modules/publishing/core/publication/compiled-book";
 import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
 import type {
   ConfirmedSourceRegion,
@@ -86,7 +87,7 @@ export async function buildPreview(input: {
     recordPipelineProfileMetrics({ markdown_bytes: markdownBytes.byteLength });
     const preparationDiagnostics = printedContentsDiagnostics(analysis);
     const configured = await profilePipelineStage("configured_document", () =>
-      prepareConfiguredDocument({
+      compileBook({
         config,
         configSha256: createHash("sha256").update(configYaml).digest("hex"),
         markdownBytes,
@@ -126,9 +127,9 @@ export async function buildPreview(input: {
     });
     const { diagnostics, pageByHeading } = await renderPreviewPages({
       bookId: input.bookId,
+      compiled: configured,
       config,
       configRevision: input.configRevision,
-      configured,
       preparationDiagnostics,
       previewDirectory,
       resolution,
@@ -186,7 +187,7 @@ export async function buildPreview(input: {
         })),
         pages: configured.pages.map((page) => ({
           page_id: page.pageId,
-          title: page.title,
+          title: pageMetadata(configured, page).title,
         })),
         renderer_version: configured.identity.renderer_version,
         semantic_digest: configured.identity.semantic_digest,

@@ -1,15 +1,21 @@
+import { createHash } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
 import { buildSearchSpool } from "@/modules/publishing/adapters/filesystem/search-spool";
+import { compileBook } from "@/modules/publishing/core/publication/compile-book";
+import {
+  pageBlockIds,
+  pageMetadata,
+  pageOutputPath,
+} from "@/modules/publishing/core/publication/compiled-book";
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { numberConfiguredHeadings } from "@/modules/publishing/core/publication/numbering";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
-import { splitDocumentPages } from "@/modules/publishing/core/publication/pages";
-import { validateDocumentConfig } from "@/modules/publishing/core/publication/validate-config";
 
 describe("same-version derived-data reproducibility", () => {
   it("produces identical page and search rows from unchanged normalized content", () => {
     const source = "# Cafe\u0301\n\n中文正文";
+    const sourceSha256 = createHash("sha256").update(source).digest("hex");
     const create = () => {
       let ordinal = 0;
       const document = normalizeDocumentBlocks(parseMarkdownDocument(source), {
@@ -26,12 +32,12 @@ describe("same-version derived-data reproducibility", () => {
         schema_version: 3,
         source: {
           main_markdown: "book.md",
-          main_markdown_sha256: "a".repeat(64),
+          main_markdown_sha256: sourceSha256,
           original_files: [],
           preprocessing: {
             typography: {
-              input_sha256: "a".repeat(64),
-              output_sha256: "a".repeat(64),
+              input_sha256: sourceSha256,
+              output_sha256: sourceSha256,
               profile: "verbatim-v1",
               protected_nodes: 0,
               punctuation_converted: 0,
@@ -51,28 +57,24 @@ describe("same-version derived-data reproducibility", () => {
         ],
         title: "Café",
       };
-      const headings = numberConfiguredHeadings(
-        validateDocumentConfig({ config, document }).headings,
-        "normalized",
-      );
-      const pages = splitDocumentPages({
-        bookTitle: "Café",
-        document,
-        headings,
+      const book = compileBook({
+        config,
+        configSha256: createHash("sha256")
+          .update(JSON.stringify(config))
+          .digest("hex"),
+        markdownBytes: source,
       });
       return {
-        pages: pages.map((page) => ({
-          blockIds: page.blockIds,
-          outputPath: page.outputPath,
+        pages: book.pages.map((page) => ({
+          blockIds: pageBlockIds(book, page),
+          outputPath: pageOutputPath(page),
           pageId: page.pageId,
-          title: page.title,
+          title: pageMetadata(book, page).title,
         })),
         spool: buildSearchSpool({
           authors: ["A\u0301uthor"],
+          book,
           bookId: 1,
-          document,
-          headings,
-          pages,
           title: "Cafe\u0301",
           versionId: "ver_reproducibility_test_0001",
         }),

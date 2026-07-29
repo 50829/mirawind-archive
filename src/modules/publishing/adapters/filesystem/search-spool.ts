@@ -1,9 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
-import type { NormalizedDocument } from "@/modules/publishing/core/preparation/document-model";
-import type { NumberedHeading } from "@/modules/publishing/core/publication/numbering";
-import type { CompiledDocumentPage } from "@/modules/publishing/core/publication/pages";
+import type { CompiledBook } from "@/modules/publishing/core/publication/compiled-book";
 import { atomicWriteFile } from "@/platform/filesystem/layout";
 
 export interface SearchFtsRow {
@@ -42,34 +40,24 @@ function normalize(value: string): string {
 
 export function buildSearchSpool(input: {
   readonly authors: readonly string[];
+  readonly book: CompiledBook;
   readonly bookId: number;
-  readonly document: NormalizedDocument;
-  readonly headings: readonly NumberedHeading[];
-  readonly pages: readonly CompiledDocumentPage[];
   readonly title: string;
   readonly versionId: string;
 }): SearchSpool {
-  const pageByBlockId = new Map(
-    input.pages.flatMap((page) =>
-      page.blockIds.map((blockId) => [blockId, page.pageId] as const),
-    ),
-  );
-  const configuredHeading = new Map(
-    input.headings.map((heading) => [heading.block_id, heading]),
-  );
   const authors = normalize(input.authors.join("\n"));
   const title = normalize(input.title);
   let currentHeading = "";
   const ftsRows: SearchFtsRow[] = [];
-  for (const block of input.document.blocks) {
+  for (const block of input.book.document.blocks) {
     if (block.type === "heading" && block.blockId) {
       currentHeading =
-        configuredHeading.get(block.blockId)?.display_title ??
+        input.book.headingByBlockId.get(block.blockId)?.display_title ??
         block.visibleText ??
         "";
     }
     if (!block.blockId || !(block.visibleText ?? "").trim()) continue;
-    const pageId = pageByBlockId.get(block.blockId);
+    const pageId = input.book.pageByBlockId.get(block.blockId)?.pageId;
     if (!pageId) throw new Error("SEARCH_BLOCK_PAGE_MISSING");
     ftsRows.push(
       Object.freeze({
@@ -113,8 +101,8 @@ export function buildSearchSpool(input: {
       }),
     );
   }
-  for (const heading of input.headings) {
-    const pageId = pageByBlockId.get(heading.block_id);
+  for (const heading of input.book.headings) {
+    const pageId = input.book.pageByHeadingId.get(heading.block_id)?.pageId;
     if (!pageId) throw new Error("SEARCH_HEADING_PAGE_MISSING");
     shortRows.push(
       Object.freeze({

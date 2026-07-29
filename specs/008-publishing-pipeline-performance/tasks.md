@@ -107,27 +107,37 @@ single-book regression.
 
 ### Tests for User Story 1
 
-- [ ] T036 [P] [US1] Add 500/1,000/2,000/4,000 root source-region complexity and exact-output tests in `tests/unit/publishing/source-regions-complexity.test.ts`
-- [ ] T037 [P] [US1] Add typography single-pass, protected-byte and diagnostic-offset regression tests in `tests/unit/publishing/typography-builder.test.ts`
-- [ ] T038 [P] [US1] Add page-plan range coverage, heading/page lookup and no-page-AST-copy tests in `tests/unit/publishing/compiled-book.test.ts`
-- [ ] T039 [P] [US1] Add ordered four-page backpressure, bounded retention, deterministic diagnostics and cancellation tests in `tests/unit/publishing/render-pages.test.ts`
-- [ ] T040 [P] [US1] Add strict `BuildCandidateCommand` and bounded `CandidateBuildArtifact` contract tests in `tests/contract/build-candidate-protocol.test.ts`
+- [x] T036 [P] [US1] Add 500/1,000/2,000/4,000 root source-region complexity and exact-output tests in `tests/unit/publishing/source-regions-complexity.test.ts`
+- [x] T037 [P] [US1] Add typography single-pass, protected-byte and diagnostic-offset regression tests in `tests/unit/publishing/typography-builder.test.ts`
+- [x] T038 [P] [US1] Add page-plan range coverage, heading/page lookup and no-page-AST-copy tests in `tests/unit/publishing/compiled-book.test.ts`
+- [x] T039 [P] [US1] Add ordered four-page backpressure, bounded retention, deterministic diagnostics and cancellation tests in `tests/unit/publishing/render-pages.test.ts`
+- [x] T040 [P] [US1] Add strict `BuildCandidateCommand` and bounded `CandidateBuildArtifact` contract tests in `tests/contract/build-candidate-protocol.test.ts`
 - [ ] T041 [P] [US1] Add candidate preview auth, sandbox resource, cache/noindex and semantic-page integration tests in `tests/integration/publication/candidate-preview.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T042 [US1] Replace repeated UTF-16-prefix conversions with one internal UTF-8 offset index in `src/modules/publishing/core/publication/source-text-index.ts`
-- [ ] T043 [US1] Linearize source-region exclusion and block mapping with ordered interval traversal in `src/modules/publishing/core/publication/source-regions.ts`
-- [ ] T044 [US1] Apply typography edits and byte diagnostics through one output builder pass in `src/modules/publishing/core/preparation/typography.ts`
-- [ ] T045 [US1] Build heading, block, range, page and resource maps once inside `compileBook()` in `src/modules/publishing/core/publication/compile-book.ts`
-- [ ] T046 [US1] Represent pagination only as ordered `PagePlan` block intervals and IDs in `src/modules/publishing/core/publication/compiled-book.ts`
+- [x] T042 [US1] Replace repeated UTF-16-prefix conversions with one internal UTF-8 offset index in `src/modules/publishing/core/preparation/source-text-index.ts`
+- [x] T043 [US1] Linearize source-region exclusion and block mapping with ordered interval traversal in `src/modules/publishing/core/preparation/source-regions.ts`
+- [x] T044 [US1] Apply typography edits and byte diagnostics through one output builder pass in `src/modules/publishing/core/preparation/typography.ts`
+- [x] T045 [US1] Build heading, block, range and page maps once inside `compileBook()` in `src/modules/publishing/core/publication/compile-book.ts`
+- [x] T046 [US1] Represent pagination only as ordered `PagePlan` block intervals and IDs in `src/modules/publishing/core/publication/compiled-book.ts`
 - [ ] T047 [US1] Replace pagination, outline, structure-proposal and manifest lookup rescans with the shared internal indexes in `src/modules/publishing/core/preparation/structure-proposal.ts` and `src/modules/publishing/core/publication/page-plans.ts`
-- [ ] T048 [US1] Implement the ordered at-most-four-page async generator with cancellation probes in `src/modules/publishing/core/publication/render-pages.ts`
+- [x] T048 [US1] Implement the ordered at-most-four-page async generator with cancellation probes in `src/modules/publishing/core/publication/render-pages.ts`
 - [ ] T049 [US1] Materialize preview/public ReaderShell policies and incremental search/manifest spools from each route-neutral page in `src/modules/publishing/adapters/reader-html/candidate-materializer.ts`
 - [ ] T050 [US1] Implement strict command/artifact types and validators in `src/modules/publishing/application/commands/build-candidate.ts` and `src/entrypoints/worker/protocol.ts`
 - [ ] T051 [US1] Implement the isolated child candidate builder and stage telemetry in `src/entrypoints/worker/handlers/build-candidate.ts`
 - [ ] T052 [US1] Add bounded current-candidate fields to draft queries and workbench DTOs in `src/modules/publishing/application/queries/get-draft.ts` and `src/web/contracts/publishing.ts`
 - [ ] T053 [US1] Run microbenchmarks and fifteen reference comparisons, then record pre-cutover compilation evidence in `docs/audits/008-compilation-performance.md`
+
+Phase 4 linearization checkpoint evidence: source-region 1,000/4,000-root medians changed from
+19.08/298.46 ms (15.64x) to 0.94/2.19 ms (2.34x). The typography 4,000-paragraph median changed
+from approximately 411 ms to 146 ms and its 1,000-to-4,000 growth is 3.44x. Range-only page plans,
+whole-book lookup maps and ordered four-page rendering are active in both existing preview and
+publication builds; the old configured-document/page-copy implementation is deleted. Format, lint,
+typecheck, 660 Vitest tests, architecture checks and the production build pass. All fifteen local
+ZIP bindings pass hash/size preflight and the frozen observed-v2 set remains 15/15 reference exact.
+This does not replace T053: candidate-code fifteen-book compilation and paired AB/BA/AB evidence are
+still required after a committed checkpoint.
 
 **Checkpoint**: Candidate core is reference-exact and measurably linear but is not yet a second
 user-selectable runtime path. Do not commit the cutover until US2 removes both old job kinds.

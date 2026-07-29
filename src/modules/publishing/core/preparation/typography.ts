@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
 import type {
   TransientDocumentNode,
   TypographyProfile,
@@ -657,6 +658,7 @@ function preprocessBody(source: string): {
   readonly spacesNormalized: number;
 } {
   const document = parseMarkdownDocument(source);
+  const sourceIndex = new SourceTextIndex(source);
   const leaves: InlineLeaf[] = [];
   let protectedNodes = 0;
   for (const block of document.root.children ?? []) {
@@ -686,10 +688,10 @@ function preprocessBody(source: string): {
     riskSummaries.push(
       Object.freeze({
         code,
-        end_byte: Buffer.byteLength(source.slice(0, input.end), "utf8"),
+        end_byte: sourceIndex.byteOffsetAt(input.end),
         punctuation_converted: clampCounter(input.punctuationConverted),
         spaces_normalized: clampCounter(input.spacesNormalized),
-        start_byte: Buffer.byteLength(source.slice(0, input.start), "utf8"),
+        start_byte: sourceIndex.byteOffsetAt(input.start),
       }),
     );
   };
@@ -777,15 +779,25 @@ function preprocessBody(source: string): {
     replacements.push({ end: start, start, value });
   }
   replacements.sort(
-    (left, right) => right.start - left.start || right.end - left.end,
+    (left, right) => left.start - right.start || left.end - right.end,
   );
-  let markdown = source;
+  const output: string[] = [];
+  let sourceCursor = 0;
   for (const replacement of replacements) {
-    markdown =
-      markdown.slice(0, replacement.start) +
-      replacement.value +
-      markdown.slice(replacement.end);
+    if (
+      replacement.start < sourceCursor ||
+      replacement.end < replacement.start
+    ) {
+      throw new Error("TYPOGRAPHY_EDIT_OVERLAP");
+    }
+    output.push(
+      source.slice(sourceCursor, replacement.start),
+      replacement.value,
+    );
+    sourceCursor = replacement.end;
   }
+  output.push(source.slice(sourceCursor));
+  const markdown = output.join("");
   return Object.freeze({
     markdown,
     protectedNodes: clampCounter(protectedNodes),

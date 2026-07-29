@@ -9,7 +9,8 @@ import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/n
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
 import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
-import { prepareConfiguredDocument } from "@/modules/publishing/core/publication/configured-document";
+import { compileBook } from "@/modules/publishing/core/publication/compile-book";
+import { pageMetadata } from "@/modules/publishing/core/publication/compiled-book";
 import { buildDocumentManifest } from "@/modules/publishing/core/publication/manifest";
 import {
   buildReaderNavigationTree,
@@ -75,19 +76,17 @@ describe("behavior-preserving architecture boundaries", () => {
       title: "Architecture Contract",
     });
     const configSha256 = sha256(stringify(config, { lineWidth: 0 }));
-    const configured = prepareConfiguredDocument({
+    const configured = compileBook({
       config,
       configSha256,
       markdownBytes: markdown,
     });
     const manifest = buildDocumentManifest({
+      book: configured,
       bookId: 7,
       configRevision: 3,
       createdAt: "2026-07-30T00:00:00.000Z",
-      document: configured.document,
-      headings: configured.headings,
       mainMarkdownOutputPath: "source/main.md",
-      pages: configured.pages,
       resourceReferences: [],
       resources: [],
       sourceFiles: [
@@ -105,9 +104,7 @@ describe("behavior-preserving architecture boundaries", () => {
       documentManifest: manifest,
     });
     const toc = configured.headings.map((heading) => {
-      const page = configured.pages.find((candidate) =>
-        candidate.blockIds.includes(heading.block_id),
-      );
+      const page = configured.pageByHeadingId.get(heading.block_id);
       if (!page) throw new Error("HEADING_PAGE_MISSING");
       return {
         blockId: heading.block_id,
@@ -172,7 +169,7 @@ describe("behavior-preserving architecture boundaries", () => {
         pages: configured.pages.map((page) => ({
           firstBlockId: page.firstBlockId,
           id: page.pageId,
-          title: page.title,
+          title: pageMetadata(configured, page).title,
         })),
         renderer: configured.identity.renderer_version,
       },

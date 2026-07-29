@@ -7,6 +7,7 @@ import type {
   TransientDocumentNode,
   Utf8ByteRange,
 } from "@/modules/publishing/core/preparation/document-model";
+import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
 
 export interface SourceRegionDiagnostic {
   readonly code:
@@ -57,24 +58,17 @@ function hash(bytes: Uint8Array): string {
 }
 
 export function utf8ByteOffset(source: string, sourceOffset: number): number {
-  if (
-    !Number.isInteger(sourceOffset) ||
-    sourceOffset < 0 ||
-    sourceOffset > source.length
-  ) {
-    throw new RangeError("Source offset is outside the Markdown");
-  }
-  return Buffer.byteLength(source.slice(0, sourceOffset), "utf8");
+  return new SourceTextIndex(source).byteOffsetAt(sourceOffset);
 }
 
 function byteRangeForNode(
-  source: string,
+  sourceIndex: SourceTextIndex,
   node: TransientDocumentNode,
 ): { readonly end: number; readonly start: number } | undefined {
   if (!node.position) return undefined;
   return Object.freeze({
-    end: utf8ByteOffset(source, node.position.end.offset),
-    start: utf8ByteOffset(source, node.position.start.offset),
+    end: sourceIndex.byteOffsetAt(node.position.end.offset),
+    start: sourceIndex.byteOffsetAt(node.position.start.offset),
   });
 }
 
@@ -151,6 +145,7 @@ export function applySourceRegions(input: {
 }): AppliedSourceRegions {
   const diagnostics: SourceRegionDiagnostic[] = [];
   const sourceBytes = Buffer.from(input.document.source, "utf8");
+  const sourceIndex = new SourceTextIndex(input.document.source);
   if (hash(sourceBytes) !== input.mainMarkdownSha256) {
     diagnostics.push(
       diagnostic(
@@ -161,9 +156,20 @@ export function applySourceRegions(input: {
   }
   const children = input.document.root.children ?? [];
   const rootRanges = children.map((child) =>
-    byteRangeForNode(input.document.source, child),
+    byteRangeForNode(sourceIndex, child),
   );
+  const rootIndexByStartByte = new Map<number, number>();
+  const rootIndexByEndByte = new Map<number, number>();
+  for (const [rootIndex, range] of rootRanges.entries()) {
+    if (!range) continue;
+    rootIndexByStartByte.set(range.start, rootIndex);
+    rootIndexByEndByte.set(range.end, rootIndex);
+  }
   const excludedRootIndexes = new Set<number>();
+  const excludedCharacterIntervals: {
+    readonly end: number;
+    readonly start: number;
+  }[] = [];
   let previousEnd = -1;
   for (const [regionIndex, region] of input.regions.entries()) {
     const regionPath = `source_regions/${regionIndex}`;
@@ -184,13 +190,13 @@ export function applySourceRegions(input: {
     }
     previousEnd = region.range.end_byte;
 
-    const startIndex = rootRanges.findIndex(
-      (range) => range?.start === region.range.start_byte,
-    );
-    const endIndex = rootRanges.findIndex(
-      (range) => range?.end === region.range.end_byte,
-    );
-    if (startIndex < 0 || endIndex < startIndex) {
+    const startIndex = rootIndexByStartByte.get(region.range.start_byte);
+    const endIndex = rootIndexByEndByte.get(region.range.end_byte);
+    if (
+      startIndex === undefined ||
+      endIndex === undefined ||
+      endIndex < startIndex
+    ) {
       diagnostics.push(
         diagnostic("SOURCE_REGION_AST_BOUNDARY", `${regionPath}/range`),
       );
@@ -200,6 +206,13 @@ export function applySourceRegions(input: {
           diagnostics.push(diagnostic("SOURCE_REGION_OVERLAP", regionPath));
         }
         excludedRootIndexes.add(index);
+      }
+      const startOffset = children[startIndex]?.position?.start.offset;
+      const endOffset = children[endIndex]?.position?.end.offset;
+      if (startOffset !== undefined && endOffset !== undefined) {
+        excludedCharacterIntervals.push(
+          Object.freeze({ end: endOffset, start: startOffset }),
+        );
       }
     }
 
@@ -221,12 +234,13 @@ export function applySourceRegions(input: {
     throw new SourceRegionValidationError("SOURCE_REGION_INVALID", diagnostics);
   }
 
-  const excludedRoots = children.filter((_child, index) =>
-    excludedRootIndexes.has(index),
-  );
-  const activeRoots = children.filter(
-    (_child, index) => !excludedRootIndexes.has(index),
-  );
+  const excludedRoots: TransientDocumentNode[] = [];
+  const activeRoots: TransientDocumentNode[] = [];
+  for (const [rootIndex, root] of children.entries()) {
+    (excludedRootIndexes.has(rootIndex) ? excludedRoots : activeRoots).push(
+      root,
+    );
+  }
   const referenced = referencedIdentifiers(activeRoots);
   const defined = definedIdentifiers(excludedRoots);
   if ([...referenced].some((identifier) => defined.has(identifier))) {
@@ -239,15 +253,20 @@ export function applySourceRegions(input: {
   }
 
   const excludedBlockIds = new Set<string>();
+  let intervalIndex = 0;
   for (const block of input.document.blocks) {
+    const start = block.position?.start.offset;
+    const end = block.position?.end.offset;
+    if (start === undefined || end === undefined) continue;
+    let interval = excludedCharacterIntervals[intervalIndex];
+    while (interval && start >= interval.end) {
+      intervalIndex += 1;
+      interval = excludedCharacterIntervals[intervalIndex];
+    }
     if (
-      excludedRoots.some(
-        (root) =>
-          root.position &&
-          block.position &&
-          block.position.start.offset >= root.position.start.offset &&
-          block.position.end.offset <= root.position.end.offset,
-      ) &&
+      interval &&
+      start >= interval.start &&
+      end <= interval.end &&
       block.blockId
     ) {
       excludedBlockIds.add(block.blockId);

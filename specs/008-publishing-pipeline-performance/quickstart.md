@@ -10,7 +10,7 @@
 Verify the local fixtures before any timed work:
 
 ```sh
-pnpm fixtures:verify-real --real-dir "$PWD/tests/fixtures/mineru/real"
+pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"
 pnpm fixtures:compare-references \
   --reference-dir "$PWD/tests/fixtures/mineru/real/references-v2" \
   --observed-dir "$PWD/tests/fixtures/mineru/real/observed-v2"
