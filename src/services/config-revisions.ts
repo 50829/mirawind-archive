@@ -5,7 +5,12 @@ import { dirname, relative, resolve, sep } from "node:path";
 import type Database from "better-sqlite3";
 import { stringify } from "yaml";
 
+import {
+  parsePrintedContentsAnalysisV2,
+  type PrintedContentsAnalysisV2,
+} from "../compiler/document/printed-contents-analysis.js";
 import { prepareConfiguredDocument } from "../compiler/document/configured-document.js";
+import { canonicalJson } from "../compiler/document/manifest.js";
 import { DraftRepository } from "../db/repositories/drafts.js";
 import { SourceRepository } from "../db/repositories/sources.js";
 import { SafeApplicationError } from "../domain/errors.js";
@@ -21,6 +26,7 @@ import {
 } from "../storage/layout.js";
 
 const maximumConfigBytes = 4 * 1024 * 1024;
+const maximumAnalysisBytes = 4 * 1024 * 1024;
 
 interface ConfigStructureNode {
   readonly block_id: string;
@@ -48,6 +54,60 @@ function sourceConfig(
 
 function equalJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+async function clonePrintedContentsAnalysis(input: {
+  readonly bookId: number;
+  readonly currentRevision: number;
+  readonly layout: StorageLayout;
+  readonly nextRevision: number;
+  readonly sourceId: string;
+  readonly sourceSha256: string;
+}): Promise<string> {
+  const directory = resolve(
+    input.layout.bookDirectory,
+    String(input.bookId),
+    "draft",
+    "analyses",
+    input.sourceId,
+  );
+  let current: PrintedContentsAnalysisV2;
+  try {
+    const bytes = await readFile(
+      resolve(directory, `${input.currentRevision}.json`),
+    );
+    if (bytes.byteLength > maximumAnalysisBytes) {
+      throw new Error("PRINTED_CONTENTS_ANALYSIS_INVALID");
+    }
+    current = parsePrintedContentsAnalysisV2(
+      JSON.parse(bytes.toString("utf8")),
+    );
+  } catch {
+    throw new SafeApplicationError(
+      "DRAFT_ANALYSIS_INVALID",
+      "The draft analysis must be rebuilt before saving changes.",
+      409,
+    );
+  }
+  if (
+    current.config_revision !== input.currentRevision ||
+    current.source_id !== input.sourceId ||
+    current.source_sha256 !== input.sourceSha256
+  ) {
+    throw new SafeApplicationError(
+      "DRAFT_ANALYSIS_INVALID",
+      "The draft analysis must be rebuilt before saving changes.",
+      409,
+    );
+  }
+  const next = parsePrintedContentsAnalysisV2({
+    ...current,
+    config_revision: input.nextRevision,
+  });
+  const nextPath = resolve(directory, `${input.nextRevision}.json`);
+  await atomicWriteFile(nextPath, canonicalJson(next), { mode: 0o600 });
+  await chmod(nextPath, 0o400);
+  return nextPath;
 }
 
 export interface ConfigRevisionUpdate {
@@ -331,6 +391,14 @@ export async function replaceDraftConfig(input: {
   try {
     await atomicWriteFile(yamlPath, yaml, { mode: 0o600 });
     await chmod(yamlPath, 0o400);
+    await clonePrintedContentsAnalysis({
+      bookId: input.bookId,
+      currentRevision: current.revision,
+      layout: input.layout,
+      nextRevision: Number(next.revision),
+      sourceId: book.draftSourceId,
+      sourceSha256: source.mainMarkdownSha256,
+    });
     const selected = drafts.replaceConfigAndQueuePreview({
       alias: typeof next.alias === "string" ? next.alias : null,
       bookId: input.bookId,
@@ -352,6 +420,17 @@ export async function replaceDraftConfig(input: {
     });
   } catch (error) {
     await rm(revisionDirectory, { force: true, recursive: true });
+    await rm(
+      resolve(
+        input.layout.bookDirectory,
+        String(input.bookId),
+        "draft",
+        "analyses",
+        book.draftSourceId,
+        `${next.revision}.json`,
+      ),
+      { force: true },
+    );
     if (
       error instanceof Error &&
       error.message === "CONFIG_REVISION_CONFLICT"

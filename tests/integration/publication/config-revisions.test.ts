@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
+import { printedContentsAnalysisIdentity } from "@/compiler/document/printed-contents-analysis";
 import { DraftRepository } from "@/db/repositories/drafts";
 import { ImportRepository } from "@/db/repositories/imports";
 import { JobRepository } from "@/db/repositories/jobs";
@@ -144,6 +145,31 @@ async function fixture(
   );
   await mkdir(resolve(configPath, ".."), { mode: 0o700, recursive: true });
   await writeFile(configPath, yaml, { mode: 0o400 });
+  const analysisPath = resolve(
+    layout.bookDirectory,
+    String(book.id),
+    "draft",
+    "analyses",
+    source.id,
+    "1.json",
+  );
+  await mkdir(resolve(analysisPath, ".."), { mode: 0o700, recursive: true });
+  await writeFile(
+    analysisPath,
+    JSON.stringify({
+      candidates: [],
+      canonical_region_id: null,
+      config_revision: 1,
+      evidence_diagnostics: [],
+      identity: printedContentsAnalysisIdentity,
+      layout_source: "none",
+      pdf_diagnostics: [],
+      source_id: source.id,
+      source_sha256: markdownHash,
+      typography: { risk_summaries: [], truncated: false },
+    }),
+    { mode: 0o400 },
+  );
   drafts.addConfigRevision({
     bookId: book.id,
     nowMs: 4,
@@ -308,6 +334,22 @@ describe("atomic draft configuration revisions", () => {
         createdByJobId: result.jobId,
         state: "building",
       });
+      const nextAnalysisPath = resolve(
+        dataRoot.layout.bookDirectory,
+        String(setup.book.id),
+        "draft",
+        "analyses",
+        drafts.requireBook(setup.book.id).draftSourceId ?? "missing",
+        "2.json",
+      );
+      expect(
+        JSON.parse(await readFile(nextAnalysisPath, "utf8")),
+      ).toMatchObject({
+        config_revision: 2,
+        identity: printedContentsAnalysisIdentity,
+        source_sha256: setup.markdownHash,
+      });
+      expect((await stat(nextAnalysisPath)).mode & 0o777).toBe(0o400);
       expect(
         await readFile(
           resolve(
@@ -366,6 +408,52 @@ describe("atomic draft configuration revisions", () => {
             "2",
           ),
         ),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    }));
+
+  it("rejects a missing pinned analysis without leaving a new revision", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const setup = await fixture(database, dataRoot.layout);
+      const analysisDirectory = resolve(
+        dataRoot.layout.bookDirectory,
+        String(setup.book.id),
+        "draft",
+        "analyses",
+        "src_config_revision_test_0001",
+      );
+      await rm(resolve(analysisDirectory, "1.json"));
+
+      await expect(
+        replaceDraftConfig({
+          bookId: setup.book.id,
+          config: config({
+            revision: 2,
+            sourceHash: setup.markdownHash,
+            title: "Edited",
+          }),
+          database,
+          expectedEtag: setup.currentEtag,
+          layout: dataRoot.layout,
+          nowMs: 10,
+        }),
+      ).rejects.toMatchObject({ code: "DRAFT_ANALYSIS_INVALID" });
+
+      expect(
+        new DraftRepository(database).requireBook(setup.book.id),
+      ).toMatchObject({ draftConfigRevision: 1, title: "Initial" });
+      await expect(
+        stat(
+          resolve(
+            dataRoot.layout.bookDirectory,
+            String(setup.book.id),
+            "draft",
+            "configs",
+            "2",
+          ),
+        ),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(
+        stat(resolve(analysisDirectory, "2.json")),
       ).rejects.toMatchObject({ code: "ENOENT" });
     }));
 });
