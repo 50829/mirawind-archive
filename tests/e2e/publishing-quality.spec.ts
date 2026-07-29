@@ -5,7 +5,11 @@ import { expect, test, type FrameLocator, type Page } from "@playwright/test";
 import axe from "axe-core";
 import Database from "better-sqlite3";
 
-import { e2eDataRoot, e2eFixtureRoot } from "../helpers/global-setup.js";
+import {
+  e2eDataRoot,
+  e2eFixtureRoot,
+  e2eOrigin,
+} from "../helpers/global-setup.js";
 import { loginAsAdministrator } from "../helpers/e2e-login.js";
 
 const axeSource = axe.source;
@@ -156,7 +160,7 @@ test("closes typography, formula and printed contents preview-to-publication beh
     "cross-origin",
   );
   expect(previewResponse.headers()["content-security-policy"]).toContain(
-    "frame-ancestors http://127.0.0.1:4321",
+    `frame-ancestors ${e2eOrigin}`,
   );
 
   const rendererStylesheet =
