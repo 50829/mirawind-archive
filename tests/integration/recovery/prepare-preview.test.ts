@@ -121,6 +121,7 @@ describe("prepare_draft and build_preview handlers", () => {
           profile: "zh-smart-v1",
         }),
       });
+      expect(prepared.artifact.structure).toHaveLength(9);
       expect(
         Object.keys(prepared.artifact.printedContents[0] ?? {}).sort(),
       ).toEqual([

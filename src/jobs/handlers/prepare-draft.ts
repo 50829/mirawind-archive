@@ -262,7 +262,7 @@ export async function prepareDraft(input: {
           )
         : [],
     );
-    const proposal = proposeDocumentStructure(activeDocument, {
+    const proposal = proposeDocumentStructure(normalized, {
       printedEntries,
       sourceRegions,
     });
