@@ -1588,10 +1588,43 @@ function printedPageLabelInversions(
   return inversions;
 }
 
+function hasSemanticPageLabelRestart(
+  entries: readonly ExtractedEntry[],
+): boolean {
+  let previousIndex: number | undefined;
+  let previousPage: number | undefined;
+  for (const [index, entry] of entries.entries()) {
+    const label = printedPageEvidence(entry.sourceTitle)?.pageLabel;
+    if (!label || !/^\d+$/u.test(label)) continue;
+    const page = Number(label);
+    if (
+      previousIndex !== undefined &&
+      previousPage !== undefined &&
+      page < previousPage &&
+      entries
+        .slice(previousIndex + 1, index + 1)
+        .some((candidate) =>
+          ["appendix", "chapter", "part"].includes(
+            candidate.numbering?.kind ?? "",
+          ),
+        )
+    ) {
+      return true;
+    }
+    previousIndex = index;
+    previousPage = page;
+  }
+  return false;
+}
+
 function reorderFromMonotonicPageLabels(
   entries: readonly ExtractedEntry[],
 ): readonly ExtractedEntry[] {
-  if (entries.length < 20 || printedPageLabelInversions(entries) === 0) {
+  if (
+    entries.length < 20 ||
+    printedPageLabelInversions(entries) === 0 ||
+    hasSemanticPageLabelRestart(entries)
+  ) {
     return entries;
   }
   const pages = entries.map((entry) => {

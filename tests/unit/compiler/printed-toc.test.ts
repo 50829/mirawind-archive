@@ -2248,6 +2248,51 @@ describe("printed contents detection", () => {
     ).toBe(true);
   });
 
+  it("preserves a semantic page-label restart across an appendix part", () => {
+    const markdownEntries = [
+      "PART ONE OVERVIEW",
+      "Chapter 1 Introduction",
+      ...Array.from(
+        { length: 10 },
+        (_, index) => `1.${index + 1} Topic ${index + 1} ...... ${index + 1}`,
+      ),
+      "Further Reading ...... 11",
+      "PART TEN APPENDICES",
+      "Chapter A Systems",
+      ...Array.from(
+        { length: 8 },
+        (_, index) => `A.${index + 1} System ${index + 1} ...... ${index + 1}`,
+      ),
+      "Index ...... 20",
+    ];
+    const source = [
+      "# Contents",
+      "",
+      ...markdownEntries.flatMap((entry) => [`## ${entry}`, ""]),
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: markdownEntries.map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual(markdownEntries);
+  });
+
   it("rejects native page artifacts and orders a chapter before same-page sections", () => {
     const markdownEntries = [
       "第四部分 高级设计和分析技术",
