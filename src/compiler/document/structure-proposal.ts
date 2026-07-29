@@ -101,7 +101,7 @@ function printedEntryTitle(
     .subarray(entry.range.start_byte, entry.range.end_byte)
     .toString("utf8")
     .normalize("NFKC")
-    .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)、]\s*)/u, "")
+    .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|\d+、\s*)/u, "")
     .replace(/\s*(?:\.{2,}|…+|\s{2,})\s*(?:\d+|[ivxlcdm]+)\s*$/iu, "")
     .trim();
 }
@@ -732,6 +732,59 @@ export function proposeDocumentStructure(
       node.starts_page = false;
     }
   }
+
+  const appliedRegionRanges = (options.sourceRegions ?? [])
+    .filter((region) => region.applied)
+    .map((region) => region.range);
+  const activeHeading = (index: number): boolean => {
+    const position = document.headings[index]?.position;
+    if (!position) return true;
+    const startByte = Buffer.byteLength(
+      document.source.slice(0, position.start.offset),
+      "utf8",
+    );
+    const endByte = Buffer.byteLength(
+      document.source.slice(0, position.end.offset),
+      "utf8",
+    );
+    return !appliedRegionRanges.some(
+      (range) => range.start_byte <= startByte && endByte <= range.end_byte,
+    );
+  };
+  let inheritedRole: ContentRole = "body";
+  let previousActiveLevel = 0;
+  for (const [index, node] of nodes.entries()) {
+    if (!activeHeading(index)) continue;
+    if (node.display_level === 1) {
+      inheritedRole = node.role ?? "body";
+    } else if (node.role !== undefined && node.role !== inheritedRole) {
+      node.display_level = 1;
+      node.starts_page = true;
+      inheritedRole = node.role;
+    } else {
+      delete node.role;
+    }
+    if (
+      previousActiveLevel === 0 ||
+      node.display_level > previousActiveLevel + 1
+    ) {
+      node.display_level = previousActiveLevel + 1;
+    }
+    const heading = document.headings[index];
+    const semanticKind = heading
+      ? (printedKinds.get(heading.blockId) ??
+        inferPrintedHeadingEvidence(heading.sourceTitle)?.kind)
+      : undefined;
+    if (
+      node.display_level > 1 &&
+      semanticKind !== "chapter" &&
+      semanticKind !== "appendix"
+    ) {
+      node.starts_page = false;
+    }
+    previousActiveLevel = node.display_level;
+  }
+
   return Object.freeze({
     nodes: Object.freeze(nodes.map((node) => Object.freeze(node))),
   });

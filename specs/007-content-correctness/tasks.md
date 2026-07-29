@@ -100,8 +100,8 @@ share analysis and every diagnostic activates a valid location/recovery without 
 
 ## Phase 10: Verification and convergence
 
-- [ ] T049 Run focused unit, contract, integration and component gates
-- [ ] T050 Run format, lint, typecheck, full tests and production build
+- [x] T049 Run focused unit, contract, integration and component gates
+- [x] T050 Run format, lint, typecheck, full tests and production build
 - [ ] T051 Run separate three-real plus 500-page build benchmark and 300 ms reader p95 gate
 - [ ] T052 Run Spec Kit analyze and converge, append and finish any remaining tasks
 - [ ] T053 Rerun converge with no unmitigated CRITICAL findings and synchronize runtime docs

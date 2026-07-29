@@ -4,6 +4,12 @@ import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
 import { parseMarkdownDocument } from "@/compiler/document/parser";
 import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
 
+function requireAt<T>(values: readonly T[], index: number): T {
+  const value = values[index];
+  if (value === undefined) throw new Error(`expected item at index ${index}`);
+  return value;
+}
+
 describe("default document structure proposal", () => {
   it("keeps cover metadata before numbered chapters out of navigation", () => {
     const document = normalizeDocumentBlocks(
@@ -171,6 +177,7 @@ describe("default document structure proposal", () => {
       "backmatter",
       "body",
     ]);
+    expect(proposal.nodes.map((node) => node.display_level)).toEqual([1, 1]);
   });
 
   it("keeps heading order, closes level gaps and starts only major units on pages", () => {
@@ -364,7 +371,7 @@ describe("default document structure proposal", () => {
       proposeDocumentStructure(document, { sourceRegions }).nodes.map(
         (node) => node.display_level,
       ),
-    ).toEqual([1, 2, 3, 4]);
+    ).toEqual([1, 1, 2, 3]);
   });
 
   it("shifts descendants when a canonical chapter has no body heading", () => {
@@ -413,23 +420,23 @@ describe("default document structure proposal", () => {
         {
           bodyHeadingBlockId: part.blockId,
           referenceLevel: 1,
-          sourceTitle: printed[0]!,
+          sourceTitle: requireAt(printed, 0),
         },
         {
           bodyHeadingBlockId: chapter.blockId,
           referenceLevel: 2,
-          sourceTitle: printed[1]!,
+          sourceTitle: requireAt(printed, 1),
         },
         {
           bodyHeadingBlockId: firstSection.blockId,
           referenceLevel: 3,
-          sourceTitle: printed[2]!,
+          sourceTitle: requireAt(printed, 2),
         },
-        { referenceLevel: 2, sourceTitle: printed[3]! },
+        { referenceLevel: 2, sourceTitle: requireAt(printed, 3) },
         {
           bodyHeadingBlockId: missingChapterSection.blockId,
           referenceLevel: 3,
-          sourceTitle: printed[4]!,
+          sourceTitle: requireAt(printed, 4),
         },
       ],
       sourceRegions: [
@@ -439,31 +446,31 @@ describe("default document structure proposal", () => {
           entries: [
             {
               body_heading_block_id: part.blockId,
-              range: ranges[0]!,
+              range: requireAt(ranges, 0),
               reference_level: 1,
             },
             {
               body_heading_block_id: chapter.blockId,
-              range: ranges[1]!,
+              range: requireAt(ranges, 1),
               reference_level: 2,
             },
             {
               body_heading_block_id: firstSection.blockId,
-              range: ranges[2]!,
+              range: requireAt(ranges, 2),
               reference_level: 3,
             },
-            { range: ranges[3]!, reference_level: 2 },
+            { range: requireAt(ranges, 3), reference_level: 2 },
             {
               body_heading_block_id: missingChapterSection.blockId,
-              range: ranges[4]!,
+              range: requireAt(ranges, 4),
               reference_level: 3,
             },
           ],
           kind: "printed_toc",
           range: {
-            end_byte: ranges[4]!.end_byte,
+            end_byte: requireAt(ranges, 4).end_byte,
             sha256: "b".repeat(64),
-            start_byte: ranges[0]!.start_byte,
+            start_byte: requireAt(ranges, 0).start_byte,
           },
           region_id: "region_0123456789abcdef",
           source_path: "book.md",
