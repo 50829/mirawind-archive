@@ -35,6 +35,10 @@ import {
 } from "../schemas/document-manifest.js";
 import { atomicWriteFile, resolveContainedPath } from "../storage/layout.js";
 import { readerStylesheetUrl } from "../styles/assets.js";
+import {
+  profilePipelineStage,
+  recordPipelineProfileMetrics,
+} from "../observability/pipeline-profile.js";
 
 export const versionBuildArtifactFilename = "version-build-result.json";
 
@@ -241,150 +245,211 @@ export async function buildImmutableVersion(input: {
     await mkdir(dirname(stagingDirectory), { mode: 0o700, recursive: true });
     await mkdir(stagingDirectory, { mode: 0o700, recursive: false });
     await mkdir(versionDirectory, { mode: 0o700, recursive: false });
-    const configYaml = await readFile(input.configYamlPath, "utf8");
-    const config = parseBookConfigYaml(configYaml);
-    if (
-      config.book_id !== input.bookId ||
-      config.revision !== input.configRevision
-    ) {
-      throw new Error("VERSION_CONFIG_CAPTURE_MISMATCH");
-    }
-    const source = config.source as Readonly<Record<string, unknown>>;
-    const mainMarkdownRelativePath = String(source.main_markdown);
-    const markdownPath = await resolveContainedPath(
-      input.sourceRoot,
-      mainMarkdownRelativePath,
-    );
-    const markdownBytes = await readFile(markdownPath);
-    if (sha256(markdownBytes) !== source.main_markdown_sha256) {
-      throw new Error("VERSION_SOURCE_HASH_MISMATCH");
-    }
-    const configured = prepareConfiguredDocument({
+    const {
       config,
-      configSha256: sha256(configYaml),
+      configYaml,
+      mainMarkdownRelativePath,
       markdownBytes,
+      markdownPath,
+      source,
+    } = await profilePipelineStage("input_validation", async () => {
+      const yaml = await readFile(input.configYamlPath, "utf8");
+      const parsedConfig = parseBookConfigYaml(yaml);
+      if (
+        parsedConfig.book_id !== input.bookId ||
+        parsedConfig.revision !== input.configRevision
+      ) {
+        throw new Error("VERSION_CONFIG_CAPTURE_MISMATCH");
+      }
+      const parsedSource = parsedConfig.source as Readonly<
+        Record<string, unknown>
+      >;
+      const mainMarkdown = String(parsedSource.main_markdown);
+      const resolvedMarkdownPath = await resolveContainedPath(
+        input.sourceRoot,
+        mainMarkdown,
+      );
+      const bytes = await readFile(resolvedMarkdownPath);
+      if (sha256(bytes) !== parsedSource.main_markdown_sha256) {
+        throw new Error("VERSION_SOURCE_HASH_MISMATCH");
+      }
+      return {
+        config: parsedConfig,
+        configYaml: yaml,
+        mainMarkdownRelativePath: mainMarkdown,
+        markdownBytes: bytes,
+        markdownPath: resolvedMarkdownPath,
+        source: parsedSource,
+      };
     });
+    recordPipelineProfileMetrics({ markdown_bytes: markdownBytes.byteLength });
+    const configured = await profilePipelineStage("configured_document", () =>
+      prepareConfiguredDocument({
+        config,
+        configSha256: sha256(configYaml),
+        markdownBytes,
+      }),
+    );
     const { document, headings, pages } = configured;
+    recordPipelineProfileMetrics({
+      headings: headings.length,
+      pages: pages.length,
+      root_blocks: document.blocks.length,
+    });
 
     let resourceOrdinal = 0;
-    const resourceResolution = await resolveDocumentResources({
-      document,
-      idFactory: () => opaqueBuildId("res", input.versionId, ++resourceOrdinal),
-      markdownPath,
-      resourceRoot: input.sourceRoot,
-    });
+    const resourceResolution = await profilePipelineStage(
+      "resource_resolution",
+      () =>
+        resolveDocumentResources({
+          document,
+          idFactory: () =>
+            opaqueBuildId("res", input.versionId, ++resourceOrdinal),
+          markdownPath,
+          resourceRoot: input.sourceRoot,
+        }),
+    );
     if (resourceResolution.diagnostics.length > 0) {
       throw new Error("VERSION_RESOURCE_CLOSURE_FAILED");
     }
 
-    await atomicWriteFile(resolve(versionDirectory, "book.yaml"), configYaml, {
-      mode: 0o400,
-    });
-    const sourceFiles = await copyTree({
-      destination: resolve(versionDirectory, "source"),
-      source: input.sourceRoot,
+    const sourceFiles = await profilePipelineStage("source_copy", async () => {
+      await atomicWriteFile(
+        resolve(versionDirectory, "book.yaml"),
+        configYaml,
+        { mode: 0o400 },
+      );
+      return copyTree({
+        destination: resolve(versionDirectory, "source"),
+        source: input.sourceRoot,
+      });
     });
     const originalFiles = source.original_files as readonly Readonly<
       Record<string, unknown>
     >[];
-    for (const original of originalFiles) {
-      const originalPath = await resolveContainedPath(
-        input.draftRoot,
-        String(original.path),
-      );
-      const metadata = await lstat(originalPath);
-      if (!metadata.isFile() || metadata.isSymbolicLink()) {
-        throw new Error("VERSION_ORIGINAL_NOT_REGULAR");
+    await profilePipelineStage("original_copy", async () => {
+      for (const original of originalFiles) {
+        const originalPath = await resolveContainedPath(
+          input.draftRoot,
+          String(original.path),
+        );
+        const metadata = await lstat(originalPath);
+        if (!metadata.isFile() || metadata.isSymbolicLink()) {
+          throw new Error("VERSION_ORIGINAL_NOT_REGULAR");
+        }
+        const destination = resolve(
+          versionDirectory,
+          "originals",
+          String(original.id),
+        );
+        await mkdir(dirname(destination), { mode: 0o700, recursive: true });
+        await copyFile(originalPath, destination);
+        await chmod(destination, 0o400);
+        const copied = await digestFile(destination);
+        if (
+          copied.size !== original.size ||
+          copied.sha256 !== original.sha256
+        ) {
+          throw new Error("VERSION_ORIGINAL_HASH_MISMATCH");
+        }
       }
-      const destination = resolve(
-        versionDirectory,
-        "originals",
-        String(original.id),
-      );
-      await mkdir(dirname(destination), { mode: 0o700, recursive: true });
-      await copyFile(originalPath, destination);
-      await chmod(destination, 0o400);
-      const copied = await digestFile(destination);
-      if (copied.size !== original.size || copied.sha256 !== original.sha256) {
-        throw new Error("VERSION_ORIGINAL_HASH_MISMATCH");
-      }
-    }
+    });
 
     const manifestResources: ManifestResource[] = [];
-    for (const resource of resourceResolution.resources) {
-      const bytes = await readFile(resource.absolutePath);
-      const inspection = await inspectRasterImage({
-        bytes,
-        filename: resource.relativePath,
-      });
-      const outputPath = `published/assets/${resource.id}`;
-      await atomicWriteFile(resolve(versionDirectory, outputPath), bytes, {
-        mode: 0o400,
-      });
-      manifestResources.push(
-        Object.freeze({
-          ...resource,
-          height: inspection.height,
-          mediaType: mediaType(inspection.format),
-          outputPath,
-          sha256: sha256(bytes),
-          size: bytes.byteLength,
-          width: inspection.width,
-        }),
-      );
-    }
+    let resourceBytes = 0;
+    await profilePipelineStage("asset_copy", async () => {
+      for (const resource of resourceResolution.resources) {
+        const bytes = await readFile(resource.absolutePath);
+        resourceBytes += bytes.byteLength;
+        const inspection = await inspectRasterImage({
+          bytes,
+          filename: resource.relativePath,
+        });
+        const outputPath = `published/assets/${resource.id}`;
+        await atomicWriteFile(resolve(versionDirectory, outputPath), bytes, {
+          mode: 0o400,
+        });
+        manifestResources.push(
+          Object.freeze({
+            ...resource,
+            height: inspection.height,
+            mediaType: mediaType(inspection.format),
+            outputPath,
+            sha256: sha256(bytes),
+            size: bytes.byteLength,
+            width: inspection.width,
+          }),
+        );
+      }
+    });
+    recordPipelineProfileMetrics({
+      resource_bytes: resourceBytes,
+      resources: resourceResolution.resources.length,
+    });
 
-    const pageByHeading = new Map(
-      pages.flatMap((page) =>
-        page.document.headings
-          .filter((heading) => page.blockIds.includes(heading.blockId))
-          .map((heading) => [heading.blockId, page.pageId] as const),
-      ),
-    );
     const bookKey =
       typeof config.alias === "string" ? config.alias : String(input.bookId);
     const pageHref = (candidate: (typeof pages)[number]) =>
       `/read/${bookKey}/${candidate.alias ?? candidate.pageId}`;
-    const pageById = new Map(pages.map((page) => [page.pageId, page]));
     const displayHeadingTitle = (heading: (typeof headings)[number]) =>
       heading.number
         ? `${heading.number}. ${heading.display_title}`
         : heading.display_title;
-    const readerToc = headings
-      .filter((heading) => heading.include_in_toc)
-      .map((heading) => {
-        const pageId = pageByHeading.get(heading.block_id);
-        const headingPage = pageId ? pageById.get(pageId) : undefined;
-        if (!pageId || !headingPage) {
-          throw new Error("VERSION_HEADING_PAGE_MISSING");
-        }
-        return Object.freeze({
-          blockId: heading.block_id,
-          href: `${pageHref(headingPage)}#${heading.block_id}`,
-          level: heading.display_level,
-          pageId,
-          title: displayHeadingTitle(heading),
-        });
-      });
-    const renderedPages = await Promise.all(
-      pages.map(async (page) => {
-        const rendered = await renderSemanticDocument({
-          document: page.document,
-          headingHref(blockId) {
-            const pageId = pageByHeading.get(blockId);
-            if (!pageId) throw new Error("VERSION_HEADING_PAGE_MISSING");
-            const headingPage = pageById.get(pageId);
-            if (!headingPage) throw new Error("VERSION_HEADING_PAGE_MISSING");
-            return `${pageHref(headingPage)}#${blockId}`;
-          },
-          headingOverrides: page.headingOverrides,
-          publishedResourceUrl: (resourceId) =>
-            `/books/${input.bookId}/assets/${input.versionId}/${resourceId}`,
-          resourceResolution,
-        });
-        assertNonBlockingRenderDiagnostics(rendered.diagnostics);
-        return { page, rendered };
-      }),
+    const { pageByHeading, pageById, readerToc } = await profilePipelineStage(
+      "page_model",
+      () => {
+        const headingsToPages = new Map(
+          pages.flatMap((page) =>
+            page.document.headings
+              .filter((heading) => page.blockIds.includes(heading.blockId))
+              .map((heading) => [heading.blockId, page.pageId] as const),
+          ),
+        );
+        const pagesById = new Map(pages.map((page) => [page.pageId, page]));
+        const toc = headings
+          .filter((heading) => heading.include_in_toc)
+          .map((heading) => {
+            const pageId = headingsToPages.get(heading.block_id);
+            const headingPage = pageId ? pagesById.get(pageId) : undefined;
+            if (!pageId || !headingPage) {
+              throw new Error("VERSION_HEADING_PAGE_MISSING");
+            }
+            return Object.freeze({
+              blockId: heading.block_id,
+              href: `${pageHref(headingPage)}#${heading.block_id}`,
+              level: heading.display_level,
+              pageId,
+              title: displayHeadingTitle(heading),
+            });
+          });
+        return {
+          pageByHeading: headingsToPages,
+          pageById: pagesById,
+          readerToc: toc,
+        };
+      },
+    );
+    const renderedPages = await profilePipelineStage("page_render", () =>
+      Promise.all(
+        pages.map(async (page) => {
+          const rendered = await renderSemanticDocument({
+            document: page.document,
+            headingHref(blockId) {
+              const pageId = pageByHeading.get(blockId);
+              if (!pageId) throw new Error("VERSION_HEADING_PAGE_MISSING");
+              const headingPage = pageById.get(pageId);
+              if (!headingPage) throw new Error("VERSION_HEADING_PAGE_MISSING");
+              return `${pageHref(headingPage)}#${blockId}`;
+            },
+            headingOverrides: page.headingOverrides,
+            publishedResourceUrl: (resourceId) =>
+              `/books/${input.bookId}/assets/${input.versionId}/${resourceId}`,
+            resourceResolution,
+          });
+          assertNonBlockingRenderDiagnostics(rendered.diagnostics);
+          return { page, rendered };
+        }),
+      ),
     );
     const css = renderedPages
       .map(({ rendered }) => rendered.css)
@@ -393,9 +458,6 @@ export async function buildImmutableVersion(input: {
       .filter((value, index, values) => value !== values[index - 1])
       .join("");
     const cssPath = "published/styles/document.css";
-    await atomicWriteFile(resolve(versionDirectory, cssPath), css, {
-      mode: 0o400,
-    });
     const language =
       typeof (config.metadata as Record<string, unknown> | undefined)
         ?.language === "string"
@@ -403,26 +465,31 @@ export async function buildImmutableVersion(input: {
             (config.metadata as Record<string, unknown> | undefined)?.language,
           )
         : "zh-CN";
-    for (const { page, rendered } of renderedPages) {
-      const pageIndex = pages.findIndex(
-        (candidate) => candidate.pageId === page.pageId,
-      );
-      const nextPage = pageIndex >= 0 ? pages.at(pageIndex + 1) : undefined;
-      const previousPage = pageIndex > 0 ? pages.at(pageIndex - 1) : undefined;
-      const outline = headings
-        .filter(
-          (heading) =>
-            heading.include_in_toc && page.blockIds.includes(heading.block_id),
-        )
-        .map((heading) => ({
-          blockId: heading.block_id,
-          href: `#${heading.block_id}`,
-          level: heading.display_level,
-          title: displayHeadingTitle(heading),
-        }));
-      await atomicWriteFile(
-        resolve(versionDirectory, page.outputPath),
-        htmlDocument({
+    let outputBytes = Buffer.byteLength(css);
+    await profilePipelineStage("page_write", async () => {
+      await atomicWriteFile(resolve(versionDirectory, cssPath), css, {
+        mode: 0o400,
+      });
+      for (const { page, rendered } of renderedPages) {
+        const pageIndex = pages.findIndex(
+          (candidate) => candidate.pageId === page.pageId,
+        );
+        const nextPage = pageIndex >= 0 ? pages.at(pageIndex + 1) : undefined;
+        const previousPage =
+          pageIndex > 0 ? pages.at(pageIndex - 1) : undefined;
+        const outline = headings
+          .filter(
+            (heading) =>
+              heading.include_in_toc &&
+              page.blockIds.includes(heading.block_id),
+          )
+          .map((heading) => ({
+            blockId: heading.block_id,
+            href: `#${heading.block_id}`,
+            level: heading.display_level,
+            title: displayHeadingTitle(heading),
+          }));
+        const html = htmlDocument({
           body: renderReaderShell({
             bodyHtml: rendered.html,
             bookKey,
@@ -446,31 +513,45 @@ export async function buildImmutableVersion(input: {
           css,
           language,
           title: page.title,
-        }),
-        { mode: 0o400 },
-      );
-    }
+        });
+        outputBytes += Buffer.byteLength(html);
+        await atomicWriteFile(
+          resolve(versionDirectory, page.outputPath),
+          html,
+          {
+            mode: 0o400,
+          },
+        );
+      }
+    });
+    recordPipelineProfileMetrics({ output_bytes: outputBytes });
 
     const createdAt = toIsoDateTime(input.createdAtMs);
-    const manifest = buildDocumentManifest({
-      bookId: input.bookId,
-      configRevision: input.configRevision,
-      createdAt,
-      document,
-      headings,
-      mainMarkdownOutputPath: `source/${mainMarkdownRelativePath}`,
-      pages,
-      resourceReferences: resourceResolution.references,
-      resources: manifestResources,
-      sourceFiles,
-      versionId: input.versionId,
-    });
-    validateDocumentManifest(manifest);
-    const manifestJson = canonicalJson(manifest);
-    await atomicWriteFile(
-      resolve(versionDirectory, "document-manifest.json"),
-      manifestJson,
-      { mode: 0o400 },
+    const manifestJson = await profilePipelineStage(
+      "manifest_build",
+      async () => {
+        const manifest = buildDocumentManifest({
+          bookId: input.bookId,
+          configRevision: input.configRevision,
+          createdAt,
+          document,
+          headings,
+          mainMarkdownOutputPath: `source/${mainMarkdownRelativePath}`,
+          pages,
+          resourceReferences: resourceResolution.references,
+          resources: manifestResources,
+          sourceFiles,
+          versionId: input.versionId,
+        });
+        validateDocumentManifest(manifest);
+        const json = canonicalJson(manifest);
+        await atomicWriteFile(
+          resolve(versionDirectory, "document-manifest.json"),
+          json,
+          { mode: 0o400 },
+        );
+        return json;
+      },
     );
     const metadata = config.metadata as
       Readonly<Record<string, unknown>> | undefined;
@@ -479,9 +560,8 @@ export async function buildImmutableVersion(input: {
           (value): value is string => typeof value === "string",
         )
       : [];
-    await writeSearchSpool(
-      resolve(versionDirectory, "derived", "search-spool.json"),
-      buildSearchSpool({
+    const searchSpool = await profilePipelineStage("search_build", async () => {
+      const spool = buildSearchSpool({
         authors,
         bookId: input.bookId,
         document,
@@ -489,48 +569,61 @@ export async function buildImmutableVersion(input: {
         pages,
         title: String(config.title),
         versionId: input.versionId,
-      }),
-    );
-
-    const files = await describeFiles(versionDirectory);
-    const marker = {
-      book_id: input.bookId,
-      book_yaml_sha256: sha256(configYaml),
-      complete: true,
-      compiler: compilerIdentity,
-      config_revision: input.configRevision,
-      created_at: createdAt,
-      files: files.map(({ path, sha256: hash, size }) => ({
-        path,
-        sha256: hash,
-        size,
-      })),
-      manifest_sha256: sha256(manifestJson),
-      predecessor_version_id: input.predecessorVersionId,
-      schema_version: 2,
-      source_id: input.sourceId,
-      version_id: input.versionId,
-    };
-    validateVersionMarker(marker);
-    await atomicWriteFile(
-      resolve(versionDirectory, "version.json"),
-      canonicalJson(marker),
-      { mode: 0o400 },
-    );
-    const artifact: VersionBuildArtifact = Object.freeze({
-      bookId: input.bookId,
-      configRevision: input.configRevision,
-      identity: configured.identity,
-      manifestSha256: sha256(manifestJson),
-      versionDirectory: "version",
-      versionId: input.versionId,
+      });
+      await writeSearchSpool(
+        resolve(versionDirectory, "derived", "search-spool.json"),
+        spool,
+      );
+      return spool;
     });
-    await atomicWriteFile(
-      resolve(stagingDirectory, versionBuildArtifactFilename),
-      canonicalJson(artifact),
-      { mode: 0o400 },
+    recordPipelineProfileMetrics({
+      search_fts_rows: searchSpool.ftsRows.length,
+      search_short_rows: searchSpool.shortRows.length,
+    });
+
+    const files = await profilePipelineStage("file_inventory_hash", () =>
+      describeFiles(versionDirectory),
     );
-    return artifact;
+    return await profilePipelineStage("version_marker", async () => {
+      const marker = {
+        book_id: input.bookId,
+        book_yaml_sha256: sha256(configYaml),
+        complete: true,
+        compiler: compilerIdentity,
+        config_revision: input.configRevision,
+        created_at: createdAt,
+        files: files.map(({ path, sha256: hash, size }) => ({
+          path,
+          sha256: hash,
+          size,
+        })),
+        manifest_sha256: sha256(manifestJson),
+        predecessor_version_id: input.predecessorVersionId,
+        schema_version: 2,
+        source_id: input.sourceId,
+        version_id: input.versionId,
+      };
+      validateVersionMarker(marker);
+      await atomicWriteFile(
+        resolve(versionDirectory, "version.json"),
+        canonicalJson(marker),
+        { mode: 0o400 },
+      );
+      const artifact: VersionBuildArtifact = Object.freeze({
+        bookId: input.bookId,
+        configRevision: input.configRevision,
+        identity: configured.identity,
+        manifestSha256: sha256(manifestJson),
+        versionDirectory: "version",
+        versionId: input.versionId,
+      });
+      await atomicWriteFile(
+        resolve(stagingDirectory, versionBuildArtifactFilename),
+        canonicalJson(artifact),
+        { mode: 0o400 },
+      );
+      return artifact;
+    });
   } catch (error) {
     await rm(stagingDirectory, { force: true, recursive: true });
     throw error;

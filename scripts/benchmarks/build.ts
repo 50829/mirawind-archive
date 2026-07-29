@@ -32,6 +32,7 @@ import {
   ImportUploadService,
 } from "../../src/services/import-upload.js";
 import { createStorageLayout } from "../../src/storage/layout.js";
+import { parsePipelineProfileArtifact } from "../../src/observability/pipeline-profile.js";
 import {
   verifyRealMineruFixtures,
   type VerifiedRealFixture,
@@ -60,9 +61,14 @@ interface BenchmarkFixture {
 }
 
 export interface BuildArguments {
+  readonly cpuProfileDirectory?: string | null;
+  readonly fixtureIds?: readonly string[];
+  readonly includeStress?: boolean;
   readonly output: string | null;
+  readonly profileDirectory?: string | null;
   readonly realDirectory: string | null;
   readonly realManifest: string | null;
+  readonly repetitions?: number;
   readonly retainDirectory: string | null;
   readonly stress: StressBookOptions;
 }
@@ -77,6 +83,13 @@ interface ManagedWorker {
 interface MemoryObservation {
   readonly peakProcessTreeRssBytes: number;
   readonly samples: number;
+}
+
+interface BenchmarkFixtureOptions {
+  readonly cpuProfileDirectory?: string;
+  readonly profileDirectory?: string;
+  readonly repetition: number;
+  readonly retainedDataRoot?: string;
 }
 
 function integerArgument(
@@ -96,7 +109,34 @@ function integerArgument(
   return parsed;
 }
 
-function parseArguments(arguments_: readonly string[]): BuildArguments {
+function booleanArgument(
+  value: string | undefined,
+  fallback: boolean,
+  label: string,
+): boolean {
+  if (value === undefined) return fallback;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${label} must be true or false`);
+}
+
+function fixtureIdsArgument(value: string | undefined): readonly string[] {
+  if (value === undefined) return Object.freeze([]);
+  const values = value.split(",").map((item) => item.trim());
+  if (
+    values.length < 1 ||
+    values.length > 100 ||
+    values.some((item) => !/^real-mineru-[a-z0-9]{6,32}$/u.test(item)) ||
+    new Set(values).size !== values.length
+  ) {
+    throw new Error("fixture IDs must be unique opaque IDs");
+  }
+  return Object.freeze(values);
+}
+
+export function parseBuildArguments(
+  arguments_: readonly string[],
+): BuildArguments {
   const values = new Map<string, string>();
   for (let index = 0; index < arguments_.length; index += 2) {
     const name = arguments_[index];
@@ -111,8 +151,13 @@ function parseArguments(arguments_: readonly string[]): BuildArguments {
     if (
       ![
         "--output",
+        "--cpu-profile-dir",
+        "--fixture-ids",
+        "--include-stress",
+        "--profile-dir",
         "--real-dir",
         "--real-manifest",
+        "--repetitions",
         "--retain-dir",
         "--stress-blocks",
         "--stress-images",
@@ -123,13 +168,32 @@ function parseArguments(arguments_: readonly string[]): BuildArguments {
     }
   }
   return Object.freeze({
+    cpuProfileDirectory: values.get("--cpu-profile-dir")
+      ? resolve(String(values.get("--cpu-profile-dir")))
+      : null,
+    fixtureIds: fixtureIdsArgument(values.get("--fixture-ids")),
+    includeStress: booleanArgument(
+      values.get("--include-stress"),
+      true,
+      "include stress",
+    ),
     output: values.get("--output")
       ? resolve(String(values.get("--output")))
+      : null,
+    profileDirectory: values.get("--profile-dir")
+      ? resolve(String(values.get("--profile-dir")))
       : null,
     realDirectory: values.get("--real-dir")
       ? resolve(String(values.get("--real-dir")))
       : null,
     realManifest: values.get("--real-manifest") ?? null,
+    repetitions: integerArgument(
+      values.get("--repetitions"),
+      1,
+      "repetitions",
+      1,
+      10,
+    ),
     retainDirectory: values.get("--retain-dir")
       ? resolve(String(values.get("--retain-dir")))
       : null,
@@ -167,6 +231,10 @@ function safeFailureCode(error: unknown): string {
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+}
+
+function roundedMilliseconds(value: number): number {
+  return Math.round(value * 1_000) / 1_000;
 }
 
 async function removeBenchmarkTree(path: string): Promise<void> {
@@ -230,7 +298,11 @@ async function waitForJob(
   );
 }
 
-function startWorker(dataRoot: string): ManagedWorker {
+function startWorker(
+  dataRoot: string,
+  profileDirectory?: string,
+  cpuProfileDirectory?: string,
+): ManagedWorker {
   const child = spawn(process.execPath, [workerEntry], {
     cwd: repositoryRoot,
     detached: true,
@@ -241,6 +313,12 @@ function startWorker(dataRoot: string): ManagedWorker {
       MIRAWIND_DATA_DIR: dataRoot,
       MIRAWIND_PASSKEY_RP_ID: "benchmark.invalid",
       MIRAWIND_PUBLIC_ORIGIN: "https://benchmark.invalid",
+      ...(profileDirectory
+        ? { MIRAWIND_PIPELINE_PROFILE_DIR: profileDirectory }
+        : {}),
+      ...(cpuProfileDirectory
+        ? { MIRAWIND_PIPELINE_CPU_PROFILE_DIR: cpuProfileDirectory }
+        : {}),
       NODE_ENV: "production",
     },
     shell: false,
@@ -375,6 +453,44 @@ function jobRows(
     .sort((left, right) => left.createdAtMs - right.createdAtMs);
 }
 
+async function pipelineProfiles(
+  directory: string | undefined,
+  jobs: readonly JobRecord[],
+): Promise<Readonly<Record<string, Readonly<Record<string, unknown>>>>> {
+  if (!directory) return Object.freeze({});
+  const entries = await Promise.all(
+    jobs.map(async (job) => {
+      const path = join(directory, `${job.id}.json`);
+      const bytes = await readFile(path);
+      if (bytes.byteLength > 1024 * 1024) {
+        throw new Error("PIPELINE_PROFILE_SIZE_LIMIT");
+      }
+      const profile = parsePipelineProfileArtifact(
+        JSON.parse(bytes.toString("utf8")) as unknown,
+      );
+      const { job_id: profileJobId, ...sanitized } = profile;
+      if (profileJobId !== job.id || profile.job_kind !== job.kind) {
+        throw new Error("PIPELINE_PROFILE_JOB_MISMATCH");
+      }
+      const databaseDurationMs = jobDuration(job);
+      return [
+        `${job.kind}:${job.attempt}`,
+        Object.freeze({
+          ...sanitized,
+          database_job_duration_ms: databaseDurationMs,
+          parent_finalize_and_ipc_ms:
+            databaseDurationMs === null
+              ? null
+              : roundedMilliseconds(
+                  Math.max(0, databaseDurationMs - profile.duration_ms),
+                ),
+        }),
+      ] as const;
+    }),
+  );
+  return Object.freeze(Object.fromEntries(entries));
+}
+
 function indexStorageBytes(database: Database.Database): number | null {
   try {
     const result = database
@@ -393,15 +509,15 @@ function indexStorageBytes(database: Database.Database): number | null {
 
 async function benchmarkFixture(
   fixture: BenchmarkFixture,
-  retainedDataRoot?: string,
+  options: BenchmarkFixtureOptions,
 ): Promise<Readonly<Record<string, unknown>>> {
   if (process.platform !== "linux") {
     throw new Error("BENCHMARK_REQUIRES_LINUX_PROCFS");
   }
   const dataRoot =
-    retainedDataRoot ??
+    options.retainedDataRoot ??
     (await mkdtemp(join(tmpdir(), "mirawind-build-benchmark-")));
-  if (retainedDataRoot) {
+  if (options.retainedDataRoot) {
     await removeBenchmarkTree(dataRoot);
     await mkdir(dataRoot, { mode: 0o700, recursive: true });
   }
@@ -422,8 +538,27 @@ async function benchmarkFixture(
     });
     const uploadMs =
       Math.round((performance.now() - uploadStartedAt) * 1_000) / 1_000;
+    const acceptedAt = performance.now();
 
-    worker = startWorker(dataRoot);
+    const fixtureProfileDirectory = options.profileDirectory
+      ? join(
+          options.profileDirectory,
+          fixture.id,
+          `run-${String(options.repetition).padStart(3, "0")}`,
+        )
+      : undefined;
+    const fixtureCpuProfileDirectory = options.cpuProfileDirectory
+      ? join(
+          options.cpuProfileDirectory,
+          fixture.id,
+          `run-${String(options.repetition).padStart(3, "0")}`,
+        )
+      : undefined;
+    worker = startWorker(
+      dataRoot,
+      fixtureProfileDirectory,
+      fixtureCpuProfileDirectory,
+    );
     if (!worker.child.pid) throw new Error("BENCHMARK_WORKER_PID_MISSING");
     memoryController = new AbortController();
     memoryPromise = monitorMemory(worker.child.pid, memoryController.signal);
@@ -503,7 +638,9 @@ async function benchmarkFixture(
     if (!book.draftConfigRevision || !book.draftSourceId) {
       throw new Error("BENCHMARK_DRAFT_CAPTURE_MISSING");
     }
+    const previewReadyAt = performance.now();
 
+    const publishRequestedAt = performance.now();
     const publish = jobs.create({
       bookId: book.id,
       capturedConfigRevision: book.draftConfigRevision,
@@ -523,6 +660,7 @@ async function benchmarkFixture(
     if (!current.currentVersionId || current.visibility !== "public") {
       throw new Error("BENCHMARK_PUBLICATION_MISSING");
     }
+    const publicReadyAt = performance.now();
     const version = database
       .prepare(
         `SELECT version_rel_path FROM book_versions
@@ -555,6 +693,10 @@ async function benchmarkFixture(
           state: job.state,
         },
       ]),
+    );
+    const profiles = await pipelineProfiles(
+      fixtureProfileDirectory,
+      jobsForFixture,
     );
     const wallMs = Math.round((performance.now() - startedAt) * 1_000) / 1_000;
 
@@ -601,8 +743,16 @@ async function benchmarkFixture(
       mineru_version: fixture.mineruVersion,
       page_count_range: fixture.pageCountRange,
       phases,
+      pipeline_profiles: profiles,
+      repetition: options.repetition,
       status: "passed",
       timings: {
+        accepted_to_preview_ms: roundedMilliseconds(
+          previewReadyAt - acceptedAt,
+        ),
+        publish_requested_to_public_ms: roundedMilliseconds(
+          publicReadyAt - publishRequestedAt,
+        ),
         upload_ms: uploadMs,
         wall_ms: wallMs,
       },
@@ -620,6 +770,7 @@ async function benchmarkFixture(
       fixture_id: fixture.id,
       fixture_type: fixture.type,
       mineru_version: fixture.mineruVersion,
+      repetition: options.repetition,
       status: "failed",
     });
   } finally {
@@ -627,7 +778,7 @@ async function benchmarkFixture(
     if (memoryPromise) await memoryPromise.catch(() => undefined);
     await worker?.stop();
     database.close();
-    if (!retainedDataRoot) await removeBenchmarkTree(dataRoot);
+    if (!options.retainedDataRoot) await removeBenchmarkTree(dataRoot);
   }
 }
 
@@ -656,29 +807,40 @@ async function fixtures(
       input.realDirectory,
       input.realManifest ?? undefined,
     );
+    const selectedIds = new Set(input.fixtureIds ?? []);
+    const selectedReal =
+      selectedIds.size === 0
+        ? verified
+        : verified.filter((fixture) => selectedIds.has(fixture.id));
+    if (selectedIds.size > 0 && selectedReal.length !== selectedIds.size) {
+      throw new Error("BENCHMARK_FIXTURE_ID_UNKNOWN");
+    }
     result.push(
-      ...verified.map((fixture) =>
+      ...selectedReal.map((fixture) =>
         realFixture(input.realDirectory as string, fixture),
       ),
     );
   }
-  const stress = buildStressBook(input.stress);
-  const stressPath = join(temporaryDirectory, "synthetic-stress.zip");
-  await writeFile(stressPath, stress.bytes, { mode: 0o600 });
-  result.push(
-    Object.freeze({
-      id: "synthetic-stress-v1",
-      mineruVersion: "synthetic",
-      pageCountRange: {
-        maximum: stress.metadata.pages,
-        minimum: stress.metadata.pages,
-      },
-      path: stressPath,
-      sha256: stress.metadata.sha256,
-      sizeBytes: stress.metadata.size_bytes,
-      type: "synthetic",
-    }),
-  );
+  if (input.includeStress ?? true) {
+    const stress = buildStressBook(input.stress);
+    const stressPath = join(temporaryDirectory, "synthetic-stress.zip");
+    await writeFile(stressPath, stress.bytes, { mode: 0o600 });
+    result.push(
+      Object.freeze({
+        id: "synthetic-stress-v1",
+        mineruVersion: "synthetic",
+        pageCountRange: {
+          maximum: stress.metadata.pages,
+          minimum: stress.metadata.pages,
+        },
+        path: stressPath,
+        sha256: stress.metadata.sha256,
+        sizeBytes: stress.metadata.size_bytes,
+        type: "synthetic",
+      }),
+    );
+  }
+  if (result.length === 0) throw new Error("BENCHMARK_FIXTURE_SET_EMPTY");
   return Object.freeze(result);
 }
 
@@ -689,6 +851,12 @@ export async function runBuildBenchmarks(
   if (input.retainDirectory) {
     await mkdir(input.retainDirectory, { mode: 0o700, recursive: true });
   }
+  if (input.profileDirectory) {
+    await mkdir(input.profileDirectory, { mode: 0o700, recursive: true });
+  }
+  if (input.cpuProfileDirectory) {
+    await mkdir(input.cpuProfileDirectory, { mode: 0o700, recursive: true });
+  }
   const temporaryDirectory = await mkdtemp(
     join(tmpdir(), "mirawind-benchmark-fixtures-"),
   );
@@ -696,25 +864,62 @@ export async function runBuildBenchmarks(
     const selected = await fixtures(input, temporaryDirectory);
     const results: Readonly<Record<string, unknown>>[] = [];
     let failed = false;
+    const repetitions = input.repetitions ?? 1;
     for (const fixture of selected) {
-      try {
-        const retainedDataRoot = input.retainDirectory
-          ? join(input.retainDirectory, fixture.id)
-          : undefined;
-        const result = await benchmarkFixture(fixture, retainedDataRoot);
-        if (result.status !== "passed") failed = true;
-        results.push(result);
-      } catch (error) {
-        failed = true;
-        results.push(
-          Object.freeze({
-            error_code: safeFailureCode(error),
-            fixture_id: fixture.id,
-            fixture_type: fixture.type,
-            mineru_version: fixture.mineruVersion,
-            status: "failed",
-          }),
-        );
+      for (let repetition = 1; repetition <= repetitions; repetition += 1) {
+        try {
+          const retainedDataRoot = input.retainDirectory
+            ? join(
+                input.retainDirectory,
+                fixture.id,
+                `run-${String(repetition).padStart(3, "0")}`,
+              )
+            : undefined;
+          const profileRunDirectory = input.profileDirectory
+            ? join(
+                input.profileDirectory,
+                fixture.id,
+                `run-${String(repetition).padStart(3, "0")}`,
+              )
+            : undefined;
+          const cpuProfileRunDirectory = input.cpuProfileDirectory
+            ? join(
+                input.cpuProfileDirectory,
+                fixture.id,
+                `run-${String(repetition).padStart(3, "0")}`,
+              )
+            : undefined;
+          if (profileRunDirectory) {
+            await removeBenchmarkTree(profileRunDirectory);
+          }
+          if (cpuProfileRunDirectory) {
+            await removeBenchmarkTree(cpuProfileRunDirectory);
+          }
+          const result = await benchmarkFixture(fixture, {
+            ...(input.cpuProfileDirectory
+              ? { cpuProfileDirectory: input.cpuProfileDirectory }
+              : {}),
+            ...(input.profileDirectory
+              ? { profileDirectory: input.profileDirectory }
+              : {}),
+            repetition,
+            ...(retainedDataRoot ? { retainedDataRoot } : {}),
+          });
+          if (result.status !== "passed") failed = true;
+          results.push(result);
+        } catch (error) {
+          failed = true;
+          results.push(
+            Object.freeze({
+              error_code: safeFailureCode(error),
+              fixture_id: fixture.id,
+              fixture_type: fixture.type,
+              mineru_version: fixture.mineruVersion,
+              repetition,
+              status: "failed",
+            }),
+          );
+        }
       }
     }
     return Object.freeze({
@@ -726,6 +931,9 @@ export async function runBuildBenchmarks(
       results,
       schema_version: 1,
       status: failed ? "failed" : "passed",
+      ...(input.profileDirectory
+        ? { profile_version: "pipeline-profile-v1" }
+        : {}),
       stress_configuration: {
         blocks_per_page: input.stress.blocksPerPage,
         image_count: input.stress.imageCount,
@@ -738,7 +946,7 @@ export async function runBuildBenchmarks(
 }
 
 async function main(): Promise<void> {
-  const input = parseArguments(process.argv.slice(2));
+  const input = parseBuildArguments(process.argv.slice(2));
   const report = await runBuildBenchmarks(input);
   const json = `${JSON.stringify(report, null, 2)}\n`;
   if (input.output) {

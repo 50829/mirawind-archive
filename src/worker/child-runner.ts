@@ -135,6 +135,18 @@ export async function runJobChild(
       ...(options.storageRoot
         ? { MIRAWIND_JOB_STORAGE_ROOT: options.storageRoot }
         : {}),
+      ...(process.env.MIRAWIND_PIPELINE_PROFILE_DIR
+        ? {
+            MIRAWIND_PIPELINE_PROFILE_DIR:
+              process.env.MIRAWIND_PIPELINE_PROFILE_DIR,
+          }
+        : {}),
+      ...(process.env.MIRAWIND_PIPELINE_CPU_PROFILE_DIR
+        ? {
+            MIRAWIND_PIPELINE_CPU_PROFILE_DIR:
+              process.env.MIRAWIND_PIPELINE_CPU_PROFILE_DIR,
+          }
+        : {}),
       NODE_ENV: process.env.NODE_ENV,
       PATH: process.env.PATH,
     },

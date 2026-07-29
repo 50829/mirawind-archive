@@ -22,6 +22,10 @@ import {
   type RunJobMessage,
 } from "./protocol.js";
 import { shouldReportJobProgress } from "./progress-throttle.js";
+import {
+  finishPipelineProfile,
+  startPipelineProfile,
+} from "../observability/pipeline-profile.js";
 
 let active: RunJobMessage | undefined;
 const controller = new AbortController();
@@ -29,9 +33,13 @@ let lastProgressAt = 0;
 let lastProgressPhase: string | null = null;
 
 function send(result: JobResultMessage): void {
-  process.send?.(result, () => {
-    if (process.connected) process.disconnect();
-  });
+  void finishPipelineProfile(result.ok ? "passed" : "failed")
+    .catch(() => undefined)
+    .then(() => {
+      process.send?.(result, () => {
+        if (process.connected) process.disconnect();
+      });
+    });
 }
 
 function reportProgress(
@@ -100,6 +108,10 @@ function safeErrorCode(error: unknown): string {
 
 async function execute(message: RunJobMessage): Promise<void> {
   try {
+    await startPipelineProfile({
+      jobId: message.input.jobId,
+      jobKind: message.input.kind,
+    });
     const root = storageRoot();
     const stagingDirectory = await resolveContainedPath(
       root,

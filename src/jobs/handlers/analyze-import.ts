@@ -15,6 +15,10 @@ import {
   type ImportRecord,
 } from "../../db/repositories/imports.js";
 import { atomicWriteFile } from "../../storage/layout.js";
+import {
+  profilePipelineStage,
+  recordPipelineProfileMetrics,
+} from "../../observability/pipeline-profile.js";
 
 export const importAnalysisVersion = "mineru-candidate-v1";
 export const analysisArtifactFilename = "analysis-result.json";
@@ -62,13 +66,25 @@ export async function analyzeImport(input: {
   try {
     await mkdir(dirname(stagingDirectory), { mode: 0o700, recursive: true });
     await mkdir(stagingDirectory, { mode: 0o700, recursive: false });
-    const extracted = await extractZipFile({
-      archivePath: input.archivePath,
-      destination: extractedDirectory,
-      ...(input.extractionLimits ? { limits: input.extractionLimits } : {}),
-      ...(input.signal ? { signal: input.signal } : {}),
+    const extracted = await profilePipelineStage("archive_extract", () =>
+      extractZipFile({
+        archivePath: input.archivePath,
+        destination: extractedDirectory,
+        ...(input.extractionLimits ? { limits: input.extractionLimits } : {}),
+        ...(input.signal ? { signal: input.signal } : {}),
+      }),
+    );
+    recordPipelineProfileMetrics({
+      archive_entries: extracted.entries,
+      archive_files: extracted.files,
+      archive_uncompressed_bytes: extracted.totalUncompressedBytes,
     });
-    const discovered = await discoverMarkdownCandidates(extractedDirectory);
+    const discovered = await profilePipelineStage("candidate_discovery", () =>
+      discoverMarkdownCandidates(extractedDirectory),
+    );
+    recordPipelineProfileMetrics({
+      markdown_candidates: discovered.candidates.length,
+    });
     const artifact: AnalyzeImportArtifact = Object.freeze({
       candidates: discovered.candidates,
       decision: discovered.decision,
@@ -76,9 +92,11 @@ export async function analyzeImport(input: {
       selectedCandidateId: discovered.selectedCandidateId,
       version: importAnalysisVersion,
     });
-    await atomicWriteFile(artifactPath, `${JSON.stringify(artifact)}\n`, {
-      mode: 0o600,
-    });
+    await profilePipelineStage("artifact_write", () =>
+      atomicWriteFile(artifactPath, `${JSON.stringify(artifact)}\n`, {
+        mode: 0o600,
+      }),
+    );
     return Object.freeze({
       artifact,
       artifactPath,

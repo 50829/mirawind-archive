@@ -63,6 +63,10 @@ import {
   SourceSnapshotService,
   type SourceSnapshotResult,
 } from "../../services/source-snapshot.js";
+import {
+  profilePipelineStage,
+  recordPipelineProfileMetrics,
+} from "../../observability/pipeline-profile.js";
 
 export const draftPreparationVersion = "prepare-draft-v4";
 export const preparationArtifactFilename = "prepared-draft.json";
@@ -129,50 +133,95 @@ export async function prepareDraft(input: {
   try {
     await mkdir(dirname(stagingDirectory), { mode: 0o700, recursive: true });
     await mkdir(stagingDirectory, { mode: 0o700, recursive: false });
-    const extracted = await extractZipFile({
-      archivePath: input.archivePath,
-      destination: extractedRoot,
-      ...(input.extractionLimits ? { limits: input.extractionLimits } : {}),
-      ...(input.signal ? { signal: input.signal } : {}),
+    const extracted = await profilePipelineStage("archive_extract", () =>
+      extractZipFile({
+        archivePath: input.archivePath,
+        destination: extractedRoot,
+        ...(input.extractionLimits ? { limits: input.extractionLimits } : {}),
+        ...(input.signal ? { signal: input.signal } : {}),
+      }),
+    );
+    recordPipelineProfileMetrics({
+      archive_entries: extracted.entries,
+      archive_files: extracted.files,
+      archive_uncompressed_bytes: extracted.totalUncompressedBytes,
     });
     if (extracted.files < 1) throw new Error("IMPORT_ARCHIVE_EMPTY");
     const markdownPath = await resolveContainedPath(
       extractedRoot,
       input.selectedCandidatePath,
     );
-    const markdownBytes = await readFile(markdownPath);
-    const typography = preprocessMarkdownTypography(
-      markdownBytes,
-      input.typographyProfile ?? "zh-smart-v1",
+    const markdownBytes = await profilePipelineStage("markdown_read", () =>
+      readFile(markdownPath),
     );
-    await atomicWriteFile(markdownPath, typography.markdown, { mode: 0o600 });
-    const document = parseMarkdownDocument(typography.markdown);
-    const normalized = normalizeDocumentBlocks(document);
-    const layoutEvidence = await readMineruLayoutEvidence(
-      markdownPath,
-      input.signal,
-    );
-    const resources = await resolveDocumentResources({
-      document,
-      markdownPath,
-      resourceRoot: dirname(markdownPath),
+    recordPipelineProfileMetrics({ markdown_bytes: markdownBytes.byteLength });
+    const typography = await profilePipelineStage("typography", async () => {
+      const result = preprocessMarkdownTypography(
+        markdownBytes,
+        input.typographyProfile ?? "zh-smart-v1",
+      );
+      await atomicWriteFile(markdownPath, result.markdown, { mode: 0o600 });
+      return result;
     });
+    recordPipelineProfileMetrics({
+      protected_nodes: typography.provenance.protected_nodes,
+    });
+    const { document, normalized } = await profilePipelineStage(
+      "parse_normalize",
+      () => {
+        const parsed = parseMarkdownDocument(typography.markdown);
+        return {
+          document: parsed,
+          normalized: normalizeDocumentBlocks(parsed),
+        };
+      },
+    );
+    recordPipelineProfileMetrics({
+      headings: normalized.headings.length,
+      root_blocks: normalized.blocks.length,
+    });
+    const layoutEvidence = await profilePipelineStage("layout_evidence", () =>
+      readMineruLayoutEvidence(markdownPath, input.signal),
+    );
+    recordPipelineProfileMetrics({
+      layout_records: layoutEvidence.records.length,
+    });
+    const resources = await profilePipelineStage("resource_resolution", () =>
+      resolveDocumentResources({
+        document,
+        markdownPath,
+        resourceRoot: dirname(markdownPath),
+      }),
+    );
     if (resources.diagnostics.length > 0) {
       throw new Error("IMPORT_RESOURCE_CLOSURE_FAILED");
     }
-    for (const resource of resources.resources) {
-      await inspectRasterImage({
-        bytes: await readFile(resource.absolutePath),
-        filename: resource.relativePath,
-      });
-    }
-    let effectiveLayoutEvidence = layoutEvidence;
-    let printedContents = detectPrintedContents({
-      document: normalized,
-      layoutEvidence,
-      sourcePath: basename(input.selectedCandidatePath),
-      sourceSha256: typography.provenance.output_sha256,
+    let resourceBytes = 0;
+    await profilePipelineStage("image_inspection", async () => {
+      for (const resource of resources.resources) {
+        const bytes = await readFile(resource.absolutePath);
+        resourceBytes += bytes.byteLength;
+        await inspectRasterImage({
+          bytes,
+          filename: resource.relativePath,
+        });
+      }
     });
+    recordPipelineProfileMetrics({
+      resource_bytes: resourceBytes,
+      resources: resources.resources.length,
+    });
+    let effectiveLayoutEvidence = layoutEvidence;
+    let printedContents = await profilePipelineStage(
+      "initial_printed_contents",
+      () =>
+        detectPrintedContents({
+          document: normalized,
+          layoutEvidence,
+          sourcePath: basename(input.selectedCandidatePath),
+          sourceSha256: typography.provenance.output_sha256,
+        }),
+    );
     const hasHighBoundary = printedContents.candidates.some(
       (candidate) => candidate.boundaryConfidence === "high",
     );
@@ -182,18 +231,15 @@ export async function prepareDraft(input: {
     );
     let pdfDiagnostics: readonly PreparedPdfDiagnostic[] = Object.freeze([]);
     if (requiresSupplementalPdfEvidence(printedContents)) {
-      const discovered = await findOriginalPdf({
-        bundleRoot: dirname(markdownPath),
-        markdownPath,
-        ...(input.signal ? { signal: input.signal } : {}),
-      });
-      if ("diagnostic" in discovered) {
-        pdfDiagnostics = Object.freeze([
-          Object.freeze({ code: discovered.diagnostic }),
-        ]);
-      } else {
+      const pdfResult = await profilePipelineStage("pdf_evidence", async () => {
+        const discovered = await findOriginalPdf({
+          bundleRoot: dirname(markdownPath),
+          markdownPath,
+          ...(input.signal ? { signal: input.signal } : {}),
+        });
+        if ("diagnostic" in discovered) return { discovered } as const;
         const pageIndices = supplementalPdfPageIndices(printedContents);
-        const pdfEvidence = await (
+        const evidence = await (
           input.pdfEvidenceReader ?? readPdfContentsEvidence
         )({
           allowOcr: !hasHighBoundary || requiresLineRepair,
@@ -203,52 +249,88 @@ export async function prepareDraft(input: {
           ...(input.signal ? { signal: input.signal } : {}),
           temporaryRoot: stagingDirectory,
         });
+        return { discovered, evidence } as const;
+      });
+      const { discovered } = pdfResult;
+      if ("diagnostic" in discovered) {
+        pdfDiagnostics = Object.freeze([
+          Object.freeze({ code: discovered.diagnostic }),
+        ]);
+      } else {
+        if (!("evidence" in pdfResult)) {
+          throw new Error("PDF_EVIDENCE_PROFILE_RESULT_INVALID");
+        }
+        const pdfEvidence = pdfResult.evidence;
         pdfDiagnostics = pdfEvidence.diagnostics;
+        recordPipelineProfileMetrics({
+          pdf_pages: new Set(
+            pdfEvidence.records.map((record) => record.pageIndex),
+          ).size,
+        });
         if (pdfEvidence.records.length > 0) {
-          const pdfLayoutEvidence = Object.freeze({
-            diagnostics: layoutEvidence.diagnostics,
-            records: pdfEvidence.records,
-            source: pdfEvidence.source,
+          await profilePipelineStage("repaired_printed_contents", () => {
+            const pdfLayoutEvidence = Object.freeze({
+              diagnostics: layoutEvidence.diagnostics,
+              records: pdfEvidence.records,
+              source: pdfEvidence.source,
+            });
+            const repairedLayoutEvidence = supplementMissingListPageLabels(
+              layoutEvidence,
+              pdfLayoutEvidence,
+            );
+            const repairedDetection = detectPrintedContents({
+              document: normalized,
+              layoutEvidence: repairedLayoutEvidence,
+              sourcePath: basename(input.selectedCandidatePath),
+              sourceSha256: typography.provenance.output_sha256,
+            });
+            const nativeDetection = detectPrintedContents({
+              document: normalized,
+              layoutEvidence: pdfLayoutEvidence,
+              sourcePath: basename(input.selectedCandidatePath),
+              sourceSha256: typography.provenance.output_sha256,
+            });
+            const preferNative = shouldUseNativePdfDetection({
+              nativeDetection,
+              nativeLayout: pdfLayoutEvidence,
+              sourceDetection: repairedDetection,
+              sourceLayout: repairedLayoutEvidence,
+            });
+            effectiveLayoutEvidence =
+              repairedLayoutEvidence.source === "none" || preferNative
+                ? pdfLayoutEvidence
+                : repairedLayoutEvidence;
+            printedContents = preferNative
+              ? nativeDetection
+              : repairedDetection;
           });
-          const repairedLayoutEvidence = supplementMissingListPageLabels(
-            layoutEvidence,
-            pdfLayoutEvidence,
-          );
-          const repairedDetection = detectPrintedContents({
-            document: normalized,
-            layoutEvidence: repairedLayoutEvidence,
-            sourcePath: basename(input.selectedCandidatePath),
-            sourceSha256: typography.provenance.output_sha256,
-          });
-          const nativeDetection = detectPrintedContents({
-            document: normalized,
-            layoutEvidence: pdfLayoutEvidence,
-            sourcePath: basename(input.selectedCandidatePath),
-            sourceSha256: typography.provenance.output_sha256,
-          });
-          const preferNative = shouldUseNativePdfDetection({
-            nativeDetection,
-            nativeLayout: pdfLayoutEvidence,
-            sourceDetection: repairedDetection,
-            sourceLayout: repairedLayoutEvidence,
-          });
-          effectiveLayoutEvidence =
-            repairedLayoutEvidence.source === "none" || preferNative
-              ? pdfLayoutEvidence
-              : repairedLayoutEvidence;
-          printedContents = preferNative ? nativeDetection : repairedDetection;
         }
       }
     }
-    const sourceRegions = printedContents.candidates.flatMap((candidate) =>
-      candidate.proposedRegion ? [candidate.proposedRegion] : [],
+    recordPipelineProfileMetrics({
+      printed_entries: printedContents.candidates.reduce(
+        (total, candidate) => total + candidate.logicalEntries.length,
+        0,
+      ),
+      printed_regions: printedContents.candidates.length,
+    });
+    const { activeDocument, sourceRegions } = await profilePipelineStage(
+      "source_regions",
+      () => {
+        const regions = printedContents.candidates.flatMap((candidate) =>
+          candidate.proposedRegion ? [candidate.proposedRegion] : [],
+        );
+        return {
+          activeDocument: applySourceRegions({
+            document: normalized,
+            mainMarkdownPath: basename(input.selectedCandidatePath),
+            mainMarkdownSha256: typography.provenance.output_sha256,
+            regions,
+          }).document,
+          sourceRegions: regions,
+        };
+      },
     );
-    const activeDocument = applySourceRegions({
-      document: normalized,
-      mainMarkdownPath: basename(input.selectedCandidatePath),
-      mainMarkdownSha256: typography.provenance.output_sha256,
-      regions: sourceRegions,
-    }).document;
     const printedEntries = printedContents.candidates.flatMap((candidate) =>
       candidate.canonical
         ? candidate.logicalEntries.map((entry) =>
@@ -262,10 +344,12 @@ export async function prepareDraft(input: {
           )
         : [],
     );
-    const proposal = proposeDocumentStructure(normalized, {
-      printedEntries,
-      sourceRegions,
-    });
+    const proposal = await profilePipelineStage("structure_proposal", () =>
+      proposeDocumentStructure(normalized, {
+        printedEntries,
+        sourceRegions,
+      }),
+    );
     const artifact: PreparedDraftArtifact = Object.freeze({
       layoutDiagnostics: layoutEvidence.diagnostics,
       layoutSource: effectiveLayoutEvidence.source,
@@ -301,9 +385,11 @@ export async function prepareDraft(input: {
       typographyRiskSummariesTruncated: typography.riskSummariesTruncated,
       version: draftPreparationVersion,
     });
-    await atomicWriteFile(artifactPath, `${JSON.stringify(artifact)}\n`, {
-      mode: 0o600,
-    });
+    await profilePipelineStage("artifact_write", () =>
+      atomicWriteFile(artifactPath, `${JSON.stringify(artifact)}\n`, {
+        mode: 0o600,
+      }),
+    );
     return Object.freeze({ artifact, artifactPath, extractedRoot });
   } catch (error) {
     await rm(stagingDirectory, { force: true, recursive: true });
