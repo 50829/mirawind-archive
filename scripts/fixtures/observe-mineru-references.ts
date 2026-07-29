@@ -69,9 +69,11 @@ interface CandidateProjection {
 }
 
 const frontmatter =
-  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|致学生|致教师|出版者的话|专家指导委员会|作者简介|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
+  /^(?:序|序言|前言|中文版序(?:[0-9零〇一二三四五六七八九十]+)?|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|致学生|致教师|出版者的话|关于作者|专家指导委员会|作者简介|译者简介|教学建议|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
 const backmatter =
   /^(?:参考文献|参考资料|(?:表|图|主题|作者)?索引|(?:译)?后记|致谢|术语表|图片来源|符号索引|bibliography|references|(?:author|subject)\s+index|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
+const contentsLabel =
+  /^(?:(?:目\s*录|简\s*(?:明\s*)?目(?:\s*录)?)(?:\s+(?:brief\s+contents|contents))?|(?:brief\s+contents|contents|table\s+of\s+contents)(?:\s+(?:目\s*录|简\s*(?:明\s*)?目(?:\s*录)?))?)$/iu;
 
 function sha256(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
@@ -236,6 +238,7 @@ function kindFor(
 function pageRows(input: {
   readonly layout: Awaited<ReturnType<typeof readMineruLayoutEvidence>>;
 }): readonly {
+  readonly contentsLabel: boolean;
   readonly page: number;
   readonly printedPageLabel: boolean;
   readonly title: string;
@@ -245,6 +248,7 @@ function pageRows(input: {
       if (!record.text) return [];
       return [
         Object.freeze({
+          contentsLabel: contentsLabel.test(normalize(record.text)),
           page: record.pageIndex,
           printedPageLabel: stripPageLabel(record.text).pageLabel !== null,
           title: comparison(record.text),
@@ -257,12 +261,71 @@ function pageRows(input: {
 function pagesForEntries(input: {
   readonly entries: readonly ReferenceContentsEntry[];
   readonly rows: readonly {
+    readonly contentsLabel: boolean;
     readonly page: number;
     readonly printedPageLabel: boolean;
     readonly title: string;
   }[];
   readonly startCursor: number;
 }): { readonly cursor: number; readonly pages: readonly number[] } {
+  const firstLabelIndex = input.rows.findIndex(
+    (row, index) => index >= input.startCursor && row.contentsLabel,
+  );
+  if (firstLabelIndex >= 0) {
+    const firstLabel = input.rows[firstLabelIndex];
+    if (firstLabel) {
+      const nextLabelIndex = input.rows.findIndex(
+        (row, index) =>
+          index > firstLabelIndex &&
+          row.contentsLabel &&
+          row.page > firstLabel.page,
+      );
+      const nextLabel =
+        nextLabelIndex >= 0 ? input.rows[nextLabelIndex] : undefined;
+      if (nextLabel) {
+        return Object.freeze({
+          cursor: nextLabelIndex,
+          pages: Object.freeze(
+            [
+              ...new Set(
+                input.rows
+                  .slice(firstLabelIndex, nextLabelIndex)
+                  .map((row) => row.page),
+              ),
+            ].sort((left, right) => left - right),
+          ),
+        });
+      }
+
+      const pageCounts = new Map<number, number>();
+      for (const row of input.rows.slice(firstLabelIndex)) {
+        if (!row.printedPageLabel) continue;
+        pageCounts.set(row.page, (pageCounts.get(row.page) ?? 0) + 1);
+      }
+      const maximumCount = Math.max(0, ...pageCounts.values());
+      const minimumCount = Math.max(2, Math.ceil(maximumCount * 0.2));
+      const pages: number[] = [];
+      for (let page = firstLabel.page; ; page += 1) {
+        const count = pageCounts.get(page) ?? 0;
+        if (page === firstLabel.page || count >= minimumCount) {
+          pages.push(page);
+          continue;
+        }
+        break;
+      }
+      if (pages.length > 0) {
+        const lastPage = pages.at(-1) ?? firstLabel.page;
+        const lastIndex = input.rows.findLastIndex(
+          (row, index) => index >= firstLabelIndex && row.page === lastPage,
+        );
+        return Object.freeze({
+          cursor: lastIndex >= 0 ? lastIndex + 1 : firstLabelIndex + 1,
+          pages: Object.freeze(pages),
+        });
+      }
+    }
+  }
+
   const expectedTitles = new Set(
     input.entries.map((entry) => comparison(entry.title)),
   );
@@ -402,21 +465,12 @@ function projectCandidates(input: {
         startCursor: rowCursor,
       });
       rowCursor = pageProjection.cursor;
-      const evidencePages = [
-        ...new Set(
-          candidate.logicalEntries.flatMap((entry) =>
-            entry.pageIndex === undefined ? [] : [entry.pageIndex],
-          ),
-        ),
-      ].sort((left, right) => left - right);
       return Object.freeze({
         candidate,
         endRoot: range.endRoot,
         entries: Object.freeze(entries),
         key,
-        pages: Object.freeze(
-          evidencePages.length > 0 ? evidencePages : pageProjection.pages,
-        ),
+        pages: pageProjection.pages,
         startRoot: range.startRoot,
       });
     }),
@@ -467,17 +521,13 @@ function rawHeadingAccounting(input: {
     proposeDocumentStructure(input.activeDocument, {
       printedEntries: input.projections.flatMap((projection) =>
         projection.candidate.canonical
-          ? projection.candidate.logicalEntries.flatMap((entry) =>
-              entry.bodyHeadingBlockId
-                ? [
-                    {
-                      bodyHeadingBlockId: entry.bodyHeadingBlockId,
-                      referenceLevel: entry.referenceLevel,
-                      sourceTitle: entry.sourceTitle,
-                    },
-                  ]
-                : [],
-            )
+          ? projection.candidate.logicalEntries.map((entry) => ({
+              ...(entry.bodyHeadingBlockId
+                ? { bodyHeadingBlockId: entry.bodyHeadingBlockId }
+                : {}),
+              referenceLevel: entry.referenceLevel,
+              sourceTitle: entry.sourceTitle,
+            }))
           : [],
       ),
       sourceRegions: input.projections.flatMap((projection) =>

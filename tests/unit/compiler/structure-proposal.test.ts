@@ -367,6 +367,116 @@ describe("default document structure proposal", () => {
     ).toEqual([1, 2, 3, 4]);
   });
 
+  it("shifts descendants when a canonical chapter has no body heading", () => {
+    const printed = [
+      "第二部分 理论",
+      "第7章 已识别章 ...... 100",
+      "7.1 已识别节 ...... 101",
+      "第8章 缺失章 ...... 120",
+      "8.1 缺失章下的节 ...... 121",
+    ];
+    const source = [
+      ...printed,
+      "",
+      "## 第二部分 理论",
+      "",
+      "## 第7章 已识别章",
+      "",
+      "## 7.1 已识别节",
+      "",
+      "## 7.1.1 正常子节",
+      "",
+      "## 8.1 缺失章下的节",
+      "",
+      "## 8.1.1 上移子节",
+    ].join("\n");
+    const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
+    const [part, chapter, firstSection, , missingChapterSection] =
+      document.headings;
+    if (!part || !chapter || !firstSection || !missingChapterSection) {
+      throw new Error("expected body headings");
+    }
+    const ranges = printed.map((entry) => {
+      const start = Buffer.from(
+        source.slice(0, source.indexOf(entry)),
+        "utf8",
+      ).byteLength;
+      return {
+        end_byte: start + Buffer.from(entry, "utf8").byteLength,
+        sha256: "a".repeat(64),
+        start_byte: start,
+      };
+    });
+
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: part.blockId,
+          referenceLevel: 1,
+          sourceTitle: printed[0]!,
+        },
+        {
+          bodyHeadingBlockId: chapter.blockId,
+          referenceLevel: 2,
+          sourceTitle: printed[1]!,
+        },
+        {
+          bodyHeadingBlockId: firstSection.blockId,
+          referenceLevel: 3,
+          sourceTitle: printed[2]!,
+        },
+        { referenceLevel: 2, sourceTitle: printed[3]! },
+        {
+          bodyHeadingBlockId: missingChapterSection.blockId,
+          referenceLevel: 3,
+          sourceTitle: printed[4]!,
+        },
+      ],
+      sourceRegions: [
+        {
+          applied: true,
+          disposition: "reference_only",
+          entries: [
+            {
+              body_heading_block_id: part.blockId,
+              range: ranges[0]!,
+              reference_level: 1,
+            },
+            {
+              body_heading_block_id: chapter.blockId,
+              range: ranges[1]!,
+              reference_level: 2,
+            },
+            {
+              body_heading_block_id: firstSection.blockId,
+              range: ranges[2]!,
+              reference_level: 3,
+            },
+            { range: ranges[3]!, reference_level: 2 },
+            {
+              body_heading_block_id: missingChapterSection.blockId,
+              range: ranges[4]!,
+              reference_level: 3,
+            },
+          ],
+          kind: "printed_toc",
+          range: {
+            end_byte: ranges[4]!.end_byte,
+            sha256: "b".repeat(64),
+            start_byte: ranges[0]!.start_byte,
+          },
+          region_id: "region_0123456789abcdef",
+          source_path: "book.md",
+          source_sha256: "c".repeat(64),
+        },
+      ],
+    });
+
+    expect(proposal.nodes.map((node) => node.display_level)).toEqual([
+      1, 2, 3, 4, 2, 3,
+    ]);
+  });
+
   it("keeps part nesting when a printed entry did not match its body heading", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
@@ -482,6 +592,141 @@ describe("default document structure proposal", () => {
       include_in_toc: false,
       starts_page: false,
     });
+  });
+
+  it("keeps adjacent body headings when the printed part maps to the subtitle", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 第一部分",
+          "",
+          "P A R T 1",
+          "",
+          "# 程序结构和执行",
+          "",
+          "正文",
+        ].join("\n"),
+      ),
+    );
+    const subtitle = document.headings[1];
+    if (!subtitle) throw new Error("expected part subtitle");
+
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: subtitle.blockId,
+          referenceLevel: 1,
+          sourceTitle: "第一部分 程序结构和执行",
+        },
+      ],
+    });
+
+    expect(proposal.nodes).toMatchObject([
+      {
+        display_level: 1,
+        include_in_toc: true,
+        starts_page: true,
+      },
+      {
+        display_level: 1,
+        include_in_toc: true,
+        starts_page: true,
+      },
+    ]);
+    expect(proposal.nodes[0]?.display_title).toBeUndefined();
+    expect(proposal.nodes[1]?.display_title).toBeUndefined();
+  });
+
+  it("keeps a detached Chinese chapter marker and splits on its title", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument("## 第3章\n\n# 程序的机器级表示\n\n正文"),
+    );
+    const [, chapterTitle] = document.headings;
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: chapterTitle?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "第3章 程序的机器级表示",
+        },
+      ],
+    });
+
+    expect(proposal.nodes).toMatchObject([
+      {
+        display_level: 1,
+        include_in_toc: true,
+        starts_page: true,
+      },
+      {
+        display_level: 1,
+        include_in_toc: true,
+        starts_page: true,
+      },
+    ]);
+  });
+
+  it("treats an ambiguous multi-digit gap as a chapter without forcing a match", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        "## 12.7.3 Previous\n\n正文\n\n## 12 7.4 Competition",
+      ),
+    );
+    const proposal = proposeDocumentStructure(document);
+
+    expect(proposal.nodes[1]).toMatchObject({
+      display_level: 1,
+      include_in_toc: true,
+      starts_page: true,
+    });
+  });
+
+  it("keeps unlisted appendix children out of the proposed hierarchy", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 错误处理",
+          "",
+          "正文",
+          "",
+          "## A. 1 Unix 系统中的错误处理",
+          "",
+          "## 1. Unix 风格的错误处理",
+          "",
+          "## A.2 错误处理包装函数",
+          "",
+          "## 参考文献",
+        ].join("\n"),
+      ),
+    );
+    const [appendix, , , , references] = document.headings;
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: appendix?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "附录 A 错误处理",
+        },
+        {
+          bodyHeadingBlockId: references?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "参考文献",
+        },
+      ],
+    });
+
+    expect(
+      proposal.nodes.map((node) => ({
+        include_in_toc: node.include_in_toc,
+        level: node.display_level,
+      })),
+    ).toEqual([
+      { include_in_toc: true, level: 1 },
+      { include_in_toc: false, level: 1 },
+      { include_in_toc: false, level: 1 },
+      { include_in_toc: false, level: 1 },
+      { include_in_toc: true, level: 1 },
+    ]);
   });
 
   it("keeps a detached English part label level with its canonical title", () => {
@@ -699,6 +944,7 @@ describe("default document structure proposal", () => {
       undefined,
       undefined,
     ]);
+    expect(proposal.nodes[1]?.starts_page).toBe(true);
   });
 
   it("keeps an unmatched learning objective in body but out of navigation", () => {
@@ -714,7 +960,7 @@ describe("default document structure proposal", () => {
     });
   });
 
-  it("keeps local headings outside the canonical printed hierarchy", () => {
+  it("nests local headings below the last canonical section", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
         [
@@ -763,11 +1009,188 @@ describe("default document structure proposal", () => {
     });
 
     expect(proposal.nodes.slice(4).map((node) => node.display_level)).toEqual([
-      3, 3,
+      4, 4,
     ]);
     expect(proposal.nodes.slice(4).map((node) => node.include_in_toc)).toEqual([
       false,
       false,
+    ]);
+  });
+
+  it("nests local headings below the last canonical h2 level", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        ["## 第1章 基础", "", "## 1.1 起步", "", "## 局部说明"].join("\n"),
+      ),
+    );
+    const [chapter, section] = document.headings;
+
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: chapter?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "第1章 基础",
+        },
+        {
+          bodyHeadingBlockId: section?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "1.1 起步",
+        },
+      ],
+    });
+
+    expect(proposal.nodes[2]).toMatchObject({
+      display_level: 3,
+      include_in_toc: false,
+    });
+  });
+
+  it("keeps chapter-local bibliography at the canonical section level", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## Chapter 1 Start",
+          "",
+          "## 1.1 Topic",
+          "",
+          "## Bibliography",
+          "",
+          "## Chapter 2 Continue",
+        ].join("\n"),
+      ),
+    );
+    const [firstChapter, section, bibliography, secondChapter] =
+      document.headings;
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: firstChapter?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "Chapter 1 Start",
+        },
+        {
+          bodyHeadingBlockId: section?.blockId ?? "",
+          referenceLevel: 3,
+          sourceTitle: "1.1 Topic",
+        },
+        {
+          bodyHeadingBlockId: bibliography?.blockId ?? "",
+          referenceLevel: 3,
+          sourceTitle: "Bibliography",
+        },
+        {
+          bodyHeadingBlockId: secondChapter?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "Chapter 2 Continue",
+        },
+      ],
+    });
+
+    expect(proposal.nodes[2]).toMatchObject({
+      display_level: 3,
+      include_in_toc: true,
+    });
+  });
+
+  it("does not split chapter-local appendix headings", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 5.9 Topic",
+          "",
+          "Body",
+          "",
+          "## Appendix: Local details",
+          "",
+          "Body",
+          "",
+          "## Appendix: Supporting table",
+        ].join("\n"),
+      ),
+    );
+    const [section, appendix, child] = document.headings;
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: section?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "5.9 Topic",
+        },
+        {
+          bodyHeadingBlockId: appendix?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "Appendix: Local details",
+        },
+        {
+          bodyHeadingBlockId: child?.blockId ?? "",
+          referenceLevel: 3,
+          sourceTitle: "Appendix: Supporting table",
+        },
+      ],
+    });
+
+    expect(proposal.nodes.slice(1).map((node) => node.starts_page)).toEqual([
+      false,
+      false,
+    ]);
+  });
+
+  it("hides a detached numeric marker before a matched English chapter", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 4 Previous chapter",
+          "",
+          "## 4.1 Previous section",
+          "",
+          "## Exercises",
+          "",
+          "## 5",
+          "",
+          "## Basis Expansions and Regularization",
+        ].join("\n"),
+      ),
+    );
+    const [previousChapter, previousSection, exercises, , chapter] =
+      document.headings;
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: previousChapter?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "4 Previous chapter",
+        },
+        {
+          bodyHeadingBlockId: previousSection?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "4.1 Previous section",
+        },
+        {
+          bodyHeadingBlockId: exercises?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "Exercises",
+        },
+        {
+          bodyHeadingBlockId: chapter?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "5 Basis Expansions and Regularization",
+        },
+      ],
+    });
+
+    expect(proposal.nodes.slice(3)).toMatchObject([
+      {
+        display_level: 1,
+        include_in_toc: false,
+        starts_page: false,
+      },
+      {
+        display_level: 1,
+        include_in_toc: true,
+        role: "body",
+        starts_page: true,
+      },
     ]);
   });
 
@@ -986,6 +1409,113 @@ describe("default document structure proposal", () => {
       true,
       true,
     ]);
+  });
+
+  it("strips a printed page suffix before classifying frontmatter", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument("## 致谢\n\n正文\n\n## 第1章 开始\n\n正文"),
+    );
+    const [acknowledgements, chapter] = document.headings;
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: acknowledgements?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "致谢 ...... xii",
+        },
+        {
+          bodyHeadingBlockId: chapter?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "第1章 开始 ...... 1",
+        },
+      ],
+    });
+
+    expect(proposal.nodes.map((node) => node.role)).toEqual([
+      "frontmatter",
+      "body",
+    ]);
+  });
+
+  it("counts raw HTML as body when splitting adjacent backmatter units", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 图片来源",
+          "",
+          "来源正文",
+          "",
+          "## 符号索引",
+          "",
+          "<table><tr><td>符号</td></tr></table>",
+          "",
+          "## 索引",
+          "",
+          "索引正文",
+        ].join("\n"),
+      ),
+    );
+
+    expect(
+      proposeDocumentStructure(document).nodes.map((node) => node.starts_page),
+    ).toEqual([true, true, true]);
+  });
+
+  it("does not split a matched exercise heading with OCR wrapper artifacts", () => {
+    const source = "## 第1章 开始\n\n正文\n\n## K习题 1Ck\n\n练习正文";
+    const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
+    const proxyStart = Buffer.from(
+      source.slice(0, source.indexOf("第1章")),
+      "utf8",
+    ).byteLength;
+    const proxyEnd = proxyStart + Buffer.from("第1章 开始", "utf8").byteLength;
+    const [chapter, exercises] = document.headings;
+    if (!chapter || !exercises) throw new Error("expected headings");
+    const proposal = proposeDocumentStructure(document, {
+      sourceRegions: [
+        {
+          applied: true,
+          disposition: "reference_only",
+          entries: [
+            {
+              body_heading_block_id: exercises.blockId,
+              range: {
+                end_byte: proxyEnd,
+                sha256: "a".repeat(64),
+                start_byte: proxyStart,
+              },
+              reference_level: 3,
+            },
+          ],
+          kind: "printed_toc",
+          range: {
+            end_byte: proxyEnd,
+            sha256: "b".repeat(64),
+            start_byte: proxyStart,
+          },
+          region_id: "region_0123456789abcdef",
+          source_path: "book.md",
+          source_sha256: "c".repeat(64),
+        },
+      ],
+      printedEntries: [
+        {
+          bodyHeadingBlockId: chapter?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "第1章 开始 ...... 1",
+        },
+        {
+          bodyHeadingBlockId: exercises?.blockId ?? "",
+          referenceLevel: 3,
+          sourceTitle: "习题 1C ...... 20",
+        },
+      ],
+    });
+
+    expect(proposal.nodes[1]).toMatchObject({
+      include_in_toc: true,
+      starts_page: false,
+    });
   });
 
   it("classifies edition-specific English prefaces as frontmatter", () => {

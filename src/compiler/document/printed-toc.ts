@@ -99,9 +99,9 @@ const contentsTitle =
   /^(?:(?:目\s*录|简\s*(?:明\s*)?目(?:\s*录)?)(?:\s+(?:brief\s+contents|contents))?|(?:brief\s+contents|contents|table\s+of\s+contents)(?:\s+(?:目\s*录|简\s*(?:明\s*)?目(?:\s*录)?))?)$/iu;
 const dotLeader = /(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+)/u;
 const frontmatterEntryTitle =
-  /^(?:序|序言|前言|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|专家指导委员会|作者简介|译者简介|教学建议|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
+  /^(?:序|序言|前言|中文版序(?:[0-9零〇一二三四五六七八九十]+)?|第\s*[0-9零〇一二三四五六七八九十百千]+\s*版\s*前言|译者序|出版者的话|关于作者|专家指导委员会|作者简介|译者简介|教学建议|preface(?:\s+to\s+(?:the\s+)?[\p{L}\p{N} -]+\s+edition)?|foreword|prologue)$/iu;
 const contextualEntryTitle =
-  /^(?:参考文献|参考资料|索引|后记|致谢|术语表|图片来源|符号索引|思考题|本章注记|附录注记|自测题|习题|练习|课后习题和问题|复习题|人物专访|编程作业|bibliographic notes|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits|practice exercises|further reading|review questions|exercises)$/iu;
+  /^(?:参考文献(?:说明)?|参考资料|索引|后记|致谢|术语表|图片来源|符号索引|思考题|本章注记|附录注记|自测题|练习题答案|习题|练习|课后习题和问题|复习题|人物专访|编程作业|bibliographic notes|bibliography|references|index|afterword|acknowledg(?:e)?ments?|credits|practice exercises|further reading|review questions|exercises)$/iu;
 const chapterReviewParentTitle =
   /^(?:课后习题和问题|end-of-chapter questions)$/iu;
 const chapterReviewChildTitle =
@@ -136,7 +136,7 @@ const standaloneMajorLabel = new RegExp(
 const topLevelBackmatterTitle =
   /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|(?:author|subject)\s+index|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 const printedNumberingPrefix = new RegExp(
-  `^(?:\\\\?\\*\\s*)?(?:第\\s*[0-9零〇一二三四五六七八九十百千]+\\s*(?:章|篇|部分|部)|(?:chapter|chap\\.?)\\s*(?:[0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})|part\\s*(?:[0-9ivxlcdm]+|${englishOrdinalWord})|附录\\s*[A-Za-z0-9一二三四五六七八九十]*(?:\\s*\\.\\s*\\d+){0,3}|[A-Z]\\s*\\.\\s*\\d+(?:\\s*\\.\\s*\\d+){0,2}|\\d+[A-Z](?:\\s*\\.\\s*\\d+){0,2}|\\d+(?:\\s*\\.\\s*\\d+){1,3}|\\d{1,3}(?=\\s+[\\p{L}“”'"（(]))`,
+  `^(?:\\\\?\\*\\s*)?(?:第\\s*[0-9零〇一二三四五六七八九十百千]+\\s*(?:章|篇|部分|部)|(?:chapter|chap\\.?)\\s*(?:[0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})|part\\s*(?:[0-9ivxlcdm]+|${englishOrdinalWord})|附录\\s*[A-Za-z0-9一二三四五六七八九十]*(?:\\s*\\.\\s*\\d+){0,3}|[A-Z]\\s*\\.\\s*\\d+(?:\\s*\\.\\s*\\d+){0,2}|\\d+[A-Z](?:\\s*\\.\\s*\\d+){0,2}|\\d+\\s+\\d+(?:\\s*[ .]\\s*\\d+){1,2}|\\d+(?:\\s*\\.\\s*\\d+){1,3}|\\d{1,3}(?=\\s+[\\p{L}“”'"（(]))`,
   "iu",
 );
 
@@ -238,6 +238,16 @@ export function inferPrintedHeadingEvidence(
       level: Math.min(4, 2 + (alphaSection.match(/\./gu)?.length ?? 0)),
     });
   }
+  const spacedDecimal =
+    /^(\d)\s+(\d+(?:\s*[ .]\s*\d+){1,2})(?=\s|、|:|：)/u.exec(plain);
+  if (spacedDecimal?.[1] && spacedDecimal[2]) {
+    const key = `${spacedDecimal[1]}.${spacedDecimal[2].replace(/\s*[ .]\s*/gu, ".")}`;
+    return Object.freeze({
+      kind: "decimal",
+      key,
+      level: Math.min(4, key.split(".").length),
+    });
+  }
   const appendixSection = /^([A-Z]\.\d+(?:\.\d+){0,2})(?=\s|、|:|：)/iu.exec(
     plain,
   )?.[1];
@@ -246,6 +256,15 @@ export function inferPrintedHeadingEvidence(
       kind: "decimal",
       key: appendixSection.toLocaleLowerCase("und"),
       level: Math.min(4, appendixSection.split(".").length),
+    });
+  }
+  const ambiguousSpacedChapter =
+    /^(\d{2,})\s+\d+(?:\s*\.\s*\d+){1,2}(?=\s|、|:|：)/u.exec(plain)?.[1];
+  if (ambiguousSpacedChapter) {
+    return Object.freeze({
+      kind: "chapter",
+      key: ambiguousSpacedChapter,
+      level: 1,
     });
   }
   const bareChapter = /^(\d{1,3})(?=\s+[\p{L}“”'"（(])/u.exec(plain)?.[1];
@@ -286,7 +305,8 @@ export function inferPrintedReferenceLevels(
   for (let index = values.length - 1; index >= 0; index -= 1) {
     hasLaterBodyMajor[index] = laterBodyMajor;
     const value = values[index] ?? "";
-    const semanticTitle = printedPageEvidence(value)?.title ?? plainTitle(value);
+    const semanticTitle =
+      printedPageEvidence(value)?.title ?? plainTitle(value);
     const kind = inferPrintedHeadingEvidence(semanticTitle)?.kind;
     const suppliedLevel = options.referenceLevels?.get(index);
     if (
@@ -305,9 +325,8 @@ export function inferPrintedReferenceLevels(
       const numbering = inferPrintedHeadingEvidence(semanticTitle);
       const reviewParent = chapterReviewParentTitle.test(semanticTitle);
       const reviewChild = chapterReviewChildTitle.test(semanticTitle);
-      const alphaSection = /^(\d{1,3}[A-Z])((?:\.\d+){0,2})(?=\s|、|:|：)/iu.exec(
-        semanticTitle,
-      );
+      const alphaSection =
+        /^(\d{1,3}[A-Z])((?:\.\d+){0,2})(?=\s|、|:|：)/iu.exec(semanticTitle);
       const suppliedLevel = options.referenceLevels?.get(index);
       let level: number;
       if (suppliedLevel !== undefined) {
@@ -316,6 +335,10 @@ export function inferPrintedReferenceLevels(
           insidePart = false;
           insideSupplementalPart = false;
           insideAppendix = true;
+        } else if (numbering?.kind === "appendix") {
+          insidePart = level >= 3;
+          insideSupplementalPart = false;
+          insideAppendix = false;
         } else if (
           numbering?.kind === "part" ||
           ((numbering?.kind === "chapter" || numbering?.kind === "decimal") &&
@@ -326,10 +349,7 @@ export function inferPrintedReferenceLevels(
             numbering?.kind === "part" &&
             /(?:附录|appendix)/iu.test(semanticTitle);
           insideAppendix = false;
-        } else if (
-          numbering?.kind === "appendix" ||
-          (numbering?.kind === "chapter" && level === numbering.level)
-        ) {
+        } else if (numbering?.kind === "chapter" && level === numbering.level) {
           insidePart = false;
           insideSupplementalPart = false;
           insideAppendix = false;
@@ -351,7 +371,7 @@ export function inferPrintedReferenceLevels(
           /^(?:附录|appendix)\s*[:：]/iu.test(semanticTitle);
         const chapterScopedAppendix =
           numbering.level === 1 &&
-          /^(?:附录|appendix)\s*\d{1,3}[A-Z](?=\s|$|[.:：])/iu.test(
+          /^(?:附录|appendix)\s*\d{1,3}[A-Z](?=\s|$|[.:：]|\p{Script=Han})/iu.test(
             semanticTitle,
           );
         if (localUnnumberedAppendix && previousLevel > 1) {
@@ -454,6 +474,16 @@ function printedPageEvidence(
   ) {
     return;
   }
+  const followedBySummary =
+    /^(?<title>.+?)\s+(?<page>\d+|[ivxlcdm]+)\s+(?:小结|summary)(?:\s*[/／].*)?$/iu.exec(
+      plain,
+    );
+  if (followedBySummary?.groups?.title && followedBySummary.groups.page) {
+    return Object.freeze({
+      pageLabel: followedBySummary.groups.page,
+      title: followedBySummary.groups.title.trim(),
+    });
+  }
   const leader =
     /^(?<title>.+?)(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+|\s{2,})\s*(?<page>\d+|[ivxlcdm]+)\s*$/iu.exec(
       plain,
@@ -549,6 +579,9 @@ function splitPrintedLogicalLine(value: string): readonly {
   readonly start: number;
   readonly text: string;
 }[] {
+  if (/^\s*(?:#{1,6}\s+)?\d+\s+\d+(?:\s*[ .]\s*\d+){1,2}\s+/u.test(value)) {
+    return Object.freeze([{ end: value.length, start: 0, text: value }]);
+  }
   const boundary = new RegExp(embeddedPrintedEntryBoundary.source, "giu");
   const segments: { end: number; start: number; text: string }[] = [];
   let cursor = 0;
@@ -862,19 +895,46 @@ function characterSimilarity(left: string, right: string): number {
   return (2 * overlap) / ([...left].length + [...right].length);
 }
 
+function repairableDecimalPrefix(
+  value: string,
+): { readonly compact: string; readonly title: string } | undefined {
+  const plain = plainTitle(value);
+  const match =
+    /^(?<number>\d+(?:(?:\s*\.\s*|\s+)\d+){0,3})\.?\s+(?<title>.+)$/u.exec(
+      plain,
+    );
+  const number = match?.groups?.number;
+  const title = match?.groups?.title?.trim();
+  if (!number || !title) return;
+  if (/^\d{2,}\s+\d/u.test(number)) return;
+  return Object.freeze({
+    compact: number.replace(/[.\s]/gu, ""),
+    title,
+  });
+}
+
+function numericMajorOrdinal(
+  evidence: PrintedHeadingEvidence | undefined,
+  value: string,
+): string | undefined {
+  if (!evidence) return;
+  if (evidence.kind === "decimal") return evidence.key.split(".")[0];
+  if (evidence.kind !== "chapter") return;
+  return /\d+/u.exec(plainTitle(value))?.[0];
+}
+
 function matchScore(
   entry: ExtractedEntry,
   heading: NormalizedHeading,
   allowNumberOnly = false,
+  allowMajorSectionFallback = false,
 ): number {
-  if (
-    entry.sourceTitle.includes("�") ||
-    heading.sourceTitle.includes("�")
-  ) {
+  if (entry.sourceTitle.includes("�") || heading.sourceTitle.includes("�")) {
     return 0;
   }
   const headingTitle = normalizedTitle(heading.sourceTitle, false);
   const headingNumber = inferPrintedHeadingEvidence(heading.sourceTitle);
+  const repairedHeadingNumber = repairableDecimalPrefix(heading.sourceTitle);
   const supplementalPartToAppendix =
     entry.numbering?.kind === "part" &&
     headingNumber?.kind === "appendix" &&
@@ -889,18 +949,40 @@ function matchScore(
       ? similarity(supplementalTitle, headingTitle)
       : 0,
   );
+  const majorSectionFallback =
+    allowMajorSectionFallback &&
+    entry.numbering?.kind === "chapter" &&
+    headingNumber?.kind === "decimal" &&
+    numericMajorOrdinal(entry.numbering, entry.sourceTitle) ===
+      numericMajorOrdinal(headingNumber, heading.sourceTitle) &&
+    titleScore >= 0.7;
+  const decimalNumberingEquivalent =
+    entry.numbering?.kind === "decimal" &&
+    ((headingNumber?.kind === "decimal" &&
+      entry.numbering.key.replaceAll(".", "") ===
+        headingNumber.key.replaceAll(".", "") &&
+      titleScore >= 0.9) ||
+      (repairedHeadingNumber !== undefined &&
+        entry.numbering.key.replaceAll(".", "") ===
+          repairedHeadingNumber.compact &&
+        similarity(
+          entry.normalizedTitle,
+          normalizedTitle(repairedHeadingNumber.title, false),
+        ) >= 0.9));
   const incompatibleMathRepresentations =
     /[\u2070-\u209f]/u.test(entry.sourceTitle) &&
     /\\[A-Za-z]+(?:\s*\{|\b)/u.test(heading.sourceTitle) &&
     titleScore < 0.62;
   const numberEqual =
-    entry.numbering &&
-    headingNumber &&
-    entry.numbering.key === headingNumber.key;
+    decimalNumberingEquivalent ||
+    (entry.numbering !== undefined &&
+      headingNumber !== undefined &&
+      entry.numbering.key === headingNumber.key);
   const numberConflict =
     entry.numbering &&
     headingNumber &&
     entry.numbering.key !== headingNumber.key &&
+    !decimalNumberingEquivalent &&
     !supplementalPartToAppendix;
   const detachedMajorTitle =
     (entry.numbering?.kind === "part" || entry.numbering?.kind === "chapter") &&
@@ -933,9 +1015,9 @@ function matchScore(
     : titleScore;
   if (
     incompatibleMathRepresentations ||
-    numberConflict ||
+    (numberConflict && !majorSectionFallback) ||
     (genericAppendix && titleScore < 0.62) ||
-    (!numberEqual && titleScore < 0.62) ||
+    (!numberEqual && !majorSectionFallback && titleScore < 0.62) ||
     (numberEqual &&
       !acceptsNumberOnly &&
       effectiveTitleScore < (canUseCharacterRepair ? 0.25 : 0.55))
@@ -945,6 +1027,8 @@ function matchScore(
   return (
     Math.round(effectiveTitleScore * 10) +
     (numberEqual ? 8 : 0) +
+    (majorSectionFallback ? 8 : 0) +
+    (majorSectionFallback && headingNumber?.level === 2 ? 2 : 0) +
     (implicitSectionNumber ? 2 : 0) +
     (detachedMajorTitle ? 20 : 0)
   );
@@ -958,6 +1042,53 @@ function recoveredMatchedSourceTitle(
   const bodyTitle = plainTitle(heading.sourceTitle);
   const headingNumber = inferPrintedHeadingEvidence(heading.sourceTitle);
   const headingTitle = normalizedTitle(heading.sourceTitle, false);
+  const repairedHeadingNumber = repairableDecimalPrefix(heading.sourceTitle);
+  const majorSectionFallback =
+    entry.numbering?.kind === "chapter" &&
+    headingNumber?.kind === "decimal" &&
+    numericMajorOrdinal(entry.numbering, entry.sourceTitle) ===
+      numericMajorOrdinal(headingNumber, heading.sourceTitle) &&
+    similarity(entry.normalizedTitle, headingTitle) >= 0.7;
+  const printed = printedPageEvidence(sourceTitle);
+  const bodyTitleWithPage = (): string => {
+    if (!printed) return bodyTitle;
+    const suffix =
+      /(?<suffix>(?:\.(?:\s*\.)+|…+|·(?:\s*·)+|_(?:\s*_)+|\s+)\s*(?:[ivxlcdm]+|\d{1,5})\s*)$/iu.exec(
+        sourceTitle,
+      )?.groups?.suffix;
+    return `${bodyTitle}${suffix ?? `  ${printed.pageLabel}`}`;
+  };
+  const damagedPrintedNumber =
+    headingNumber?.kind === "decimal" &&
+    /^\d+\s+\d/u.test(sourceTitle) &&
+    (() => {
+      const prefix = /^(?<number>\d+(?:[ .]\d+){1,3})\s+/u.exec(sourceTitle)
+        ?.groups?.number;
+      return (
+        prefix !== undefined &&
+        prefix.replace(/[ .]/gu, "") === headingNumber.key.replaceAll(".", "")
+      );
+    })();
+  if (damagedPrintedNumber) return bodyTitleWithPage();
+  if (majorSectionFallback) return sourceTitle;
+  if (
+    printed &&
+    !new RegExp(`(?:${printed.pageLabel})\\s*$`, "iu").test(sourceTitle)
+  ) {
+    return `${printed.title}  ${printed.pageLabel}`;
+  }
+  const bodyUsesCanonicalNumber =
+    entry.numbering?.kind === "decimal" &&
+    bodyTitle.startsWith(entry.numbering.key) &&
+    /^\s/u.test(bodyTitle.slice(entry.numbering.key.length));
+  if (
+    entry.numbering?.kind === "decimal" &&
+    sourceTitle.startsWith(entry.numbering.key) &&
+    !bodyUsesCanonicalNumber &&
+    repairedHeadingNumber?.compact === entry.numbering.key.replaceAll(".", "")
+  ) {
+    return sourceTitle;
+  }
   if (
     dotLeader.test(bodyTitle) ||
     /^\$?k\$?\s*习题(?:\s|$).*\$?k\$?$/iu.test(bodyTitle)
@@ -987,19 +1118,15 @@ function recoveredMatchedSourceTitle(
   ) {
     return sourceTitle;
   }
-  const printed = printedPageEvidence(sourceTitle);
   if (!printed) return bodyTitle;
-  const suffix =
-    /(?<suffix>(?:\.(?:\s*\.)+|…+|·(?:\s*·)+|_(?:\s*_)+|\s+)\s*(?:[ivxlcdm]+|\d{1,5})\s*)$/iu.exec(
-      sourceTitle,
-    )?.groups?.suffix;
-  return `${bodyTitle}${suffix ?? `  ${printed.pageLabel}`}`;
+  return bodyTitleWithPage();
 }
 
 function monotonicMatches(
   entries: readonly ExtractedEntry[],
   headings: readonly NormalizedHeading[],
   options: {
+    readonly allowMajorSectionFallback?: boolean;
     readonly allowNumberOnly?: boolean;
     readonly requireNumberingForNumberedEntries?: boolean;
   } = {},
@@ -1013,6 +1140,7 @@ function monotonicMatches(
   const candidates: MatchCandidate[] = [];
   const exactHeadings = new Map<string, number[]>();
   const numberedHeadings = new Map<string, number[]>();
+  const repairedNumberedHeadings = new Map<string, number[]>();
   for (const [index, heading] of headings.entries()) {
     const title = normalizedTitle(heading.sourceTitle, false);
     exactHeadings.set(title, [...(exactHeadings.get(title) ?? []), index]);
@@ -1023,12 +1151,26 @@ function monotonicMatches(
         index,
       ]);
     }
+    const repairedNumber = repairableDecimalPrefix(heading.sourceTitle);
+    if (repairedNumber) {
+      repairedNumberedHeadings.set(repairedNumber.compact, [
+        ...(repairedNumberedHeadings.get(repairedNumber.compact) ?? []),
+        index,
+      ]);
+    }
   }
   for (const [entryIndex, entry] of entries.entries()) {
     const indexes = new Set(exactHeadings.get(entry.normalizedTitle) ?? []);
     if (entry.numbering) {
       for (const index of numberedHeadings.get(entry.numbering.key) ?? []) {
         indexes.add(index);
+      }
+      if (entry.numbering.kind === "decimal") {
+        for (const index of repairedNumberedHeadings.get(
+          entry.numbering.key.replaceAll(".", ""),
+        ) ?? []) {
+          indexes.add(index);
+        }
       }
     }
     if (indexes.size === 0) {
@@ -1053,7 +1195,12 @@ function monotonicMatches(
       ) {
         continue;
       }
-      const score = matchScore(entry, heading, options.allowNumberOnly);
+      const score = matchScore(
+        entry,
+        heading,
+        options.allowNumberOnly,
+        options.allowMajorSectionFallback,
+      );
       if (score > 0) candidates.push({ entryIndex, headingIndex, score });
       if (candidates.length >= maximumMatchCandidates) break;
     }
@@ -1389,6 +1536,74 @@ function printedPageLabelInversions(
     previous = current;
   }
   return inversions;
+}
+
+function reorderFromMonotonicPageLabels(
+  entries: readonly ExtractedEntry[],
+): readonly ExtractedEntry[] {
+  if (entries.length < 20 || printedPageLabelInversions(entries) === 0) {
+    return entries;
+  }
+  const pages = entries.map((entry) => {
+    const label = printedPageEvidence(entry.sourceTitle)?.pageLabel;
+    return label && /^\d+$/u.test(label) ? Number(label) : undefined;
+  });
+  if (
+    pages.filter((page) => page !== undefined).length / entries.length <
+    0.6
+  ) {
+    return entries;
+  }
+  const ranks = pages.map((page, index) => {
+    if (page !== undefined) return page;
+    let previousIndex = index - 1;
+    while (previousIndex >= 0 && pages[previousIndex] === undefined) {
+      previousIndex -= 1;
+    }
+    let nextIndex = index + 1;
+    while (nextIndex < pages.length && pages[nextIndex] === undefined) {
+      nextIndex += 1;
+    }
+    const previous = pages[previousIndex];
+    const next = pages[nextIndex];
+    if (entries[index]?.numbering?.kind === "part") {
+      let nextMajorIndex = index + 1;
+      while (
+        nextMajorIndex < entries.length &&
+        (pages[nextMajorIndex] === undefined ||
+          !["appendix", "chapter", "part"].includes(
+            entries[nextMajorIndex]?.numbering?.kind ?? "",
+          ))
+      ) {
+        nextMajorIndex += 1;
+      }
+      const nextMajor = pages[nextMajorIndex];
+      if (nextMajor !== undefined) {
+        return nextMajor - (nextMajorIndex - index) / (entries.length + 1);
+      }
+    }
+    if (previous !== undefined && next !== undefined && previous <= next) {
+      return (
+        previous +
+        ((next - previous) * (index - previousIndex)) /
+          (nextIndex - previousIndex)
+      );
+    }
+    if (next !== undefined) {
+      return next - (nextIndex - index) / (entries.length + 1);
+    }
+    if (previous !== undefined) {
+      return previous + (index - previousIndex) / (entries.length + 1);
+    }
+    return index;
+  });
+  const reordered = Object.freeze(
+    entries
+      .map((entry, index) => ({ entry, index, rank: ranks[index] ?? index }))
+      .sort((left, right) => left.rank - right.rank || left.index - right.index)
+      .map(({ entry }) => entry),
+  );
+  return printedPageLabelInversions(reordered) === 0 ? reordered : entries;
 }
 
 function reorderFromReliableLayout(
@@ -1762,7 +1977,10 @@ function recoverLayoutLogicalEntries(
       sourceGap.length === layoutGap.length &&
       sourceGap.every((sourceEntry, offset) => {
         const layoutEntry = layoutGap[offset];
-        return layoutEntry !== undefined && samePrintedEntry(sourceEntry, layoutEntry);
+        return (
+          layoutEntry !== undefined &&
+          samePrintedEntry(sourceEntry, layoutEntry)
+        );
       });
     const damagedSourceGap = sourceGap.some(needsLayoutRepair);
     const maximumEmptyLayoutGap =
@@ -1799,8 +2017,8 @@ function recoverLayoutLogicalEntries(
         }
         recovered.push(
           needsLayoutRepair(sourceEntry) ||
-          sourceEntry.sourceTitle.includes("�") ||
-          prefersNativeVisibleMath(sourceEntry, layoutEntry)
+            sourceEntry.sourceTitle.includes("�") ||
+            prefersNativeVisibleMath(sourceEntry, layoutEntry)
             ? Object.freeze({ ...layoutEntry, range: sourceEntry.range })
             : Object.freeze({
                 ...sourceEntry,
@@ -1930,8 +2148,8 @@ function recoverLayoutLogicalEntries(
           ) >= 0.9));
     recovered.push(
       sourceAnchorDamaged ||
-      layoutHasMissingPage ||
-      prefersNativeVisibleMath(sourceEntry, layoutEntry)
+        layoutHasMissingPage ||
+        prefersNativeVisibleMath(sourceEntry, layoutEntry)
         ? Object.freeze({
             ...layoutEntry,
             range: sourceEntry.range,
@@ -1952,14 +2170,17 @@ function recoverLayoutLogicalEntries(
     layoutCursor = anchor.layoutIndex + 1;
   }
   recovered.push(...sourceEntries.slice(sourceCursor));
-  const reordered = reorderFromReliableLayout(recovered, layoutEntries);
+  const reordered = reorderFromMonotonicPageLabels(
+    reorderFromReliableLayout(recovered, layoutEntries),
+  );
   if (evidence?.source !== "native-pdf") return reordered;
   return Object.freeze(
     reordered.map((entry) => {
       const nativeMatches = layoutEntries.filter((layoutEntry) =>
         prefersNativeVisibleMath(entry, layoutEntry),
       );
-      const nativeMatch = nativeMatches.length === 1 ? nativeMatches[0] : undefined;
+      const nativeMatch =
+        nativeMatches.length === 1 ? nativeMatches[0] : undefined;
       return nativeMatch
         ? Object.freeze({ ...nativeMatch, range: entry.range })
         : entry;
@@ -2055,8 +2276,60 @@ export function detectPrintedContents(input: {
     }
   }
 
+  const estimatedPrintedWindows = ranges.map((range) => {
+    const seenTitles = new Set<string>();
+    let endIndex: number | undefined;
+    for (
+      let index = range.firstEntryIndex;
+      index <= range.endIndex;
+      index += 1
+    ) {
+      const block = roots[index];
+      if (!block?.position) continue;
+      if (
+        index > range.firstEntryIndex &&
+        contentsTitle.test(rootTitle(block).normalize("NFKC"))
+      ) {
+        endIndex = index - 1;
+        break;
+      }
+      const title =
+        block.type === "heading" ? normalizedTitle(rootTitle(block)) : "";
+      const printedRowsContinue = roots
+        .slice(index + 1, index + 5)
+        .some((candidate) =>
+          hasPrintedPageLine(candidate, input.document.source),
+        );
+      if (
+        title &&
+        seenTitles.has(title) &&
+        printedPageEvidence(rootTitle(block)) === undefined &&
+        !printedRowsContinue
+      ) {
+        endIndex = index - 1;
+        break;
+      }
+      for (const entry of lineEntries({
+        block,
+        previousLevel: 0,
+        source: input.document.source,
+        sourceBytes,
+      })) {
+        if (entry.normalizedTitle) seenTitles.add(entry.normalizedTitle);
+      }
+    }
+    const start = roots[range.startIndex]?.position?.start.offset;
+    const end =
+      endIndex === undefined
+        ? undefined
+        : roots[endIndex]?.position?.end.offset;
+    return start === undefined || end === undefined
+      ? undefined
+      : Object.freeze({ end, start });
+  });
+
   const candidates: PrintedContentsCandidate[] = [];
-  for (const range of ranges) {
+  for (const [rangeIndex, range] of ranges.entries()) {
     const sourceEntries: ExtractedEntry[] = [];
     let candidateEndIndex = range.startIndex;
     let richContent = false;
@@ -2130,6 +2403,50 @@ export function detectPrintedContents(input: {
         source: input.document.source,
         sourceBytes,
       });
+      const previousEntry = sourceEntries.at(-1);
+      const detachedPartSubtitle =
+        extracted.length === 0 &&
+        block.type === "heading" &&
+        previousEntry?.numbering?.kind === "part" &&
+        printedPageEvidence(previousEntry.sourceTitle) === undefined &&
+        currentNumbering === undefined &&
+        possibleBodyTitle.length >= 2 &&
+        possibleBodyTitle.length <= 80 &&
+        !frontmatterEntryTitle.test(rootTitle(block)) &&
+        !contextualEntryTitle.test(rootTitle(block)) &&
+        roots.slice(index + 1, index + 5).some((candidate) => {
+          const candidateTitle = rootTitle(candidate);
+          const candidateKind =
+            inferPrintedHeadingEvidence(candidateTitle)?.kind;
+          return (
+            hasPrintedPageLine(candidate, input.document.source) ||
+            candidateKind === "chapter"
+          );
+        });
+      if (detachedPartSubtitle && previousEntry && block.position) {
+        const sourceTitle = `${plainTitle(previousEntry.sourceTitle)} ${plainTitle(
+          rootTitle(block),
+        )}`;
+        const endByte = utf8ByteOffset(
+          input.document.source,
+          block.position.end.offset,
+        );
+        sourceEntries[sourceEntries.length - 1] = Object.freeze({
+          ...previousEntry,
+          normalizedTitle: normalizedTitle(sourceTitle),
+          range: Object.freeze({
+            end_byte: endByte,
+            sha256: hash(
+              sourceBytes.subarray(previousEntry.range.start_byte, endByte),
+            ),
+            start_byte: previousEntry.range.start_byte,
+          }),
+          sourceTitle,
+        });
+        candidateEndIndex = index;
+        noiseBlocks = 0;
+        continue;
+      }
       if (requiresPdfLineRepair(block, input.document.source)) {
         requiresPdfEvidence = true;
       }
@@ -2167,8 +2484,7 @@ export function detectPrintedContents(input: {
         plainTitle(entry.sourceTitle);
       const semanticNumbering = inferPrintedHeadingEvidence(semanticTitle);
       const numbering = semanticNumbering ?? entry.numbering;
-      const layoutSensitiveLocal =
-        /^appendix\s*[:：]/iu.test(semanticTitle);
+      const layoutSensitiveLocal = /^appendix\s*[:：]/iu.test(semanticTitle);
       const proposedLevel = layoutSensitiveLocal
         ? Math.max(
             inferredLevels[index] ?? entry.referenceLevel,
@@ -2216,12 +2532,30 @@ export function detectPrintedContents(input: {
     );
     const bodyHeadings = input.document.headings.filter((heading) => {
       const start = heading.position?.start.offset ?? Number.NEGATIVE_INFINITY;
+      const insideOtherPrintedWindow = estimatedPrintedWindows.some(
+        (window, windowIndex) =>
+          windowIndex !== rangeIndex &&
+          window !== undefined &&
+          start >= window.start &&
+          start <= window.end,
+      );
       return (
+        !insideOtherPrintedWindow &&
         (start < candidateStartOffset || start > candidateEndOffset) &&
         eligibleHeading(heading, start > candidateEndOffset)
       );
     });
+    const summaryCandidate =
+      entries.filter(
+        (entry) =>
+          entry.numbering?.kind === "part" ||
+          entry.numbering?.kind === "chapter",
+      ).length >= 3 &&
+      entries.filter((entry) => entry.numbering?.kind === "decimal").length /
+        Math.max(1, entries.length) <
+        0.25;
     const alignment = monotonicMatches(entries, bodyHeadings, {
+      allowMajorSectionFallback: summaryCandidate,
       allowNumberOnly: false,
     });
     const resolvedMatches = new Map(alignment.matches);
@@ -2293,16 +2627,24 @@ export function detectPrintedContents(input: {
         );
       const best = candidates[0];
       const second = candidates[1];
+      const frontmatterRepair = frontmatterEntryTitle.test(
+        printedPageEvidence(entry.sourceTitle)?.title ??
+          plainTitle(entry.sourceTitle),
+      );
       const minimumScore = localAppendix
         ? 6
-        : entry.layoutOnly || localUnnumberedRepair
-          ? 4.5
-          : 16;
+        : frontmatterRepair
+          ? 7.5
+          : entry.layoutOnly || localUnnumberedRepair
+            ? 4.5
+            : 16;
       const minimumMargin = localAppendix
         ? 2
-        : entry.layoutOnly || localUnnumberedRepair
-          ? 1.5
-          : 4;
+        : frontmatterRepair
+          ? 2
+          : entry.layoutOnly || localUnnumberedRepair
+            ? 1.5
+            : 4;
       if (
         best &&
         best.score >= minimumScore &&
@@ -2359,8 +2701,7 @@ export function detectPrintedContents(input: {
     );
     const hasExplicitMajorContext = matchedEntries.some(
       (entry) =>
-        entry.numbering?.kind === "part" ||
-        entry.numbering?.kind === "chapter",
+        entry.numbering?.kind === "part" || entry.numbering?.kind === "chapter",
     );
     matchedEntries = matchedEntries.map((entry, index) => {
       const recoveredNumbering = inferPrintedHeadingEvidence(

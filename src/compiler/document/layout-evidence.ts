@@ -47,6 +47,7 @@ export interface PrintedLayoutRow {
 
 const pageSuffix =
   /(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+|\s{2,})\s*(?:\d+|[ivxlcdm]+)\s*$/iu;
+const trailingLeader = /(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+)\s*$/u;
 const numberingPrefix =
   /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|part)\s*[0-9ivxlcdm]+|附录|\d+(?:\s*\.\s*\d+){0,3})(?:\s|、|:|：|$)/iu;
 const detachedSectionNumber = /^\d+(?:\s*\.\s*\d+){1,3}\s*\.?\s*$/u;
@@ -369,11 +370,17 @@ function supplementalPageLabels(
     evidence.records
       .flatMap((record) => {
         const text = record.text?.trim().toLocaleLowerCase("und");
+        const label =
+          text && standalonePageLabel.test(text)
+            ? text
+            : evidence.source === "native-pdf"
+              ? pageLabel(text)
+              : undefined;
         if (
           record.pageIndex !== pageIndex ||
-          record.type !== "page-label" ||
-          !text ||
-          !standalonePageLabel.test(text) ||
+          (record.type !== "page-label" &&
+            !(evidence.source === "native-pdf" && record.type === "text")) ||
+          !label ||
           !record.bbox
         ) {
           return [];
@@ -381,7 +388,7 @@ function supplementalPageLabels(
         return [
           Object.freeze({
             centerY: (record.bbox[1] + record.bbox[3]) / 2,
-            label: text,
+            label,
           }),
         ];
       })
@@ -526,7 +533,8 @@ export function supplementMissingListPageLabels(
       if (
         pageLabel(record.text) ||
         !record.text ||
-        !numberingPrefix.test(record.text.trim())
+        (!numberingPrefix.test(record.text.trim()) &&
+          !trailingLeader.test(record.text.trim()))
       ) {
         continue;
       }
@@ -538,6 +546,130 @@ export function supplementMissingListPageLabels(
             monotonicPageLabel(records, index, candidate.label) &&
             Math.abs(candidate.centerY - expectedY) <=
               Math.max(10, slope * 0.45),
+        )
+        .sort(
+          (left, right) =>
+            Math.abs(left.centerY - expectedY) -
+            Math.abs(right.centerY - expectedY),
+        )[0];
+      if (!match) continue;
+      used.add(match);
+      replacements.set(
+        record,
+        Object.freeze({
+          ...record,
+          pageLabelSupplemented: true,
+          text: `${record.text.trim()}  ${match.label}`,
+        }),
+      );
+    }
+  }
+  const positionedPageIndexes = new Set(
+    base.records.flatMap((record) =>
+      record.bbox && record.text ? [record.pageIndex] : [],
+    ),
+  );
+  for (const pageIndex of positionedPageIndexes) {
+    const records = base.records
+      .filter(
+        (record) =>
+          record.pageIndex === pageIndex &&
+          record.bbox &&
+          record.text &&
+          (pageLabel(record.text) !== undefined ||
+            trailingLeader.test(record.text.trim())),
+      )
+      .sort(
+        (left, right) =>
+          ((left.bbox?.[1] ?? 0) + (left.bbox?.[3] ?? 0)) / 2 -
+          ((right.bbox?.[1] ?? 0) + (right.bbox?.[3] ?? 0)) / 2,
+      );
+    const candidates = supplementalPageLabels(supplemental, pageIndex);
+    if (records.length < 3 || candidates.length < 3) continue;
+    const baseBottom = maximumPageBottom(base.records, pageIndex);
+    const supplementalBottom = maximumPageBottom(
+      supplemental.records,
+      pageIndex,
+    );
+    if (!baseBottom || !supplementalBottom) continue;
+    const roughScale = supplementalBottom / baseBottom;
+    const used = new Set<PageLabelCandidate>();
+    const anchors: {
+      readonly sourceY: number;
+      readonly targetY: number;
+    }[] = [];
+    for (const record of records) {
+      const label = pageLabel(record.text);
+      const box = record.bbox;
+      if (!label || !box) continue;
+      const sourceY = (box[1] + box[3]) / 2;
+      const expectedY = sourceY * roughScale;
+      const tolerance = Math.max(12, (box[3] - box[1]) * roughScale * 2);
+      const match = candidates
+        .filter(
+          (candidate) =>
+            !used.has(candidate) &&
+            candidate.label === label &&
+            Math.abs(candidate.centerY - expectedY) <= tolerance,
+        )
+        .sort(
+          (left, right) =>
+            Math.abs(left.centerY - expectedY) -
+            Math.abs(right.centerY - expectedY),
+        )[0];
+      if (!match) continue;
+      used.add(match);
+      anchors.push(Object.freeze({ sourceY, targetY: match.centerY }));
+    }
+    if (anchors.length < 2) continue;
+    const meanSource =
+      anchors.reduce((sum, anchor) => sum + anchor.sourceY, 0) / anchors.length;
+    const meanTarget =
+      anchors.reduce((sum, anchor) => sum + anchor.targetY, 0) / anchors.length;
+    const denominator = anchors.reduce(
+      (sum, anchor) => sum + (anchor.sourceY - meanSource) ** 2,
+      0,
+    );
+    if (denominator <= 0) continue;
+    const slope =
+      anchors.reduce(
+        (sum, anchor) =>
+          sum + (anchor.sourceY - meanSource) * (anchor.targetY - meanTarget),
+        0,
+      ) / denominator;
+    const intercept = meanTarget - slope * meanSource;
+    const residual = Math.max(
+      ...anchors.map((anchor) =>
+        Math.abs(anchor.targetY - (intercept + slope * anchor.sourceY)),
+      ),
+    );
+    if (
+      slope < roughScale * 0.55 ||
+      slope > roughScale * 1.8 ||
+      residual > 12
+    ) {
+      continue;
+    }
+    for (const [index, record] of records.entries()) {
+      const box = record.bbox;
+      if (
+        !box ||
+        !record.text ||
+        replacements.has(record) ||
+        pageLabel(record.text) ||
+        !trailingLeader.test(record.text.trim())
+      ) {
+        continue;
+      }
+      const sourceY = (box[1] + box[3]) / 2;
+      const expectedY = intercept + slope * sourceY;
+      const tolerance = Math.max(12, (box[3] - box[1]) * slope * 2);
+      const match = candidates
+        .filter(
+          (candidate) =>
+            !used.has(candidate) &&
+            monotonicPageLabel(records, index, candidate.label) &&
+            Math.abs(candidate.centerY - expectedY) <= tolerance,
         )
         .sort(
           (left, right) =>
@@ -640,9 +772,116 @@ function nearestColumn(left: number, starts: readonly number[]): number {
 
 interface PositionedRecord {
   readonly box: BoundingBox;
+  readonly closedByDetachedPageLabel?: boolean;
   readonly column: number;
   readonly record: LayoutEvidenceRecord;
   readonly text: string;
+}
+
+const raisedCharacter = new Map<string, string>([["𝑛", "ⁿ"]]);
+
+function restoreRaisedFragments(
+  records: readonly PositionedRecord[],
+): PositionedRecord[] {
+  const assignments = new Map<
+    PositionedRecord,
+    { readonly fragment: PositionedRecord; readonly text: string }[]
+  >();
+  const used = new Set<PositionedRecord>();
+  for (const fragment of records) {
+    const replacement = raisedCharacter.get(fragment.text.trim());
+    if (!replacement || fragment.record.groupId !== undefined) continue;
+    const fragmentHeight = fragment.box[3] - fragment.box[1];
+    const centerX = (fragment.box[0] + fragment.box[2]) / 2;
+    const main = records
+      .filter((candidate) => {
+        if (
+          candidate === fragment ||
+          candidate.column !== fragment.column ||
+          candidate.record.groupId !== undefined ||
+          raisedCharacter.has(candidate.text.trim()) ||
+          trailingLeader.test(candidate.text.trim()) ||
+          standalonePageLabel.test(candidate.text.trim())
+        ) {
+          return false;
+        }
+        const candidateHeight = candidate.box[3] - candidate.box[1];
+        const overlap = Math.max(
+          0,
+          Math.min(candidate.box[3], fragment.box[3]) -
+            Math.max(candidate.box[1], fragment.box[1]),
+        );
+        return (
+          overlap >= Math.min(fragmentHeight, candidateHeight) * 0.45 &&
+          fragment.box[1] <= candidate.box[1] + candidateHeight * 0.25 &&
+          centerX >= candidate.box[0] &&
+          centerX <= candidate.box[2] + candidateHeight
+        );
+      })
+      .sort((left, right) => {
+        const distance = (candidate: PositionedRecord) =>
+          centerX < candidate.box[0]
+            ? candidate.box[0] - centerX
+            : centerX > candidate.box[2]
+              ? centerX - candidate.box[2]
+              : 0;
+        return distance(left) - distance(right);
+      })[0];
+    if (!main) continue;
+    assignments.set(main, [
+      ...(assignments.get(main) ?? []),
+      { fragment, text: replacement },
+    ]);
+    used.add(fragment);
+  }
+  return records.flatMap((record) => {
+    if (used.has(record)) return [];
+    const fragments = assignments.get(record);
+    if (!fragments || fragments.length === 0) return [record];
+    const characters = [...record.text];
+    const width = Math.max(1, record.box[2] - record.box[0]);
+    const insertions = new Map<number, string[]>();
+    for (const { fragment, text } of fragments) {
+      const centerX = (fragment.box[0] + fragment.box[2]) / 2;
+      const boundary = Math.max(
+        1,
+        Math.min(
+          characters.length,
+          Math.round(((centerX - record.box[0]) / width) * characters.length),
+        ),
+      );
+      insertions.set(boundary, [...(insertions.get(boundary) ?? []), text]);
+    }
+    let text = "";
+    for (const [index, character] of characters.entries()) {
+      text += character;
+      text += (insertions.get(index + 1) ?? []).join("");
+    }
+    return [
+      {
+        ...record,
+        box: Object.freeze([
+          Math.min(
+            record.box[0],
+            ...fragments.map(({ fragment }) => fragment.box[0]),
+          ),
+          Math.min(
+            record.box[1],
+            ...fragments.map(({ fragment }) => fragment.box[1]),
+          ),
+          Math.max(
+            record.box[2],
+            ...fragments.map(({ fragment }) => fragment.box[2]),
+          ),
+          Math.max(
+            record.box[3],
+            ...fragments.map(({ fragment }) => fragment.box[3]),
+          ),
+        ]),
+        text,
+      },
+    ];
+  });
 }
 
 function detachedTechnicalToken(
@@ -702,20 +941,22 @@ export function reconstructPrintedLayoutRows(
     (left, right) => left[0] - right[0],
   )) {
     const starts = columnStarts(records);
-    const positioned: PositionedRecord[] = records.flatMap((record) => {
-      const box = placement(record);
-      const text = record.text?.trim();
-      return box && text
-        ? [
-            {
-              box,
-              column: nearestColumn(box[0], starts),
-              record,
-              text,
-            },
-          ]
-        : [];
-    });
+    const positioned = restoreRaisedFragments(
+      records.flatMap((record) => {
+        const box = placement(record);
+        const text = record.text?.trim();
+        return box && text
+          ? [
+              {
+                box,
+                column: nearestColumn(box[0], starts),
+                record,
+                text,
+              },
+            ]
+          : [];
+      }),
+    );
     positioned.sort(
       (left, right) =>
         left.column - right.column ||
@@ -766,6 +1007,10 @@ export function reconstructPrintedLayoutRows(
             Math.max(previous.box[2], item.box[2]),
             Math.max(previous.box[3], item.box[3]),
           ]),
+          ...(previous.closedByDetachedPageLabel ||
+          item.closedByDetachedPageLabel
+            ? { closedByDetachedPageLabel: true }
+            : {}),
           column: restoredToken.main.column,
           record: restoredToken.main.record,
           text: restoredToken.text,
@@ -775,12 +1020,14 @@ export function reconstructPrintedLayoutRows(
         previous.column === item.column &&
         previous.record.groupId === undefined &&
         item.record.groupId === undefined &&
-        overlap >= minimumHeight * 0.7 &&
+        overlap >= minimumHeight * 0.45 &&
         horizontalOverlap <= minimumWidth * 0.15
       ) {
         const fragments = [previous, item].sort(
           (left, right) => left.box[0] - right.box[0],
         );
+        const rightmost = fragments[1];
+        const leftmost = fragments[0];
         coalesced[coalesced.length - 1] = {
           box: Object.freeze([
             Math.min(previous.box[0], item.box[0]),
@@ -788,6 +1035,13 @@ export function reconstructPrintedLayoutRows(
             Math.max(previous.box[2], item.box[2]),
             Math.max(previous.box[3], item.box[3]),
           ]),
+          closedByDetachedPageLabel:
+            previous.closedByDetachedPageLabel ||
+            item.closedByDetachedPageLabel ||
+            (rightmost !== undefined &&
+              leftmost !== undefined &&
+              standalonePageLabel.test(rightmost.text.trim()) &&
+              !standalonePageLabel.test(leftmost.text.trim())),
           column: previous.column,
           record: previous.record,
           text: fragments.map((fragment) => fragment.text).join(" "),
@@ -818,6 +1072,7 @@ export function reconstructPrintedLayoutRows(
         !groupItem &&
         previous.pageIndex === pageIndex &&
         previousPositioned.column === positionedRecord.column &&
+        !previousPositioned.closedByDetachedPageLabel &&
         verticalGap >=
           -Math.min(
             20,

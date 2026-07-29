@@ -165,6 +165,53 @@ describe("bounded MinerU layout evidence", () => {
     expect(result.source).toBe("content-list");
   });
 
+  it("supplements an unnumbered leader row from the same aligned page column", () => {
+    const base: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        "1A 向量 1",
+        "复数 . . . . .",
+        "组 . . . 4",
+        "习题 1A . . . 9",
+      ].map((text, groupItemIndex) => ({
+        bbox: [
+          77,
+          100 + groupItemIndex * 50,
+          958,
+          125 + groupItemIndex * 50,
+        ] as const,
+        pageIndex: 8,
+        sourceOrder: groupItemIndex,
+        text,
+        type: "list",
+      })),
+      source: "content-list",
+    };
+    const supplemental: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        [125, "1A 向量 . . . 1"],
+        [175, "复数 . . . 2"],
+        [225, "组 . . . 4"],
+        [275, "习题 1A . . . 9"],
+      ].map(([top, text], sourceOrder) => ({
+        bbox: [77, Number(top), 1006, Number(top) + 17] as const,
+        pageIndex: 8,
+        sourceOrder,
+        text: String(text),
+        type: "text",
+      })),
+      source: "native-pdf",
+    };
+
+    const result = supplementMissingListPageLabels(base, supplemental);
+
+    expect(result.records[1]).toMatchObject({
+      pageLabelSupplemented: true,
+      text: "复数 . . . . .  2",
+    });
+  });
+
   it("does not infer a missing page label without two geometric anchors", () => {
     const base: LayoutEvidence = {
       diagnostics: [],
@@ -379,6 +426,177 @@ describe("bounded MinerU layout evidence", () => {
       "1.4 A long title 24",
       "1. 7. 1 Development: 1961~ 1972 ...... 39",
     ]);
+  });
+
+  it("does not append the next entry after a detached right-side page label", () => {
+    const evidence: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        {
+          bbox: [36, 216, 150, 228],
+          pageIndex: 4,
+          sourceOrder: 0,
+          text: "第 1 章 向量空间",
+          type: "text",
+        },
+        {
+          bbox: [458, 216, 463, 227],
+          pageIndex: 4,
+          sourceOrder: 1,
+          text: "1",
+          type: "text",
+        },
+        {
+          bbox: [52, 233, 443, 244],
+          pageIndex: 4,
+          sourceOrder: 2,
+          text: "1A R 和 C . . . . . . . . . . . .",
+          type: "text",
+        },
+        {
+          bbox: [458, 233, 463, 244],
+          pageIndex: 4,
+          sourceOrder: 3,
+          text: "2",
+          type: "text",
+        },
+      ],
+      source: "native-pdf",
+    };
+
+    expect(
+      reconstructPrintedLayoutRows(evidence).map((row) => row.text),
+    ).toEqual(["第 1 章 向量空间 1", "1A R 和 C . . . . . . . . . . . . 2"]);
+  });
+
+  it("joins a base symbol, superscript, leader and page label by x position", () => {
+    const evidence: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        {
+          bbox: [76, 283, 82, 292],
+          pageIndex: 4,
+          sourceOrder: 3,
+          text: "F",
+          type: "text",
+        },
+        {
+          bbox: [82, 279, 88, 287],
+          pageIndex: 4,
+          sourceOrder: 0,
+          text: "𝑛",
+          type: "text",
+        },
+        {
+          bbox: [94, 282, 443, 293],
+          pageIndex: 4,
+          sourceOrder: 1,
+          text: ". . . . . . . . . . . .",
+          type: "text",
+        },
+        {
+          bbox: [458, 282, 463, 293],
+          pageIndex: 4,
+          sourceOrder: 2,
+          text: "5",
+          type: "text",
+        },
+      ],
+      source: "native-pdf",
+    };
+
+    expect(
+      reconstructPrintedLayoutRows(evidence).map((row) => row.text),
+    ).toEqual(["Fⁿ . . . . . . . . . . . . 5"]);
+  });
+
+  it("attaches multiple raised math symbols to their geometric base characters", () => {
+    const evidence: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        {
+          bbox: [78, 230, 82, 240],
+          pageIndex: 4,
+          sourceOrder: 0,
+          text: "𝑛",
+          type: "text",
+        },
+        {
+          bbox: [52, 231, 105, 243],
+          pageIndex: 4,
+          sourceOrder: 1,
+          text: "1A R 和 C",
+          type: "text",
+        },
+        {
+          bbox: [106, 230, 110, 240],
+          pageIndex: 4,
+          sourceOrder: 2,
+          text: "𝑛",
+          type: "text",
+        },
+        {
+          bbox: [117, 233, 443, 243],
+          pageIndex: 4,
+          sourceOrder: 3,
+          text: ". . . . . . . . . . . .",
+          type: "text",
+        },
+        {
+          bbox: [458, 233, 463, 243],
+          pageIndex: 4,
+          sourceOrder: 4,
+          text: "2",
+          type: "text",
+        },
+      ],
+      source: "native-pdf",
+    };
+
+    expect(
+      reconstructPrintedLayoutRows(evidence).map((row) => row.text),
+    ).toEqual(["1A Rⁿ 和 Cⁿ . . . . . . . . . . . . 2"]);
+  });
+
+  it("keeps header and footer labels separate from nearby contents rows", () => {
+    const evidence: LayoutEvidence = {
+      diagnostics: [],
+      records: [
+        {
+          bbox: [458, 15, 463, 26],
+          pageIndex: 6,
+          sourceOrder: 0,
+          text: "v",
+          type: "text",
+        },
+        {
+          bbox: [52, 37, 443, 49],
+          pageIndex: 6,
+          sourceOrder: 1,
+          text: "5B Minimum polynomial . . . . . . . .",
+          type: "text",
+        },
+        {
+          bbox: [448, 37, 463, 49],
+          pageIndex: 6,
+          sourceOrder: 2,
+          text: "120",
+          type: "text",
+        },
+        {
+          bbox: [458, 760, 463, 771],
+          pageIndex: 6,
+          sourceOrder: 3,
+          text: "7",
+          type: "text",
+        },
+      ],
+      source: "native-pdf",
+    };
+
+    expect(
+      reconstructPrintedLayoutRows(evidence).map((row) => row.text),
+    ).toEqual(["v", "5B Minimum polynomial . . . . . . . . 120", "7"]);
   });
 
   it("restores a detached technical token inside a numbered PDF row", () => {

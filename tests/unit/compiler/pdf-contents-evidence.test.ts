@@ -145,6 +145,47 @@ describe("bounded PDF contents evidence", () => {
     );
   });
 
+  it("removes a repeated native extraction ordinal after printed page labels", async () => {
+    const rows = [
+      ["复数", "2", "8"],
+      ["组", "4", "9"],
+      ["Fn", "5", "10"],
+      ["关于域", "8", "11"],
+      ["习题", "9", "12"],
+    ];
+    const nativeText = [
+      "level\tpage_num\tpar_num\tblock_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext",
+      "1\t1\t0\t0\t0\t0\t0\t0\t600\t800\t-1\t###PAGE###",
+      "5\t1\t1\t1\t1\t1\t10\t20\t55\t12\t100\tContents",
+      ...rows.flatMap(([title, page, ordinal], index) => [
+        `5\t1\t1\t1\t${index + 2}\t1\t10\t${40 + index * 20}\t80\t12\t100\t${title}`,
+        `5\t1\t1\t1\t${index + 2}\t2\t95\t${40 + index * 20}\t80\t12\t100\t....`,
+        `5\t1\t1\t1\t${index + 2}\t3\t180\t${40 + index * 20}\t20\t12\t100\t${page}`,
+        `5\t1\t1\t1\t${index + 2}\t4\t205\t${40 + index * 20}\t20\t12\t100\t${ordinal}`,
+      ]),
+    ].join("\n");
+    const value = await fixture({ nativeText });
+
+    const result = await readPdfContentsEvidence({
+      commands: value.commands,
+      pdfPath: value.pdfPath,
+      recoverPageLabels: true,
+      temporaryRoot: value.work,
+    });
+
+    expect(result.source).toBe("native-pdf");
+    expect(result.records.map((record) => record.text)).toEqual(
+      expect.arrayContaining([
+        "复数 .... 2",
+        "组 .... 4",
+        "Fn .... 5",
+        "关于域 .... 8",
+        "习题 .... 9",
+      ]),
+    );
+    await expect(access(`${value.commands.pdftoppm}.log`)).rejects.toThrow();
+  });
+
   it("uses OCR when native text exists but has no contents boundary", async () => {
     const value = await fixture({
       nativeText: "Cover\nCopyright\fPreface\nIntroduction\f",

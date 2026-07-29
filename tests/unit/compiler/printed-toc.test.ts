@@ -12,7 +12,6 @@ import {
   inferPrintedHeadingEvidence,
   inferPrintedReferenceLevels,
   shouldPreferNativePdfDetection,
-  shouldPreferNativePdfLayout,
   supplementalPdfPageIndices,
   type PrintedContentsDetection,
 } from "@/compiler/document/printed-toc";
@@ -130,12 +129,12 @@ describe("printed contents detection", () => {
           },
         ],
       }) as unknown as PrintedContentsDetection;
-    expect(
-      shouldPreferNativePdfDetection(detection(10), detection(12)),
-    ).toBe(false);
-    expect(
-      shouldPreferNativePdfDetection(detection(10), detection(13)),
-    ).toBe(true);
+    expect(shouldPreferNativePdfDetection(detection(10), detection(12))).toBe(
+      false,
+    );
+    expect(shouldPreferNativePdfDetection(detection(10), detection(13))).toBe(
+      true,
+    );
     expect(
       shouldPreferNativePdfDetection(detection(10), detection(20, "low")),
     ).toBe(false);
@@ -320,6 +319,42 @@ describe("printed contents detection", () => {
         "7.1 分散化与组合风险",
       ]),
     ).toEqual([1, 2, 3, 4, 3, 3, 3, 3, 2, 3]);
+  });
+
+  it("keeps a compact appendix exercise label inside its chapter", () => {
+    expect(
+      inferPrintedReferenceLevels([
+        "第二部分 资产组合理论与实践",
+        "第6章 风险资产配置",
+        "6.1 风险与收益",
+        "附录 6A 风险厌恶",
+        "附录6A习题",
+        "附录 6B 保险合同",
+      ]),
+    ).toEqual([1, 2, 3, 3, 3, 3]);
+
+    expect(
+      inferPrintedReferenceLevels(
+        [
+          "第二部分 资产组合理论与实践",
+          "第6章 风险资产配置",
+          "6.1 风险与收益",
+          "附录 6A 风险厌恶",
+          "概念检查6A-1",
+          "附录6A习题",
+          "附录 6B 保险合同",
+        ],
+        {
+          referenceLevels: new Map([
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 3],
+            [6, 3],
+          ]),
+        },
+      ),
+    ).toEqual([1, 2, 3, 3, 3, 3, 3]);
   });
 
   it("keeps unnumbered topics inside an alphanumeric section", () => {
@@ -625,7 +660,9 @@ describe("printed contents detection", () => {
       sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
-    expect(result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle)).toEqual([
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
       "5A 不变子空间 ...... 112",
       "5B 最小多项式 . . . . . .",
       "复向量空间上特征值的存在性 . . . . . . 120",
@@ -1720,6 +1757,221 @@ describe("printed contents detection", () => {
     );
   });
 
+  it("keeps unpaged edition frontmatter and joins a detached part subtitle", () => {
+    const source = [
+      "# 目录",
+      "",
+      "## 出版者的话",
+      "",
+      "## 中文版序一",
+      "",
+      "## 中文版序二",
+      "",
+      "## 关于作者",
+      "",
+      "## 第一部分",
+      "",
+      "## 程序结构和执行",
+      "",
+      "## 第 2 章 信息的表示和处理 ...... 22",
+      "",
+      "## 中文版序一",
+      "",
+      "正文",
+      "",
+      "## 中文版序二",
+      "",
+      "正文",
+      "",
+      "## 关于作者",
+      "",
+      "正文",
+      "",
+      "## 第一部分",
+      "",
+      "## 程序结构和执行",
+      "",
+      "正文",
+      "",
+      "## 第 2 章 信息的表示和处理",
+      "",
+      "正文",
+    ].join("\n");
+    const document = documentFor(source);
+    const partSubtitle = document.headings.find(
+      (heading, index) => heading.sourceTitle === "程序结构和执行" && index > 6,
+    );
+    const result = detectPrintedContents({
+      document,
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
+      "## 出版者的话",
+      "中文版序一",
+      "中文版序二",
+      "关于作者",
+      "第一部分 程序结构和执行",
+      "第 2 章 信息的表示和处理 ...... 22",
+    ]);
+    expect(result.candidates[0]?.logicalEntries[4]).toMatchObject({
+      bodyHeadingBlockId: partSubtitle?.blockId,
+      referenceLevel: 1,
+    });
+  });
+
+  it("matches collapsed decimal separators and repairs damaged printed numbering", () => {
+    const source = [
+      "# 目录",
+      "",
+      "3.6.6 用条件传送来实现条件分支 ...... 200",
+      "",
+      "3 10.5 支持变长栈帧 ...... 300",
+      "",
+      "第 4 章 处理器体系结构 ...... 320",
+      "",
+      "## 3.66 用条件传送来实现条件分支",
+      "",
+      "正文",
+      "",
+      "## 3.10.5 支持变长栈帧",
+      "",
+      "正文",
+      "",
+      "## 第 4 章 处理器体系结构",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries.slice(0, 2)).toMatchObject([
+      {
+        bodyHeadingBlockId: expect.any(String),
+        sourceTitle: "3.6.6 用条件传送来实现条件分支 ...... 200",
+      },
+      {
+        bodyHeadingBlockId: expect.any(String),
+        sourceTitle: "3.10.5 支持变长栈帧...... 300",
+      },
+    ]);
+  });
+
+  it("repairs compact body numbering but withholds ambiguous multi-digit gaps", () => {
+    const source = [
+      "# 目录",
+      "",
+      "2.5 小结 ...... 87",
+      "",
+      "8.1.2 异常的类别 ...... 504",
+      "",
+      "9.3.1 DRAM缓存的组织结构 ...... 562",
+      "",
+      "12.7.4 竞争 ...... 719",
+      "",
+      "## 2.5. 小结",
+      "",
+      "正文",
+      "",
+      "## 812 异常的类别",
+      "",
+      "正文",
+      "",
+      "## 931 DRAM缓存的组织结构",
+      "",
+      "正文",
+      "",
+      "## 12 7.4 竞争",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => ({
+        matched: entry.bodyHeadingBlockId !== undefined,
+        title: entry.sourceTitle,
+      })),
+    ).toEqual([
+      { matched: true, title: "2.5 小结 ...... 87" },
+      { matched: true, title: "8.1.2 异常的类别 ...... 504" },
+      { matched: true, title: "9.3.1 DRAM缓存的组织结构 ...... 562" },
+      { matched: false, title: "12.7.4 竞争 ...... 719" },
+    ]);
+  });
+
+  it("keeps chapter-end reference notes and answer keys at the chapter-local level", () => {
+    const source = [
+      "# 目录",
+      "",
+      "第一部分 系统基础",
+      "",
+      "第 2 章 信息表示 ...... 22",
+      "",
+      "2.5 小结 ...... 80",
+      "",
+      "参考文献说明 ...... 81",
+      "",
+      "练习题答案 ...... 82",
+      "",
+      "## 第一部分 系统基础",
+      "",
+      "## 第 2 章 信息表示",
+      "",
+      "## 2.5 小结",
+      "",
+      "## 参考文献说明",
+      "",
+      "## 练习题答案",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          ["第一部分 系统基础", 0],
+          ["第 2 章 信息表示 ...... 22", 20],
+          ["2.5 小结 ...... 80", 40],
+          ["参考文献说明 ...... 81", 60],
+          ["练习题答案 ...... 82", 80],
+        ].map(([text, indent], index) => ({
+          bbox: [
+            indent as number,
+            20 + index * 30,
+            700,
+            40 + index * 30,
+          ] as const,
+          pageIndex: 0,
+          text: text as string,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries
+        .slice(-2)
+        .map((entry) => entry.referenceLevel),
+    ).toEqual([3, 3]);
+  });
+
   it("does not fuzzy-match a printed title containing replacement characters", () => {
     const source = [
       "# 目录",
@@ -2156,7 +2408,12 @@ describe("printed contents detection", () => {
           "下一主题 . . . . . . 3",
           "最后主题 . . . . . . 4",
         ].map((text, index) => ({
-          bbox: [20 + (index === 0 ? 0 : 24), 20 + index * 30, 700, 40 + index * 30] as const,
+          bbox: [
+            20 + (index === 0 ? 0 : 24),
+            20 + index * 30,
+            700,
+            40 + index * 30,
+          ] as const,
           pageIndex: 0,
           text,
           type: "text" as const,
@@ -2167,7 +2424,9 @@ describe("printed contents detection", () => {
       sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
-    expect(result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle)).toEqual([
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
       "第 1 章 向量空间 ...... 1",
       "复数 . . . . . . 2",
       "下一主题 . . . . . . 3",
@@ -2218,7 +2477,12 @@ describe("printed contents detection", () => {
           "下一主题 . . . . . . 5",
           "最后主题 . . . . . . 6",
         ].map((text, index) => ({
-          bbox: [20 + (index === 0 ? 0 : 24), 20 + index * 30, 700, 40 + index * 30] as const,
+          bbox: [
+            20 + (index === 0 ? 0 : 24),
+            20 + index * 30,
+            700,
+            40 + index * 30,
+          ] as const,
           pageIndex: 0,
           text,
           type: "text" as const,
@@ -2229,7 +2493,9 @@ describe("printed contents detection", () => {
       sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
-    expect(result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle)).toEqual([
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
       "第 1 章 向量空间 ...... 1",
       "1A Rn 和 Cn . . . . . . 2",
       "复数 . . . . . . 2",
@@ -2274,7 +2540,12 @@ describe("printed contents detection", () => {
           "习题 3A ...... 48",
           "3B 零空间和值域 ...... 50",
         ].map((text, index) => ({
-          bbox: [20 + (index === 0 ? 0 : 24), 20 + index * 30, 700, 40 + index * 30] as const,
+          bbox: [
+            20 + (index === 0 ? 0 : 24),
+            20 + index * 30,
+            700,
+            40 + index * 30,
+          ] as const,
           pageIndex: 0,
           text,
           type: "text" as const,

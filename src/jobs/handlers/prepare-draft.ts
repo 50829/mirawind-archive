@@ -28,6 +28,8 @@ import { createPrintedContentsAnalysisV2 } from "../../compiler/document/printed
 import {
   detectPrintedContents,
   requiresSupplementalPdfEvidence,
+  shouldPreferNativePdfDetection,
+  shouldPreferNativePdfLayout,
   supplementalPdfPageIndices,
   type PrintedContentsCandidate,
   type PrintedContentsDetection,
@@ -213,16 +215,29 @@ export async function prepareDraft(input: {
             layoutEvidence,
             pdfLayoutEvidence,
           );
-          effectiveLayoutEvidence =
-            repairedLayoutEvidence === layoutEvidence
-              ? pdfLayoutEvidence
-              : repairedLayoutEvidence;
-          printedContents = detectPrintedContents({
+          const repairedDetection = detectPrintedContents({
             document: normalized,
-            layoutEvidence: effectiveLayoutEvidence,
+            layoutEvidence: repairedLayoutEvidence,
             sourcePath: basename(input.selectedCandidatePath),
             sourceSha256: typography.provenance.output_sha256,
           });
+          const nativeDetection = detectPrintedContents({
+            document: normalized,
+            layoutEvidence: pdfLayoutEvidence,
+            sourcePath: basename(input.selectedCandidatePath),
+            sourceSha256: typography.provenance.output_sha256,
+          });
+          const preferNative =
+            shouldPreferNativePdfLayout(
+              repairedLayoutEvidence,
+              pdfLayoutEvidence,
+            ) ||
+            repairedLayoutEvidence === layoutEvidence ||
+            shouldPreferNativePdfDetection(repairedDetection, nativeDetection);
+          effectiveLayoutEvidence = preferNative
+            ? pdfLayoutEvidence
+            : repairedLayoutEvidence;
+          printedContents = preferNative ? nativeDetection : repairedDetection;
         }
       }
     }
@@ -237,16 +252,14 @@ export async function prepareDraft(input: {
     }).document;
     const printedEntries = printedContents.candidates.flatMap((candidate) =>
       candidate.canonical
-        ? candidate.logicalEntries.flatMap((entry) =>
-            entry.bodyHeadingBlockId
-              ? [
-                  Object.freeze({
-                    bodyHeadingBlockId: entry.bodyHeadingBlockId,
-                    referenceLevel: entry.referenceLevel,
-                    sourceTitle: entry.sourceTitle,
-                  }),
-                ]
-              : [],
+        ? candidate.logicalEntries.map((entry) =>
+            Object.freeze({
+              ...(entry.bodyHeadingBlockId
+                ? { bodyHeadingBlockId: entry.bodyHeadingBlockId }
+                : {}),
+              referenceLevel: entry.referenceLevel,
+              sourceTitle: entry.sourceTitle,
+            }),
           )
         : [],
     );

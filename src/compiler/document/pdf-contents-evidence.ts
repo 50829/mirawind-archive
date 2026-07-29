@@ -202,6 +202,57 @@ interface NativePdfWord {
   readonly top: number;
 }
 
+function removeNativeExtractionOrdinals(
+  records: readonly LayoutEvidenceRecord[],
+): readonly LayoutEvidenceRecord[] {
+  const ordinalRow =
+    /^(?<title>.+?(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+))\s*(?<page>\d+|[ivxlcdm]+)\s+(?<ordinal>\d{1,5})\s*$/iu;
+  const reliablePages = new Set<number>();
+  const byPage = new Map<
+    number,
+    readonly { readonly ordinal: number; readonly sourceOrder: number }[]
+  >();
+  for (const record of records) {
+    const match = ordinalRow.exec(record.text ?? "");
+    const ordinal = Number(match?.groups?.ordinal);
+    if (!Number.isSafeInteger(ordinal)) continue;
+    byPage.set(record.pageIndex, [
+      ...(byPage.get(record.pageIndex) ?? []),
+      { ordinal, sourceOrder: record.sourceOrder ?? 0 },
+    ]);
+  }
+  for (const [pageIndex, rows] of byPage) {
+    const ordered = [...rows].sort(
+      (left, right) => left.sourceOrder - right.sourceOrder,
+    );
+    if (ordered.length < 4) continue;
+    let consecutive = 0;
+    for (let index = 1; index < ordered.length; index += 1) {
+      if (
+        (ordered[index]?.ordinal ?? 0) ===
+        (ordered[index - 1]?.ordinal ?? 0) + 1
+      ) {
+        consecutive += 1;
+      }
+    }
+    if (consecutive / (ordered.length - 1) >= 0.8) {
+      reliablePages.add(pageIndex);
+    }
+  }
+  if (reliablePages.size === 0) return records;
+  return Object.freeze(
+    records.map((record) => {
+      if (!reliablePages.has(record.pageIndex) || !record.text) return record;
+      const match = ordinalRow.exec(record.text);
+      if (!match?.groups?.title || !match.groups.page) return record;
+      return Object.freeze({
+        ...record,
+        text: `${match.groups.title.trim()} ${match.groups.page}`,
+      });
+    }),
+  );
+}
+
 function nativeTsvRecords(
   value: string,
   pageLimit: number,
@@ -278,7 +329,7 @@ function nativeTsvRecords(
       }),
     ]);
   }
-  const allRecords = [...groups.values()].flatMap((words, sourceOrder) => {
+  const rawRecords = [...groups.values()].flatMap((words, sourceOrder) => {
     const first = words[0];
     if (!first) return [];
     const text = words
@@ -300,6 +351,7 @@ function nativeTsvRecords(
       }),
     ];
   });
+  const allRecords = removeNativeExtractionOrdinals(rawRecords);
   const recordsByPage = new Map<number, LayoutEvidenceRecord[]>();
   for (const record of allRecords) {
     recordsByPage.set(record.pageIndex, [
