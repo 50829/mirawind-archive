@@ -1596,27 +1596,35 @@ describe("default document structure proposal", () => {
     );
     const [part, , chapter, section] = document.headings;
 
-    expect(
-      proposeDocumentStructure(document, {
-        printedEntries: [
-          {
-            bodyHeadingBlockId: part?.blockId ?? "",
-            referenceLevel: 1,
-            sourceTitle: "Part One",
-          },
-          {
-            bodyHeadingBlockId: chapter?.blockId ?? "",
-            referenceLevel: 2,
-            sourceTitle: "Chapter 7 Portfolio selection",
-          },
-          {
-            bodyHeadingBlockId: section?.blockId ?? "",
-            referenceLevel: 3,
-            sourceTitle: "7.1 Diversification",
-          },
-        ],
-      }).nodes.map((node) => node.display_level),
-    ).toEqual([1, 1, 2, 3]);
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: part?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "Part One",
+        },
+        {
+          bodyHeadingBlockId: chapter?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "Chapter 7 Portfolio selection",
+        },
+        {
+          bodyHeadingBlockId: section?.blockId ?? "",
+          referenceLevel: 3,
+          sourceTitle: "7.1 Diversification",
+        },
+      ],
+    });
+
+    expect(proposal.nodes.map((node) => node.display_level)).toEqual([
+      1, 1, 2, 3,
+    ]);
+    expect(proposal.nodes.map((node) => node.role)).toEqual([
+      "body",
+      "appendix",
+      "body",
+      undefined,
+    ]);
   });
 
   it("splits parts, later nested chapters and appendices independently of levels", () => {

@@ -119,11 +119,16 @@ function createPagePlans(input: {
     if (!firstBlockId || blockCursor === blockStart) {
       throw new Error("DOCUMENT_PAGE_HAS_NO_BLOCKS");
     }
-    const firstHeading = roots
-      .slice(rootStart, rootEnd)
-      .find((node) => node.type === "heading" && node.blockId);
-    const configuredHeading = firstHeading?.blockId
-      ? headingById.get(firstHeading.blockId)
+    let firstHeadingBlockId: string | undefined;
+    for (let rootIndex = rootStart; rootIndex < rootEnd; rootIndex += 1) {
+      const root = roots[rootIndex];
+      if (root?.type === "heading" && root.blockId) {
+        firstHeadingBlockId = root.blockId;
+        break;
+      }
+    }
+    const configuredHeading = firstHeadingBlockId
+      ? headingById.get(firstHeadingBlockId)
       : undefined;
     const pageId = ordinal + 1;
     const page = Object.freeze({

@@ -4,6 +4,7 @@ import {
   inferPrintedReferenceLevels,
   isLocalPartHeading,
 } from "@/modules/publishing/core/preparation/printed-contents";
+import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
 import type {
   ConfirmedSourceRegion,
   NormalizedDocument,
@@ -85,18 +86,17 @@ function proposedRole(title: string): ContentRole {
 }
 
 function printedEntryTitle(
-  source: string,
+  sourceBytes: Buffer,
   entry: ConfirmedSourceRegion["entries"][number],
 ): string | undefined {
-  const bytes = Buffer.from(source, "utf8");
   if (
     entry.range.start_byte < 0 ||
-    entry.range.end_byte > bytes.byteLength ||
+    entry.range.end_byte > sourceBytes.byteLength ||
     entry.range.start_byte >= entry.range.end_byte
   ) {
     return;
   }
-  return bytes
+  return sourceBytes
     .subarray(entry.range.start_byte, entry.range.end_byte)
     .toString("utf8")
     .normalize("NFKC")
@@ -173,10 +173,23 @@ function collapseMissingNestedChapterLevels(
   const headingIndexByBlockId = new Map(
     headings.map((heading, index) => [heading.blockId, index] as const),
   );
+  const previousMatchedEntries = new Array<
+    (typeof entries)[number] | undefined
+  >(entries.length);
+  const nextMatchedBlockIds = new Array<string | undefined>(entries.length);
+  let previousMatchedEntry: (typeof entries)[number] | undefined;
+  for (const [index, entry] of entries.entries()) {
+    previousMatchedEntries[index] = previousMatchedEntry;
+    if (entry.bodyHeadingBlockId) previousMatchedEntry = entry;
+  }
+  let nextMatchedBlockId: string | undefined;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    nextMatchedBlockIds[index] = nextMatchedBlockId;
+    const blockId = entries[index]?.bodyHeadingBlockId;
+    if (blockId) nextMatchedBlockId = blockId;
+  }
   const hasInterveningBodyHeading = (entryIndex: number): boolean => {
-    const previousEntry = entries
-      .slice(0, entryIndex)
-      .findLast((entry) => entry.bodyHeadingBlockId);
+    const previousEntry = previousMatchedEntries[entryIndex];
     if (
       inferPrintedHeadingEvidence(previousEntry?.sourceTitle ?? "")?.kind !==
       "part"
@@ -184,9 +197,7 @@ function collapseMissingNestedChapterLevels(
       return false;
     }
     const previousBlockId = previousEntry?.bodyHeadingBlockId;
-    const nextBlockId = entries
-      .slice(entryIndex + 1)
-      .find((entry) => entry.bodyHeadingBlockId)?.bodyHeadingBlockId;
+    const nextBlockId = nextMatchedBlockIds[entryIndex];
     const previousIndex = previousBlockId
       ? headingIndexByBlockId.get(previousBlockId)
       : undefined;
@@ -232,6 +243,132 @@ function collapseMissingNestedChapterLevels(
   });
 }
 
+interface HeadingGapSummary {
+  readonly hasNode: boolean;
+  readonly hasText: boolean;
+  readonly onlyOrnamental: boolean;
+}
+
+function indexHeadingGaps(
+  headings: readonly NormalizedHeading[],
+  roots: readonly TransientDocumentNode[],
+): {
+  readonly gaps: readonly (HeadingGapSummary | undefined)[];
+  readonly hasTextBetween: (
+    previous: NormalizedHeading | undefined,
+    current: NormalizedHeading,
+  ) => boolean;
+} {
+  const gaps = new Array<HeadingGapSummary | undefined>(headings.length);
+  const textPrefix = new Uint32Array(headings.length);
+  const headingIndexByBlockId = new Map(
+    headings.map((heading, index) => [heading.blockId, index] as const),
+  );
+  let rootCursor = 0;
+  let textCount = 0;
+  for (
+    let headingIndex = 1;
+    headingIndex < headings.length;
+    headingIndex += 1
+  ) {
+    const previousEnd = headings[headingIndex - 1]?.position?.end.offset;
+    const currentStart = headings[headingIndex]?.position?.start.offset;
+    if (previousEnd === undefined || currentStart === undefined) {
+      textPrefix[headingIndex] = textCount;
+      continue;
+    }
+
+    let nodeCount = 0;
+    let textNodeCount = 0;
+    let ornamentalNodeCount = 0;
+    while (rootCursor < roots.length) {
+      const root = roots[rootCursor];
+      const position = root?.position;
+      if (
+        !root ||
+        !position ||
+        root.type === "heading" ||
+        position.start.offset < previousEnd
+      ) {
+        rootCursor += 1;
+        continue;
+      }
+      if (position.end.offset > currentStart) break;
+      const text = nodeText(root);
+      nodeCount += 1;
+      if (text.length > 0) textNodeCount += 1;
+      if (ornamentalPartMarker.test(text)) ornamentalNodeCount += 1;
+      rootCursor += 1;
+    }
+    textCount += textNodeCount;
+    textPrefix[headingIndex] = textCount;
+    gaps[headingIndex] = Object.freeze({
+      hasNode: nodeCount > 0,
+      hasText: textNodeCount > 0,
+      onlyOrnamental: nodeCount > 0 && ornamentalNodeCount === nodeCount,
+    });
+  }
+
+  return Object.freeze({
+    gaps: Object.freeze(gaps),
+    hasTextBetween(
+      previous: NormalizedHeading | undefined,
+      current: NormalizedHeading,
+    ): boolean {
+      if (!previous || !previous.position || !current.position) return true;
+      const previousIndex = headingIndexByBlockId.get(previous.blockId);
+      const currentIndex = headingIndexByBlockId.get(current.blockId);
+      if (
+        previousIndex === undefined ||
+        currentIndex === undefined ||
+        currentIndex <= previousIndex
+      ) {
+        return true;
+      }
+      return (
+        (textPrefix[currentIndex] ?? 0) - (textPrefix[previousIndex] ?? 0) > 0
+      );
+    },
+  });
+}
+
+function indexActiveHeadings(
+  document: NormalizedDocument,
+  regions: readonly ConfirmedSourceRegion[],
+): Uint8Array {
+  const active = new Uint8Array(document.headings.length);
+  active.fill(1);
+  const ranges = regions
+    .filter((region) => region.applied)
+    .map((region) => region.range)
+    .toSorted(
+      (left, right) =>
+        left.start_byte - right.start_byte || right.end_byte - left.end_byte,
+    );
+  if (ranges.length === 0) return active;
+
+  const sourceIndex = new SourceTextIndex(document.source);
+  let rangeCursor = 0;
+  let greatestEligibleEnd = Number.NEGATIVE_INFINITY;
+  for (const [headingIndex, heading] of document.headings.entries()) {
+    if (!heading.position) continue;
+    const startByte = sourceIndex.byteOffsetAt(heading.position.start.offset);
+    const endByte = sourceIndex.byteOffsetAt(heading.position.end.offset);
+    while (
+      rangeCursor < ranges.length &&
+      (ranges[rangeCursor]?.start_byte ?? Number.POSITIVE_INFINITY) <= startByte
+    ) {
+      greatestEligibleEnd = Math.max(
+        greatestEligibleEnd,
+        ranges[rangeCursor]?.end_byte ?? Number.NEGATIVE_INFINITY,
+      );
+      rangeCursor += 1;
+    }
+    if (greatestEligibleEnd >= endByte) active[headingIndex] = 0;
+  }
+  return active;
+}
+
 /**
  * Produces a portable initial `book.yaml` structure without mutating or
  * reordering the transient document tree.
@@ -251,33 +388,36 @@ export function proposeDocumentStructure(
     options.printedEntries ?? [],
     document.headings,
   );
+  const sourceBytes = Buffer.from(document.source, "utf8");
+  const sourceRegionLevels: [string, number][] = [];
+  const sourceRegionRoles: [string, ContentRole][] = [];
+  const sourceRegionKinds: [
+    string,
+    "appendix" | "chapter" | "decimal" | "part",
+  ][] = [];
+  for (const region of options.sourceRegions ?? []) {
+    let beforeFirstBodyUnit = true;
+    for (const entry of region.entries) {
+      const blockId = entry.body_heading_block_id;
+      if (blockId) sourceRegionLevels.push([blockId, entry.reference_level]);
+      const title = printedEntryTitle(sourceBytes, entry);
+      const kind = title ? inferPrintedHeadingEvidence(title)?.kind : undefined;
+      const role = title
+        ? printedTitleRole(title, beforeFirstBodyUnit)
+        : undefined;
+      if (kind === "part" || kind === "chapter") beforeFirstBodyUnit = false;
+      if (blockId && role) sourceRegionRoles.push([blockId, role]);
+      if (blockId && kind) sourceRegionKinds.push([blockId, kind]);
+    }
+  }
   const printedLevels = new Map([
-    ...(options.sourceRegions ?? []).flatMap((region) =>
-      region.entries.flatMap((entry) =>
-        entry.body_heading_block_id
-          ? [[entry.body_heading_block_id, entry.reference_level] as const]
-          : [],
-      ),
-    ),
+    ...sourceRegionLevels,
     ...projectedPrintedEntries.flatMap((entry) =>
       entry.bodyHeadingBlockId
         ? [[entry.bodyHeadingBlockId, entry.referenceLevel] as const]
         : [],
     ),
   ]);
-  const sourceRegionRoles = (options.sourceRegions ?? []).flatMap((region) => {
-    let beforeFirstBodyUnit = true;
-    return region.entries.flatMap((entry) => {
-      const title = printedEntryTitle(document.source, entry);
-      const kind = title ? inferPrintedHeadingEvidence(title)?.kind : undefined;
-      const role = title
-        ? printedTitleRole(title, beforeFirstBodyUnit)
-        : undefined;
-      if (kind === "part" || kind === "chapter") beforeFirstBodyUnit = false;
-      if (!entry.body_heading_block_id || !role) return [];
-      return [[entry.body_heading_block_id, role] as const];
-    });
-  });
   let beforeFirstPrintedBodyUnit = true;
   const projectedPrintedRoles = (options.printedEntries ?? []).flatMap(
     (entry) => {
@@ -302,18 +442,7 @@ export function proposeDocumentStructure(
     if (role) printedRoles.set(entry.bodyHeadingBlockId, role);
     else printedRoles.delete(entry.bodyHeadingBlockId);
   }
-  const printedKinds = new Map([
-    ...(options.sourceRegions ?? []).flatMap((region) =>
-      region.entries.flatMap((entry) => {
-        if (!entry.body_heading_block_id) return [];
-        const title = printedEntryTitle(document.source, entry);
-        const kind = title
-          ? inferPrintedHeadingEvidence(title)?.kind
-          : undefined;
-        return kind ? [[entry.body_heading_block_id, kind] as const] : [];
-      }),
-    ),
-  ]);
+  const printedKinds = new Map(sourceRegionKinds);
   for (const entry of options.printedEntries ?? []) {
     if (!entry.bodyHeadingBlockId) continue;
     const kind = inferPrintedHeadingEvidence(entry.sourceTitle)?.kind;
@@ -449,22 +578,7 @@ export function proposeDocumentStructure(
     return closed;
   });
   const roots = document.root.children ?? [];
-  const hasBodyBetweenHeadings = (
-    previous: NormalizedHeading,
-    current: NormalizedHeading,
-  ): boolean => {
-    const previousEnd = previous.position?.end.offset;
-    const currentStart = current.position?.start.offset;
-    if (previousEnd === undefined || currentStart === undefined) return true;
-    return roots.some(
-      (root) =>
-        root.type !== "heading" &&
-        root.position &&
-        root.position.start.offset >= previousEnd &&
-        root.position.end.offset <= currentStart &&
-        nodeText(root).length > 0,
-    );
-  };
+  const headingGaps = indexHeadingGaps(document.headings, roots);
   let currentTopLevelRole: ContentRole = "body";
   const nodes: {
     block_id: string;
@@ -529,7 +643,7 @@ export function proposeDocumentStructure(
         pureNumericChapterMarker.test(title) &&
         nextHeading &&
         /^\p{Script=Han}/u.test(nextHeading.sourceTitle.trim()) &&
-        !hasBodyBetweenHeadings(heading, nextHeading),
+        !(headingGaps.gaps[index + 1]?.hasText ?? true),
       );
       if (classifiedRole !== "body") {
         currentTopLevelRole = classifiedRole;
@@ -583,44 +697,8 @@ export function proposeDocumentStructure(
     node.include_in_toc = false;
   }
 
-  const hasBodyBetween = (
-    previous: NormalizedHeading | undefined,
-    current: NormalizedHeading,
-  ): boolean => {
-    if (!previous) return true;
-    const previousEnd = previous.position?.end.offset;
-    const currentStart = current.position?.start.offset;
-    if (previousEnd === undefined || currentStart === undefined) return true;
-    return roots.some(
-      (root) =>
-        root.type !== "heading" &&
-        root.position &&
-        root.position.start.offset >= previousEnd &&
-        root.position.end.offset <= currentStart &&
-        nodeText(root).length > 0,
-    );
-  };
   const detachedPartLabelIndexes = new Set<number>();
   const detachedNumericChapterMarkerIndexes = new Set<number>();
-  const onlyOrnamentalPartBetween = (
-    previous: NormalizedHeading,
-    current: NormalizedHeading,
-  ): boolean => {
-    const previousEnd = previous.position?.end.offset;
-    const currentStart = current.position?.start.offset;
-    if (previousEnd === undefined || currentStart === undefined) return false;
-    const intervening = roots.filter(
-      (root) =>
-        root.type !== "heading" &&
-        root.position &&
-        root.position.start.offset >= previousEnd &&
-        root.position.end.offset <= currentStart,
-    );
-    return (
-      intervening.length > 0 &&
-      intervening.every((root) => ornamentalPartMarker.test(nodeText(root)))
-    );
-  };
   for (let index = 0; index < document.headings.length - 1; index += 1) {
     const heading = document.headings[index];
     const nextHeading = document.headings[index + 1];
@@ -633,8 +711,8 @@ export function proposeDocumentStructure(
         heading.sourceTitle.trim().normalize("NFKC"),
       ) &&
       printedKinds.get(nextHeading.blockId) === "part" &&
-      (!hasBodyBetween(heading, nextHeading) ||
-        onlyOrnamentalPartBetween(heading, nextHeading))
+      (!(headingGaps.gaps[index + 1]?.hasText ?? true) ||
+        (headingGaps.gaps[index + 1]?.onlyOrnamental ?? false))
     ) {
       detachedPartLabelIndexes.add(index);
       node.display_level = nextNode.display_level;
@@ -691,7 +769,8 @@ export function proposeDocumentStructure(
       major = true;
     }
     const startsPage =
-      index === 0 || (major && hasBodyBetween(previousPageHeading, heading));
+      index === 0 ||
+      (major && headingGaps.hasTextBetween(previousPageHeading, heading));
     node.starts_page = startsPage;
     if (startsPage) previousPageHeading = heading;
   }
@@ -703,27 +782,11 @@ export function proposeDocumentStructure(
     if (!heading || !previousHeading || !node || !previousNode) continue;
     const title = heading.sourceTitle.trim();
     const previousTitle = previousHeading.sourceTitle.trim();
-    const previousEnd = previousHeading.position?.end.offset;
-    const currentStart = heading.position?.start.offset;
-    const interveningBody =
-      previousEnd !== undefined &&
-      currentStart !== undefined &&
-      roots.filter(
-        (root) =>
-          root.type !== "heading" &&
-          root.position &&
-          root.position.start.offset >= previousEnd &&
-          root.position.end.offset <= currentStart,
-      );
-    const hasBodyBetween =
-      Array.isArray(interveningBody) && interveningBody.length > 0;
+    const gap = headingGaps.gaps[index];
+    const hasBodyBetween = gap?.hasNode ?? false;
     const onlyOrnamentalPartMarker =
       purePartLabel.test(previousTitle.normalize("NFKC")) &&
-      Array.isArray(interveningBody) &&
-      interveningBody.length > 0 &&
-      interveningBody.every((root) =>
-        ornamentalPartMarker.test(nodeText(root)),
-      );
+      (gap?.onlyOrnamental ?? false);
     const detachedNamedPart =
       purePartLabel.test(previousTitle.normalize("NFKC")) &&
       /^第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:篇|部分|部)$/u.test(
@@ -797,29 +860,15 @@ export function proposeDocumentStructure(
     }
   }
 
-  const appliedRegionRanges = (options.sourceRegions ?? [])
-    .filter((region) => region.applied)
-    .map((region) => region.range);
-  const activeHeading = (index: number): boolean => {
-    const position = document.headings[index]?.position;
-    if (!position) return true;
-    const startByte = Buffer.byteLength(
-      document.source.slice(0, position.start.offset),
-      "utf8",
-    );
-    const endByte = Buffer.byteLength(
-      document.source.slice(0, position.end.offset),
-      "utf8",
-    );
-    return !appliedRegionRanges.some(
-      (range) => range.start_byte <= startByte && endByte <= range.end_byte,
-    );
-  };
+  const activeHeadings = indexActiveHeadings(
+    document,
+    options.sourceRegions ?? [],
+  );
   let inheritedRole: ContentRole = "body";
   let previousActiveLevel = 0;
   let hasNestedPartContext = false;
   for (const [index, node] of nodes.entries()) {
-    if (!activeHeading(index)) continue;
+    if (activeHeadings[index] === 0) continue;
     const heading = document.headings[index];
     const semanticKind = heading
       ? (printedKinds.get(heading.blockId) ??
@@ -847,7 +896,6 @@ export function proposeDocumentStructure(
         (authoritativePrintedLevel ?? 1) > 1
       ) {
         inheritedRole = "body";
-        delete node.role;
       } else {
         node.display_level = 1;
         node.starts_page = true;

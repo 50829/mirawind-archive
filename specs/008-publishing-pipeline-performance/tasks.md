@@ -121,7 +121,7 @@ single-book regression.
 - [x] T044 [US1] Apply typography edits and byte diagnostics through one output builder pass in `src/modules/publishing/core/preparation/typography.ts`
 - [x] T045 [US1] Build heading, block, range and page maps once inside `compileBook()` in `src/modules/publishing/core/publication/compile-book.ts`
 - [x] T046 [US1] Represent pagination only as ordered `PagePlan` block intervals and IDs in `src/modules/publishing/core/publication/compiled-book.ts`
-- [ ] T047 [US1] Replace pagination, outline, structure-proposal and manifest lookup rescans with the shared internal indexes in `src/modules/publishing/core/preparation/structure-proposal.ts` and `src/modules/publishing/core/publication/page-plans.ts`
+- [x] T047 [US1] Replace pagination, outline, structure-proposal and manifest lookup rescans with the shared internal indexes in `src/modules/publishing/core/preparation/structure-proposal.ts`, `src/modules/publishing/core/publication/compile-book.ts` and `src/modules/publishing/core/publication/manifest.ts`
 - [x] T048 [US1] Implement the ordered at-most-four-page async generator with cancellation probes in `src/modules/publishing/core/publication/render-pages.ts`
 - [ ] T049 [US1] Materialize preview/public ReaderShell policies and incremental search/manifest spools from each route-neutral page in `src/modules/publishing/adapters/reader-html/candidate-materializer.ts`
 - [ ] T050 [US1] Implement strict command/artifact types and validators in `src/modules/publishing/application/commands/build-candidate.ts` and `src/entrypoints/worker/protocol.ts`
@@ -138,6 +138,13 @@ typecheck, 660 Vitest tests, architecture checks and the production build pass. 
 ZIP bindings pass hash/size preflight and the frozen observed-v2 set remains 15/15 reference exact.
 This does not replace T053: candidate-code fifteen-book compilation and paired AB/BA/AB evidence are
 still required after a committed checkpoint.
+
+The indexed structure-proposal checkpoint changed the 1,000/4,000-heading medians from
+144.00/1,724.98 ms (11.98x) to 41.82/136.68 ms (3.27x). A fresh current-code observation of all
+fifteen real books is 15/15 reference-v2 exact; this run also added a regression for restoring an
+explicit body role when a nested chapter follows appendix material inside a part. Pagination now
+finds first headings without page slices and manifest resource IDs use one position index instead of
+rescanning every reference for every block.
 
 **Checkpoint**: Candidate core is reference-exact and measurably linear but is not yet a second
 user-selectable runtime path. Do not commit the cutover until US2 removes both old job kinds.

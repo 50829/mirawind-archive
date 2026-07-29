@@ -80,26 +80,42 @@ export function semanticCompilationDigest(value: unknown): string {
     .digest("hex");
 }
 
+function resourcePositionKey(position: {
+  readonly end: { readonly offset: number };
+  readonly start: { readonly offset: number };
+}): string {
+  return `${position.start.offset}:${position.end.offset}`;
+}
+
+function indexResourceIds(
+  references: readonly ResourceReference[],
+): ReadonlyMap<string, readonly string[]> {
+  const mutable = new Map<string, Set<string>>();
+  for (const reference of references) {
+    if (!reference.position) continue;
+    const key = resourcePositionKey(reference.position);
+    const ids = mutable.get(key) ?? new Set<string>();
+    ids.add(reference.resourceId);
+    mutable.set(key, ids);
+  }
+  return new Map(
+    [...mutable].map(([key, ids]) => [
+      key,
+      Object.freeze(
+        [...ids].sort((left, right) =>
+          Buffer.from(left).compare(Buffer.from(right)),
+        ),
+      ),
+    ]),
+  );
+}
+
 function resourceIdsFor(
   block: TransientDocumentNode,
-  references: readonly ResourceReference[],
+  resourceIdsByPosition: ReadonlyMap<string, readonly string[]>,
 ): readonly string[] {
-  if (block.type !== "image") return [];
-  const start = block.position?.start.offset;
-  const end = block.position?.end.offset;
-  return Object.freeze(
-    references
-      .filter(
-        (reference) =>
-          start !== undefined &&
-          end !== undefined &&
-          reference.position?.start.offset === start &&
-          reference.position.end.offset === end,
-      )
-      .map((reference) => reference.resourceId)
-      .filter((value, index, values) => values.indexOf(value) === index)
-      .sort((left, right) => Buffer.from(left).compare(Buffer.from(right))),
-  );
+  if (block.type !== "image" || !block.position) return [];
+  return resourceIdsByPosition.get(resourcePositionKey(block.position)) ?? [];
 }
 
 export function buildDocumentManifest(input: {
@@ -113,6 +129,7 @@ export function buildDocumentManifest(input: {
   readonly sourceFiles: readonly ManifestSourceFile[];
   readonly versionId: string;
 }): Readonly<Record<string, unknown>> {
+  const resourceIdsByPosition = indexResourceIds(input.resourceReferences);
   const blocks = Object.fromEntries(
     input.book.document.blocks.map((block) => {
       if (!block.blockId || !block.position) {
@@ -127,7 +144,7 @@ export function buildDocumentManifest(input: {
           kind,
           normalized_visible_text: block.visibleText ?? "",
           page_id: pageId,
-          resource_ids: resourceIdsFor(block, input.resourceReferences),
+          resource_ids: resourceIdsFor(block, resourceIdsByPosition),
           source: {
             end: {
               column: block.position.end.column,
