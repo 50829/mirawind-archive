@@ -847,6 +847,7 @@ export function proposeDocumentStructure(
         (authoritativePrintedLevel ?? 1) > 1
       ) {
         inheritedRole = "body";
+        delete node.role;
       } else {
         node.display_level = 1;
         node.starts_page = true;

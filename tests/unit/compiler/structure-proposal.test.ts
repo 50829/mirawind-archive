@@ -122,6 +122,35 @@ describe("default document structure proposal", () => {
     ).toEqual(["backmatter", "body"]);
   });
 
+  it("resets inherited role without emitting role on a chapter nested in a part", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument("# Part One\n\n# Chapter One\n\nData\n"),
+    );
+    const part = requireAt(document.headings, 0);
+    const chapter = requireAt(document.headings, 1);
+
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: part.blockId,
+          referenceLevel: 1,
+          sourceTitle: "Part I",
+        },
+        {
+          bodyHeadingBlockId: chapter.blockId,
+          referenceLevel: 2,
+          sourceTitle: "Chapter 1",
+        },
+      ],
+    });
+
+    expect(proposal.nodes).toMatchObject([
+      { display_level: 1, role: "body" },
+      { display_level: 2 },
+    ]);
+    expect(proposal.nodes[1]).not.toHaveProperty("role");
+  });
+
   it("resets a carried role from a matched printed chapter", () => {
     const source = [
       "# References",
