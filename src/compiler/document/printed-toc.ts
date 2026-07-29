@@ -1053,10 +1053,25 @@ function recoveredMatchedSourceTitle(
   const bodyTitleWithPage = (): string => {
     if (!printed) return bodyTitle;
     const suffix =
-      /(?<suffix>(?:\.(?:\s*\.)+|…+|·(?:\s*·)+|_(?:\s*_)+|\s+)\s*(?:[ivxlcdm]+|\d{1,5})\s*)$/iu.exec(
+      /(?<suffix>\s*(?:\.(?:\s*\.)+|…+|·(?:\s*·)+|_(?:\s*_)+|\s+)\s*(?:[ivxlcdm]+|\d{1,5})\s*)$/iu.exec(
         sourceTitle,
       )?.groups?.suffix;
     return `${bodyTitle}${suffix ?? `  ${printed.pageLabel}`}`;
+  };
+  const repairedBodyTitleWithPage = (): string | undefined => {
+    if (
+      entry.numbering?.kind !== "decimal" ||
+      repairedHeadingNumber?.compact !== entry.numbering.key.replaceAll(".", "")
+    ) {
+      return;
+    }
+    const repairedBodyTitle = `${entry.numbering.key} ${repairedHeadingNumber.title}`;
+    if (!printed) return repairedBodyTitle;
+    const suffix =
+      /(?<suffix>\s*(?:\.(?:\s*\.)+|…+|·(?:\s*·)+|_(?:\s*_)+|\s+)\s*(?:[ivxlcdm]+|\d{1,5})\s*)$/iu.exec(
+        sourceTitle,
+      )?.groups?.suffix;
+    return `${repairedBodyTitle}${suffix ?? `  ${printed.pageLabel}`}`;
   };
   const damagedPrintedNumber =
     headingNumber?.kind === "decimal" &&
@@ -1087,7 +1102,7 @@ function recoveredMatchedSourceTitle(
     !bodyUsesCanonicalNumber &&
     repairedHeadingNumber?.compact === entry.numbering.key.replaceAll(".", "")
   ) {
-    return sourceTitle;
+    return repairedBodyTitleWithPage() ?? sourceTitle;
   }
   if (
     dotLeader.test(bodyTitle) ||

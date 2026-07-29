@@ -865,6 +865,41 @@ describe("printed contents detection", () => {
     });
   });
 
+  it("repairs spaced body decimal numbering while recovering a damaged printed title", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## 1.1.1 具体构成描述 ...... 2",
+      "",
+      "## 1.1.2 务 ...... 4",
+      "",
+      "## 1.1.3 什么是协议 ...... 6",
+      "",
+      "## 1. 1. 1 具体构成描述",
+      "",
+      "Body",
+      "",
+      "## 1. 1. 2 服务描述",
+      "",
+      "Body",
+      "",
+      "## 1. 1. 3 什么是协议",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
+      bodyHeadingBlockId: expect.stringMatching(/^blk_/u),
+      sourceTitle: "1.1.2 服务描述 ...... 4",
+    });
+  });
+
   it("repairs multi-character OCR loss from a unique numbered body heading", () => {
     const source = [
       "## Contents",
@@ -1860,7 +1895,7 @@ describe("printed contents detection", () => {
       },
       {
         bodyHeadingBlockId: expect.any(String),
-        sourceTitle: "3.10.5 支持变长栈帧...... 300",
+        sourceTitle: "3.10.5 支持变长栈帧 ...... 300",
       },
     ]);
   });
