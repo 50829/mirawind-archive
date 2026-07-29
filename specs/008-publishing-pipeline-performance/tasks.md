@@ -14,14 +14,14 @@ the old and new publication job paths must not coexist in a commit.
 
 **Purpose**: Freeze inputs and make measurements machine-verifiable before optimization.
 
-- [ ] T001 Add failing result-schema and environment-binding tests for paired runs in `tests/unit/benchmarks/pipeline-paired.test.ts`
-- [ ] T002 [P] Add failing statistical tests for AB/BA/AB medians, CV expansion, single-book regression and RSS gates in `tests/unit/benchmarks/paired-statistics.test.ts`
-- [ ] T003 [P] Add failing fixture/reference preflight tests for exactly fifteen hash-bound inputs in `tests/unit/benchmarks/reference-preflight.test.ts`
-- [ ] T004 Implement versioned paired-result parsing and statistics in `scripts/benchmarks/paired-statistics.ts`
-- [ ] T005 Implement baseline/candidate worktree orchestration, randomized fixture order and isolated data roots in `scripts/benchmarks/pipeline-paired.ts`
-- [ ] T006 Extend environment and pipeline profiles with commit, dirty state, lockfile, runtime, filesystem, resource counts, stage timings and process-tree RSS in `scripts/benchmarks/environment.ts` and `scripts/benchmarks/pipeline-profile.ts`
-- [ ] T007 Add `benchmark:pipeline-paired` and `benchmark:compilation-complexity` commands in `package.json`
-- [ ] T008 Run the current reference preflight and preserve the frozen `c176fdd` baseline identity in ignored `.cache/008-publishing-performance/baseline.json`
+- [x] T001 Add failing result-schema and environment-binding tests for paired runs in `tests/unit/benchmarks/pipeline-paired.test.ts`
+- [x] T002 [P] Add failing statistical tests for AB/BA/AB medians, CV expansion, single-book regression and RSS gates in `tests/unit/benchmarks/paired-statistics.test.ts`
+- [x] T003 [P] Add failing fixture/reference preflight tests for exactly fifteen hash-bound inputs in `tests/unit/benchmarks/reference-preflight.test.ts`
+- [x] T004 Implement versioned paired-result parsing and statistics in `scripts/benchmarks/paired-statistics.ts`
+- [x] T005 Implement baseline/candidate worktree orchestration, randomized fixture order and isolated data roots in `scripts/benchmarks/pipeline-paired.ts`
+- [x] T006 Extend environment and pipeline profiles with commit, dirty state, lockfile, runtime, filesystem, resource counts, stage timings and process-tree RSS in `scripts/benchmarks/environment.ts` and `scripts/benchmarks/pipeline-profile.ts`
+- [x] T007 Add `benchmark:pipeline-paired` and `benchmark:compilation-complexity` commands in `package.json`
+- [x] T008 Run the current reference preflight and preserve the frozen `c176fdd` baseline identity in ignored `.cache/008-publishing-performance/baseline.json`
 
 **Checkpoint**: The runner rejects unbound/noisy/incorrect evidence and can reproduce the old result
 without claiming an optimization.
