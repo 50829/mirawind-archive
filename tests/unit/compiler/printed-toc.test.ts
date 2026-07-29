@@ -997,6 +997,35 @@ describe("printed contents detection", () => {
     });
   });
 
+  it("recovers private-use math glyphs from a matched body heading", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## 4.8 Residues ...... 100",
+      "",
+      "## 4.9  function and  function ...... 110",
+      "",
+      "## 5.1 Next ...... 120",
+      "",
+      "## 4.8 Residues",
+      "",
+      "## 4.9 \\varphi function and \\mu function PHI AND MU",
+      "",
+      "## 5.1 Next",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
+      bodyHeadingBlockId: expect.stringMatching(/^blk_/u),
+      sourceTitle: "4.9 \\varphi function and \\mu function ...... 110",
+    });
+  });
+
   it("repairs an unnumbered damaged row only inside reliable neighbor anchors", () => {
     const source = [
       "## Contents",

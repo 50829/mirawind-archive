@@ -480,7 +480,7 @@ describe("default document structure proposal", () => {
     });
 
     expect(proposal.nodes.map((node) => node.display_level)).toEqual([
-      1, 2, 3, 4, 2, 3,
+      1, 2, 3, 4, 3, 4,
     ]);
   });
 
@@ -1201,6 +1201,72 @@ describe("default document structure proposal", () => {
     ]);
   });
 
+  it("does not push a detached numeric marker below h3", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 1.1 Topic",
+          "",
+          "## 1.1.1 Detail",
+          "",
+          "## 2",
+          "",
+          "## Next Chapter",
+        ].join("\n"),
+      ),
+    );
+    const [section, detail, , chapter] = document.headings;
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: section?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "1.1 Topic",
+        },
+        {
+          bodyHeadingBlockId: detail?.blockId ?? "",
+          referenceLevel: 3,
+          sourceTitle: "1.1.1 Detail",
+        },
+        {
+          bodyHeadingBlockId: chapter?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "Chapter 2 Next Chapter",
+        },
+      ],
+    });
+
+    expect(proposal.nodes[2]).toMatchObject({
+      display_level: 3,
+      include_in_toc: false,
+      starts_page: false,
+    });
+  });
+
+  it("keeps explicit backmatter visible after a matched appendix", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        "## Appendix B Tables\n\nBody\n\n## Bibliography\n\nSources\n",
+      ),
+    );
+    const appendix = document.headings[0];
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: appendix?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "Appendix B Tables",
+        },
+      ],
+    });
+
+    expect(proposal.nodes[1]).toMatchObject({
+      display_level: 1,
+      include_in_toc: true,
+      role: "backmatter",
+    });
+  });
+
   it("classifies a matched author biography as frontmatter", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument("## 作者简介\n\n正文\n\n## 第1章 起步\n\n正文"),
@@ -1272,6 +1338,23 @@ describe("default document structure proposal", () => {
       proposeDocumentStructure(document).nodes.map(
         (node) => node.display_level,
       ),
+    ).toEqual([1, 2]);
+  });
+
+  it("preserves section depth when its printed chapter heading is missing", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument("# Preface\n\n## 1.1 First section\n\nBody\n"),
+    );
+
+    expect(
+      proposeDocumentStructure(document, {
+        printedEntries: [
+          {
+            referenceLevel: 1,
+            sourceTitle: "Chapter 1 Missing heading",
+          },
+        ],
+      }).nodes.map((node) => node.display_level),
     ).toEqual([1, 2]);
   });
 

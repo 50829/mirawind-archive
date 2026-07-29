@@ -1041,6 +1041,11 @@ function recoveredMatchedSourceTitle(
   const sourceTitle = plainTitle(entry.sourceTitle);
   const bodyTitle = plainTitle(heading.sourceTitle);
   const headingNumber = inferPrintedHeadingEvidence(heading.sourceTitle);
+  const matchedNumberEqual =
+    entry.numbering !== undefined &&
+    headingNumber !== undefined &&
+    entry.numbering.kind === headingNumber.kind &&
+    entry.numbering.key === headingNumber.key;
   const headingTitle = normalizedTitle(heading.sourceTitle, false);
   const repairedHeadingNumber = repairableDecimalPrefix(heading.sourceTitle);
   const majorSectionFallback =
@@ -1122,6 +1127,22 @@ function recoveredMatchedSourceTitle(
     similarity(entry.normalizedTitle, headingTitle) >= 0.9
   ) {
     return bodyTitleWithPage();
+  }
+  if (
+    matchedNumberEqual &&
+    /[\uE000-\uF8FF]/u.test(sourceTitle) &&
+    !/[\uE000-\uF8FF]/u.test(bodyTitle)
+  ) {
+    const bodyMathCommands = bodyTitle.match(/\\[A-Za-z]+/gu) ?? [];
+    const privateGlyphs = sourceTitle.match(/[\uE000-\uF8FF]/gu) ?? [];
+    if (bodyMathCommands.length >= privateGlyphs.length) {
+      let commandIndex = 0;
+      return sourceTitle.replace(/[\uE000-\uF8FF]/gu, () => {
+        const command = bodyMathCommands[commandIndex];
+        commandIndex += 1;
+        return command ?? "";
+      });
+    }
   }
   if (similarity(entry.normalizedTitle, headingTitle) >= 0.9) {
     return sourceTitle;

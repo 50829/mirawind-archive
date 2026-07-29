@@ -105,13 +105,6 @@ function printedEntryTitle(
     .trim();
 }
 
-function numericMajorOrdinal(value: string): string | undefined {
-  const evidence = inferPrintedHeadingEvidence(value);
-  if (evidence?.kind === "decimal") return evidence.key.split(".")[0];
-  if (evidence?.kind !== "chapter") return;
-  return /\d+/u.exec(value)?.[0];
-}
-
 function printedTitleRole(
   title: string,
   beforeFirstBodyUnit = false,
@@ -176,24 +169,6 @@ export function proposeDocumentStructure(
     readonly sourceRegions?: readonly ConfirmedSourceRegion[];
   } = {},
 ): StructureProposal {
-  const missingChapterOrdinals = new Set(
-    (options.printedEntries ?? []).flatMap((entry) => {
-      if (entry.bodyHeadingBlockId) return [];
-      const ordinal = numericMajorOrdinal(entry.sourceTitle);
-      return ordinal &&
-        inferPrintedHeadingEvidence(entry.sourceTitle)?.kind === "chapter"
-        ? [ordinal]
-        : [];
-    }),
-  );
-  const closeMissingChapterGap = (title: string, level: number): number => {
-    const evidence = inferPrintedHeadingEvidence(title);
-    const ordinal =
-      evidence?.kind === "decimal" ? evidence.key.split(".")[0] : undefined;
-    return ordinal && missingChapterOrdinals.has(ordinal)
-      ? Math.max(1, level - 1)
-      : level;
-  };
   const printedLevels = new Map([
     ...(options.sourceRegions ?? []).flatMap((region) =>
       region.entries.flatMap((entry) =>
@@ -338,7 +313,7 @@ export function proposeDocumentStructure(
     if (printed) {
       hasNumberedUnit = true;
       structuralEvidence[index] = true;
-      return closeMissingChapterGap(title, printed);
+      return printed;
     }
     if (hasPrintedHierarchy && localOrdinalTitle(title)) {
       structuralEvidence[index] = false;
@@ -357,7 +332,7 @@ export function proposeDocumentStructure(
       hasNumberedUnit = true;
       const contextualLevel = contextualNumberedLevels[index] ?? numbered;
       structuralEvidence[index] = true;
-      return closeMissingChapterGap(title, contextualLevel);
+      return contextualLevel;
     }
     if (semanticTopLevel) {
       structuralEvidence[index] = true;
@@ -515,6 +490,10 @@ export function proposeDocumentStructure(
     }
     if (!suppressUnlistedAppendixChildren) continue;
     if (evidence?.kind === "appendix") {
+      suppressUnlistedAppendixChildren = false;
+      continue;
+    }
+    if (backmatterTitle.test(heading.sourceTitle.trim().normalize("NFKC"))) {
       suppressUnlistedAppendixChildren = false;
       continue;
     }
@@ -703,7 +682,7 @@ export function proposeDocumentStructure(
       if (!purePartLabel.test(title.normalize("NFKC"))) {
         const precedingLevel = nodes[index - 2]?.display_level;
         previousNode.display_level = Math.min(
-          4,
+          3,
           (precedingLevel ?? node.display_level) + 1,
         );
       }
