@@ -1040,3 +1040,44 @@
   初始结构。
 - 替代：本决策在 007 当前范围内取代 D-031、D-101 中要求管理员确认印刷目录分析结果的
   部分；主文档候选确认和其他出版配置编辑不在本决策范围内。
+
+## D-117：出版与阅读代码按业务模块分层并只构建一次候选版本
+
+- 状态：Accepted
+- 架构：中大型单体按 `publishing`、`reader`、`catalog`、`identity` 业务模块组织，模块内
+  统一使用 `core → application ← adapters`。`publishing/core` 只按稳定业务职责分为
+  `preparation` 与 `publication`，不为流水线中的每个动词建立目录层级。Astro `pages`、
+  worker 和 CLI 是入口，composition root 是唯一可同时引用 use case 与具体 adapter 的位置。
+  平台层只提供无业务含义的 SQLite、文件系统和进程原语，业务表、路径与状态转换属于模块
+  adapter。
+- 依赖：core 不得依赖 application、adapter、React、Astro、SQLite 或文件系统；application
+  只依赖 core 与 ports；adapter 实现 ports；外部模块只能经各模块的 `application/public.ts`
+  进入用例。源码内部使用 `@/` 绝对导入，禁止跨目录相对导入、深层越界导入、反向依赖和
+  循环。AST 架构检查与 lint 共同作为提交门禁。
+- 核心契约：出版构建只公开
+  `BuildCandidateCommand → CompiledBook → AsyncIterable<RenderedPage> → CandidateBuildArtifact`
+  四个边界。`CompiledBook` 是唯一整书内存模型，持有一次解析后的文档树、配置后的标题、
+  `PagePlan` 区间、身份、诊断和逻辑资源；`PagePlan` 只保存区间与 ID，不复制逐页文档树。
+  `RenderedPage` 是逐页、路由无关的结构化语义结果。`AsyncIterable` 只是有背压的执行协议，
+  不是业务实体；实现最多并发四页并按页序交付、写入和释放。`CandidateBuildArtifact` 是严格且
+  有界的 child 到 parent 持久化边界。byte offset、block/page map 等索引只属于编译函数内部，
+  不升级为公共 IR；`DraftCandidate` 与 `BookVersion` 属于 application/SQLite 生命周期，
+  不属于编译契约。不得引入 `SourceDocument`、`AnalyzedDocument`、`LaidOutDocument`、
+  `OutputDocument` 或 `CandidatePlan` 等无独立不变量的中间实体。
+- 构建：preview 与 publish 不再分别编译；唯一 `build_candidate` 在后台从同一
+  `CompiledBook` 逐页生成 preview/public 外壳、搜索和 presentation。发布只同步校验并原子
+  晋升 candidate，不创建发布构建任务。
+- 状态：草稿 revision 绑定唯一当前 candidate attempt；retry 使用新 job 和 candidate ID。
+  candidate 完成时 version、搜索、presentation、草稿 ready 与 job success 在一个事务登记；
+  发布在另一个事务中切换 `current_version_id`、版本状态和审计。失败、取消、interruption 和
+  orphan 均有显式终态或回收路径。
+- 性能：优化优先消除已测得的平方 source-region/字节偏移工作、preview/publish 重复编译、
+  无界页面并发、重复 ZIP 解压及重复资源枚举/hash。验收以十五本真实样本的交替 paired A/B、
+  reference v2 exact、RSS、并发阅读和搜索门禁为准，不以目录搬迁或单次运行宣称优化。
+- identity：`prepare-draft-v4` 和 reader identity 保持；编译、语义 HTML 与草稿预览提升为
+  `compiler-v5`、`semantic-html-v5-katex-0.18.1`、`draft-preview-v5`。`book.yaml` v3、
+  document manifest v2 与 version marker v2 保持。
+- 切换：基准、机械边界迁移和纯算法优化可独立提交；数据库、JobKind、worker protocol、
+  API、UI 与旧 preview/publish 链在同一 clean-switch 提交替换。不得保留运行时 fallback、
+  转发 export 或两条可发布路径。本决策取代 D-102、D-108 中与双构建、异步发布和旧模块
+  边界冲突的部分；D-108 的一次性替换原则继续有效。
