@@ -163,73 +163,33 @@ async function fixture(
 }
 
 describe("atomic draft configuration revisions", () => {
-  it("toggles a source region without deleting its authoritative definition", () =>
+  it("rejects source-region adjudication patches", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const setup = await fixture(database, dataRoot.layout, true);
-      const disabled = await patchDraftConfig({
-        bookId: setup.book.id,
-        database,
-        expectedEtag: setup.currentEtag,
-        layout: dataRoot.layout,
-        nowMs: 10,
-        patch: {
-          changes: [],
-          regions: [
-            {
-              applied: false,
-              region_id: "region_config_revision_0001",
-            },
-          ],
-        },
-      });
-      const drafts = new DraftRepository(database);
-      const disabledConfig = parseBookConfigYaml(
-        await readFile(
-          resolve(
-            dataRoot.layout.root,
-            drafts.requireConfig(setup.book.id, 2).yamlRelativePath,
-          ),
-          "utf8",
-        ),
-      );
-      expect(disabledConfig.source_regions).toEqual([
-        expect.objectContaining({
-          applied: false,
-          region_id: "region_config_revision_0001",
+      await expect(
+        patchDraftConfig({
+          bookId: setup.book.id,
+          database,
+          expectedEtag: setup.currentEtag,
+          layout: dataRoot.layout,
+          nowMs: 10,
+          patch: {
+            changes: [],
+            regions: [
+              {
+                applied: false,
+                region_id: "region_config_revision_0001",
+              },
+            ],
+          },
         }),
-      ]);
+      ).rejects.toMatchObject({ code: "DRAFT_PATCH_INVALID" });
 
-      await patchDraftConfig({
-        bookId: setup.book.id,
-        database,
-        expectedEtag: disabled.etag,
-        layout: dataRoot.layout,
-        nowMs: 11,
-        patch: {
-          changes: [],
-          regions: [
-            {
-              applied: true,
-              region_id: "region_config_revision_0001",
-            },
-          ],
-        },
+      expect(
+        new DraftRepository(database).requireBook(setup.book.id),
+      ).toMatchObject({
+        draftConfigRevision: 1,
       });
-      const enabledConfig = parseBookConfigYaml(
-        await readFile(
-          resolve(
-            dataRoot.layout.root,
-            drafts.requireConfig(setup.book.id, 3).yamlRelativePath,
-          ),
-          "utf8",
-        ),
-      );
-      expect(enabledConfig.source_regions).toEqual([
-        expect.objectContaining({
-          applied: true,
-          region_id: "region_config_revision_0001",
-        }),
-      ]);
     }));
 
   it("merges a strict block patch without accepting unknown fields", () =>

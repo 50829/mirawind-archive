@@ -41,12 +41,6 @@ interface HeadingContext {
   readonly title: string;
 }
 
-interface SourceRegion {
-  readonly applied: boolean;
-  readonly entry_count: number;
-  readonly region_id: string;
-}
-
 interface TypographySummary {
   readonly profile: "verbatim-v1" | "zh-smart-v1";
   readonly protected_nodes: number;
@@ -108,7 +102,6 @@ export const StructureEditor = forwardRef<
     readonly headings: readonly HeadingContext[];
     readonly onSaved: () => Promise<void>;
     readonly onStateChange: (state: StructureEditorState) => void;
-    readonly regions: readonly SourceRegion[];
     readonly revision: number;
     readonly saveDisabled?: boolean;
     readonly structure: readonly StructureNode[];
@@ -128,19 +121,8 @@ export const StructureEditor = forwardRef<
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const onStateChange = props.onStateChange;
-  const sourceRegions = props.regions;
-  const [enabledRegionIds, setEnabledRegionIds] = useState<ReadonlySet<string>>(
-    () =>
-      new Set(
-        sourceRegions
-          .filter((region) => region.applied)
-          .map((region) => region.region_id),
-      ),
-  );
   const nodesRef = useRef(nodes);
-  const enabledRegionIdsRef = useRef(enabledRegionIds);
   const acceptedSnapshot = useRef<{
-    readonly enabledRegionIds: ReadonlySet<string>;
     readonly nodes: readonly StructureNode[];
   } | null>(null);
   const selectedDialog = useRef<HTMLDialogElement>(null);
@@ -149,7 +131,6 @@ export const StructureEditor = forwardRef<
   const sourceDialogTrigger = useRef<HTMLButtonElement>(null);
   const lastRevision = useRef(props.revision);
   nodesRef.current = nodes;
-  enabledRegionIdsRef.current = enabledRegionIds;
   const headingById = useMemo(
     () => new Map(props.headings.map((heading) => [heading.block_id, heading])),
     [props.headings],
@@ -205,35 +186,12 @@ export const StructureEditor = forwardRef<
       setNodes((current) =>
         mergeAcceptedNodes(props.structure, accepted.nodes, current),
       );
-      setEnabledRegionIds((current) => {
-        const next = new Set(
-          props.regions
-            .filter((region) => region.applied)
-            .map((region) => region.region_id),
-        );
-        for (const region of props.regions) {
-          const id = region.region_id;
-          if (current.has(id) === accepted.enabledRegionIds.has(id)) {
-            continue;
-          }
-          if (current.has(id)) next.add(id);
-          else next.delete(id);
-        }
-        return next;
-      });
     } else {
       setNodes(props.structure);
-      setEnabledRegionIds(
-        new Set(
-          props.regions
-            .filter((region) => region.applied)
-            .map((region) => region.region_id),
-        ),
-      );
     }
     acceptedSnapshot.current = null;
     lastRevision.current = props.revision;
-  }, [props.regions, props.revision, props.structure]);
+  }, [props.revision, props.structure]);
 
   useEffect(() => {
     if (
@@ -257,15 +215,6 @@ export const StructureEditor = forwardRef<
     if (!selected) return;
     const base = withoutOptional(selected, "display_title");
     updateSelected(value ? { ...base, display_title: value } : base);
-  }
-
-  function setRegionApplied(regionId: string, applied: boolean) {
-    setEnabledRegionIds((current) => {
-      const next = new Set(current);
-      if (applied) next.add(regionId);
-      else next.delete(regionId);
-      return next;
-    });
   }
 
   function renderSelectedNode(titleId: string) {
@@ -409,22 +358,6 @@ export const StructureEditor = forwardRef<
             </div>
           </dl>
         )}
-        {sourceRegions.map((region) => (
-          <label
-            className="my-4 flex items-center gap-2"
-            key={region.region_id}
-          >
-            <input
-              className="size-4 accent-emerald-700"
-              checked={enabledRegionIds.has(region.region_id)}
-              onChange={(event) =>
-                setRegionApplied(region.region_id, event.currentTarget.checked)
-              }
-              type="checkbox"
-            />
-            作为层级参照（{region.entry_count} 条）
-          </label>
-        ))}
       </>
     );
   }
@@ -445,13 +378,7 @@ export const StructureEditor = forwardRef<
     }
     return [change];
   });
-  const dirtyRegions = sourceRegions.flatMap((region) => {
-    const applied = enabledRegionIds.has(region.region_id);
-    return applied === region.applied
-      ? []
-      : [{ applied, region_id: region.region_id }];
-  });
-  const dirty = dirtyChanges.length > 0 || dirtyRegions.length > 0;
+  const dirty = dirtyChanges.length > 0;
 
   async function save() {
     if (!dirty || saving || props.saveDisabled) return;
@@ -459,12 +386,10 @@ export const StructureEditor = forwardRef<
     setStatus("");
     setConflict(false);
     const submittedNodes = nodesRef.current;
-    const submittedRegionIds = new Set(enabledRegionIdsRef.current);
     try {
       const response = await fetch(`/api/manage/books/${props.bookId}/draft`, {
         body: JSON.stringify({
           changes: dirtyChanges,
-          regions: dirtyRegions,
         }),
         cache: "no-store",
         credentials: "same-origin",
@@ -484,7 +409,6 @@ export const StructureEditor = forwardRef<
         return;
       }
       acceptedSnapshot.current = {
-        enabledRegionIds: submittedRegionIds,
         nodes: submittedNodes,
       };
       await props.onSaved();
@@ -605,7 +529,7 @@ export const StructureEditor = forwardRef<
           <FilePenLine aria-hidden="true" size={18} />
           当前项
         </button>
-        {(props.typography || sourceRegions.length > 0) && (
+        {props.typography && (
           <button
             className={manageSecondaryButton}
             onClick={() => sourceDialog.current?.showModal()}
@@ -622,7 +546,7 @@ export const StructureEditor = forwardRef<
         {renderSelectedNode("desktop-editor-title")}
       </div>
 
-      {(props.typography || sourceRegions.length > 0) && (
+      {props.typography && (
         <details className="desktop-source-regions max-[850px]:hidden">
           <summary>源处理</summary>
           <div>{renderSourceHandling("desktop-source-title")}</div>
@@ -652,7 +576,7 @@ export const StructureEditor = forwardRef<
         </div>
       </dialog>
 
-      {(props.typography || sourceRegions.length > 0) && (
+      {props.typography && (
         <dialog
           aria-labelledby="mobile-source-title"
           className={`workbench-mobile-dialog ${manageDialog}`}

@@ -290,11 +290,7 @@ test("closes typography, formula and printed contents preview-to-publication beh
     timeout: 30_000,
   });
   await page.getByRole("link", { name: "打开出版工作台" }).click();
-  const printedSourceHandling = page.locator(".desktop-source-regions");
-  await printedSourceHandling.locator("summary").click();
-  const printedRegion =
-    printedSourceHandling.getByLabel("作为层级参照（6 条）");
-  await expect(printedRegion).toBeChecked();
+  await expect(page.getByLabel(/作为层级参照/u)).toHaveCount(0);
 
   const printedPreview = page.frameLocator("iframe");
   await expect(
@@ -307,27 +303,6 @@ test("closes typography, formula and printed contents preview-to-publication beh
     printedPreview.getByRole("heading", { name: "第 1 章 绪论" }),
   ).toBeVisible();
 
-  await printedRegion.uncheck();
-  await expect(printedRegion).not.toBeChecked();
-  await page.getByRole("button", { name: "保存并重建" }).click();
-  await expect(page.getByText("正在构建预览")).toBeVisible();
-  await expect(page.getByRole("button", { name: "发布当前修订" })).toBeEnabled({
-    timeout: 30_000,
-  });
-  await expect(
-    printedPreview.getByRole("heading", { name: "目录" }),
-  ).toBeVisible();
-
-  await printedRegion.check();
-  await expect(printedRegion).toBeChecked();
-  await page.getByRole("button", { name: "保存并重建" }).click();
-  await expect(page.getByText("正在构建预览")).toBeVisible();
-  await expect(page.getByRole("button", { name: "发布当前修订" })).toBeEnabled({
-    timeout: 30_000,
-  });
-  await expect(
-    printedPreview.getByRole("heading", { name: "目录" }),
-  ).toHaveCount(0);
   await expect(printedPreview.locator(".reader-document")).not.toContainText(
     "...... 1",
   );

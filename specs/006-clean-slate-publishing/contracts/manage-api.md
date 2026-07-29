@@ -29,8 +29,7 @@ diagnostics. It does not return complete source/configuration/original-file iden
       "starts_page": true,
       "role": "body"
     }
-  ],
-  "regions": [{ "region_id": "region_...", "applied": false }]
+  ]
 }
 ```
 
@@ -38,6 +37,10 @@ Missing fields are unchanged. Explicit null deletes optional overrides. Unknown 
 duplicate IDs and unknown IDs are rejected. Success returns `202` with the new revision,
 preview job ID and building state. A stale ETag returns `412` without discarding client
 edits.
+
+D-116 supersedes the earlier source-region patch field. Source regions are automatic,
+read-only preparation output; this endpoint rejects region, canonical, body-match and
+inferred-hierarchy adjudication fields.
 
 ## Reprocess
 

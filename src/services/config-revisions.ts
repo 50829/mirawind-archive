@@ -66,11 +66,6 @@ interface DraftStructureChange {
   readonly starts_page?: boolean;
 }
 
-interface DraftRegionChange {
-  readonly applied: boolean;
-  readonly region_id: string;
-}
-
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new SafeApplicationError(
@@ -97,16 +92,10 @@ function exactKeys(
 
 function parseDraftPatch(value: unknown): {
   readonly changes: readonly DraftStructureChange[];
-  readonly regions: readonly DraftRegionChange[];
 } {
   const patch = record(value);
-  exactKeys(patch, ["changes", "regions"]);
-  if (
-    !Array.isArray(patch.changes) ||
-    patch.changes.length > 20_000 ||
-    (patch.regions !== undefined &&
-      (!Array.isArray(patch.regions) || patch.regions.length > 32))
-  ) {
+  exactKeys(patch, ["changes"]);
+  if (!Array.isArray(patch.changes) || patch.changes.length > 20_000) {
     throw new SafeApplicationError(
       "DRAFT_PATCH_INVALID",
       "The draft patch is invalid.",
@@ -152,24 +141,8 @@ function parseDraftPatch(value: unknown): {
     }
     return change as unknown as DraftStructureChange;
   });
-  const regions = (patch.regions ?? []).map((item) => {
-    const change = record(item);
-    exactKeys(change, ["applied", "region_id"]);
-    if (
-      typeof change.region_id !== "string" ||
-      typeof change.applied !== "boolean"
-    ) {
-      throw new SafeApplicationError(
-        "DRAFT_PATCH_INVALID",
-        "A source-region change is invalid.",
-        400,
-      );
-    }
-    return change as unknown as DraftRegionChange;
-  });
   if (
-    new Set(changes.map((change) => change.block_id)).size !== changes.length ||
-    new Set(regions.map((change) => change.region_id)).size !== regions.length
+    new Set(changes.map((change) => change.block_id)).size !== changes.length
   ) {
     throw new SafeApplicationError(
       "DRAFT_PATCH_INVALID",
@@ -177,7 +150,7 @@ function parseDraftPatch(value: unknown): {
       400,
     );
   }
-  return { changes, regions };
+  return { changes };
 }
 
 export async function patchDraftConfig(input: {
@@ -207,17 +180,7 @@ export async function patchDraftConfig(input: {
   );
   const currentNodes = config.structure as readonly Record<string, unknown>[];
   const nodeIds = new Set(currentNodes.map((node) => String(node.block_id)));
-  const currentRegions = config.source_regions as readonly Record<
-    string,
-    unknown
-  >[];
-  const regionIds = new Set(
-    currentRegions.map((region) => String(region.region_id)),
-  );
-  if (
-    parsed.changes.some((change) => !nodeIds.has(change.block_id)) ||
-    parsed.regions.some((change) => !regionIds.has(change.region_id))
-  ) {
+  if (parsed.changes.some((change) => !nodeIds.has(change.block_id))) {
     throw new SafeApplicationError(
       "DRAFT_PATCH_ID_UNKNOWN",
       "The draft patch references an unknown identity.",
@@ -227,17 +190,9 @@ export async function patchDraftConfig(input: {
   const changes = new Map(
     parsed.changes.map((change) => [change.block_id, change]),
   );
-  const regionChanges = new Map(
-    parsed.regions.map((change) => [change.region_id, change.applied]),
-  );
   const next = {
     ...config,
     revision: Number(config.revision) + 1,
-    source_regions: currentRegions.map((region) => ({
-      ...region,
-      applied:
-        regionChanges.get(String(region.region_id)) ?? Boolean(region.applied),
-    })),
     structure: currentNodes.map((node) => {
       const change = changes.get(String(node.block_id));
       if (!change) return node;

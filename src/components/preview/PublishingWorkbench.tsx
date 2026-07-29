@@ -511,7 +511,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
                 await refresh();
               }}
               onStateChange={updateEditorState}
-              regions={draft.regions}
               revision={draft.config_revision}
               saveDisabled={draft.preview_state === "building"}
               structure={draft.structure}
