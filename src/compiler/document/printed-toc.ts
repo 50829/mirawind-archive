@@ -138,7 +138,7 @@ const explicitMajorEntryPrefix = new RegExp(
   "iu",
 );
 const topLevelBackmatterTitle =
-  /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|(?:author|subject)\s+index|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
+  /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|(?:表|图|主题|作者)?索引|致谢|bibliography|references|glossary|(?:author|subject)\s+index|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 const localUnnumberedAppendixTitle = /^(?:附录|appendix)\s*[:：]/iu;
 const localEnglishUnnumberedAppendixTitle = /^appendix\s*[:：]/iu;
 const printedNumberingPrefix = new RegExp(
@@ -1161,6 +1161,13 @@ function recoveredMatchedSourceTitle(
   }
   if (
     matchedNumberEqual &&
+    /\\[A-Za-z]+/u.test(sourceTitle) &&
+    headingTitle.startsWith(entry.normalizedTitle)
+  ) {
+    return sourceTitle;
+  }
+  if (
+    matchedNumberEqual &&
     /[\uE000-\uF8FF]/u.test(sourceTitle) &&
     !/[\uE000-\uF8FF]/u.test(bodyTitle)
   ) {
@@ -1671,7 +1678,6 @@ function attachReliableLayoutPageIndexes(
   if (!evidence) return entries;
   const layoutRows = reconstructPrintedLayoutRows(evidence);
   if (layoutRows.length === 0) return entries;
-  const pageIndexesByIdentity = new Map<string, Set<number>>();
   const identity = (sourceTitle: string): string => {
     const printed = printedPageEvidence(sourceTitle);
     const semanticTitle = printed?.title ?? sourceTitle;
@@ -1682,8 +1688,43 @@ function attachReliableLayoutPageIndexes(
       printed?.pageLabel ?? "",
     ].join("\u0000");
   };
+  const entryIdentities = new Set(
+    entries.map((entry) => identity(entry.sourceTitle)),
+  );
+  const identitiesByPageIndex = new Map<number, Set<string>>();
   for (const row of layoutRows) {
     const key = identity(row.text);
+    if (!entryIdentities.has(key)) continue;
+    const identities = identitiesByPageIndex.get(row.pageIndex) ?? new Set();
+    identities.add(key);
+    identitiesByPageIndex.set(row.pageIndex, identities);
+  }
+  const pageClusters = [...identitiesByPageIndex.keys()]
+    .sort((left, right) => left - right)
+    .reduce<number[][]>((clusters, pageIndex) => {
+      const current = clusters.at(-1);
+      if (current && pageIndex === (current.at(-1) ?? -2) + 1) {
+        current.push(pageIndex);
+      } else {
+        clusters.push([pageIndex]);
+      }
+      return clusters;
+    }, [])
+    .sort((left, right) => {
+      const score = (cluster: readonly number[]): number =>
+        cluster.reduce(
+          (total, pageIndex) =>
+            total + (identitiesByPageIndex.get(pageIndex)?.size ?? 0),
+          0,
+        );
+      return score(right) - score(left) || (left[0] ?? 0) - (right[0] ?? 0);
+    });
+  const reliablePageIndexes = new Set(pageClusters[0] ?? []);
+  const pageIndexesByIdentity = new Map<string, Set<number>>();
+  for (const row of layoutRows) {
+    if (!reliablePageIndexes.has(row.pageIndex)) continue;
+    const key = identity(row.text);
+    if (!entryIdentities.has(key)) continue;
     const pages = pageIndexesByIdentity.get(key) ?? new Set();
     pages.add(row.pageIndex);
     pageIndexesByIdentity.set(key, pages);
@@ -2065,7 +2106,7 @@ export function shouldPreferNativePdfDetection(
   const nativeInversions = pageLabelInversions(nativeCandidates);
   if (nativeInversions > sourceInversions) return false;
   if (nativeInversions < sourceInversions) return true;
-  const significantAdvantage = Math.max(3, Math.ceil(sourceEntries * 0.1));
+  const significantAdvantage = 3;
   if (nativeEntries >= sourceEntries + significantAdvantage) return true;
   const unresolvedPageLabels = (
     candidates: readonly PrintedContentsCandidate[],
@@ -3044,7 +3085,11 @@ export function detectPrintedContents(input: {
       const sourceTitle = recoveredMatchedSourceTitle(
         entry,
         match,
-        hasSupportedOmittedDecimalNumber(entries, entryIndex, match),
+        hasSupportedOmittedDecimalNumber(entries, entryIndex, match) ||
+          contextualEntryTitle.test(
+            printedPageEvidence(entry.sourceTitle)?.title ??
+              plainTitle(entry.sourceTitle),
+          ),
       );
       if (sourceTitle !== entry.sourceTitle) {
         recoveredTitleEntryIndexes.add(logicalEntryIndex);

@@ -170,6 +170,9 @@ describe("printed contents detection", () => {
     ]);
     expect(shouldPreferNativePdfDetection(ordered, inverted)).toBe(false);
     expect(shouldPreferNativePdfDetection(inverted, ordered)).toBe(true);
+    expect(shouldPreferNativePdfDetection(detection(261), detection(269))).toBe(
+      true,
+    );
     const contentListLayout = {
       diagnostics: [],
       records: [],
@@ -264,6 +267,33 @@ describe("printed contents detection", () => {
       result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
     ).toEqual(expected);
     expect(result.candidates[0]?.matchedHeadingCount).toBe(3);
+  });
+
+  it("preserves a concise printed math title over a matched body explanation", () => {
+    const expected = "4.9 \\varphi 函数和 \\mu 函数 ...... 110";
+    const source = [
+      "## Contents",
+      "",
+      "4.8 留数 ...... 100",
+      "",
+      expected,
+      "",
+      "5.1 后续 ...... 120",
+      "",
+      "## 4.8 留数",
+      "",
+      "## 4.9 \\varphi 函数和 \\mu 函数 PHI AND MU",
+      "",
+      "## 5.1 后续",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toBe(expected);
   });
 
   it("preserves product-version numbers in major titles", () => {
@@ -1118,6 +1148,39 @@ describe("printed contents detection", () => {
       bodyHeadingBlockId: expect.stringMatching(/^blk_/u),
       referenceLevel: 3,
       sourceTitle: "1.1.4 练习 ...... 6",
+    });
+  });
+
+  it("recovers a decimal number for a matched chapter-local contextual row", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## 5.11 Previous topic ...... 228",
+      "",
+      "## 习题 ...... 230",
+      "",
+      "## 6.1 Next topic ...... 232",
+      "",
+      "## 5.11 Previous topic",
+      "",
+      "Body",
+      "",
+      "## 5.12 习题",
+      "",
+      "Body",
+      "",
+      "## 6.1 Next topic",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
+      bodyHeadingBlockId: expect.stringMatching(/^blk_/u),
+      sourceTitle: "5.12 习题 ...... 230",
     });
   });
 
@@ -2494,6 +2557,67 @@ describe("printed contents detection", () => {
     expect(
       result.candidates[0]?.logicalEntries.map((entry) => entry.pageIndex),
     ).toEqual([0, 0, 1, 1]);
+  });
+
+  it("does not attribute a directory row to a matching body page", () => {
+    const source = [
+      "# Contents",
+      "",
+      "1.1 Alpha ...... 1",
+      "",
+      "1.2 Beta ...... 2",
+      "",
+      "1.3 Gamma ...... 3",
+      "",
+      "## 1.1 Alpha",
+      "",
+      "## 1.2 Beta",
+      "",
+      "## 1.3 Gamma",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          {
+            bbox: [20, 20, 300, 40],
+            pageIndex: 2,
+            text: "1.1 Alpha ...... 1",
+            type: "text",
+          },
+          {
+            bbox: [20, 50, 300, 70],
+            pageIndex: 2,
+            text: "1.3 Gamma ...... 3",
+            type: "text",
+          },
+          {
+            bbox: [20, 20, 300, 40],
+            pageIndex: 102,
+            text: "1.2 Beta ...... 2",
+            type: "text",
+          },
+        ],
+        source: "content-list",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.pageIndex),
+    ).toEqual([2, undefined, 2]);
+  });
+
+  it("treats table indexes as top-level backmatter", () => {
+    expect(
+      inferPrintedReferenceLevels([
+        "8.1 Final section ...... 550",
+        "表索引 ...... 563",
+      ]),
+    ).toEqual([2, 1]);
   });
 
   it("preserves a semantic page-label restart across an appendix part", () => {
