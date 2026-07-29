@@ -124,7 +124,7 @@ single-book regression.
 - [x] T047 [US1] Replace pagination, outline, structure-proposal and manifest lookup rescans with the shared internal indexes in `src/modules/publishing/core/preparation/structure-proposal.ts`, `src/modules/publishing/core/publication/compile-book.ts` and `src/modules/publishing/core/publication/manifest.ts`
 - [x] T048 [US1] Implement the ordered at-most-four-page async generator with cancellation probes in `src/modules/publishing/core/publication/render-pages.ts`
 - [x] T049 [US1] Materialize preview/public ReaderShell policies and incremental search/manifest spools from each route-neutral page in `src/modules/publishing/adapters/reader-html/candidate-materializer.ts`
-- [ ] T050 [US1] Implement strict command/artifact types and validators in `src/modules/publishing/application/commands/build-candidate.ts` and `src/entrypoints/worker/protocol.ts`
+- [x] T050 [US1] Implement strict command/artifact types and validators in `src/modules/publishing/application/commands/build-candidate.ts` and `src/entrypoints/worker/protocol.ts`
 - [ ] T051 [US1] Implement the isolated child candidate builder and stage telemetry in `src/entrypoints/worker/handlers/build-candidate.ts`
 - [ ] T052 [US1] Add bounded current-candidate fields to draft queries and workbench DTOs in `src/modules/publishing/application/queries/get-draft.ts` and `src/web/contracts/publishing.ts`
 - [ ] T053 [US1] Run microbenchmarks and fifteen reference comparisons, then record pre-cutover compilation evidence in `docs/audits/008-compilation-performance.md`

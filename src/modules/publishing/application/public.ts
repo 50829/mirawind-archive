@@ -20,6 +20,11 @@ import {
   maximumUploadBytes,
 } from "@/modules/publishing/application/import-upload-policy";
 import { m1PublishPolicy } from "@/modules/publishing/application/publish-policy";
+import {
+  candidateBuildIdentities,
+  parseBuildCandidateCommand,
+  parseCandidateBuildArtifact,
+} from "@/modules/publishing/application/commands/build-candidate";
 
 export type { TypographyProfile } from "@/modules/publishing/core/preparation/document-model";
 export type {
@@ -30,8 +35,13 @@ export type {
   BookVersionRecord,
   BookVersionState,
 } from "@/modules/publishing/application/version-record";
+export type {
+  BuildCandidateCommand,
+  CandidateBuildArtifact,
+} from "@/modules/publishing/application/commands/build-candidate";
 
 export {
+  candidateBuildIdentities,
   evaluateJobRetry,
   importUploadIdempotencyOperation,
   isKnownJobPhase,
@@ -39,6 +49,8 @@ export {
   m1ImportExpiryMs,
   m1PublishPolicy,
   maximumUploadBytes,
+  parseBuildCandidateCommand,
+  parseCandidateBuildArtifact,
   canonicalJson,
   katexCriticalCss,
   parseBookConfigYaml,

@@ -122,7 +122,7 @@ export function parseBuildCandidateCommand(
     value.previewIdentity !== candidateBuildIdentities.preview ||
     value.readerIdentity !== candidateBuildIdentities.reader ||
     value.sourceRootRelativePath !==
-      `books/${bookId}/draft/source/${sourceId}` ||
+      `books/${bookId}/draft/sources/${sourceId}` ||
     value.configRelativePath !==
       `books/${bookId}/draft/configs/${configRevision}/book.yaml`
   ) {

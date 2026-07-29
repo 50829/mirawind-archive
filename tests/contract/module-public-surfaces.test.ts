@@ -43,6 +43,7 @@ async function sourceFiles(directory: string): Promise<readonly string[]> {
 describe("module application public surfaces", () => {
   it("exposes the stable runtime entrypoints", () => {
     expect(Object.keys(publishing).sort()).toEqual([
+      "candidateBuildIdentities",
       "canonicalJson",
       "evaluateJobRetry",
       "importUploadIdempotencyOperation",
@@ -53,6 +54,8 @@ describe("module application public surfaces", () => {
       "m1PublishPolicy",
       "maximumUploadBytes",
       "parseBookConfigYaml",
+      "parseBuildCandidateCommand",
+      "parseCandidateBuildArtifact",
       "publishingRendererIdentity",
       "rendererStylesheetUrl",
       "validateBookConfig",
