@@ -232,9 +232,10 @@ export async function prepareDraft(input: {
             sourceDetection: repairedDetection,
             sourceLayout: repairedLayoutEvidence,
           });
-          effectiveLayoutEvidence = preferNative
-            ? pdfLayoutEvidence
-            : repairedLayoutEvidence;
+          effectiveLayoutEvidence =
+            repairedLayoutEvidence.source === "none" || preferNative
+              ? pdfLayoutEvidence
+              : repairedLayoutEvidence;
           printedContents = preferNative ? nativeDetection : repairedDetection;
         }
       }
