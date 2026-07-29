@@ -480,7 +480,7 @@ describe("default document structure proposal", () => {
     });
 
     expect(proposal.nodes.map((node) => node.display_level)).toEqual([
-      1, 2, 3, 4, 3, 4,
+      1, 2, 3, 4, 2, 3,
     ]);
   });
 
@@ -1356,6 +1356,105 @@ describe("default document structure proposal", () => {
         ],
       }).nodes.map((node) => node.display_level),
     ).toEqual([1, 2]);
+  });
+
+  it("collapses descendants when a nested printed chapter heading is missing", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## Part One",
+          "",
+          "## Chapter 7 Previous",
+          "",
+          "## 7.1 Previous section",
+          "",
+          "## 8.1 First section",
+          "",
+          "## 8.1.1 First detail",
+          "",
+          "## 8.1.2 Second detail",
+        ].join("\n"),
+      ),
+    );
+    const [part, chapter, previousSection, firstSection] = document.headings;
+
+    expect(
+      proposeDocumentStructure(document, {
+        printedEntries: [
+          {
+            bodyHeadingBlockId: part?.blockId ?? "",
+            referenceLevel: 1,
+            sourceTitle: "Part One",
+          },
+          {
+            bodyHeadingBlockId: chapter?.blockId ?? "",
+            referenceLevel: 2,
+            sourceTitle: "Chapter 7 Previous",
+          },
+          {
+            bodyHeadingBlockId: previousSection?.blockId ?? "",
+            referenceLevel: 3,
+            sourceTitle: "7.1 Previous section",
+          },
+          {
+            referenceLevel: 2,
+            sourceTitle: "Chapter 8 Missing heading",
+          },
+          {
+            bodyHeadingBlockId: firstSection?.blockId ?? "",
+            referenceLevel: 3,
+            sourceTitle: "8.1 First section",
+          },
+        ],
+      }).nodes.map((node) => node.display_level),
+    ).toEqual([1, 2, 3, 2, 3, 3]);
+  });
+
+  it("restores a nested chapter after an unlisted top-level appendix", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## Part One",
+          "",
+          "Body",
+          "",
+          "## Appendix A Answers",
+          "",
+          "Answers",
+          "",
+          "## Chapter 7 Portfolio selection",
+          "",
+          "Body",
+          "",
+          "## 7.1 Diversification",
+          "",
+          "Body",
+        ].join("\n"),
+      ),
+    );
+    const [part, , chapter, section] = document.headings;
+
+    expect(
+      proposeDocumentStructure(document, {
+        printedEntries: [
+          {
+            bodyHeadingBlockId: part?.blockId ?? "",
+            referenceLevel: 1,
+            sourceTitle: "Part One",
+          },
+          {
+            bodyHeadingBlockId: chapter?.blockId ?? "",
+            referenceLevel: 2,
+            sourceTitle: "Chapter 7 Portfolio selection",
+          },
+          {
+            bodyHeadingBlockId: section?.blockId ?? "",
+            referenceLevel: 3,
+            sourceTitle: "7.1 Diversification",
+          },
+        ],
+      }).nodes.map((node) => node.display_level),
+    ).toEqual([1, 1, 2, 3]);
   });
 
   it("splits parts, later nested chapters and appendices independently of levels", () => {

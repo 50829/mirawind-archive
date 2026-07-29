@@ -154,6 +154,54 @@ function continuousLevels(
   });
 }
 
+function collapseMissingNestedChapterLevels(
+  entries: readonly {
+    readonly bodyHeadingBlockId?: string;
+    readonly referenceLevel: number;
+    readonly sourceTitle: string;
+  }[],
+  headings: readonly NormalizedHeading[],
+): readonly {
+  readonly bodyHeadingBlockId?: string;
+  readonly referenceLevel: number;
+  readonly sourceTitle: string;
+}[] {
+  const missingLevels: number[] = [];
+  const headingByBlockId = new Map(
+    headings.map((heading) => [heading.blockId, heading] as const),
+  );
+  return entries.map((entry) => {
+    while (
+      missingLevels.length > 0 &&
+      (missingLevels.at(-1) ?? 0) >= entry.referenceLevel
+    ) {
+      missingLevels.pop();
+    }
+    const printedEvidence = inferPrintedHeadingEvidence(entry.sourceTitle);
+    const bodyEvidence = entry.bodyHeadingBlockId
+      ? inferPrintedHeadingEvidence(
+          headingByBlockId.get(entry.bodyHeadingBlockId)?.sourceTitle ?? "",
+        )
+      : undefined;
+    const followsMissingHierarchy =
+      printedEvidence !== undefined &&
+      bodyEvidence !== undefined &&
+      printedEvidence.kind === bodyEvidence.kind &&
+      printedEvidence.key === bodyEvidence.key;
+    const referenceLevel = followsMissingHierarchy
+      ? Math.max(1, entry.referenceLevel - missingLevels.length)
+      : entry.referenceLevel;
+    if (
+      !entry.bodyHeadingBlockId &&
+      entry.referenceLevel > 1 &&
+      printedEvidence?.kind === "chapter"
+    ) {
+      missingLevels.push(entry.referenceLevel);
+    }
+    return Object.freeze({ ...entry, referenceLevel });
+  });
+}
+
 /**
  * Produces a portable initial `book.yaml` structure without mutating or
  * reordering the transient document tree.
@@ -169,6 +217,10 @@ export function proposeDocumentStructure(
     readonly sourceRegions?: readonly ConfirmedSourceRegion[];
   } = {},
 ): StructureProposal {
+  const projectedPrintedEntries = collapseMissingNestedChapterLevels(
+    options.printedEntries ?? [],
+    document.headings,
+  );
   const printedLevels = new Map([
     ...(options.sourceRegions ?? []).flatMap((region) =>
       region.entries.flatMap((entry) =>
@@ -177,7 +229,7 @@ export function proposeDocumentStructure(
           : [],
       ),
     ),
-    ...(options.printedEntries ?? []).flatMap((entry) =>
+    ...projectedPrintedEntries.flatMap((entry) =>
       entry.bodyHeadingBlockId
         ? [[entry.bodyHeadingBlockId, entry.referenceLevel] as const]
         : [],
@@ -733,14 +785,41 @@ export function proposeDocumentStructure(
   };
   let inheritedRole: ContentRole = "body";
   let previousActiveLevel = 0;
+  let hasNestedPartContext = false;
   for (const [index, node] of nodes.entries()) {
     if (!activeHeading(index)) continue;
+    const heading = document.headings[index];
+    const semanticKind = heading
+      ? (printedKinds.get(heading.blockId) ??
+        inferPrintedHeadingEvidence(heading.sourceTitle)?.kind)
+      : undefined;
+    const authoritativePrintedLevel = heading
+      ? printedLevels.get(heading.blockId)
+      : undefined;
+    if (semanticKind === "part" && authoritativePrintedLevel === 1) {
+      hasNestedPartContext = true;
+    } else if (
+      (semanticKind === "chapter" && authoritativePrintedLevel === 1) ||
+      node.role === "frontmatter" ||
+      node.role === "backmatter"
+    ) {
+      hasNestedPartContext = false;
+    }
     if (node.display_level === 1) {
       inheritedRole = node.role ?? "body";
     } else if (node.role !== undefined && node.role !== inheritedRole) {
-      node.display_level = 1;
-      node.starts_page = true;
-      inheritedRole = node.role;
+      if (
+        node.role === "body" &&
+        semanticKind === "chapter" &&
+        hasNestedPartContext &&
+        (authoritativePrintedLevel ?? 1) > 1
+      ) {
+        inheritedRole = "body";
+      } else {
+        node.display_level = 1;
+        node.starts_page = true;
+        inheritedRole = node.role;
+      }
     } else {
       delete node.role;
     }
@@ -750,11 +829,6 @@ export function proposeDocumentStructure(
     ) {
       node.display_level = previousActiveLevel + 1;
     }
-    const heading = document.headings[index];
-    const semanticKind = heading
-      ? (printedKinds.get(heading.blockId) ??
-        inferPrintedHeadingEvidence(heading.sourceTitle)?.kind)
-      : undefined;
     if (
       node.display_level > 1 &&
       semanticKind !== "chapter" &&

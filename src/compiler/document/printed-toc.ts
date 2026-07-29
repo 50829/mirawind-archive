@@ -353,7 +353,10 @@ export function inferPrintedReferenceLevels(
             numbering?.kind === "part" &&
             /(?:附录|appendix)/iu.test(semanticTitle);
           insideAppendix = false;
-        } else if (numbering?.kind === "chapter" && level === numbering.level) {
+        } else if (
+          (numbering?.kind === "chapter" || numbering?.kind === "decimal") &&
+          level === numbering.level
+        ) {
           insidePart = false;
           insideSupplementalPart = false;
           insideAppendix = false;
