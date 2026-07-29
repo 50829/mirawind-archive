@@ -133,6 +133,10 @@ const standaloneMajorLabel = new RegExp(
   `^(?:第\\s*[0-9零〇一二三四五六七八九十百千]+\\s*(?:章|篇|部分|部)|(?:chapter|chap\\.?|part)\\s*(?:[0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord}))$`,
   "iu",
 );
+const explicitMajorEntryPrefix = new RegExp(
+  `^(?:第\\s*[0-9零〇一二三四五六七八九十百千]+\\s*(?:章|篇|部分|部)|(?:chapter|chap\\.?)\\s*(?:[0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})|part\\s*(?:[0-9ivxlcdm]+|${englishOrdinalWord})|附录|appendix)(?:\\s|[:：]|$)`,
+  "iu",
+);
 const topLevelBackmatterTitle =
   /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|(?:author|subject)\s+index|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
 const printedNumberingPrefix = new RegExp(
@@ -1649,6 +1653,44 @@ function reorderFromMonotonicPageLabels(
   return printedPageLabelInversions(reordered) === 0 ? reordered : entries;
 }
 
+function reorderMajorBeforeSamePageDescendants(
+  entries: readonly ExtractedEntry[],
+): readonly ExtractedEntry[] {
+  const reordered = [...entries];
+  for (let index = 1; index < reordered.length; index += 1) {
+    const major = reordered[index];
+    if (major?.numbering?.kind !== "chapter") continue;
+    const majorPage = printedPageEvidence(major.sourceTitle)?.pageLabel;
+    const majorOrdinal = numericMajorOrdinal(
+      major.numbering,
+      major.sourceTitle,
+    );
+    if (!majorPage || !majorOrdinal) continue;
+    let insertionIndex = index;
+    while (insertionIndex > 0) {
+      const previous = reordered[insertionIndex - 1];
+      const previousPage = previous
+        ? printedPageEvidence(previous.sourceTitle)?.pageLabel
+        : undefined;
+      const previousOrdinal = previous
+        ? numericMajorOrdinal(previous.numbering, previous.sourceTitle)
+        : undefined;
+      if (
+        previousPage !== majorPage ||
+        previous?.numbering?.kind !== "decimal" ||
+        previousOrdinal !== majorOrdinal
+      ) {
+        break;
+      }
+      insertionIndex -= 1;
+    }
+    if (insertionIndex === index) continue;
+    reordered.splice(index, 1);
+    reordered.splice(insertionIndex, 0, major);
+  }
+  return Object.freeze(reordered);
+}
+
 function reorderFromReliableLayout(
   entries: readonly ExtractedEntry[],
   layoutEntries: readonly Omit<ExtractedEntry, "range">[],
@@ -1884,6 +1926,19 @@ function recoverLayoutLogicalEntries(
       );
     });
   };
+  const acceptsLayoutOnlyEntry = (
+    entry: Omit<ExtractedEntry, "range">,
+  ): boolean => {
+    if (evidence?.source !== "native-pdf") return true;
+    const printed = printedPageEvidence(entry.sourceTitle);
+    const title = printed?.title ?? plainTitle(entry.sourceTitle);
+    if (printed) return /\p{L}/u.test(title);
+    return (
+      frontmatterEntryTitle.test(title) ||
+      topLevelBackmatterTitle.test(title) ||
+      explicitMajorEntryPrefix.test(title)
+    );
+  };
   const alignment = monotonicMatches(sourceEntries, layoutHeadings, {
     allowNumberOnly: true,
     requireNumberingForNumberedEntries: true,
@@ -2040,6 +2095,7 @@ function recoverLayoutLogicalEntries(
         const sourceOffset = supersetMatches.get(offset);
         if (sourceOffset === undefined) {
           if (sourceContainsLayoutEntry(layoutEntry)) continue;
+          if (!acceptsLayoutOnlyEntry(layoutEntry)) continue;
           const sourceEntry =
             sourceEntries[nearestSourceIndex(layoutCursor + offset)];
           if (!sourceEntry) {
@@ -2129,6 +2185,7 @@ function recoverLayoutLogicalEntries(
         .map((entry, offset) => ({ entry, offset }))
         .filter(({ entry }) => {
           if (sourceContainsLayoutEntry(entry)) return false;
+          if (!acceptsLayoutOnlyEntry(entry)) return false;
           const title =
             printedPageEvidence(entry.sourceTitle)?.title ??
             plainTitle(entry.sourceTitle);
@@ -2216,9 +2273,10 @@ function recoverLayoutLogicalEntries(
   const reordered = reorderFromMonotonicPageLabels(
     reorderFromReliableLayout(recovered, layoutEntries),
   );
-  if (evidence?.source !== "native-pdf") return reordered;
+  const semanticallyOrdered = reorderMajorBeforeSamePageDescendants(reordered);
+  if (evidence?.source !== "native-pdf") return semanticallyOrdered;
   return Object.freeze(
-    reordered.map((entry) => {
+    semanticallyOrdered.map((entry) => {
       const nativeMatches = layoutEntries.filter((layoutEntry) =>
         prefersNativeVisibleMath(entry, layoutEntry),
       );

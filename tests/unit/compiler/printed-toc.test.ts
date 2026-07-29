@@ -2248,6 +2248,75 @@ describe("printed contents detection", () => {
     ).toBe(true);
   });
 
+  it("rejects native page artifacts and orders a chapter before same-page sections", () => {
+    const markdownEntries = [
+      "第四部分 高级设计和分析技术",
+      "15.1 钢条切割 ...... 204",
+      "第 15 章 动态规划 ...... 204",
+      "15.2 矩阵链乘法 ...... 210",
+      "第 16 章 贪心算法 ...... 237",
+    ];
+    const layoutEntries = [
+      "第四部分 高级设计和分析技术",
+      "15.1 钢条切割 ...... 204",
+      "第 15 章 动态规划 ...... 204",
+      "147 活动选择问题 ............",
+      "15.2 矩阵链乘法 ...... 210",
+      "178 ...... 277",
+      "第 16 章 贪心算法 ...... 237",
+    ];
+    const source = [
+      "# 目录",
+      "",
+      ...markdownEntries.flatMap((entry) => [`## ${entry}`, ""]),
+      "## 高级设计和分析技术",
+      "",
+      "正文",
+      "",
+      "## 动态规划",
+      "",
+      "正文",
+      "",
+      "## 15.1 钢条切割",
+      "",
+      "正文",
+      "",
+      "## 15.2 矩阵链乘法",
+      "",
+      "正文",
+      "",
+      "## 贪心算法",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: layoutEntries.map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
+      "第四部分 高级设计和分析技术",
+      "第 15 章 动态规划 ...... 204",
+      "15.1 钢条切割 ...... 204",
+      "15.2 矩阵链乘法 ...... 210",
+      "第 16 章 贪心算法 ...... 237",
+    ]);
+  });
+
   it("joins a wrapped optional section before matching it to the body", () => {
     const source = [
       "# 目录",
