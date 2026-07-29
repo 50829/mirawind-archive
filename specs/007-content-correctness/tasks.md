@@ -102,10 +102,10 @@ share analysis and every diagnostic activates a valid location/recovery without 
 
 - [x] T049 Run focused unit, contract, integration and component gates
 - [x] T050 Run format, lint, typecheck, full tests and production build
-- [ ] T051 Run separate three-real plus 500-page build benchmark and 300 ms reader p95 gate
-- [ ] T052 Run Spec Kit analyze and converge, append and finish any remaining tasks
-- [ ] T053 Rerun converge with no unmitigated CRITICAL findings and synchronize runtime docs
-- [ ] T054 Commit remaining logical implementation and convergence units using Conventional Commits
+- [x] T051 Run separate three-real plus 500-page build benchmark and 300 ms reader p95 gate
+- [x] T052 Run Spec Kit analyze and converge, append and finish any remaining tasks
+- [x] T053 Rerun converge with no unmitigated CRITICAL findings and synchronize runtime docs
+- [x] T054 Commit remaining logical implementation and convergence units using Conventional Commits
 
 ## Dependencies
 
@@ -114,3 +114,7 @@ algorithm changes. T013-T017 feed T018-T029. T030-T037 can proceed after the ref
 is stable. T038-T041 consume final diagnostic/artifact contracts. T042-T048 require all
 comparison tooling, complete Codex image inspection and drive algorithm correction. T049-T054 are
 final gates.
+
+## Phase 11: Convergence
+
+- [x] T055 Synchronize the 007 release audit with the fifteen-book exact correctness gate and separate performance manifest per SC-007 and NFR-006 (partial)

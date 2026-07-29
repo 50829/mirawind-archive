@@ -31,10 +31,10 @@ pnpm vitest run --project integration tests/integration/recovery/prepare-preview
 ## Performance and repository gates
 
 ```sh
-pnpm benchmark:build -- \
+pnpm benchmark:build \
   --real-dir "$PWD/tests/fixtures/mineru/real" \
   --real-manifest performance-fixtures.json
-pnpm benchmark:reference -- \
+pnpm benchmark:reference \
   --real-dir "$PWD/tests/fixtures/mineru/real" \
   --real-manifest performance-fixtures.json \
   --retain-dir "$PWD/.cache/007-performance" \
