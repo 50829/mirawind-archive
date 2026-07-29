@@ -62,6 +62,7 @@ interface BenchmarkFixture {
 export interface BuildArguments {
   readonly output: string | null;
   readonly realDirectory: string | null;
+  readonly realManifest: string | null;
   readonly retainDirectory: string | null;
   readonly stress: StressBookOptions;
 }
@@ -111,6 +112,7 @@ function parseArguments(arguments_: readonly string[]): BuildArguments {
       ![
         "--output",
         "--real-dir",
+        "--real-manifest",
         "--retain-dir",
         "--stress-blocks",
         "--stress-images",
@@ -127,6 +129,7 @@ function parseArguments(arguments_: readonly string[]): BuildArguments {
     realDirectory: values.get("--real-dir")
       ? resolve(String(values.get("--real-dir")))
       : null,
+    realManifest: values.get("--real-manifest") ?? null,
     retainDirectory: values.get("--retain-dir")
       ? resolve(String(values.get("--retain-dir")))
       : null,
@@ -636,7 +639,7 @@ function realFixture(
     id: fixture.id,
     mineruVersion: fixture.mineruVersion as "3.4.4",
     pageCountRange: fixture.pageCountRange,
-    path: join(directory, `${fixture.id}.zip`),
+    path: join(directory, fixture.fileName),
     sha256: fixture.sha256,
     sizeBytes: fixture.sizeBytes,
     type: "real",
@@ -649,7 +652,10 @@ async function fixtures(
 ): Promise<readonly BenchmarkFixture[]> {
   const result: BenchmarkFixture[] = [];
   if (input.realDirectory) {
-    const verified = await verifyRealMineruFixtures(input.realDirectory);
+    const verified = await verifyRealMineruFixtures(
+      input.realDirectory,
+      input.realManifest ?? undefined,
+    );
     result.push(
       ...verified.map((fixture) =>
         realFixture(input.realDirectory as string, fixture),

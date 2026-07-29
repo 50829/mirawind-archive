@@ -31,8 +31,15 @@ pnpm vitest run --project integration tests/integration/recovery/prepare-preview
 ## Performance and repository gates
 
 ```sh
-pnpm benchmark:build
-pnpm benchmark:read
+pnpm benchmark:build -- \
+  --real-dir "$PWD/tests/fixtures/mineru/real" \
+  --real-manifest performance-fixtures.json
+pnpm benchmark:reference -- \
+  --real-dir "$PWD/tests/fixtures/mineru/real" \
+  --real-manifest performance-fixtures.json \
+  --retain-dir "$PWD/.cache/007-performance" \
+  --output-json "$PWD/.cache/007-performance.json" \
+  --output-markdown "$PWD/.cache/007-performance.md"
 pnpm format
 pnpm lint
 pnpm typecheck
@@ -40,6 +47,7 @@ pnpm test
 pnpm build
 ```
 
-The build benchmark uses three designated real books plus the 500-page synthetic book. The
-reader benchmark retains the 300 ms uncached p95 target. Neither substitutes for the
+`performance-fixtures.json` uses the strict local fixture-manifest schema and lists only the
+designated 97/441/583-page books. The build and reference benchmarks add the 500-page
+synthetic book and retain the 300 ms uncached reader p95 target. Neither substitutes for the
 fifteen-book exact correctness comparison.

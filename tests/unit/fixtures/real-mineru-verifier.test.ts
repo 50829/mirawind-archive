@@ -64,6 +64,7 @@ describe("real MinerU fixture verifier", () => {
 
     await expect(verifyRealMineruFixtures(root)).resolves.toEqual([
       expect.objectContaining({
+        fileName: "real-mineru-a7f31c.zip",
         id: "real-mineru-a7f31c",
         sizeBytes: Buffer.byteLength(contents[0] ?? ""),
       }),

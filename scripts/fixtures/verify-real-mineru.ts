@@ -30,6 +30,7 @@ interface RealFixtureManifest {
 }
 
 export interface VerifiedRealFixture {
+  readonly fileName: string;
   readonly id: string;
   readonly mineruVersion: string;
   readonly pageCountRange: {
@@ -266,6 +267,7 @@ export async function verifyRealMineruFixtures(
     }
     verified.push(
       Object.freeze({
+        fileName: fixture.file_name,
         id: fixture.id,
         mineruVersion: fixture.mineru_version,
         pageCountRange: Object.freeze({ ...fixture.page_count_range }),

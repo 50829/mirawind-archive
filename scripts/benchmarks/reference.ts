@@ -36,6 +36,7 @@ interface ReferenceArguments {
   readonly outputJson: string;
   readonly outputMarkdown: string;
   readonly realDirectory: string;
+  readonly realManifest: string | null;
   readonly requests: number;
   readonly retainDirectory: string;
 }
@@ -59,6 +60,7 @@ function parseArguments(arguments_: readonly string[]): ReferenceArguments {
     "--output-json",
     "--output-markdown",
     "--real-dir",
+    "--real-manifest",
     "--requests",
     "--retain-dir",
   ]);
@@ -73,6 +75,7 @@ function parseArguments(arguments_: readonly string[]): ReferenceArguments {
     outputJson: resolve(requiredArgument(values, "--output-json")),
     outputMarkdown: resolve(requiredArgument(values, "--output-markdown")),
     realDirectory: resolve(requiredArgument(values, "--real-dir")),
+    realManifest: values.get("--real-manifest") ?? null,
     requests: boundedInteger(
       values.get("--requests"),
       200,
@@ -530,6 +533,7 @@ export async function runReferenceBenchmark(
   const build = await runBuildBenchmarks({
     output: null,
     realDirectory: input.realDirectory,
+    realManifest: input.realManifest,
     retainDirectory: input.retainDirectory,
     stress: {
       blocksPerPage: 20,
