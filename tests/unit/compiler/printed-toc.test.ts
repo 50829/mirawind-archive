@@ -8,9 +8,13 @@ import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
 import { parseMarkdownDocument } from "@/compiler/document/parser";
 import {
   detectPrintedContents,
+  hasReliableLayoutOrderInversion,
   inferPrintedHeadingEvidence,
   inferPrintedReferenceLevels,
+  shouldPreferNativePdfDetection,
+  shouldPreferNativePdfLayout,
   supplementalPdfPageIndices,
+  type PrintedContentsDetection,
 } from "@/compiler/document/printed-toc";
 import { applySourceRegions } from "@/compiler/document/source-regions";
 import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
@@ -42,6 +46,168 @@ function documentFor(source: string) {
 }
 
 describe("printed contents detection", () => {
+  it("uses native PDF order only for a reliable sidecar inversion", () => {
+    const records = [
+      "第1章 开始 ...... 1",
+      "第2章 结束 ...... 4",
+      "1.1 第一节 ...... 2",
+      "1.2 第二节 ...... 3",
+    ].map((text, sourceOrder) => ({
+      bbox: [20, 20 + sourceOrder * 30, 700, 40 + sourceOrder * 30] as const,
+      pageIndex: 0,
+      pageLabelSupplemented: true,
+      sourceOrder,
+      text,
+      type: "text",
+    }));
+    const nativeRecords = [
+      "第1章 开始 ...... 1",
+      "1.1 第一节 ...... 2",
+      "1.2 第二节 ...... 3",
+      "第2章 结束 ...... 4",
+    ].map((text, sourceOrder) => ({
+      bbox: [20, 20 + sourceOrder * 30, 700, 40 + sourceOrder * 30] as const,
+      pageIndex: 0,
+      sourceOrder,
+      text,
+      type: "text",
+    }));
+    const source = {
+      diagnostics: [],
+      records,
+      source: "content-list" as const,
+    };
+
+    expect(
+      hasReliableLayoutOrderInversion(source, {
+        diagnostics: [],
+        records: nativeRecords,
+        source: "native-pdf",
+      }),
+    ).toBe(true);
+    expect(
+      hasReliableLayoutOrderInversion(source, {
+        diagnostics: [],
+        records: records.map((record) => ({
+          bbox: record.bbox,
+          pageIndex: record.pageIndex,
+          sourceOrder: record.sourceOrder,
+          text: record.text,
+          type: record.type,
+        })),
+        source: "native-pdf",
+      }),
+    ).toBe(false);
+    expect(
+      hasReliableLayoutOrderInversion(
+        {
+          ...source,
+          records: nativeRecords.map((record) => ({
+            ...record,
+            pageLabelSupplemented: true,
+          })),
+        },
+        {
+          diagnostics: [],
+          records,
+          source: "native-pdf",
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("prefers native PDF only for a significant complete-candidate advantage", () => {
+    const detection = (
+      entryCount: number,
+      boundaryConfidence: "high" | "low" = "high",
+    ) =>
+      ({
+        candidates: [
+          {
+            boundaryConfidence,
+            entryCount,
+            proposedRegion: {},
+          },
+        ],
+      }) as unknown as PrintedContentsDetection;
+    expect(
+      shouldPreferNativePdfDetection(detection(10), detection(12)),
+    ).toBe(false);
+    expect(
+      shouldPreferNativePdfDetection(detection(10), detection(13)),
+    ).toBe(true);
+    expect(
+      shouldPreferNativePdfDetection(detection(10), detection(20, "low")),
+    ).toBe(false);
+  });
+
+  it("matches decorative stars and equivalent technical math tokens", () => {
+    const source = [
+      "## Contents",
+      "",
+      "7.2.3 解释 ...... 305",
+      "",
+      "11.4 嵌入式选择与 $\\\\mathrm{L}1$ 正则化 ...... 395",
+      "",
+      "## 7.2.3 解释*",
+      "",
+      "Body",
+      "",
+      "## 11.4 嵌入式选择与 L_{1} 正则化",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map(
+        (entry) => entry.bodyHeadingBlockId !== undefined,
+      ),
+    ).toEqual([true, true]);
+  });
+
+  it("preserves product-version numbers in major titles", () => {
+    const source = [
+      "## Contents",
+      "",
+      "Chapter 21 Windows  10",
+      "",
+      "21.1 History 821",
+      "",
+      "Chapter B Windows 7",
+      "",
+      "B.1 History 1",
+      "",
+      "## Chapter 21 Windows 10",
+      "",
+      "## 21.1 History",
+      "",
+      "## Chapter B Windows 7",
+      "",
+      "## B.1 History",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
+      "Chapter 21 Windows  10",
+      "21.1 History 821",
+      "Chapter B Windows 7",
+      "B.1 History 1",
+    ]);
+  });
+
   it("recognizes bare chapter numbers, alphanumeric sections and local appendices", () => {
     expect(inferPrintedHeadingEvidence("1 导论")).toMatchObject({
       kind: "chapter",
@@ -74,6 +240,14 @@ describe("printed contents detection", () => {
       level: 1,
     });
     expect(inferPrintedHeadingEvidence("\\ 4.6 证明主定理")).toMatchObject({
+      kind: "decimal",
+      level: 2,
+    });
+    expect(inferPrintedHeadingEvidence("\\* 5.4 概率分析")).toMatchObject({
+      kind: "decimal",
+      level: 2,
+    });
+    expect(inferPrintedHeadingEvidence("B. 3 函数")).toMatchObject({
       kind: "decimal",
       level: 2,
     });
@@ -146,6 +320,33 @@ describe("printed contents detection", () => {
         "7.1 分散化与组合风险",
       ]),
     ).toEqual([1, 2, 3, 4, 3, 3, 3, 3, 2, 3]);
+  });
+
+  it("keeps unnumbered topics inside an alphanumeric section", () => {
+    expect(
+      inferPrintedReferenceLevels(
+        [
+          "第2章 线性映射",
+          "2A 张成空间和线性无关性",
+          "线性组合和张成空间",
+          "线性无关性",
+          "习题 2A",
+          "2B 基",
+          "基的判定",
+          "习题 2B",
+          "第3章 多项式",
+        ],
+        {
+          referenceLevels: new Map([
+            [2, 2],
+            [3, 2],
+            [4, 2],
+            [6, 2],
+            [7, 2],
+          ]),
+        },
+      ),
+    ).toEqual([1, 2, 3, 3, 3, 2, 3, 3, 1]);
   });
 
   it("produces a high-confidence title-free region with monotonic body matches", async () => {
@@ -397,6 +598,41 @@ describe("printed contents detection", () => {
     ).toBe(false);
   });
 
+  it("does not merge an alpha section with its child when its leader lacks a page", () => {
+    const source = [
+      "# 目录",
+      "",
+      "5A 不变子空间 ...... 112",
+      "",
+      "5B 最小多项式 . . . . . .",
+      "",
+      "复向量空间上特征值的存在性 . . . . . . 120",
+      "",
+      "5C 上三角矩阵 ...... 129",
+      "",
+      "## 5A 不变子空间",
+      "",
+      "## 5B 最小多项式",
+      "",
+      "## 复向量空间上特征值的存在性",
+      "",
+      "## 5C 上三角矩阵",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle)).toEqual([
+      "5A 不变子空间 ...... 112",
+      "5B 最小多项式 . . . . . .",
+      "复向量空间上特征值的存在性 . . . . . . 120",
+      "5C 上三角矩阵 ...... 129",
+    ]);
+  });
+
   it("bridges a bounded run of non-entry blocks inside printed contents", () => {
     const source = [
       "# Contents",
@@ -592,6 +828,216 @@ describe("printed contents detection", () => {
     });
   });
 
+  it("repairs multi-character OCR loss from a unique numbered body heading", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## 2.3.2 邮件报文格式 ...... 79",
+      "",
+      "## 2.3.3 邮件 协 ...... 80",
+      "",
+      "## 2.4 DNS 服务 ...... 81",
+      "",
+      "## 2.3.2 邮件报文格式",
+      "",
+      "Body",
+      "",
+      "## 2.3.3 邮件访问协议",
+      "",
+      "Body",
+      "",
+      "## 2.4 DNS 服务",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
+      bodyHeadingBlockId: expect.stringMatching(/^blk_/u),
+      sourceTitle: expect.stringContaining("2.3.3 邮件访问协议"),
+    });
+  });
+
+  it("repairs a known OCR phrase corruption from the numbered body heading", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## 1.1.2 服务描述 ...... 4",
+      "",
+      "## 1.1.3 仕么是协议 ...... 5",
+      "",
+      "## 1.2 网络边缘 ...... 6",
+      "",
+      "## 1.1.2 服务描述",
+      "",
+      "## 1.1.3 什么是协议",
+      "",
+      "## 1.2 网络边缘",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toContain(
+      "1.1.3 什么是协议",
+    );
+  });
+
+  it("repairs an unnumbered damaged row only inside reliable neighbor anchors", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## 7.4.6 5G 蜂窝网络 ...... 378",
+      "",
+      "## 移动 管 ...... 380",
+      "",
+      "## 7.5.1 设备移动性 ...... 381",
+      "",
+      "## 7.4.6 5G 蜂窝网络",
+      "",
+      "Body",
+      "",
+      "## 7.5 移动性管理原理",
+      "",
+      "Body",
+      "",
+      "## 7.5.1 设备移动性",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
+      bodyHeadingBlockId: expect.stringMatching(/^blk_/u),
+      sourceTitle: expect.stringContaining("7.5 移动性管理原理"),
+    });
+  });
+
+  it("recovers a page-only row inside a chapter review group", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## 3.9 小结 ...... 186",
+      "",
+      "## 课后习题和问题 ...... 187",
+      "",
+      "## 复习题 ...... 187",
+      "",
+      "## ...... 189",
+      "",
+      "## 编程作业 ...... 196",
+      "",
+      "## 第 4 章 下一章 ...... 198",
+      "",
+      "## 3.9 小结",
+      "",
+      "## 课后习题和问题",
+      "",
+      "## 复习题",
+      "",
+      "## 习题",
+      "",
+      "## 编程作业",
+      "",
+      "## 第 4 章 下一章",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => ({
+        matched: Boolean(entry.bodyHeadingBlockId),
+        title: entry.sourceTitle,
+      })),
+    ).toContainEqual({ matched: true, title: "习题...... 189" });
+  });
+
+  it("recomputes nested levels after recovering a matched title", () => {
+    const source = [
+      "## Contents",
+      "",
+      "第七部分 专题 ...... 700",
+      "",
+      "第35章 近似算法 ...... 701",
+      "",
+      "35.2 旅行商问题 ...... 710",
+      "",
+      "35.2.1 題 ...... 711",
+      "",
+      "## 第七部分 专题",
+      "",
+      "## 第35章 近似算法",
+      "",
+      "## 35.2 旅行商问题",
+      "",
+      "## 35.2.1 满足三角不等式的旅行商问题",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.referenceLevel),
+    ).toEqual([1, 2, 3, 4]);
+  });
+
+  it("uses page-stripped semantics for final chapter notes and appendices", () => {
+    expect(
+      inferPrintedReferenceLevels([
+        "第 16 章 强化学习 ...... 370",
+        "16.7 阅读材料 ...... 393",
+        "习题 ...... 394",
+        "参考文献 ...... 395",
+        "附录 ...... 399",
+        "A 矩阵 ...... 399",
+        "后记 ...... 417",
+      ]),
+    ).toEqual([1, 2, 2, 2, 1, 2, 1]);
+  });
+
+  it("returns chapter notes to the canonical section level", () => {
+    expect(
+      inferPrintedReferenceLevels([
+        "Chapter 1 Start ...... 1",
+        "1.1 Topic ...... 2",
+        "1.1.1 Detail ...... 3",
+        "Bibliographic Notes ...... 4",
+        "Exercises ...... 5",
+        "Chapter 2 Continue ...... 6",
+      ]),
+    ).toEqual([1, 2, 3, 2, 2, 1]);
+    expect(
+      inferPrintedReferenceLevels([
+        "Part One Foundations",
+        "Chapter 1 Start ...... 1",
+        "1.1 Topic ...... 2",
+        "1.1.1 Detail ...... 3",
+        "Bibliography ...... 4",
+        "Chapter 2 Continue ...... 6",
+      ]),
+    ).toEqual([1, 2, 3, 4, 3, 2]);
+  });
+
   it("preserves a reliable short printed title instead of rewriting it from the body", () => {
     const source = [
       "## Contents",
@@ -624,6 +1070,38 @@ describe("printed contents detection", () => {
     expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toContain(
       "庞加菜怎样看指数",
     );
+  });
+
+  it("does not copy renderer artifacts from a matched body heading", () => {
+    const source = [
+      "## Contents",
+      "",
+      "5A 不变子空间 ...... 155",
+      "",
+      "习题 5A ...... 167",
+      "",
+      "5B 最小多项式 ...... 168",
+      "",
+      "## 5A 不变子空间",
+      "",
+      "## $K$ 习题 5A $k$",
+      "",
+      "## 5B 最小多项式 . . . . 复向量空间上特征值的存在性",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
+      expect.stringContaining("5A 不变子空间"),
+      expect.stringContaining("习题 5A ...... 167"),
+      expect.stringContaining("5B 最小多项式 ...... 168"),
+    ]);
   });
 
   it("withholds bilingual body matches when numbering is the only strong evidence", () => {
@@ -1076,6 +1554,387 @@ describe("printed contents detection", () => {
     ]);
   });
 
+  it("retains a reliable native row when no body heading matches it", () => {
+    const markdownEntries = [
+      "第 1 章 向量空间 ...... 1",
+      "1A 向量 ...... 2",
+      "第 2 章 线性映射 ...... 20",
+    ];
+    const layoutEntries = [
+      "第 1 章 向量空间 ...... 1",
+      "1A 向量 ...... 2",
+      "复数 ...... 2",
+      "第 2 章 线性映射 ...... 20",
+    ];
+    const source = [
+      "# 目录",
+      "",
+      ...markdownEntries.flatMap((entry) => [`## ${entry}`, ""]),
+      "## 第 1 章 向量空间",
+      "",
+      "正文",
+      "",
+      "## 1A 向量",
+      "",
+      "正文",
+      "",
+      "## 第 2 章 线性映射",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: layoutEntries.map((text, index) => ({
+          bbox: [
+            index === 2 ? 45 : index === 1 ? 20 : 0,
+            20 + index * 30,
+            700,
+            40 + index * 30,
+          ] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual(layoutEntries);
+    expect(result.candidates[0]?.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "PRINTED_TOC_UNMATCHED_ENTRY" }),
+      ]),
+    );
+  });
+
+  it("uses native visible math text for the printed row instead of Markdown syntax", () => {
+    const markdownEntries = [
+      "第 1 章 向量空间 ...... 1",
+      "1A $\\mathbf { R } ^ { n }$ 和 $\\mathbf { C } ^ { n }$ ...... 2",
+      "第 2 章 线性映射 ...... 20",
+      "第 3 章 多项式 ...... 40",
+    ];
+    const layoutEntries = [
+      "第 1 章 向量空间 ...... 1",
+      "1A Rⁿ 和 Cⁿ ...... 2",
+      "第 2 章 线性映射 ...... 20",
+      "第 3 章 多项式 ...... 40",
+    ];
+    const source = [
+      "# 目录",
+      "",
+      ...markdownEntries.flatMap((entry) => [`## ${entry}`, ""]),
+      "## 第 1 章 向量空间",
+      "",
+      "正文",
+      "",
+      "## 1A $\\mathbf { R } ^ { n }$ 和 $\\mathbf { C } ^ { n }$",
+      "",
+      "正文",
+      "",
+      "## 第 2 章 线性映射",
+      "",
+      "正文",
+      "",
+      "## 第 3 章 多项式",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: layoutEntries.map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
+      sourceTitle: "1A Rⁿ 和 Cⁿ ...... 2",
+    });
+    expect(result.candidates[0]?.logicalEntries[1]).not.toHaveProperty(
+      "bodyHeadingBlockId",
+    );
+  });
+
+  it("prefers an explicitly numbered body section when duplicate titles tie", () => {
+    const source = [
+      "# 目录",
+      "",
+      "第 4 章 多项式 ...... 100",
+      "",
+      "多项式在 R 上的分解 ...... 107",
+      "",
+      "习题 4 ...... 109",
+      "",
+      "## 第 4 章 多项式",
+      "",
+      "正文",
+      "",
+      "## 多项式在R上的分解",
+      "",
+      "正文",
+      "",
+      "## 4.16 多项式在R上的分解",
+      "",
+      "正文",
+      "",
+      "## 习题 4",
+      "",
+      "正文",
+    ].join("\n");
+    const document = documentFor(source);
+    const numberedHeading = document.headings.find((heading) =>
+      heading.sourceTitle.startsWith("4.16 "),
+    );
+    const result = detectPrintedContents({
+      document,
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(numberedHeading).toBeDefined();
+    expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
+      bodyHeadingBlockId: numberedHeading?.blockId,
+    });
+    expect(result.candidates[0]?.diagnostics).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "PRINTED_TOC_AMBIGUOUS_MATCH" }),
+      ]),
+    );
+  });
+
+  it("does not fuzzy-match a printed title containing replacement characters", () => {
+    const source = [
+      "# 目录",
+      "",
+      "## 第 1 章 向量空间 ...... 1",
+      "",
+      "## 1A R� 和 C� ...... 2",
+      "",
+      "## 第 2 章 线性映射 ...... 20",
+      "",
+      "## 第 1 章 向量空间",
+      "",
+      "正文",
+      "",
+      "## 1A Rn 和 Cn",
+      "",
+      "正文",
+      "",
+      "## 第 2 章 线性映射",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]).not.toHaveProperty(
+      "bodyHeadingBlockId",
+    );
+    expect(result.candidates[0]?.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "PRINTED_TOC_UNMATCHED_ENTRY" }),
+      ]),
+    );
+  });
+
+  it("preserves complete short Markdown rows over damaged native PDF text", () => {
+    const markdownEntries = [
+      "第 15 章 动态规划 ...... 204",
+      "本章注记 ...... 236",
+      "第 16 章 贪心算法 ...... 237",
+      "6.3 建堆 ...... 87",
+      "附录 A 求和 ...... 672",
+      "B.2 关系 ...... 682",
+      "B.3 函数 ...... 683",
+      "B.5 树 ...... 687",
+      "第 17 章 摊还分析 ...... 450",
+    ];
+    const layoutEntries = [
+      "第 15 章 动态规划 ...... 204",
+      "本章注记 ...... 236",
+      "143 第 16 章贪心算法 ...... 237",
+      "6. 3 建堆 ...... 87",
+      "附录 A ...... 672",
+      "B. 2 关系 ...... 682",
+      "B. 3 函数 ...... 683",
+      "B. 5 树 ...... 687",
+      "第 17 章 摊还分析 ...... 450",
+    ];
+    const bodyEntries = [
+      "动态规划",
+      "本章注记",
+      "贪心算法",
+      "6.3 建堆",
+      "求和",
+      "B.2 关系",
+      "B.3 函数",
+      "B.5 树",
+      "摊还分析",
+    ];
+    const source = [
+      "# Contents",
+      "",
+      ...markdownEntries.flatMap((entry) => [`## ${entry}`, ""]),
+      ...bodyEntries.flatMap((entry) => [`## ${entry}`, "", "Body", ""]),
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: layoutEntries.map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual(markdownEntries);
+    expect(result.candidates[0]?.matchedHeadingCount).toBe(
+      markdownEntries.length,
+    );
+  });
+
+  it("recovers visual row order when MinerU crosses native PDF columns", () => {
+    const markdownEntries = [
+      "第四部分 高级设计和分析技术",
+      "15.1 钢条切割 ...... 204",
+      "15.2 矩阵链乘法 ...... 210",
+      "思考题 ...... 231",
+      "第 15 章 动态规划 ...... 204",
+      "本章注记 ...... 236",
+      "第 16 章 贪心算法 ...... 237",
+    ];
+    const layoutEntries = [
+      "第四部分 高级设计和分析技术",
+      "第 15 章 动态规划 ...... 204",
+      "15.1 钢条切割 ...... 204",
+      "15.2 矩阵链乘法 ...... 210",
+      "思考题 ...... 231",
+      "本章注记 ...... 236",
+      "第 16 章 贪心算法 ...... 237",
+    ];
+    const bodyEntries = [
+      "高级设计和分析技术",
+      "动态规划",
+      "15.1 钢条切割",
+      "15.2 矩阵链乘法",
+      "思考题",
+      "本章注记",
+      "贪心算法",
+    ];
+    const source = [
+      "# 目录",
+      "",
+      ...markdownEntries.flatMap((entry) => [`## ${entry}`, ""]),
+      ...bodyEntries.flatMap((entry) => [`## ${entry}`, "", "正文", ""]),
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: layoutEntries.map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => ({
+        level: entry.referenceLevel,
+        title: entry.sourceTitle,
+      })),
+    ).toEqual(
+      layoutEntries.map((title, index) => ({
+        level: [1, 2, 3, 3, 3, 3, 2][index],
+        title,
+      })),
+    );
+    expect(result.candidates[0]?.matchedHeadingCount).toBe(
+      layoutEntries.length,
+    );
+    expect(
+      result.candidates[0]?.proposedRegion?.entries.every(
+        (entry, index, entries) =>
+          index === 0 ||
+          entry.range.start_byte >= (entries[index - 1]?.range.end_byte ?? 0),
+      ),
+    ).toBe(true);
+  });
+
+  it("joins a wrapped optional section before matching it to the body", () => {
+    const source = [
+      "# 目录",
+      "",
+      "第 5 章 概率分析 ...... 65",
+      "",
+      "\\* 5.4 概率分析和指示器随机变量的",
+      "进一步使用 ...... 73",
+      "",
+      "第 6 章 堆排序 ...... 84",
+      "",
+      "## 第 5 章 概率分析",
+      "",
+      "正文",
+      "",
+      "## \\* 5.4 概率分析和指示器随机变量的进一步使用",
+      "",
+      "正文",
+      "",
+      "## 第 6 章 堆排序",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
+      bodyHeadingBlockId: expect.any(String),
+      referenceLevel: 2,
+      sourceTitle: "\\* 5.4 概率分析和指示器随机变量的 进一步使用 ...... 73",
+    });
+  });
+
   it("does not let fused layout invent chapter-local rows between source anchors", () => {
     const source = [
       "# Contents",
@@ -1258,6 +2117,182 @@ describe("printed contents detection", () => {
     expect(supplementalPdfPageIndices(result)).toEqual([0]);
   });
 
+  it("restores a missing page label on an unnumbered nested contents row", () => {
+    const source = [
+      "## 目录",
+      "",
+      "第 1 章 向量空间 ...... 1",
+      "",
+      "复数 . . . . . .",
+      "",
+      "下一主题 . . . . . . 3",
+      "",
+      "最后主题 . . . . . . 4",
+      "",
+      "## 第 1 章 向量空间",
+      "",
+      "正文",
+      "",
+      "## 复数",
+      "",
+      "正文",
+      "",
+      "## 下一主题",
+      "",
+      "正文",
+      "",
+      "## 最后主题",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          "第 1 章 向量空间 ...... 1",
+          "复数 . . . . . . 2",
+          "下一主题 . . . . . . 3",
+          "最后主题 . . . . . . 4",
+        ].map((text, index) => ({
+          bbox: [20 + (index === 0 ? 0 : 24), 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle)).toEqual([
+      "第 1 章 向量空间 ...... 1",
+      "复数 . . . . . . 2",
+      "下一主题 . . . . . . 3",
+      "最后主题 . . . . . . 4",
+    ]);
+  });
+
+  it("inserts a native-only row beside a damaged but identifiable source row", () => {
+    const source = [
+      "## 目录",
+      "",
+      "第 1 章 向量空间 ...... 1",
+      "",
+      "1A R� 和 C� . . . . . . 2",
+      "",
+      "组 . . . . . . 4",
+      "",
+      "下一主题 . . . . . . 5",
+      "",
+      "最后主题 . . . . . . 6",
+      "",
+      "## 第 1 章 向量空间",
+      "",
+      "正文",
+      "",
+      "## 组",
+      "",
+      "正文",
+      "",
+      "## 下一主题",
+      "",
+      "正文",
+      "",
+      "## 最后主题",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          "第 1 章 向量空间 ...... 1",
+          "1A Rn 和 Cn . . . . . . 2",
+          "复数 . . . . . . 2",
+          "组 . . . . . . 4",
+          "下一主题 . . . . . . 5",
+          "最后主题 . . . . . . 6",
+        ].map((text, index) => ({
+          bbox: [20 + (index === 0 ? 0 : 24), 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle)).toEqual([
+      "第 1 章 向量空间 ...... 1",
+      "1A Rn 和 Cn . . . . . . 2",
+      "复数 . . . . . . 2",
+      "组 . . . . . . 4",
+      "下一主题 . . . . . . 5",
+      "最后主题 . . . . . . 6",
+    ]);
+  });
+
+  it("repairs a replacement-damaged technical row from the same native page slot", () => {
+    const source = [
+      "## 目录",
+      "",
+      "第 3 章 线性映射 ...... 43",
+      "",
+      "L(�, �) 上的代数运算 ...... 46",
+      "",
+      "习题 3A ...... 48",
+      "",
+      "3B 零空间和值域 ...... 50",
+      "",
+      "## 第 3 章 线性映射",
+      "",
+      "正文",
+      "",
+      "## 习题 3A",
+      "",
+      "正文",
+      "",
+      "## 3B 零空间和值域",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          "第 3 章 线性映射 ...... 43",
+          "L(V, W) 上的代数运算 ...... 46",
+          "习题 3A ...... 48",
+          "3B 零空间和值域 ...... 50",
+        ].map((text, index) => ({
+          bbox: [20 + (index === 0 ? 0 : 24), 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toBe(
+      "L(V, W) 上的代数运算 ...... 46",
+    );
+    expect(result.candidates[0]?.logicalEntries[1]).not.toHaveProperty(
+      "bodyHeadingBlockId",
+    );
+  });
+
   it("does not infer a native page label from a lone trailing period", () => {
     const source = [
       "## Contents",
@@ -1356,6 +2391,44 @@ describe("printed contents detection", () => {
       { level: 2, matched: true },
       { level: 3, matched: true },
       { level: 3, matched: true },
+    ]);
+  });
+
+  it("matches a supplemental part to an appendix-labelled body heading", () => {
+    const source = [
+      "## 目录",
+      "",
+      "第八部分 附录：数学基础知识",
+      "",
+      "附录 A 求和 ...... 672",
+      "",
+      "A.1 求和公式及其性质 ...... 672",
+      "",
+      ...Array.from({ length: 10 }, () => ["目录后说明", ""]).flat(),
+      "",
+      "## 附录：数学基础知识",
+      "",
+      "正文",
+      "",
+      "## 求和",
+      "",
+      "正文",
+      "",
+      "## A.1 求和公式及其性质",
+      "",
+      "正文",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries).toMatchObject([
+      { bodyHeadingBlockId: expect.any(String), referenceLevel: 1 },
+      { bodyHeadingBlockId: expect.any(String), referenceLevel: 2 },
+      { bodyHeadingBlockId: expect.any(String), referenceLevel: 3 },
     ]);
   });
 

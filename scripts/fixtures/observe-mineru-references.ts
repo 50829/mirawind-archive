@@ -16,6 +16,8 @@ import {
   detectPrintedContents,
   inferPrintedHeadingEvidence,
   requiresSupplementalPdfEvidence,
+  shouldPreferNativePdfDetection,
+  shouldPreferNativePdfLayout,
   supplementalPdfPageIndices,
   type PrintedContentsCandidate,
 } from "../../src/compiler/document/printed-toc.js";
@@ -77,7 +79,7 @@ function sha256(value: string | Uint8Array): string {
 
 function normalize(value: string): string {
   return value
-    .normalize("NFKC")
+    .normalize("NFC")
     .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "")
     .replace(/[*_`]/gu, "")
     .replace(/\\([\\`*_{}[\]()#+.!-])/gu, "$1")
@@ -85,11 +87,18 @@ function normalize(value: string): string {
     .trim();
 }
 
-function stripPageLabel(value: string): {
+export function stripPageLabel(value: string): {
   readonly pageLabel: string | null;
   readonly title: string;
 } {
   const text = normalize(value);
+  if (
+    /^(?:chapter|part)\s+(?:[0-9ivxlcdm]+|[A-Z])\s+.*\b(?:windows|macos|android)\s+\d+\s*$/iu.test(
+      text,
+    )
+  ) {
+    return Object.freeze({ pageLabel: null, title: text });
+  }
   if (/^(?:chapter|part)\s+(?:\d+|[ivxlcdm]+)$/iu.test(text)) {
     return Object.freeze({ pageLabel: null, title: text });
   }
@@ -102,7 +111,7 @@ function stripPageLabel(value: string): {
   }
   const title = match.groups.title.trim();
   if (
-    title.length < 2 ||
+    (title.length < 2 && !/^\p{Script=Han}$/u.test(title)) ||
     /^(?:chapter|part|第\s*\d+\s*(?:章|部分))$/iu.test(title)
   ) {
     return Object.freeze({ pageLabel: null, title: text });
@@ -112,7 +121,8 @@ function stripPageLabel(value: string): {
 
 function comparison(value: string): string {
   return stripPageLabel(value)
-    .title.replace(
+    .title.normalize("NFKC")
+    .replace(
       /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|part)\s*[0-9ivxlcdm]+|附录\s*[A-Za-z0-9一二三四五六七八九十]*|[A-Z]?\d+(?:\.\d+){0,3})\s*/iu,
       "",
     )
@@ -206,7 +216,11 @@ function kindFor(
   const evidence = inferPrintedHeadingEvidence(title);
   if (evidence?.kind === "part") return "part";
   if (evidence?.kind === "chapter") return "chapter";
-  if (evidence?.kind === "appendix") return "appendix";
+  if (evidence?.kind === "appendix") {
+    return level > 1 && /^(?:附录|appendix)\s*[:：]/iu.test(title)
+      ? "other"
+      : "appendix";
+  }
   if (evidence?.kind === "decimal") return "section";
   if (frontmatter.test(title)) return "frontmatter";
   if (
@@ -670,16 +684,28 @@ export async function observeRealMineruFixture(input: {
         source: pdfEvidence.source,
       });
       const repairedLayout = supplementMissingListPageLabels(layout, pdfLayout);
-      const effectiveLayout =
-        repairedLayout === layout ? pdfLayout : repairedLayout;
       regionCounter = 0;
-      detection = detectPrintedContents({
+      const repairedDetection = detectPrintedContents({
         document: originalDocument,
         idFactory: () => `region_${String(++regionCounter).padStart(16, "0")}`,
-        layoutEvidence: effectiveLayout,
+        layoutEvidence: repairedLayout,
         sourcePath: basename(markdown.relative_path),
         sourceSha256: typography.provenance.output_sha256,
       });
+      regionCounter = 0;
+      const nativeDetection = detectPrintedContents({
+        document: originalDocument,
+        idFactory: () => `region_${String(++regionCounter).padStart(16, "0")}`,
+        layoutEvidence: pdfLayout,
+        sourcePath: basename(markdown.relative_path),
+        sourceSha256: typography.provenance.output_sha256,
+      });
+      detection =
+        shouldPreferNativePdfLayout(repairedLayout, pdfLayout) ||
+        repairedLayout === layout ||
+        shouldPreferNativePdfDetection(repairedDetection, nativeDetection)
+          ? nativeDetection
+          : repairedDetection;
     }
   }
   process.stderr.write(

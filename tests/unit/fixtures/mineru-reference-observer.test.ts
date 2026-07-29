@@ -6,7 +6,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { MineruReferencePack } from "../../../scripts/fixtures/create-mineru-reference-pack";
-import { observeRealMineruFixture } from "../../../scripts/fixtures/observe-mineru-references";
+import {
+  observeRealMineruFixture,
+  stripPageLabel,
+} from "../../../scripts/fixtures/observe-mineru-references";
 import { buildZip } from "../../../scripts/fixtures/zip-builder";
 import { parseMarkdownDocument } from "@/compiler/document/parser";
 
@@ -84,6 +87,32 @@ function packFor(source: string, archiveSha256: string): MineruReferencePack {
 }
 
 describe("real MinerU production observer", () => {
+  it("does not project terminal product versions as printed page labels", () => {
+    expect(stripPageLabel("Chapter 21 Windows 10")).toEqual({
+      pageLabel: null,
+      title: "Chapter 21 Windows 10",
+    });
+    expect(stripPageLabel("Chapter B Windows 7")).toEqual({
+      pageLabel: null,
+      title: "Chapter B Windows 7",
+    });
+  });
+
+  it("projects a long leader after a one-character title as a page label", () => {
+    expect(
+      stripPageLabel(
+        "组 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 4",
+      ),
+    ).toEqual({ pageLabel: "4", title: "组" });
+  });
+
+  it("preserves visible superscripts in projected printed titles", () => {
+    expect(stripPageLabel("1A Rⁿ 和 Cⁿ .... 2")).toEqual({
+      pageLabel: "2",
+      title: "1A Rⁿ 和 Cⁿ",
+    });
+  });
+
   it("projects detector output without reading expected reference decisions", async () => {
     const source = [
       "# Book",

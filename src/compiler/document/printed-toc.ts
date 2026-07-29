@@ -135,6 +135,10 @@ const standaloneMajorLabel = new RegExp(
 );
 const topLevelBackmatterTitle =
   /^(?:参考文献|参考资料|术语表|(?:译)?后记|图片来源|符号索引|索引|致谢|bibliography|references|glossary|(?:author|subject)\s+index|index|afterword|acknowledg(?:e)?ments?|credits)$/iu;
+const printedNumberingPrefix = new RegExp(
+  `^(?:\\\\?\\*\\s*)?(?:第\\s*[0-9零〇一二三四五六七八九十百千]+\\s*(?:章|篇|部分|部)|(?:chapter|chap\\.?)\\s*(?:[0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})|part\\s*(?:[0-9ivxlcdm]+|${englishOrdinalWord})|附录\\s*[A-Za-z0-9一二三四五六七八九十]*(?:\\s*\\.\\s*\\d+){0,3}|[A-Z]\\s*\\.\\s*\\d+(?:\\s*\\.\\s*\\d+){0,2}|\\d+[A-Z](?:\\s*\\.\\s*\\d+){0,2}|\\d+(?:\\s*\\.\\s*\\d+){1,3}|\\d{1,3}(?=\\s+[\\p{L}“”'"（(]))`,
+  "iu",
+);
 
 function hash(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -160,6 +164,10 @@ function plainTitle(value: string): string {
     .normalize("NFKC")
     .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "")
     .replace(/^\\+\s*(?=(?:[A-Z]\s*\.\s*)?\d)/u, "")
+    .replace(
+      /^\d{1,5}\s+(?=(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|part|appendix)\b))/iu,
+      "",
+    )
     .replace(/\$(\\(?:dots|ldots|cdots)\s+(?:\d{1,5}|[ivxlcdm]+))\$/giu, "$1")
     .replace(/\^\{\\prime\}/gu, "'")
     .replace(
@@ -174,6 +182,7 @@ export function inferPrintedHeadingEvidence(
   value: string,
 ): PrintedHeadingEvidence | undefined {
   const plain = plainTitle(value)
+    .replace(/^\\?\*\s*/u, "")
     .replace(/[．。]/gu, ".")
     .replace(/\s*\.\s*/gu, ".");
   const appendix =
@@ -269,13 +278,16 @@ export function inferPrintedReferenceLevels(
   let insideSupplementalPart = false;
   let insideAppendix = false;
   let insideLocalAppendixGroup = false;
+  let alphaSectionLevel: number | undefined;
   let reviewGroupLevel: number | undefined;
   let previousLevel = 0;
   const hasLaterBodyMajor: boolean[] = Array.from({ length: values.length });
   let laterBodyMajor = false;
   for (let index = values.length - 1; index >= 0; index -= 1) {
     hasLaterBodyMajor[index] = laterBodyMajor;
-    const kind = inferPrintedHeadingEvidence(values[index] ?? "")?.kind;
+    const value = values[index] ?? "";
+    const semanticTitle = printedPageEvidence(value)?.title ?? plainTitle(value);
+    const kind = inferPrintedHeadingEvidence(semanticTitle)?.kind;
     const suppliedLevel = options.referenceLevels?.get(index);
     if (
       kind === "chapter" ||
@@ -288,11 +300,14 @@ export function inferPrintedReferenceLevels(
   }
   return Object.freeze(
     values.map((value, index) => {
-      const numbering = inferPrintedHeadingEvidence(value);
       const semanticTitle =
         printedPageEvidence(value)?.title ?? plainTitle(value);
+      const numbering = inferPrintedHeadingEvidence(semanticTitle);
       const reviewParent = chapterReviewParentTitle.test(semanticTitle);
       const reviewChild = chapterReviewChildTitle.test(semanticTitle);
+      const alphaSection = /^(\d{1,3}[A-Z])((?:\.\d+){0,2})(?=\s|、|:|：)/iu.exec(
+        semanticTitle,
+      );
       const suppliedLevel = options.referenceLevels?.get(index);
       let level: number;
       if (suppliedLevel !== undefined) {
@@ -373,7 +388,7 @@ export function inferPrintedReferenceLevels(
         level = Math.min(4, numbering.level + (insidePart ? 1 : 0));
       } else if (topLevelBackmatterTitle.test(semanticTitle)) {
         if (previousLevel > 1 && hasLaterBodyMajor[index]) {
-          level = previousLevel;
+          level = Math.min(4, 2 + (insidePart ? 1 : 0));
         } else {
           insidePart = false;
           insideSupplementalPart = false;
@@ -381,11 +396,6 @@ export function inferPrintedReferenceLevels(
           insideLocalAppendixGroup = false;
           level = 1;
         }
-      } else if (
-        /^(?:bibliographic notes|exercises)$/iu.test(semanticTitle) &&
-        previousLevel > 0
-      ) {
-        level = Math.min(4, Math.max(2, previousLevel));
       } else if (
         /^(?:课后习题和问题|end-of-chapter questions|参考文献(?:说明)?|练习题答案|家庭作业|思考题|本章注记|附录注记|习题|练习|bibliographic notes|exercises|review questions)$/iu.test(
           semanticTitle,
@@ -401,12 +411,31 @@ export function inferPrintedReferenceLevels(
       } else {
         level = previousLevel > 0 ? previousLevel : 1;
       }
+      if (
+        numbering === undefined &&
+        alphaSectionLevel !== undefined &&
+        !(topLevelBackmatterTitle.test(semanticTitle) && level === 1)
+      ) {
+        level = Math.max(level, Math.min(4, alphaSectionLevel + 1));
+      }
       if (reviewParent) {
         reviewGroupLevel = level;
       } else if (reviewChild && reviewGroupLevel !== undefined) {
         level = Math.min(4, reviewGroupLevel + 1);
       } else if (numbering) {
         reviewGroupLevel = undefined;
+      }
+      if (alphaSection) {
+        const nestedDepth = alphaSection[2]?.match(/\./gu)?.length ?? 0;
+        alphaSectionLevel = Math.max(1, level - nestedDepth);
+      } else if (
+        numbering?.kind === "part" ||
+        numbering?.kind === "chapter" ||
+        numbering?.kind === "appendix" ||
+        numbering?.kind === "decimal" ||
+        (topLevelBackmatterTitle.test(semanticTitle) && level === 1)
+      ) {
+        alphaSectionLevel = undefined;
       }
       previousLevel = level;
       return level;
@@ -418,6 +447,13 @@ function printedPageEvidence(
   value: string,
 ): { readonly pageLabel: string; readonly title: string } | undefined {
   const plain = plainTitle(value);
+  if (
+    /^(?:chapter|part)\s+(?:[0-9ivxlcdm]+|[A-Z])\s+.*\b(?:windows|macos|android)\s+\d+\s*$/iu.test(
+      plain,
+    )
+  ) {
+    return;
+  }
   const leader =
     /^(?<title>.+?)(?:\.(?:\s*\.)+|…{1,}|·(?:\s*·)+|_(?:\s*_)+|\s{2,})\s*(?<page>\d+|[ivxlcdm]+)\s*$/iu.exec(
       plain,
@@ -459,14 +495,15 @@ function normalizedTitle(value: string, removePageLabel = true): string {
   const numbering = inferPrintedHeadingEvidence(withoutPage);
   const withoutNumber = numbering
     ? withoutPage.slice(
-        /^(?:第\s*[0-9零〇一二三四五六七八九十百千]+\s*(?:章|篇|部分|部)|(?:chapter|chap\.?)\s*(?:[0-9ivxlcdm]+|[A-Z]|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)|part\s*(?:[0-9ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)|附录\s*[A-Za-z0-9一二三四五六七八九十]*(?:\.\d+){0,3}|[A-Z]\.\d+(?:\.\d+){0,2}|\d+[A-Z](?:\.\d+){0,2}|\d+(?:\.\d+){0,3})/iu.exec(
-          withoutPage,
-        )?.[0].length ?? 0,
+        printedNumberingPrefix.exec(withoutPage)?.[0].length ?? 0,
       )
     : withoutPage;
   const comparisonTitle = withoutNumber.trim() ? withoutNumber : withoutPage;
   return comparisonTitle
     .replace(/\\(?:dots|ldots|cdots)\b/giu, "")
+    .replace(/\\mathrm\s*\{?\s*([A-Za-z])\s*\}?/gu, "$1")
+    .replace(/\*+\s*$/gu, "")
+    .replace(/[$\\{}]/gu, "")
     .replace(/^[\s、:：.\-—]+/u, "")
     .replace(/[，,。.;；:：!?！？'"“”‘’()（）[\]【】\-—_]/gu, "")
     .replace(/\s+/gu, "")
@@ -563,7 +600,10 @@ function lineEntries(input: {
         contextualEntryTitle.test(plain)
       ) {
         const title = normalizedTitle(segment.text);
-        if (title) {
+        const printed = printedPageEvidence(plain);
+        const pageOnly =
+          printed !== undefined && normalizedTitle(printed.title) === "";
+        if (title || pageOnly) {
           const startOffset =
             input.block.position.start.offset + lineOffset + segment.start;
           const endOffset =
@@ -610,6 +650,26 @@ function mergeDetachedSourceEntries(
     const current = entries[index];
     const next = entries[index + 1];
     if (!current) continue;
+    if (!current.normalizedTitle) {
+      const previous = merged.at(-1);
+      const previousTitle = previous
+        ? (printedPageEvidence(previous.sourceTitle)?.title ??
+          plainTitle(previous.sourceTitle))
+        : "";
+      if (
+        previous &&
+        (chapterReviewParentTitle.test(previousTitle) ||
+          chapterReviewChildTitle.test(previousTitle))
+      ) {
+        merged.push(
+          Object.freeze({
+            ...current,
+            referenceLevel: previous.referenceLevel,
+          }),
+        );
+      }
+      continue;
+    }
     const detached = /^(?<number>\d+(?:\s*\.\s*\d+){1,3})\s*\.?\s*$/u.exec(
       plainTitle(current.sourceTitle),
     );
@@ -653,6 +713,9 @@ function mergeDetachedSourceEntries(
     if (
       current.numbering &&
       !currentPrinted &&
+      !new RegExp(`${dotLeader.source}\\s*$`, "iu").test(
+        plainTitle(current.sourceTitle),
+      ) &&
       next &&
       nextPrinted &&
       !next.numbering &&
@@ -780,14 +843,56 @@ function similarity(left: string, right: string): number {
   return (2 * overlap) / (left.length + right.length - 2);
 }
 
+function characterSimilarity(left: string, right: string): number {
+  if (left === right) return 1;
+  if (!left || !right) return 0;
+  const counts = (value: string): Map<string, number> => {
+    const result = new Map<string, number>();
+    for (const character of value) {
+      result.set(character, (result.get(character) ?? 0) + 1);
+    }
+    return result;
+  };
+  const leftCounts = counts(left);
+  const rightCounts = counts(right);
+  let overlap = 0;
+  for (const [character, count] of leftCounts) {
+    overlap += Math.min(count, rightCounts.get(character) ?? 0);
+  }
+  return (2 * overlap) / ([...left].length + [...right].length);
+}
+
 function matchScore(
   entry: ExtractedEntry,
   heading: NormalizedHeading,
   allowNumberOnly = false,
 ): number {
+  if (
+    entry.sourceTitle.includes("�") ||
+    heading.sourceTitle.includes("�")
+  ) {
+    return 0;
+  }
   const headingTitle = normalizedTitle(heading.sourceTitle, false);
   const headingNumber = inferPrintedHeadingEvidence(heading.sourceTitle);
-  const titleScore = similarity(entry.normalizedTitle, headingTitle);
+  const supplementalPartToAppendix =
+    entry.numbering?.kind === "part" &&
+    headingNumber?.kind === "appendix" &&
+    /(?:附录|appendix)/iu.test(plainTitle(entry.sourceTitle));
+  const supplementalTitle = entry.normalizedTitle.replace(
+    /^(?:附录|appendix)/iu,
+    "",
+  );
+  const titleScore = Math.max(
+    similarity(entry.normalizedTitle, headingTitle),
+    supplementalPartToAppendix
+      ? similarity(supplementalTitle, headingTitle)
+      : 0,
+  );
+  const incompatibleMathRepresentations =
+    /[\u2070-\u209f]/u.test(entry.sourceTitle) &&
+    /\\[A-Za-z]+(?:\s*\{|\b)/u.test(heading.sourceTitle) &&
+    titleScore < 0.62;
   const numberEqual =
     entry.numbering &&
     headingNumber &&
@@ -795,25 +900,52 @@ function matchScore(
   const numberConflict =
     entry.numbering &&
     headingNumber &&
-    entry.numbering.key !== headingNumber.key;
+    entry.numbering.key !== headingNumber.key &&
+    !supplementalPartToAppendix;
   const detachedMajorTitle =
     (entry.numbering?.kind === "part" || entry.numbering?.kind === "chapter") &&
     headingNumber === undefined &&
     titleScore >= 0.7;
+  const implicitSectionNumber =
+    entry.numbering === undefined &&
+    headingNumber?.kind === "decimal" &&
+    entry.normalizedTitle.length >= 2;
   const genericAppendix =
     entry.numbering?.kind === "appendix" && entry.numbering.key === "appendix";
   const acceptsNumberOnly = allowNumberOnly || entry.normalizedTitle.length < 2;
+  const entryTitleLength = [...entry.normalizedTitle].length;
+  const headingTitleLength = [...headingTitle].length;
+  const titleLengthRatio =
+    Math.min(entryTitleLength, headingTitleLength) /
+    Math.max(1, entryTitleLength, headingTitleLength);
+  const bilingualExpansion =
+    headingTitle.includes(entry.normalizedTitle) &&
+    (headingTitle.match(/[a-z]/giu)?.length ?? 0) >= 4 &&
+    (entry.normalizedTitle.match(/[a-z]/giu)?.length ?? 0) < 4;
+  const canUseCharacterRepair = titleLengthRatio >= 0.25 && !bilingualExpansion;
+  const effectiveTitleScore = numberEqual
+    ? Math.max(
+        titleScore,
+        canUseCharacterRepair
+          ? characterSimilarity(entry.normalizedTitle, headingTitle)
+          : 0,
+      )
+    : titleScore;
   if (
+    incompatibleMathRepresentations ||
     numberConflict ||
     (genericAppendix && titleScore < 0.62) ||
     (!numberEqual && titleScore < 0.62) ||
-    (numberEqual && !acceptsNumberOnly && titleScore < 0.55)
+    (numberEqual &&
+      !acceptsNumberOnly &&
+      effectiveTitleScore < (canUseCharacterRepair ? 0.25 : 0.55))
   ) {
     return 0;
   }
   return (
-    Math.round(titleScore * 10) +
+    Math.round(effectiveTitleScore * 10) +
     (numberEqual ? 8 : 0) +
+    (implicitSectionNumber ? 2 : 0) +
     (detachedMajorTitle ? 20 : 0)
   );
 }
@@ -823,8 +955,15 @@ function recoveredMatchedSourceTitle(
   heading: NormalizedHeading,
 ): string {
   const sourceTitle = plainTitle(entry.sourceTitle);
+  const bodyTitle = plainTitle(heading.sourceTitle);
   const headingNumber = inferPrintedHeadingEvidence(heading.sourceTitle);
   const headingTitle = normalizedTitle(heading.sourceTitle, false);
+  if (
+    dotLeader.test(bodyTitle) ||
+    /^\$?k\$?\s*习题(?:\s|$).*\$?k\$?$/iu.test(bodyTitle)
+  ) {
+    return sourceTitle;
+  }
   if (
     (entry.numbering?.kind === "part" || entry.numbering?.kind === "chapter") &&
     headingNumber === undefined
@@ -834,9 +973,21 @@ function recoveredMatchedSourceTitle(
   if (similarity(entry.normalizedTitle, headingTitle) >= 0.9) {
     return sourceTitle;
   }
-  if (entry.normalizedTitle.length >= 3) return sourceTitle;
+  const entryLength = [...entry.normalizedTitle].length;
+  const headingLength = [...headingTitle].length;
+  const knownOcrPhraseCorruption =
+    entry.normalizedTitle.includes("仕么") && headingTitle.includes("什么");
+  if (entryLength >= headingLength && !knownOcrPhraseCorruption) {
+    return sourceTitle;
+  }
+  if (
+    entryLength >= 3 &&
+    !knownOcrPhraseCorruption &&
+    characterSimilarity(entry.normalizedTitle, headingTitle) < 0.4
+  ) {
+    return sourceTitle;
+  }
   const printed = printedPageEvidence(sourceTitle);
-  const bodyTitle = plainTitle(heading.sourceTitle);
   if (!printed) return bodyTitle;
   const suffix =
     /(?<suffix>(?:\.(?:\s*\.)+|…+|·(?:\s*·)+|_(?:\s*_)+|\s+)\s*(?:[ivxlcdm]+|\d{1,5})\s*)$/iu.exec(
@@ -1176,10 +1327,16 @@ function layoutLogicalEntries(
   );
   const selected = rows.filter((row) => {
     const printed = printedPageEvidence(row.text);
+    const numbering = inferPrintedHeadingEvidence(row.text);
     return (
       candidatePages.has(row.pageIndex) &&
-      printed !== undefined &&
-      !contentsTitle.test(printed.title.trim().normalize("NFKC"))
+      (printed !== undefined ||
+        numbering?.kind === "part" ||
+        numbering?.kind === "chapter" ||
+        numbering?.kind === "appendix") &&
+      !contentsTitle.test(
+        (printed?.title ?? plainTitle(row.text)).trim().normalize("NFKC"),
+      )
     );
   });
   if (selected.length < 3) return Object.freeze([]);
@@ -1219,6 +1376,221 @@ function layoutLogicalEntries(
   );
 }
 
+function printedPageLabelInversions(
+  entries: readonly Pick<ExtractedEntry, "sourceTitle">[],
+): number {
+  let inversions = 0;
+  let previous: number | undefined;
+  for (const entry of entries) {
+    const page = printedPageEvidence(entry.sourceTitle)?.pageLabel;
+    if (!page || !/^\d+$/u.test(page)) continue;
+    const current = Number(page);
+    if (previous !== undefined && current < previous) inversions += 1;
+    previous = current;
+  }
+  return inversions;
+}
+
+function reorderFromReliableLayout(
+  entries: readonly ExtractedEntry[],
+  layoutEntries: readonly Omit<ExtractedEntry, "range">[],
+): readonly ExtractedEntry[] {
+  if (entries.length < 3 || layoutEntries.length < 3) return entries;
+  const layoutByNumber = new Map<string, number[]>();
+  const layoutByTitleAndPage = new Map<string, number[]>();
+  const titleAndPageKey = (
+    entry: Pick<ExtractedEntry, "normalizedTitle" | "sourceTitle">,
+  ): string =>
+    `${entry.normalizedTitle}\u0000${printedPageEvidence(entry.sourceTitle)?.pageLabel ?? ""}`;
+  for (const [index, entry] of layoutEntries.entries()) {
+    if (entry.numbering) {
+      layoutByNumber.set(entry.numbering.key, [
+        ...(layoutByNumber.get(entry.numbering.key) ?? []),
+        index,
+      ]);
+    }
+    const titleKey = titleAndPageKey(entry);
+    layoutByTitleAndPage.set(titleKey, [
+      ...(layoutByTitleAndPage.get(titleKey) ?? []),
+      index,
+    ]);
+  }
+  const layoutHeadings: readonly NormalizedHeading[] = layoutEntries.map(
+    (entry, index) =>
+      Object.freeze({
+        blockId: `layout-order-${index}`,
+        level: entry.referenceLevel,
+        sourceTitle: entry.sourceTitle,
+        textFingerprint: "",
+      }),
+  );
+  const proposals = entries.flatMap((entry, sourceIndex) => {
+    const candidates = new Set(
+      entry.numbering ? (layoutByNumber.get(entry.numbering.key) ?? []) : [],
+    );
+    for (const index of layoutByTitleAndPage.get(titleAndPageKey(entry)) ??
+      []) {
+      candidates.add(index);
+    }
+    const ranked = [...candidates]
+      .map((layoutIndex) => {
+        const heading = layoutHeadings[layoutIndex];
+        return {
+          layoutIndex,
+          score: heading ? matchScore(entry, heading, true) : 0,
+          sourceIndex,
+        };
+      })
+      .filter((candidate) => candidate.score >= 6)
+      .sort(
+        (left, right) =>
+          right.score - left.score || left.layoutIndex - right.layoutIndex,
+      );
+    const best = ranked[0];
+    const second = ranked[1];
+    return best && best.score - (second?.score ?? 0) >= 2 ? [best] : [];
+  });
+  const assignments = new Map<number, number>();
+  const claimedLayout = new Set<number>();
+  for (const proposal of proposals.sort(
+    (left, right) =>
+      right.score - left.score || left.sourceIndex - right.sourceIndex,
+  )) {
+    if (
+      assignments.has(proposal.sourceIndex) ||
+      claimedLayout.has(proposal.layoutIndex)
+    ) {
+      continue;
+    }
+    assignments.set(proposal.sourceIndex, proposal.layoutIndex);
+    claimedLayout.add(proposal.layoutIndex);
+  }
+  if (assignments.size < 3) return entries;
+  let previousLayoutIndex = -1;
+  let hasInversion = false;
+  for (let sourceIndex = 0; sourceIndex < entries.length; sourceIndex += 1) {
+    const layoutIndex = assignments.get(sourceIndex);
+    if (layoutIndex === undefined) continue;
+    if (layoutIndex < previousLayoutIndex) hasInversion = true;
+    previousLayoutIndex = layoutIndex;
+  }
+  if (!hasInversion) return entries;
+  const rankFor = (sourceIndex: number): number => {
+    const exact = assignments.get(sourceIndex);
+    if (exact !== undefined) return exact;
+    let previousSource = sourceIndex - 1;
+    while (previousSource >= 0 && !assignments.has(previousSource)) {
+      previousSource -= 1;
+    }
+    let nextSource = sourceIndex + 1;
+    while (nextSource < entries.length && !assignments.has(nextSource)) {
+      nextSource += 1;
+    }
+    const previous = assignments.get(previousSource);
+    const next = assignments.get(nextSource);
+    if (previous !== undefined && next !== undefined && previous < next) {
+      return (
+        previous +
+        ((next - previous) * (sourceIndex - previousSource)) /
+          (nextSource - previousSource)
+      );
+    }
+    if (previous !== undefined) {
+      return previous + (sourceIndex - previousSource) / (entries.length + 1);
+    }
+    if (next !== undefined) {
+      return next - (nextSource - sourceIndex) / (entries.length + 1);
+    }
+    return sourceIndex;
+  };
+  const reordered = Object.freeze(
+    entries
+      .map((entry, sourceIndex) => ({
+        entry,
+        rank: rankFor(sourceIndex),
+        sourceIndex,
+      }))
+      .sort(
+        (left, right) =>
+          left.rank - right.rank || left.sourceIndex - right.sourceIndex,
+      )
+      .map(({ entry }) => entry),
+  );
+  const sourceInversions = printedPageLabelInversions(entries);
+  const reorderedInversions = printedPageLabelInversions(reordered);
+  return sourceInversions > 0 && reorderedInversions === 0
+    ? reordered
+    : entries;
+}
+
+export function hasReliableLayoutOrderInversion(
+  sourceEvidence: LayoutEvidence,
+  nativePdfEvidence: LayoutEvidence,
+): boolean {
+  if (nativePdfEvidence.source !== "native-pdf") return false;
+  const sourceEntries: readonly ExtractedEntry[] = layoutLogicalEntries(
+    sourceEvidence,
+  ).map((entry, index) =>
+    Object.freeze({
+      ...entry,
+      range: Object.freeze({
+        end_byte: index + 1,
+        sha256: "",
+        start_byte: index,
+      }),
+    }),
+  );
+  const nativeEntries = layoutLogicalEntries(nativePdfEvidence);
+  const reordered = reorderFromReliableLayout(sourceEntries, nativeEntries);
+  const sourceInversions = printedPageLabelInversions(sourceEntries);
+  const reorderedInversions = printedPageLabelInversions(reordered);
+  if (
+    sourceInversions === 0 ||
+    reorderedInversions !== 0 ||
+    reorderedInversions >= sourceInversions
+  ) {
+    return false;
+  }
+  return reordered.some((entry, index) => entry !== sourceEntries[index]);
+}
+
+export function shouldPreferNativePdfLayout(
+  sourceEvidence: LayoutEvidence,
+  nativePdfEvidence: LayoutEvidence,
+): boolean {
+  return hasReliableLayoutOrderInversion(sourceEvidence, nativePdfEvidence);
+}
+
+export function shouldPreferNativePdfDetection(
+  sourceDetection: PrintedContentsDetection,
+  nativeDetection: PrintedContentsDetection,
+): boolean {
+  const sourceCandidates = sourceDetection.candidates.filter(
+    (candidate) => candidate.proposedRegion !== undefined,
+  );
+  const nativeCandidates = nativeDetection.candidates.filter(
+    (candidate) =>
+      candidate.proposedRegion !== undefined &&
+      candidate.boundaryConfidence === "high",
+  );
+  if (
+    nativeCandidates.length < 1 ||
+    nativeCandidates.length !== sourceCandidates.length
+  ) {
+    return false;
+  }
+  const sourceEntries = sourceCandidates.reduce(
+    (sum, candidate) => sum + candidate.entryCount,
+    0,
+  );
+  const nativeEntries = nativeCandidates.reduce(
+    (sum, candidate) => sum + candidate.entryCount,
+    0,
+  );
+  const significantAdvantage = Math.max(3, Math.ceil(sourceEntries * 0.1));
+  return nativeEntries >= sourceEntries + significantAdvantage;
+}
+
 function recoverLayoutLogicalEntries(
   sourceEntries: readonly ExtractedEntry[],
   evidence: LayoutEvidence | undefined,
@@ -1235,6 +1607,25 @@ function recoverLayoutLogicalEntries(
         textFingerprint: "",
       }),
   );
+  const sourceContainsLayoutEntry = (
+    layoutEntry: Omit<ExtractedEntry, "range">,
+  ): boolean => {
+    const layoutPage = printedPageEvidence(layoutEntry.sourceTitle)?.pageLabel;
+    return sourceEntries.some((sourceEntry) => {
+      if (
+        layoutEntry.numbering &&
+        sourceEntry.numbering?.key === layoutEntry.numbering.key &&
+        similarity(sourceEntry.normalizedTitle, layoutEntry.normalizedTitle) >=
+          0.55
+      ) {
+        return true;
+      }
+      return (
+        sourceEntry.normalizedTitle === layoutEntry.normalizedTitle &&
+        printedPageEvidence(sourceEntry.sourceTitle)?.pageLabel === layoutPage
+      );
+    });
+  };
   const alignment = monotonicMatches(sourceEntries, layoutHeadings, {
     allowNumberOnly: true,
     requireNumberingForNumberedEntries: true,
@@ -1281,15 +1672,99 @@ function recoverLayoutLogicalEntries(
   const recovered: ExtractedEntry[] = [];
   let sourceCursor = 0;
   let layoutCursor = 0;
+  const needsLayoutRepair = (entry: ExtractedEntry): boolean => {
+    const title = plainTitle(entry.sourceTitle);
+    const containsLeader = dotLeader.test(title);
+    return (
+      entry.sourceTitle.includes("�") ||
+      (!entry.numbering &&
+        entry.normalizedTitle.length < 3 &&
+        containsLeader) ||
+      (printedPageEvidence(entry.sourceTitle) === undefined &&
+        new RegExp(`${dotLeader.source}\\s*$`, "iu").test(title))
+    );
+  };
+  const samePrintedEntry = (
+    sourceEntry: ExtractedEntry,
+    layoutEntry: Omit<ExtractedEntry, "range">,
+  ): boolean => {
+    const sourcePage = printedPageEvidence(sourceEntry.sourceTitle)?.pageLabel;
+    const layoutPage = printedPageEvidence(layoutEntry.sourceTitle)?.pageLabel;
+    if (!sourcePage || !layoutPage || sourcePage !== layoutPage) return false;
+    if (
+      sourceEntry.numbering &&
+      layoutEntry.numbering &&
+      sourceEntry.numbering.key === layoutEntry.numbering.key
+    ) {
+      return true;
+    }
+    return sourceEntry.normalizedTitle === layoutEntry.normalizedTitle;
+  };
+  const prefersNativeVisibleMath = (
+    sourceEntry: ExtractedEntry,
+    layoutEntry: Omit<ExtractedEntry, "range">,
+  ): boolean => {
+    const hasMarkdownMathSyntax = (value: string): boolean =>
+      /\$[^$\n]+\$|\\[A-Za-z]+(?:\s*\{|\b)/u.test(value);
+    if (
+      evidence?.source !== "native-pdf" ||
+      !hasMarkdownMathSyntax(sourceEntry.sourceTitle) ||
+      hasMarkdownMathSyntax(layoutEntry.sourceTitle)
+    ) {
+      return false;
+    }
+    return (
+      sourceEntry.numbering !== undefined &&
+      sourceEntry.numbering.key === layoutEntry.numbering?.key
+    );
+  };
+  const nativeSupersetMatches = (
+    sourceGap: readonly ExtractedEntry[],
+    layoutGap: readonly Omit<ExtractedEntry, "range">[],
+  ): ReadonlyMap<number, number> | undefined => {
+    if (
+      evidence?.source !== "native-pdf" ||
+      sourceGap.length < 1 ||
+      sourceGap.length > 8 ||
+      layoutGap.length <= sourceGap.length ||
+      layoutGap.length > sourceGap.length + 8
+    ) {
+      return;
+    }
+    const matches = new Map<number, number>();
+    let layoutOffset = 0;
+    for (const [sourceOffset, sourceEntry] of sourceGap.entries()) {
+      let matchedOffset = -1;
+      for (
+        let candidateOffset = layoutOffset;
+        candidateOffset < layoutGap.length;
+        candidateOffset += 1
+      ) {
+        const layoutEntry = layoutGap[candidateOffset];
+        if (layoutEntry && samePrintedEntry(sourceEntry, layoutEntry)) {
+          matchedOffset = candidateOffset;
+          break;
+        }
+      }
+      if (matchedOffset < 0) return;
+      matches.set(matchedOffset, sourceOffset);
+      layoutOffset = matchedOffset + 1;
+    }
+    return matches;
+  };
   for (const anchor of anchors) {
     const sourceGap = sourceEntries.slice(sourceCursor, anchor.sourceIndex);
     const layoutGap = layoutEntries.slice(layoutCursor, anchor.layoutIndex);
-    const damagedSourceGap = sourceGap.some(
-      (entry) =>
-        entry.normalizedTitle.length < 3 ||
-        (entry.normalizedTitle.length <= 4 &&
-          dotLeader.test(entry.sourceTitle)),
-    );
+    const supersetMatches = nativeSupersetMatches(sourceGap, layoutGap);
+    const parallelNativeMatches =
+      evidence?.source === "native-pdf" &&
+      sourceGap.length > 0 &&
+      sourceGap.length === layoutGap.length &&
+      sourceGap.every((sourceEntry, offset) => {
+        const layoutEntry = layoutGap[offset];
+        return layoutEntry !== undefined && samePrintedEntry(sourceEntry, layoutEntry);
+      });
+    const damagedSourceGap = sourceGap.some(needsLayoutRepair);
     const maximumEmptyLayoutGap =
       evidence?.source === "native-pdf" || evidence?.source === "ocr" ? 8 : 2;
     const fillsEmptyGap =
@@ -1299,20 +1774,106 @@ function recoverLayoutLogicalEntries(
       sourceGap.length <= 2 &&
       layoutGap.length >= sourceGap.length &&
       layoutGap.length <= sourceGap.length + 8;
-    if (layoutGap.length > 0 && (fillsEmptyGap || replacesDamagedGap)) {
+    if (supersetMatches) {
+      for (const [offset, layoutEntry] of layoutGap.entries()) {
+        const sourceOffset = supersetMatches.get(offset);
+        if (sourceOffset === undefined) {
+          if (sourceContainsLayoutEntry(layoutEntry)) continue;
+          const sourceEntry =
+            sourceEntries[nearestSourceIndex(layoutCursor + offset)];
+          if (!sourceEntry) {
+            throw new Error("PRINTED_TOC_LAYOUT_PROVENANCE_MISSING");
+          }
+          recovered.push(
+            Object.freeze({
+              ...layoutEntry,
+              layoutOnly: true,
+              range: sourceEntry.range,
+            }),
+          );
+          continue;
+        }
+        const sourceEntry = sourceGap[sourceOffset];
+        if (!sourceEntry) {
+          throw new Error("PRINTED_TOC_LAYOUT_PROVENANCE_MISSING");
+        }
+        recovered.push(
+          needsLayoutRepair(sourceEntry) ||
+          sourceEntry.sourceTitle.includes("�") ||
+          prefersNativeVisibleMath(sourceEntry, layoutEntry)
+            ? Object.freeze({ ...layoutEntry, range: sourceEntry.range })
+            : Object.freeze({
+                ...sourceEntry,
+                ...(layoutEntry.pageIndex === undefined
+                  ? {}
+                  : { pageIndex: layoutEntry.pageIndex }),
+                sourceTitle: plainTitle(sourceEntry.sourceTitle),
+              }),
+        );
+      }
+    } else if (parallelNativeMatches) {
+      recovered.push(
+        ...sourceGap.map((sourceEntry, offset) => {
+          const layoutEntry = layoutGap[offset];
+          if (!layoutEntry) {
+            throw new Error("PRINTED_TOC_LAYOUT_PROVENANCE_MISSING");
+          }
+          return prefersNativeVisibleMath(sourceEntry, layoutEntry)
+            ? Object.freeze({ ...layoutEntry, range: sourceEntry.range })
+            : sourceEntry;
+        }),
+      );
+    } else if (layoutGap.length > 0 && replacesDamagedGap) {
+      if (sourceGap.every(needsLayoutRepair)) {
+        const acceptedLayoutGap = layoutGap.filter((entry, offset) => {
+          const sourceEntry = sourceGap[Math.min(offset, sourceGap.length - 1)];
+          return !sourceEntry?.numbering || entry.numbering !== undefined;
+        });
+        if (acceptedLayoutGap.length === 0) {
+          recovered.push(...sourceGap);
+        } else {
+          recovered.push(
+            ...acceptedLayoutGap.map((entry, offset) => {
+              const sourceEntry =
+                sourceEntries[nearestSourceIndex(layoutCursor + offset)];
+              if (!sourceEntry) {
+                throw new Error("PRINTED_TOC_LAYOUT_PROVENANCE_MISSING");
+              }
+              return Object.freeze({ ...entry, range: sourceEntry.range });
+            }),
+          );
+        }
+      } else if (layoutGap.length !== sourceGap.length) {
+        recovered.push(...sourceGap);
+      } else {
+        recovered.push(
+          ...sourceGap.map((sourceEntry, offset) => {
+            const layoutEntry = layoutGap[offset];
+            if (
+              !layoutEntry ||
+              !needsLayoutRepair(sourceEntry) ||
+              (sourceEntry.numbering && !layoutEntry.numbering)
+            ) {
+              return sourceEntry;
+            }
+            return Object.freeze({
+              ...layoutEntry,
+              range: sourceEntry.range,
+            });
+          }),
+        );
+      }
+    } else if (layoutGap.length > 0 && fillsEmptyGap) {
       const acceptedLayoutGap = layoutGap
         .map((entry, offset) => ({ entry, offset }))
-        .filter(({ entry, offset }) => {
-          if (!fillsEmptyGap) {
-            const sourceEntry =
-              sourceGap[Math.min(offset, sourceGap.length - 1)];
-            return !sourceEntry?.numbering || entry.numbering !== undefined;
-          }
+        .filter(({ entry }) => {
+          if (sourceContainsLayoutEntry(entry)) return false;
           const title =
             printedPageEvidence(entry.sourceTitle)?.title ??
             plainTitle(entry.sourceTitle);
           const numbering = inferPrintedHeadingEvidence(title);
-          if (evidence?.source === "native-pdf" || evidence?.source === "ocr") {
+          if (evidence?.source === "native-pdf") return true;
+          if (evidence?.source === "ocr") {
             return (
               entry.referenceLevel > 1 ||
               numbering !== undefined ||
@@ -1339,7 +1900,7 @@ function recoverLayoutLogicalEntries(
             }
             return Object.freeze({
               ...entry,
-              ...(fillsEmptyGap ? { layoutOnly: true } : {}),
+              layoutOnly: true,
               range: sourceEntry.range,
             });
           }),
@@ -1353,7 +1914,7 @@ function recoverLayoutLogicalEntries(
     if (!sourceEntry || !layoutEntry) {
       throw new Error("PRINTED_TOC_LAYOUT_PROVENANCE_MISSING");
     }
-    const sourceAnchorDamaged = sourceEntry.normalizedTitle.length < 3;
+    const sourceAnchorDamaged = needsLayoutRepair(sourceEntry);
     const sourcePrinted = printedPageEvidence(sourceEntry.sourceTitle);
     const layoutPrinted = printedPageEvidence(layoutEntry.sourceTitle);
     const layoutHasMissingPage =
@@ -1368,7 +1929,9 @@ function recoverLayoutLogicalEntries(
             normalizedTitle(layoutPrinted.title),
           ) >= 0.9));
     recovered.push(
-      sourceAnchorDamaged || layoutHasMissingPage
+      sourceAnchorDamaged ||
+      layoutHasMissingPage ||
+      prefersNativeVisibleMath(sourceEntry, layoutEntry)
         ? Object.freeze({
             ...layoutEntry,
             range: sourceEntry.range,
@@ -1389,7 +1952,19 @@ function recoverLayoutLogicalEntries(
     layoutCursor = anchor.layoutIndex + 1;
   }
   recovered.push(...sourceEntries.slice(sourceCursor));
-  return Object.freeze(recovered);
+  const reordered = reorderFromReliableLayout(recovered, layoutEntries);
+  if (evidence?.source !== "native-pdf") return reordered;
+  return Object.freeze(
+    reordered.map((entry) => {
+      const nativeMatches = layoutEntries.filter((layoutEntry) =>
+        prefersNativeVisibleMath(entry, layoutEntry),
+      );
+      const nativeMatch = nativeMatches.length === 1 ? nativeMatches[0] : undefined;
+      return nativeMatch
+        ? Object.freeze({ ...nativeMatch, range: entry.range })
+        : entry;
+    }),
+  );
 }
 
 export function detectPrintedContents(input: {
@@ -1590,16 +2165,16 @@ export function detectPrintedContents(input: {
       const semanticTitle =
         printedPageEvidence(entry.sourceTitle)?.title ??
         plainTitle(entry.sourceTitle);
+      const semanticNumbering = inferPrintedHeadingEvidence(semanticTitle);
+      const numbering = semanticNumbering ?? entry.numbering;
       const layoutSensitiveLocal =
-        /^(?:bibliographic notes|exercises|appendix\s*[:：])/iu.test(
-          semanticTitle,
-        );
+        /^appendix\s*[:：]/iu.test(semanticTitle);
       const proposedLevel = layoutSensitiveLocal
         ? Math.max(
             inferredLevels[index] ?? entry.referenceLevel,
             layoutLevel ?? 0,
           )
-        : entry.numbering ||
+        : numbering ||
             chapterReviewChildTitle.test(semanticTitle) ||
             contextualEntryTitle.test(semanticTitle)
           ? (inferredLevels[index] ?? entry.referenceLevel)
@@ -1613,7 +2188,11 @@ export function detectPrintedContents(input: {
         proposedLevel,
         previousResolvedLevel === 0 ? 1 : previousResolvedLevel + 1,
       );
-      entries[index] = Object.freeze({ ...entry, referenceLevel });
+      entries[index] = Object.freeze({
+        ...entry,
+        ...(numbering ? { numbering } : {}),
+        referenceLevel,
+      });
       previousResolvedLevel = referenceLevel;
     });
 
@@ -1652,11 +2231,19 @@ export function detectPrintedContents(input: {
       const localAppendix =
         entry.numbering?.kind === "appendix" &&
         entry.numbering.key === "appendix";
+      const pageOnlyReviewEntry =
+        entry.normalizedTitle.length === 0 &&
+        printedPageEvidence(entry.sourceTitle) !== undefined;
+      const localUnnumberedRepair =
+        entry.numbering === undefined &&
+        (entry.normalizedTitle.length >= 2 || pageOnlyReviewEntry);
       if (
         resolvedMatches.has(entryIndex) ||
         (!localAppendix &&
           entry.numbering?.kind !== "part" &&
-          entry.numbering?.kind !== "chapter")
+          entry.numbering?.kind !== "chapter" &&
+          !entry.layoutOnly &&
+          !localUnnumberedRepair)
       ) {
         continue;
       }
@@ -1673,15 +2260,32 @@ export function detectPrintedContents(input: {
         }
       }
       const candidates = bodyHeadings
-        .map((heading, headingIndex) => ({
-          headingIndex,
-          score:
+        .map((heading, headingIndex) => {
+          const eligible =
             headingIndex > lowerBound &&
             headingIndex < upperBound &&
-            !usedHeadingIndexes.has(headingIndex)
-              ? matchScore(entry, heading, true)
-              : 0,
-        }))
+            !usedHeadingIndexes.has(headingIndex);
+          const exactScore = eligible
+            ? matchScore(entry, heading, entry.normalizedTitle.length < 2)
+            : 0;
+          const fuzzyScore =
+            eligible &&
+            localUnnumberedRepair &&
+            !entry.sourceTitle.includes("�") &&
+            !heading.sourceTitle.includes("�")
+              ? pageOnlyReviewEntry &&
+                chapterReviewChildTitle.test(plainTitle(heading.sourceTitle))
+                ? 8
+                : characterSimilarity(
+                    entry.normalizedTitle,
+                    normalizedTitle(heading.sourceTitle, false),
+                  ) * 10
+              : 0;
+          return {
+            headingIndex,
+            score: Math.max(exactScore, fuzzyScore >= 4.5 ? fuzzyScore : 0),
+          };
+        })
         .filter((candidate) => candidate.score > 0)
         .sort(
           (left, right) =>
@@ -1689,8 +2293,16 @@ export function detectPrintedContents(input: {
         );
       const best = candidates[0];
       const second = candidates[1];
-      const minimumScore = localAppendix ? 6 : 16;
-      const minimumMargin = localAppendix ? 2 : 4;
+      const minimumScore = localAppendix
+        ? 6
+        : entry.layoutOnly || localUnnumberedRepair
+          ? 4.5
+          : 16;
+      const minimumMargin = localAppendix
+        ? 2
+        : entry.layoutOnly || localUnnumberedRepair
+          ? 1.5
+          : 4;
       if (
         best &&
         best.score >= minimumScore &&
@@ -1702,13 +2314,15 @@ export function detectPrintedContents(input: {
       }
     }
     const diagnostics: PrintedContentsDiagnostic[] = [];
-    const matchedEntries = entries.flatMap((entry, entryIndex) => {
+    let nextLogicalEntryIndex = 0;
+    const recoveredTitleEntryIndexes = new Set<number>();
+    let matchedEntries = entries.flatMap((entry, entryIndex) => {
       if (ambiguousEntries.has(entryIndex)) {
-        if (entry.layoutOnly) return [];
+        const logicalEntryIndex = nextLogicalEntryIndex++;
         diagnostics.push(
           diagnostic(
             "PRINTED_TOC_AMBIGUOUS_MATCH",
-            `candidates/${candidates.length}/entries/${entryIndex}`,
+            `candidates/${candidates.length}/entries/${logicalEntryIndex}`,
           ),
         );
         return [entry];
@@ -1717,16 +2331,20 @@ export function detectPrintedContents(input: {
       const match =
         headingIndex === undefined ? undefined : bodyHeadings[headingIndex];
       if (!match) {
-        if (entry.layoutOnly) return [];
+        const logicalEntryIndex = nextLogicalEntryIndex++;
         diagnostics.push(
           diagnostic(
             "PRINTED_TOC_UNMATCHED_ENTRY",
-            `candidates/${candidates.length}/entries/${entryIndex}`,
+            `candidates/${candidates.length}/entries/${logicalEntryIndex}`,
           ),
         );
         return [entry];
       }
+      const logicalEntryIndex = nextLogicalEntryIndex++;
       const sourceTitle = recoveredMatchedSourceTitle(entry, match);
+      if (sourceTitle !== entry.sourceTitle) {
+        recoveredTitleEntryIndexes.add(logicalEntryIndex);
+      }
       return [
         Object.freeze({
           ...entry,
@@ -1735,6 +2353,43 @@ export function detectPrintedContents(input: {
           sourceTitle,
         }),
       ];
+    });
+    const recoveredLevels = inferPrintedReferenceLevels(
+      matchedEntries.map((entry) => entry.sourceTitle),
+    );
+    const hasExplicitMajorContext = matchedEntries.some(
+      (entry) =>
+        entry.numbering?.kind === "part" ||
+        entry.numbering?.kind === "chapter",
+    );
+    matchedEntries = matchedEntries.map((entry, index) => {
+      const recoveredNumbering = inferPrintedHeadingEvidence(
+        printedPageEvidence(entry.sourceTitle)?.title ?? entry.sourceTitle,
+      );
+      const recoveredLevel = recoveredLevels[index] ?? entry.referenceLevel;
+      const numberingChanged = entry.numbering?.key !== recoveredNumbering?.key;
+      const contextualNumbering =
+        recoveredNumbering?.kind === "appendix" ||
+        recoveredNumbering?.kind === "chapter" ||
+        recoveredNumbering?.kind === "decimal";
+      const levelNeedsContext =
+        hasExplicitMajorContext &&
+        contextualNumbering &&
+        entry.referenceLevel !== recoveredLevel;
+      if (
+        !recoveredNumbering ||
+        (!numberingChanged &&
+          !levelNeedsContext &&
+          (!recoveredTitleEntryIndexes.has(index) ||
+            entry.referenceLevel === recoveredLevel))
+      ) {
+        return entry;
+      }
+      return Object.freeze({
+        ...entry,
+        numbering: recoveredNumbering,
+        referenceLevel: recoveredLevel,
+      });
     });
     const nearestMatchedBlock = (entryIndex: number): string | undefined => {
       for (let distance = 1; distance < matchedEntries.length; distance += 1) {
@@ -1862,20 +2517,31 @@ export function detectPrintedContents(input: {
           left.range.start_byte - right.range.start_byte ||
           left.range.end_byte - right.range.end_byte,
       );
+    let previousSourceRegionHeadingIndex = -1;
+    const sourceRegionHeadingIndexes = new Map(
+      input.document.headings.map((heading, index) => [heading.blockId, index]),
+    );
     const proposedRegion = canApplyBoundary
       ? Object.freeze({
           applied: true,
           disposition: "reference_only" as const,
           entries: Object.freeze(
-            sourceRegionEntries.map((entry) =>
-              Object.freeze({
-                ...(entry.bodyHeadingBlockId
+            sourceRegionEntries.map((entry) => {
+              const headingIndex = entry.bodyHeadingBlockId
+                ? sourceRegionHeadingIndexes.get(entry.bodyHeadingBlockId)
+                : undefined;
+              const retainsMatch =
+                headingIndex !== undefined &&
+                headingIndex > previousSourceRegionHeadingIndex;
+              if (retainsMatch) previousSourceRegionHeadingIndex = headingIndex;
+              return Object.freeze({
+                ...(retainsMatch && entry.bodyHeadingBlockId
                   ? { body_heading_block_id: entry.bodyHeadingBlockId }
                   : {}),
                 range: entry.range,
                 reference_level: entry.referenceLevel,
-              }),
-            ),
+              });
+            }),
           ),
           kind: "printed_toc" as const,
           range: Object.freeze({
