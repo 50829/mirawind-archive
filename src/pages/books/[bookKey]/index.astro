@@ -1,10 +1,10 @@
 ---
-import { BookDetails } from "@/components/library/BookDetails";
-import { LibraryScene } from "@/components/library/LibraryScene";
+import { BookDetails } from "@/web/components/library/BookDetails";
+import { LibraryScene } from "@/web/components/library/LibraryScene";
+import { createCatalogServer } from "@/composition/server";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { libraryHtmlResponse } from "@/http/cache/library-response";
 import { applyResponsePolicy } from "@/http/cache/policies";
-import { LibraryService } from "@/services/library";
 import "@/styles/global.css";
 
 export const prerender = false;
@@ -13,7 +13,7 @@ const requestedKey = Astro.params.bookKey ?? "";
 const { database, decision } = resolveRuntimeAdministrator(
   Astro.locals.session,
 );
-const service = new LibraryService(database);
+const service = createCatalogServer(database);
 const details = service.resolveDetails({
   administrator: decision,
   bookKey: requestedKey,
@@ -74,7 +74,7 @@ const canonical = new URL(`/books/${details.bookKey}`, Astro.url);
 </html>
 
 <script>
-  import { installDetailsNavigation } from "@/components/library/details-navigation";
+  import { installDetailsNavigation } from "@/web/components/library/details-navigation";
 
   installDetailsNavigation();
 </script>

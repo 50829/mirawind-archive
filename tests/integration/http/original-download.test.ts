@@ -3,9 +3,12 @@ import { resolve } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { closeRuntimeAuthForTests, getRuntimeDatabase } from "@/auth/session";
-import { publishReadyVersion } from "@/services/publication";
-import { resetRuntimeStorageForTests } from "@/storage/runtime";
+import {
+  closeRuntimeAuthForTests,
+  getRuntimeDatabase,
+} from "@/composition/auth";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
+import { resetRuntimeStorageForTests } from "@/composition/storage";
 
 import { GET as getOriginal } from "../../../src/pages/books/[bookKey]/originals/[fileId].js";
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";

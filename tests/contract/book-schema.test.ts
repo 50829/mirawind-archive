@@ -3,7 +3,10 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { parseBookConfigYaml, validateBookConfig } from "@/schemas/book-config";
+import {
+  parseBookConfigYaml,
+  validateBookConfig,
+} from "@/modules/publishing/core/publication/book-config-schema";
 
 const examplePath = fileURLToPath(
   new URL("../../docs/schemas/examples/book.v3.yaml", import.meta.url),

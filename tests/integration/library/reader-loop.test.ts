@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { renderReaderShell } from "@/components/reader/render";
-import { PublishedBookService } from "@/services/published-book";
-import { publishReadyVersion } from "@/services/publication";
+import { renderReaderShell } from "@/web/features/reader/render";
+import { PublishedBookService } from "@/modules/reader/adapters/filesystem/published-book";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {

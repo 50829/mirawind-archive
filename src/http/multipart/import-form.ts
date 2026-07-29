@@ -6,18 +6,18 @@ import Busboy, {
 } from "@fastify/busboy";
 import type Database from "better-sqlite3";
 
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { JobRepository } from "@/db/repositories/jobs";
+import { createPublishingServer } from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import {
-  ImportUploadService,
   importUploadIdempotencyOperation,
   m1ImportExpiryMs,
   maximumUploadBytes,
-  type ImportUploadResult,
-} from "@/services/import-upload";
-import type { StorageLayout } from "@/storage/layout";
+} from "@/modules/publishing/application/public";
+import type { StorageLayout } from "@/platform/filesystem/layout";
+
+type PublishingServer = ReturnType<typeof createPublishingServer>;
+type ImportStore = ReturnType<PublishingServer["storeImport"]>;
+type ImportUploadResult = Awaited<ReturnType<ImportStore["store"]>>;
 
 function multipartError(message = "The multipart upload is invalid.") {
   return new SafeApplicationError("INVALID_MULTIPART", message, 400);
@@ -43,7 +43,8 @@ export async function storeMultipartImport(input: {
   readonly layout: StorageLayout;
   readonly request: Request;
 }): Promise<ImportUploadResult> {
-  const existing = new JobRepository(input.database).findByIdempotency(
+  const publishing = createPublishingServer(input.database);
+  const existing = publishing.findJobByIdempotency(
     importUploadIdempotencyOperation,
     input.idempotencyKey,
   );
@@ -52,7 +53,7 @@ export async function storeMultipartImport(input: {
       ?.cancel("idempotent-replay")
       .catch(() => undefined);
     return Object.freeze({
-      import: new ImportRepository(input.database).require(existing.importId),
+      import: publishing.requireImport(existing.importId),
       job: existing,
     });
   }
@@ -112,7 +113,7 @@ export async function storeMultipartImport(input: {
         return;
       }
       fileSeen = true;
-      fileResult = new ImportUploadService(input.database, input.layout).store({
+      fileResult = publishing.storeImport(input.layout).store({
         bookId: targetBook,
         bytes: fileBytes(stream),
         expiresAtMs: m1ImportExpiryMs,
@@ -147,10 +148,7 @@ export async function storeMultipartImport(input: {
     );
     parser.on("error", () => fail(multipartError()));
     parser.on("finish", () => {
-      if (
-        targetBookId !== undefined &&
-        !new DraftRepository(input.database).findBook(targetBookId)
-      ) {
+      if (targetBookId !== undefined && !publishing.findBook(targetBookId)) {
         fail(multipartError("The target book does not exist."));
       }
       if (parsingError || !fileSeen || !fileResult) {

@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import {
   detectPrintedContents,
   hasReliableLayoutOrderInversion,
@@ -15,9 +15,9 @@ import {
   shouldUseNativePdfDetection,
   supplementalPdfPageIndices,
   type PrintedContentsDetection,
-} from "@/compiler/document/printed-toc";
-import { applySourceRegions } from "@/compiler/document/source-regions";
-import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
+} from "@/modules/publishing/core/preparation/printed-contents";
+import { applySourceRegions } from "@/modules/publishing/core/preparation/source-regions";
+import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
 
 const fixturePath = fileURLToPath(
   new URL("../../fixtures/publishing-quality/printed-toc.md", import.meta.url),

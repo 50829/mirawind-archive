@@ -3,18 +3,18 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DraftRepository } from "@/db/repositories/drafts";
-import { BookDeletionRepository } from "@/db/repositories/book-deletions";
-import { JobRepository } from "@/db/repositories/jobs";
-import { acceptBookDeletion } from "@/services/book-deletion";
-import { createBookDeletionToken } from "@/services/book-deletion-token";
-import { permanentlyCleanupBook } from "@/services/permanent-book-cleanup";
-import { LibraryService } from "@/services/library";
-import { PublishedBookService } from "@/services/published-book";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { BookDeletionRepository } from "@/modules/catalog/adapters/sqlite/book-deletions";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { acceptBookDeletion } from "@/modules/catalog/adapters/sqlite/book-deletion";
+import { createBookDeletionToken } from "@/modules/catalog/core/book-deletion-token";
+import { permanentlyCleanupBook } from "@/modules/catalog/adapters/filesystem/permanent-book-cleanup";
+import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
+import { PublishedBookService } from "@/modules/reader/adapters/filesystem/published-book";
 import {
   removeExactContainedTree,
   UnsafePermanentRemovalTargetError,
-} from "@/storage/permanent-removal";
+} from "@/platform/filesystem/permanent-removal";
 
 import { withMigratedTestDatabase } from "../../helpers/database";
 

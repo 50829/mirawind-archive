@@ -1,12 +1,12 @@
 import type { APIRoute } from "astro";
 
+import { publishingServerActions } from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { readBoundedJson } from "@/http/json-body";
 import { requireMutationOrigin } from "@/http/origin";
-import { makeBookNonPublic } from "@/services/publication";
-import { getRuntimeEnvironment } from "@/storage/runtime";
+import { getRuntimeEnvironment } from "@/composition/storage";
 
 export const prerender = false;
 
@@ -35,7 +35,7 @@ export const PATCH: APIRoute = async ({ locals, params, request }) => {
   }
   const visibility = String((body as Record<string, unknown>).visibility) as
     "draft" | "private";
-  makeBookNonPublic({
+  publishingServerActions.makeBookNonPublic({
     actorUserId: session?.user.id ?? null,
     bookId: id,
     database,

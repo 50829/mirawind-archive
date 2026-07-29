@@ -1,6 +1,8 @@
-export const readerStylesheetIdentity =
-  "mirawind-reader-v2-tailwind-4.3.3" as const;
-export const readerStylesheetUrl =
-  `/reader-assets/styles/${readerStylesheetIdentity}.css` as const;
-export const readerScriptUrl =
-  `/reader-assets/scripts/${readerStylesheetIdentity}.js` as const;
+import {
+  readerAssetIdentity,
+  readerScriptUrl,
+  readerStylesheetUrl,
+} from "@/modules/reader/application/public";
+
+export const readerStylesheetIdentity = readerAssetIdentity;
+export { readerScriptUrl, readerStylesheetUrl };

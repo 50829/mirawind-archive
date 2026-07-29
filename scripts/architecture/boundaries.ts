@@ -51,6 +51,17 @@ export function dependencyViolation(
     }
     return null;
   }
+  if (
+    source.layer === "core" &&
+    !targetPath.startsWith("domain/") &&
+    !(
+      target !== null &&
+      source.domain === target.domain &&
+      target.layer === "core"
+    )
+  ) {
+    return "FORBIDDEN_DEPENDENCY";
+  }
   if (target && source.domain !== target.domain) {
     return targetPath === `modules/${target.domain}/application/public.ts`
       ? null

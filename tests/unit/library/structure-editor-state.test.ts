@@ -4,7 +4,7 @@ import {
   changeDisplayLevel,
   mergeAcceptedNodes,
   type EditableStructureNode,
-} from "@/components/preview/structure-editor-state";
+} from "@/web/components/manage/structure-editor-state";
 
 describe("publishing workbench local edit retention", () => {
   it("keeps only edits made after the accepted save snapshot", () => {

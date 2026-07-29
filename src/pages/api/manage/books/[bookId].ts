@@ -1,12 +1,12 @@
 import type { APIRoute } from "astro";
 
+import { createCatalogServer } from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { readBoundedJson } from "@/http/json-body";
 import { requireMutationOrigin } from "@/http/origin";
-import { acceptBookDeletion } from "@/services/book-deletion";
-import { getRuntimeEnvironment } from "@/storage/runtime";
+import { getRuntimeEnvironment } from "@/composition/storage";
 
 export const prerender = false;
 
@@ -62,13 +62,12 @@ export const DELETE: APIRoute = async ({ locals, params, request }) => {
       401,
     );
   }
-  const accepted = acceptBookDeletion({
+  const accepted = createCatalogServer(database).acceptBookDeletion({
     actorUserId,
     bookId: requireBookId(params.bookId),
     confirmationTitle: String(
       (body as Record<string, unknown>).confirmationTitle,
     ),
-    database,
     idempotencyKey: requireHeader(request, "idempotency-key"),
     mutationToken: requireHeader(request, "if-match"),
     nowMs: Date.now(),

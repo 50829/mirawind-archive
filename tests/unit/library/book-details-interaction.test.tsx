@@ -1,12 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { BookDetails } from "@/components/library/BookDetails";
+import { BookDetails } from "@/web/components/library/BookDetails";
 import {
   createLibraryContext,
   parseLibraryContext,
-} from "@/components/library/details-navigation";
-import type { BookDetails as BookDetailsView } from "@/services/library";
+} from "@/web/components/library/details-navigation";
+import type { BookDetails as BookDetailsView } from "@/modules/catalog/application/public";
 
 const details: BookDetailsView = {
   authors: ["A. Author"],

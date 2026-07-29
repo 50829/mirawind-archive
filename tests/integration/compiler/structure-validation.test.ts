@@ -4,9 +4,9 @@ import {
   type ConfigSemanticDiagnostic,
   ConfigSemanticValidationError,
   validateDocumentConfig,
-} from "@/compiler/document/validate-config";
-import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
+} from "@/modules/publishing/core/publication/validate-config";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 
 const document = normalizeDocumentBlocks(
   parseMarkdownDocument(

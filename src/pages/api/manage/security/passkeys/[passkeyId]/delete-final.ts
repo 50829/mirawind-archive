@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
 
-import { getRuntimeAuth, getRuntimeDatabase } from "@/auth/session";
+import { getRuntimeAuth, getRuntimeDatabase } from "@/composition/auth";
+import { createIdentityServer } from "@/composition/server";
 import { parseEnvironment } from "@/config/environment";
-import { InstallationRepository } from "@/db/repositories/installation";
 import { validateFallbackPassword } from "@/http/authorization/admin-guard";
 import { requireRecentAdministratorAuthentication } from "@/http/authorization/reauth-guard";
 import {
@@ -10,7 +10,6 @@ import {
   createSafeJsonError,
   requireExactOrigin,
 } from "@/http/response-policy";
-import { deleteFinalPasskey } from "@/services/security/final-passkey";
 
 export const prerender = false;
 
@@ -42,7 +41,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   }
 
   const database = getRuntimeDatabase();
-  const adminUserId = new InstallationRepository(database).adminUserId();
+  const adminUserId = createIdentityServer(database).adminUserId();
   const authorization =
     adminUserId === null
       ? { allowed: false as const, reason: "NOT_SOLE_ADMINISTRATOR" as const }
@@ -130,9 +129,8 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
     );
   }
   try {
-    const result = await deleteFinalPasskey({
+    const result = await createIdentityServer(database).deleteFinalPasskey({
       auth,
-      database,
       nowMs: Date.now(),
       passkeyId,
       userId: session.user.id,

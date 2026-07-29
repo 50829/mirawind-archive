@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   parsePrintedContentsAnalysisV2,
   printedContentsAnalysisIdentity,
-} from "@/compiler/document/printed-contents-analysis";
+} from "@/modules/publishing/core/preparation/printed-contents-analysis";
 
 const hash = "a".repeat(64);
 

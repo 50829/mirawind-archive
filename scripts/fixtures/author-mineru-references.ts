@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { extractZipFile } from "../../src/compiler/archive/extractor.js";
-import { parseMarkdownDocument } from "../../src/compiler/document/parser.js";
-import type { TransientDocumentNode } from "../../src/compiler/document/types.js";
-import { resolveContainedPath } from "../../src/storage/layout.js";
+import { extractZipFile } from "../../src/modules/publishing/adapters/filesystem/extract-archive.js";
+import { parseMarkdownDocument } from "../../src/modules/publishing/core/preparation/parse-markdown.js";
+import type { TransientDocumentNode } from "../../src/modules/publishing/core/preparation/document-model.js";
+import { resolveContainedPath } from "../../src/platform/filesystem/layout.js";
 import type { MineruReferencePack } from "./create-mineru-reference-pack.js";
 import {
   parseMineruReferenceV2,

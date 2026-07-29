@@ -29,6 +29,6 @@ if (defaultOutput) {
 }
 await mkdir(dirname(outputPath), { mode: 0o755, recursive: true });
 await copyFile(
-  resolve(projectRoot, "src", "components", "reader", "reader-runtime.js"),
+  resolve(projectRoot, "src", "web", "features", "reader", "reader-runtime.js"),
   outputPath,
 );

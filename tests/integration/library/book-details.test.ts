@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { SourceRepository } from "@/db/repositories/sources";
-import { LibraryService } from "@/services/library";
-import { publishReadyVersion } from "@/services/publication";
+import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
+import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {

@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { PublishPanel } from "@/components/preview/PublishPanel";
-import { publicationPhaseLabel } from "@/components/preview/publication-phase";
+import { PublishPanel } from "@/web/components/manage/PublishPanel";
+import { publicationPhaseLabel } from "@/web/components/manage/publication-phase";
 
 const base = {
   bookId: 7,

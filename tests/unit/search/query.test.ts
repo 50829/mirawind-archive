@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeSearchQuery } from "@/compiler/search/query";
+import { normalizeSearchQuery } from "@/modules/reader/core/search-query";
 
 describe("public search query normalization", () => {
   it("normalizes NFC and newlines before selecting scope by Unicode code points", () => {

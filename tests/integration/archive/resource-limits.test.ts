@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   archiveResourceLimits,
   extractZipFile,
-} from "@/compiler/archive/extractor";
+} from "@/modules/publishing/adapters/filesystem/extract-archive";
 import { buildZip } from "../../../scripts/fixtures/zip-builder";
 
 const roots: string[] = [];

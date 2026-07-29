@@ -1,17 +1,17 @@
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
-import { openDatabase } from "@/db/connection";
+import { openDatabase } from "@/platform/sqlite/connection";
 import { SafeApplicationError } from "@/domain/errors";
-import { analyzeImport } from "@/jobs/handlers/analyze-import";
-import { buildPreview } from "@/jobs/handlers/build-preview";
-import { buildPublish } from "@/jobs/handlers/build-publish";
-import { prepareDraft } from "@/jobs/handlers/prepare-draft";
-import { reclaimRetainedStorage } from "@/jobs/handlers/reclaim";
-import { permanentlyCleanupBook } from "@/services/permanent-book-cleanup";
-import { reconcileRuntimeStorage } from "@/jobs/handlers/reconcile";
-import { verifyVersion } from "@/jobs/handlers/verify-version";
-import { resolveContainedPath } from "@/storage/path-resolver";
-import { createStorageLayout } from "@/storage/layout";
+import { analyzeImport } from "@/modules/publishing/adapters/worker/analyze-import";
+import { buildPreview } from "@/modules/publishing/adapters/worker/build-preview";
+import { buildPublish } from "@/modules/publishing/adapters/worker/build-publish";
+import { prepareDraft } from "@/modules/publishing/adapters/worker/prepare-draft";
+import { reclaimRetainedStorage } from "@/modules/publishing/adapters/worker/reclaim";
+import { permanentlyCleanupBook } from "@/modules/catalog/adapters/filesystem/permanent-book-cleanup";
+import { reconcileStorage } from "@/composition/storage-reconciliation";
+import { verifyVersion } from "@/composition/verify-version-job";
+import { resolveContainedPath } from "@/platform/filesystem/layout";
+import { createStorageLayout } from "@/platform/filesystem/layout";
 import {
   isCancelJobMessage,
   isRunJobMessage,
@@ -20,8 +20,8 @@ import {
   type JobProgressMessage,
   type JobResultMessage,
   type RunJobMessage,
-} from "@/worker/protocol";
-import { shouldReportJobProgress } from "@/worker/progress-throttle";
+} from "@/entrypoints/worker/protocol";
+import { shouldReportJobProgress } from "@/entrypoints/worker/progress-throttle";
 import {
   finishPipelineProfile,
   startPipelineProfile,
@@ -193,7 +193,7 @@ async function execute(message: RunJobMessage): Promise<void> {
         role: "worker",
       });
       try {
-        const outcome = await reconcileRuntimeStorage({
+        const outcome = await reconcileStorage({
           database,
           layout: await createStorageLayout(root),
           nowMs: Date.now(),

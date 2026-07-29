@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { BookPresentationRepository } from "@/db/repositories/book-presentations";
-import { reconcileBookVersionPresentations } from "@/services/book-presentation";
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
+import { reconcileBookVersionPresentations } from "@/modules/catalog/adapters/filesystem/book-presentation";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {

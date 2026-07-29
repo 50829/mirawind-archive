@@ -9,9 +9,9 @@ import {
   JobRepository,
   createJobRepositorySchema,
   type JobRecord,
-} from "@/db/repositories/jobs";
-import { recoverExpiredJobLeases } from "@/jobs/recovery";
-import { evaluateJobRetry } from "@/jobs/retry-policy";
+} from "@/modules/publishing/adapters/sqlite/jobs";
+import { recoverExpiredJobLeases } from "@/modules/publishing/application/recover-expired-jobs";
+import { evaluateJobRetry } from "@/modules/publishing/application/retry-policy";
 
 const temporaryRoots: string[] = [];
 

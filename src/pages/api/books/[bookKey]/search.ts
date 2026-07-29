@@ -2,15 +2,17 @@ import { createHash } from "node:crypto";
 
 import type { APIRoute } from "astro";
 
-import { normalizeSearchQuery } from "@/compiler/search/query";
-import { BookSearchRepository } from "@/db/repositories/book-search";
+import {
+  createPublishedBookServer,
+  createReaderServer,
+} from "@/composition/server";
+import { normalizeSearchQuery } from "@/modules/reader/application/public";
 import { SafeApplicationError } from "@/domain/errors";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
 import { ifNoneMatchMatches } from "@/http/conditional";
 import { noIndexRobotsTag } from "@/http/seo/robots";
-import { PublishedBookService } from "@/services/published-book";
-import { getRuntimeStorageLayout } from "@/storage/runtime";
+import { getRuntimeStorageLayout } from "@/composition/storage";
 
 export const prerender = false;
 
@@ -95,7 +97,7 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
   const limit = limitFrom(url.searchParams.get("limit"));
   const { database, decision } = resolveRuntimeAdministrator(locals.session);
   const layout = await getRuntimeStorageLayout();
-  const book = new PublishedBookService(database, layout).resolveCurrent(
+  const book = createPublishedBookServer(database, layout).resolveCurrent(
     params.bookKey ?? "",
     decision,
   );
@@ -104,7 +106,7 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
     book.versionId,
     query.normalized,
   );
-  const rows = new BookSearchRepository(database).search({
+  const rows = createReaderServer(database).search({
     bookId: book.bookId,
     bookKey: book.alias ?? String(book.bookId),
     limit: limit + 1,

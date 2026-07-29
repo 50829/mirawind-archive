@@ -1,9 +1,7 @@
 import type { APIRoute } from "astro";
 
-import { getRuntimeEnvironment } from "@/storage/runtime";
-import { ImportRepository } from "@/db/repositories/imports";
-import { JobRepository } from "@/db/repositories/jobs";
-import { withImmediateTransaction } from "@/db/transaction/immediate";
+import { createPublishingServer } from "@/composition/server";
+import { getRuntimeEnvironment } from "@/composition/storage";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
@@ -43,50 +41,12 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       400,
     );
   }
-  const imports = new ImportRepository(database);
-  const current = imports.find(importId);
-  if (!current) {
-    throw new SafeApplicationError(
-      "IMPORT_NOT_FOUND",
-      "The import was not found.",
-      404,
-    );
-  }
-  if (current.state !== "needs_main_confirmation") {
-    throw new SafeApplicationError(
-      "IMPORT_STATE_CONFLICT",
-      "The import is not awaiting candidate confirmation.",
-      409,
-    );
-  }
-  if (
-    !imports
-      .candidates(importId)
-      .some((candidate) => candidate.id === candidateId)
-  ) {
-    throw new SafeApplicationError(
-      "CANDIDATE_NOT_FOUND",
-      "The candidate was not found.",
-      404,
-    );
-  }
+  const publishing = createPublishingServer(database);
   const nowMs = Date.now();
-  const job = withImmediateTransaction(database, () => {
-    const imported = imports.confirmCandidate({
-      candidateId,
-      importId,
-      nowMs,
-    });
-    return new JobRepository(database).create({
-      ...(imported.bookId === null ? {} : { bookId: imported.bookId }),
-      idempotency: {
-        key: `prepare-import-${imported.id}`,
-        operation: "import.prepare",
-      },
-      importId: imported.id,
-      kind: "prepare_draft",
-      nowMs,
-    });
+  const job = publishing.confirmImportCandidateAndQueuePreparation({
+    candidateId,
+    importId,
+    nowMs,
   });
   const headers = new Headers();
   applyResponsePolicy(headers, "private-api");

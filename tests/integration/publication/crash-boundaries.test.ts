@@ -5,12 +5,12 @@ import { resolve } from "node:path";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
-import { canonicalJson } from "@/compiler/document/manifest";
-import { VersionRepository } from "@/db/repositories/versions";
-import type { PublicationCrashPoint } from "@/jobs/crash-points";
-import { finalizeBuiltPublication } from "@/jobs/handlers/build-publish";
-import { publishReadyVersion } from "@/services/publication";
-import { finalizeImmutableVersion } from "@/storage/finalize-version";
+import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
+import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
+import type { PublicationCrashPoint } from "@/modules/publishing/application/crash-points";
+import { finalizeBuiltPublication } from "@/modules/publishing/adapters/worker/build-publish";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
+import { finalizeImmutableVersion } from "@/modules/publishing/adapters/filesystem/finalize-version";
 
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
 import { withMigratedTestDatabase } from "../../helpers/database.js";

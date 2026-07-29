@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { SearchSpool } from "@/compiler/search/build-spool";
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { JobRepository } from "@/db/repositories/jobs";
-import { SourceRepository } from "@/db/repositories/sources";
-import { VersionRepository } from "@/db/repositories/versions";
+import type { SearchSpool } from "@/modules/publishing/adapters/filesystem/search-spool";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
+import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import { presentationForTest } from "./stale-build.test.js";

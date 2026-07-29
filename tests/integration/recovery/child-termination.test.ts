@@ -9,8 +9,8 @@ import {
   defaultJobTerminationGraceMs,
   defaultJobTimeoutMs,
   runJobChild,
-} from "@/worker/child-runner";
-import type { FrozenJobInput } from "@/worker/protocol";
+} from "@/entrypoints/worker/child-runner";
+import type { FrozenJobInput } from "@/entrypoints/worker/protocol";
 
 const fixturePath = fileURLToPath(
   new URL("../../fixtures/processes/stubborn-job-child.mjs", import.meta.url),
@@ -35,20 +35,10 @@ function input(suffix: string): FrozenJobInput {
   const jobId = `job_0123456789abcdef${suffix}`;
   return {
     attempt: 1,
-    bookId: null,
-    capturedConfigRevision: null,
-    capturedCurrentVersionId: null,
-    capturedSourceId: null,
-    configYamlRelativePath: null,
     createdAtMs: 1_000,
-    importId: null,
-    importUploadRelativePath: null,
     jobId,
     kind: "reconcile",
-    selectedCandidateRelativePath: null,
-    sourceRootRelativePath: null,
     stagingRelativePath: `staging/${jobId}`,
-    versionId: null,
   };
 }
 

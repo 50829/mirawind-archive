@@ -4,14 +4,12 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { extractZipFile } from "../../src/compiler/archive/extractor.js";
-import {
-  readMineruLayoutEvidence,
-  supplementMissingListPageLabels,
-} from "../../src/compiler/document/layout-evidence.js";
-import { normalizeDocumentBlocks } from "../../src/compiler/document/normalize.js";
-import { parseMarkdownDocument } from "../../src/compiler/document/parser.js";
-import { readPdfContentsEvidence } from "../../src/compiler/document/pdf-contents-evidence.js";
+import { extractZipFile } from "../../src/modules/publishing/adapters/filesystem/extract-archive.js";
+import { readMineruLayoutEvidence } from "../../src/modules/publishing/adapters/filesystem/read-layout-evidence.js";
+import { supplementMissingListPageLabels } from "../../src/modules/publishing/core/preparation/layout-evidence.js";
+import { normalizeDocumentBlocks } from "../../src/modules/publishing/core/preparation/normalize-document.js";
+import { parseMarkdownDocument } from "../../src/modules/publishing/core/preparation/parse-markdown.js";
+import { readPdfContentsEvidence } from "../../src/modules/publishing/adapters/filesystem/read-pdf-contents-evidence.js";
 import {
   detectPrintedContents,
   inferPrintedHeadingEvidence,
@@ -19,21 +17,21 @@ import {
   shouldUseNativePdfDetection,
   supplementalPdfPageIndices,
   type PrintedContentsCandidate,
-} from "../../src/compiler/document/printed-toc.js";
+} from "../../src/modules/publishing/core/preparation/printed-contents.js";
 import {
   applySourceRegions,
   utf8ByteOffset,
-} from "../../src/compiler/document/source-regions.js";
+} from "../../src/modules/publishing/core/preparation/source-regions.js";
 import {
   proposeDocumentStructure,
   type ContentRole,
-} from "../../src/compiler/document/structure-proposal.js";
-import type { NormalizedDocument } from "../../src/compiler/document/types.js";
+} from "../../src/modules/publishing/core/preparation/structure-proposal.js";
+import type { NormalizedDocument } from "../../src/modules/publishing/core/preparation/document-model.js";
 import {
   findTypographyProtectedRanges,
   preprocessMarkdownTypography,
-} from "../../src/compiler/preprocess/typography.js";
-import { resolveContainedPath } from "../../src/storage/layout.js";
+} from "../../src/modules/publishing/core/preparation/typography.js";
+import { resolveContainedPath } from "../../src/platform/filesystem/layout.js";
 import type { MineruReferencePack } from "./create-mineru-reference-pack.js";
 import type {
   ObservedMineruOutcome,

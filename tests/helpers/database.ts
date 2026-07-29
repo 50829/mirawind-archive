@@ -2,9 +2,9 @@ import { join } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { openDatabase } from "@/db/connection";
-import { applyMigrations } from "@/db/migrate";
-import { loadMigrationManifest } from "@/db/migration-manifest";
+import { openDatabase } from "@/platform/sqlite/connection";
+import { applyMigrations } from "@/platform/sqlite/migrate";
+import { loadMigrationManifest } from "@/platform/sqlite/migration-manifest";
 
 import type { TemporaryDataRoot } from "./data-root";
 

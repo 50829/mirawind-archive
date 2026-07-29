@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { SafeApplicationError } from "@/domain/errors";
 import { authorizeBookResource } from "@/http/authorization/book-guard";
-import { publishReadyVersion } from "@/services/publication";
-import { PublishedBookService } from "@/services/published-book";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
+import { PublishedBookService } from "@/modules/reader/adapters/filesystem/published-book";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {

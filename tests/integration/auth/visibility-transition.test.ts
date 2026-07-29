@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeSearchQuery } from "@/compiler/search/query";
-import { BookSearchRepository } from "@/db/repositories/book-search";
-import { makeBookNonPublic, publishReadyVersion } from "@/services/publication";
-import { PublishedBookService } from "@/services/published-book";
+import { normalizeSearchQuery } from "@/modules/reader/core/search-query";
+import { BookSearchRepository } from "@/modules/reader/adapters/sqlite/book-search";
+import {
+  makeBookNonPublic,
+  publishReadyVersion,
+} from "@/modules/publishing/adapters/sqlite/publication";
+import { PublishedBookService } from "@/modules/reader/adapters/filesystem/published-book";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {

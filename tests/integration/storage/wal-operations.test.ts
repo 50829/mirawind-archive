@@ -2,13 +2,13 @@ import { performance } from "node:perf_hooks";
 
 import { describe, expect, it } from "vitest";
 
-import { openDatabase } from "@/db/connection";
+import { openDatabase } from "@/platform/sqlite/connection";
 import {
   passiveCheckpointIntervalMs,
   runMaintenanceCheckpoint,
   runPassiveCheckpoint,
   WorkerCheckpointScheduler,
-} from "@/worker/checkpoint";
+} from "@/entrypoints/worker/checkpoint";
 
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
 import { openMigratedTestDatabase } from "../../helpers/database.js";

@@ -1,13 +1,12 @@
 import type { APIRoute } from "astro";
 
-import { JobRepository } from "@/db/repositories/jobs";
+import { createPublishingServer } from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { requireMutationOrigin } from "@/http/origin";
-import { serializeJobStatus } from "@/services/job-status";
-import { getRuntimeEnvironment } from "@/storage/runtime";
+import { getRuntimeEnvironment } from "@/composition/storage";
 
 export const prerender = false;
 
@@ -26,8 +25,8 @@ export const POST: APIRoute = ({ locals, params, request }) => {
   const { database } = requireRuntimeAdministrator(locals.session);
   requireMutationOrigin(request, getRuntimeEnvironment().publicOrigin);
   const jobId = requireJobId(params.jobId);
-  const repository = new JobRepository(database);
-  if (!repository.get(jobId)) {
+  const publishing = createPublishingServer(database);
+  if (!publishing.getJob(jobId)) {
     throw new SafeApplicationError(
       "JOB_NOT_FOUND",
       "The job was not found.",
@@ -37,7 +36,7 @@ export const POST: APIRoute = ({ locals, params, request }) => {
 
   let job;
   try {
-    job = repository.requestCancellation(jobId, Date.now());
+    job = publishing.cancelJob(jobId, Date.now());
   } catch (error) {
     if (error instanceof Error && error.message === "JOB_ALREADY_TERMINAL") {
       throw new SafeApplicationError(
@@ -51,5 +50,8 @@ export const POST: APIRoute = ({ locals, params, request }) => {
 
   const headers = new Headers();
   applyResponsePolicy(headers, "private-api");
-  return Response.json(serializeJobStatus(job), { headers, status: 202 });
+  return Response.json(publishing.serializeJobStatus(job), {
+    headers,
+    status: 202,
+  });
 };

@@ -5,17 +5,17 @@ import { resolve } from "node:path";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
-import { buildImmutableVersion } from "@/compiler/version-builder";
-import { BookPresentationRepository } from "@/db/repositories/book-presentations";
-import { JobRepository } from "@/db/repositories/jobs";
-import { VersionRepository } from "@/db/repositories/versions";
+import { buildImmutableVersion } from "@/modules/publishing/adapters/filesystem/build-version";
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import {
   verifyAndRecoverCurrentVersions,
   verifyVersionFully,
   verifyVersionQuickly,
-} from "@/services/version-verifier";
-import { finalizeImmutableVersion } from "@/storage/finalize-version";
-import { reconcileStorage } from "@/storage/reconcile";
+} from "@/composition/version-verification";
+import { finalizeImmutableVersion } from "@/modules/publishing/adapters/filesystem/finalize-version";
+import { reconcileStorage } from "@/composition/storage-reconciliation";
 
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
 import { openMigratedTestDatabase } from "../../helpers/database.js";
@@ -24,8 +24,8 @@ import {
   publicationTestVersionId,
   setupPublicationFixture,
 } from "../publication/stale-build.test.js";
-import { publishReadyVersion } from "@/services/publication";
-import { deriveBookVersionPresentation } from "@/services/book-presentation";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
+import { deriveBookVersionPresentation } from "@/modules/catalog/application/public";
 
 const sourceId = "src_stale_publish_test_0001";
 const replacementVersionId = "ver_reconciliation_current_0001";

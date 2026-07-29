@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { discoverMarkdownCandidates } from "@/compiler/document/candidate-discovery";
+import { discoverMarkdownCandidates } from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
 
 const fixtureRoot = fileURLToPath(
   new URL("../../fixtures/mineru/cases/", import.meta.url),

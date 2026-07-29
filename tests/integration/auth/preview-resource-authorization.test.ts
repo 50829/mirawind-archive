@@ -6,7 +6,7 @@ import {
   issuePreviewResourceAuthorization,
   previewAuthorizationLifetimeMs,
 } from "@/http/authorization/preview-resource";
-import { InstallationRepository } from "@/db/repositories/installation";
+import { InstallationRepository } from "@/modules/identity/adapters/sqlite/installation";
 
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
 import { openMigratedTestDatabase } from "../../helpers/database.js";

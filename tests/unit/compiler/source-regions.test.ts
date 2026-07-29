@@ -2,14 +2,14 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import {
   SourceRegionValidationError,
   applySourceRegions,
   utf8ByteOffset,
-} from "@/compiler/document/source-regions";
-import type { ConfirmedSourceRegion } from "@/compiler/document/types";
+} from "@/modules/publishing/core/preparation/source-regions";
+import type { ConfirmedSourceRegion } from "@/modules/publishing/core/preparation/document-model";
 
 function sha(value: string): string {
   return createHash("sha256").update(value).digest("hex");

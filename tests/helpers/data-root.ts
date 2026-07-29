@@ -2,7 +2,10 @@ import { chmod, lstat, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
-import { createStorageLayout, type StorageLayout } from "@/storage/layout";
+import {
+  createStorageLayout,
+  type StorageLayout,
+} from "@/platform/filesystem/layout";
 
 export interface TemporaryDataRoot {
   readonly cleanup: () => Promise<void>;

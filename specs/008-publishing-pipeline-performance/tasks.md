@@ -62,27 +62,34 @@ existing compiler/publication parity tests remain byte/semantic equivalent.
 
 ### Tests for User Story 4
 
-- [ ] T018 [P] [US4] Add module-public-surface contract tests for publishing, reader, catalog and identity in `tests/contract/module-public-surfaces.test.ts`
-- [ ] T019 [P] [US4] Add behavior snapshots around existing configured-document, Reader model, catalog projection and auth use cases in `tests/integration/architecture/behavior-equivalence.test.ts`
-- [ ] T020 [P] [US4] Add discriminated worker-command validator tests, including old nullable-bag rejection fixtures, in `tests/contract/worker-command-union.test.ts`
+- [x] T018 [P] [US4] Add module-public-surface contract tests for publishing, reader, catalog and identity in `tests/contract/module-public-surfaces.test.ts`
+- [x] T019 [P] [US4] Add behavior snapshots around existing configured-document, Reader model, catalog projection and auth use cases in `tests/integration/architecture/behavior-equivalence.test.ts`
+- [x] T020 [P] [US4] Add discriminated worker-command validator tests, including old nullable-bag rejection fixtures, in `tests/contract/worker-command-union.test.ts`
 
 ### Implementation for User Story 4
 
-- [ ] T021 [P] [US4] Create publishing application ports and the only cross-module surface in `src/modules/publishing/application/ports/` and `src/modules/publishing/application/public.ts`
-- [ ] T022 [P] [US4] Create reader, catalog and identity application public surfaces in `src/modules/reader/application/public.ts`, `src/modules/catalog/application/public.ts` and `src/modules/identity/application/public.ts`
-- [ ] T023 [US4] Move hostile-input and content-preparation pure logic from `src/compiler/archive/` and `src/compiler/preprocess/` into `src/modules/publishing/core/preparation/` using `@/` imports
-- [ ] T024 [US4] Move document, render, resource and search pure logic from `src/compiler/` into `src/modules/publishing/core/publication/` without forwarding exports
-- [ ] T025 [US4] Separate ReaderPageModel/server artifact behavior into `src/modules/reader/core/` and `src/modules/reader/application/`, keeping React/static shell presentation in `src/web/features/reader/`
-- [ ] T026 [US4] Move public library/version presentation queries into `src/modules/catalog/application/` and `src/modules/catalog/adapters/sqlite/`
-- [ ] T027 [US4] Move administrator/authentication use cases behind identity ports in `src/modules/identity/application/` and adapters in `src/modules/identity/adapters/`
-- [ ] T028 [US4] Move business SQL mappings from `src/db/repositories/` into each owning module's `adapters/sqlite/`, leaving connection/transaction primitives in `src/platform/sqlite/`
-- [ ] T029 [US4] Move business storage paths and durability adapters into module `adapters/filesystem/`, leaving generic fsync/atomic/path primitives in `src/platform/filesystem/`
-- [ ] T030 [US4] Replace `FrozenJobInput` with a discriminated command union and registry in `src/entrypoints/worker/protocol.ts` and `src/entrypoints/worker/job-registry.ts`
-- [ ] T031 [US4] Move worker and CLI runtime handlers into `src/entrypoints/worker/` and `src/entrypoints/cli/`, then assemble adapters only in `src/composition/worker.ts` and `src/composition/cli.ts`
-- [ ] T032 [US4] Add the server composition root and make Astro controllers call application public surfaces in `src/composition/server.ts` and `src/pages/`
-- [ ] T033 [US4] Move React components/controllers/presenters into `src/web/` ownership and replace direct repository/storage imports in `src/components/` and `src/pages/`
-- [ ] T034 [US4] Delete empty legacy `src/compiler/`, `src/services/`, business `src/db/repositories/`, old `src/worker/` and forwarding files after all consumers move
-- [ ] T035 [US4] Run equivalence, architecture, format, lint, typecheck, unit, contract, integration and build gates; record the behavior-preserving checkpoint in `specs/008-publishing-pipeline-performance/tasks.md`
+- [x] T021 [P] [US4] Create publishing application ports and the only cross-module surface in `src/modules/publishing/application/ports/` and `src/modules/publishing/application/public.ts`
+- [x] T022 [P] [US4] Create reader, catalog and identity application public surfaces in `src/modules/reader/application/public.ts`, `src/modules/catalog/application/public.ts` and `src/modules/identity/application/public.ts`
+- [x] T023 [US4] Move hostile-input and content-preparation pure logic from `src/compiler/archive/` and `src/compiler/preprocess/` into `src/modules/publishing/core/preparation/` using `@/` imports
+- [x] T024 [US4] Move document, render, resource and search pure logic from `src/compiler/` into `src/modules/publishing/core/publication/` without forwarding exports
+- [x] T025 [US4] Separate ReaderPageModel/server artifact behavior into `src/modules/reader/core/` and `src/modules/reader/application/`, keeping React/static shell presentation in `src/web/features/reader/`
+- [x] T026 [US4] Move public library/version presentation queries into `src/modules/catalog/application/` and `src/modules/catalog/adapters/sqlite/`
+- [x] T027 [US4] Move administrator/authentication use cases behind identity ports in `src/modules/identity/application/` and adapters in `src/modules/identity/adapters/`
+- [x] T028 [US4] Move business SQL mappings from `src/db/repositories/` into each owning module's `adapters/sqlite/`, leaving connection/transaction primitives in `src/platform/sqlite/`
+- [x] T029 [US4] Move business storage paths and durability adapters into module `adapters/filesystem/`, leaving generic fsync/atomic/path primitives in `src/platform/filesystem/`
+- [x] T030 [US4] Replace `FrozenJobInput` with a discriminated command union and registry in `src/entrypoints/worker/protocol.ts` and `src/entrypoints/worker/job-registry.ts`
+- [x] T031 [US4] Move worker and CLI runtime handlers into `src/entrypoints/worker/` and `src/entrypoints/cli/`, then assemble adapters only in `src/composition/worker.ts` and `src/composition/cli.ts`
+- [x] T032 [US4] Add the server composition root and make Astro controllers call application public surfaces in `src/composition/server.ts` and `src/pages/`
+- [x] T033 [US4] Move React components/controllers/presenters into `src/web/` ownership and replace direct repository/storage imports in `src/components/` and `src/pages/`
+- [x] T034 [US4] Delete empty legacy `src/compiler/`, `src/services/`, business `src/db/repositories/`, old `src/worker/` and forwarding files after all consumers move
+- [x] T035 [US4] Run equivalence, architecture, format, lint, typecheck, unit, contract, integration and build gates; record the behavior-preserving checkpoint in `specs/008-publishing-pipeline-performance/tasks.md`
+
+Phase 3 evidence: publishing, reader, catalog and identity expose one application public surface;
+Astro pages and process entrypoints no longer import module adapters directly; the complete 222-file
+source graph and fourteen architecture fixtures report zero diagnostics. Configured-document,
+Reader navigation, catalog projection and Passkey policy snapshots remain equivalent. Format, lint,
+typecheck, the production process bundle, the complete Astro/Vite production build and 633 Vitest
+tests passed.
 
 **Checkpoint**: Commit as `refactor(architecture): establish acyclic module boundaries` only after
 all old ownership directories are gone and no behavior snapshot changed.

@@ -1,20 +1,19 @@
 import type { APIRoute } from "astro";
 
-import { DraftRepository } from "@/db/repositories/drafts";
-import { JobRepository } from "@/db/repositories/jobs";
-import { SourceRepository } from "@/db/repositories/sources";
-import { withImmediateTransaction } from "@/db/transaction/immediate";
+import {
+  createPublishingServer,
+  publishingServerActions,
+} from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { readBoundedJson } from "@/http/json-body";
 import { requireMutationOrigin } from "@/http/origin";
-import { m1PublishPolicy } from "@/policy/publish-policy";
-import { assertReadyPreviewIdentity } from "@/services/preview-identity";
+import { m1PublishPolicy } from "@/modules/publishing/application/public";
 import {
   getRuntimeEnvironment,
   getRuntimeStorageLayout,
-} from "@/storage/runtime";
+} from "@/composition/storage";
 
 export const prerender = false;
 
@@ -62,19 +61,17 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   const expectedRevision = Number(
     (body as Record<string, unknown>).expected_config_revision,
   );
-  const drafts = new DraftRepository(database);
-  const current = drafts.findBook(id);
+  const publishing = createPublishingServer(database);
+  const current = publishing.findBook(id);
   if (!current?.draftSourceId || !current.draftConfigRevision) {
     throw new SafeApplicationError("NOT_FOUND", "The book was not found.", 404);
   }
-  const config = drafts.requireConfig(id, current.draftConfigRevision);
-  const source = new SourceRepository(database).requireSnapshot(
-    current.draftSourceId,
-  );
+  const config = publishing.requireConfig(id, current.draftConfigRevision);
+  const source = publishing.requireSource(current.draftSourceId);
   const preview =
     current.readyPreviewRevision === null
       ? null
-      : drafts.findPreview(id, current.readyPreviewRevision);
+      : publishing.findPreview(id, current.readyPreviewRevision);
   if (!preview) {
     throw new SafeApplicationError(
       "PUBLISH_PREVIEW_STALE",
@@ -82,7 +79,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
       409,
     );
   }
-  await assertReadyPreviewIdentity({
+  await publishingServerActions.assertReadyPreviewIdentity({
     book: current,
     config,
     layout: await getRuntimeStorageLayout(),
@@ -101,38 +98,11 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
       403,
     );
   }
-  const job = withImmediateTransaction(database, () => {
-    const book = drafts.requireBook(id);
-    const preview =
-      book.readyPreviewRevision === null
-        ? null
-        : drafts.findPreview(id, book.readyPreviewRevision);
-    if (
-      book.draftConfigRevision !== expectedRevision ||
-      book.readyPreviewRevision !== expectedRevision ||
-      preview?.state !== "ready" ||
-      !book.draftSourceId
-    ) {
-      throw new SafeApplicationError(
-        "PUBLISH_PREVIEW_STALE",
-        "The ready preview no longer matches the current publishing inputs.",
-        409,
-      );
-    }
-    return new JobRepository(database).create({
-      bookId: id,
-      capturedConfigRevision: expectedRevision,
-      ...(book.currentVersionId
-        ? { capturedCurrentVersionId: book.currentVersionId }
-        : {}),
-      capturedSourceId: book.draftSourceId,
-      idempotency: {
-        key: idempotencyKey,
-        operation: `book.publish:${id}:${expectedRevision}`,
-      },
-      kind: "build_publish",
-      nowMs: Date.now(),
-    });
+  const job = publishing.queuePublishBuild({
+    bookId: id,
+    expectedRevision,
+    idempotencyKey,
+    nowMs: Date.now(),
   });
   const headers = new Headers();
   applyResponsePolicy(headers, "private-api");

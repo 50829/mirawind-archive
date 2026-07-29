@@ -18,11 +18,11 @@ import { fileURLToPath } from "node:url";
 
 import Database from "better-sqlite3";
 
-import { openDatabase } from "../../src/db/connection.js";
-import { applyMigrations } from "../../src/db/migrate.js";
-import { loadMigrationManifest } from "../../src/db/migration-manifest.js";
-import { createStorageLayout } from "../../src/storage/layout.js";
-import { reconcileStorage } from "../../src/storage/reconcile.js";
+import { openDatabase } from "../../src/platform/sqlite/connection.js";
+import { applyMigrations } from "../../src/platform/sqlite/migrate.js";
+import { loadMigrationManifest } from "../../src/platform/sqlite/migration-manifest.js";
+import { createStorageLayout } from "../../src/platform/filesystem/layout.js";
+import { reconcileStorage } from "../../src/composition/storage-reconciliation.js";
 
 interface AuditArguments {
   readonly output: string;

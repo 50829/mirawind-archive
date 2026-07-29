@@ -11,7 +11,7 @@ import {
   stripPageLabel,
 } from "../../../scripts/fixtures/observe-mineru-references";
 import { buildZip } from "../../../scripts/fixtures/zip-builder";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 
 const roots: string[] = [];
 

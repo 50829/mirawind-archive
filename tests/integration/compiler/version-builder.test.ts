@@ -12,12 +12,12 @@ import { resolve } from "node:path";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
-import { buildImmutableVersion } from "@/compiler/version-builder";
+import { buildImmutableVersion } from "@/modules/publishing/adapters/filesystem/build-version";
 import {
   validateDocumentManifest,
   validateVersionMarker,
-} from "@/schemas/document-manifest";
-import { finalizeImmutableVersion } from "@/storage/finalize-version";
+} from "@/modules/publishing/core/publication/document-manifest-schema";
+import { finalizeImmutableVersion } from "@/modules/publishing/adapters/filesystem/finalize-version";
 
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
 

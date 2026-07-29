@@ -2,6 +2,9 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vitest/config";
 
+const schemaRoot = fileURLToPath(new URL("./docs/schemas", import.meta.url));
+const sourceRoot = fileURLToPath(new URL("./src", import.meta.url));
+
 const shared = {
   environment: "node",
   globals: false,
@@ -11,9 +14,10 @@ const shared = {
 
 export default defineConfig({
   resolve: {
-    alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
-    },
+    alias: [
+      { find: "@/schemas", replacement: schemaRoot },
+      { find: "@", replacement: sourceRoot },
+    ],
   },
   test: {
     coverage: {

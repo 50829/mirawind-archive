@@ -14,9 +14,9 @@ import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 
-import { extractZipFile } from "../../src/compiler/archive/extractor.js";
-import { parseMarkdownDocument } from "../../src/compiler/document/parser.js";
-import type { TransientDocumentNode } from "../../src/compiler/document/types.js";
+import { extractZipFile } from "../../src/modules/publishing/adapters/filesystem/extract-archive.js";
+import { parseMarkdownDocument } from "../../src/modules/publishing/core/preparation/parse-markdown.js";
+import type { TransientDocumentNode } from "../../src/modules/publishing/core/preparation/document-model.js";
 import {
   parseRealFixtureManifest,
   verifyRealMineruFixtures,

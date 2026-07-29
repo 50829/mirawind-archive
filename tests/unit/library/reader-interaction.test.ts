@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildReaderNavigationTree,
   readerBreadcrumbs,
-} from "@/components/reader/navigation";
-import { renderReaderShell } from "@/components/reader/render";
-import { shouldNavigateWithArrowKey } from "@/components/reader/reader-interaction";
+} from "@/modules/reader/application/public";
+import { renderReaderShell } from "@/web/features/reader/render";
+import { shouldNavigateWithArrowKey } from "@/web/features/reader/reader-interaction";
 import { readerScriptUrl } from "@/styles/assets";
 
 const props = {

@@ -6,13 +6,13 @@ import { fileURLToPath } from "node:url";
 
 import Database from "better-sqlite3";
 
-import { normalizeSearchQuery } from "../../src/compiler/search/query.js";
-import { DraftRepository } from "../../src/db/repositories/drafts.js";
+import { normalizeSearchQuery } from "../../src/modules/reader/core/search-query.js";
+import { DraftRepository } from "../../src/modules/publishing/adapters/sqlite/drafts.js";
 import {
   JobRepository,
   type JobRecord,
-} from "../../src/db/repositories/jobs.js";
-import { openDatabase } from "../../src/db/connection.js";
+} from "../../src/modules/publishing/adapters/sqlite/jobs.js";
+import { openDatabase } from "../../src/platform/sqlite/connection.js";
 import { runBuildBenchmarks } from "./build.js";
 import { captureBenchmarkEnvironment } from "./environment.js";
 import { argumentMap, boundedInteger, requiredArgument } from "./http.js";

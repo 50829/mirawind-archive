@@ -18,20 +18,18 @@ import { fileURLToPath } from "node:url";
 
 import type Database from "better-sqlite3";
 
-import { applyMigrations } from "../../src/db/migrate.js";
-import { loadMigrationManifest } from "../../src/db/migration-manifest.js";
-import { openDatabase } from "../../src/db/connection.js";
-import { DraftRepository } from "../../src/db/repositories/drafts.js";
-import { ImportRepository } from "../../src/db/repositories/imports.js";
+import { applyMigrations } from "../../src/platform/sqlite/migrate.js";
+import { loadMigrationManifest } from "../../src/platform/sqlite/migration-manifest.js";
+import { openDatabase } from "../../src/platform/sqlite/connection.js";
+import { DraftRepository } from "../../src/modules/publishing/adapters/sqlite/drafts.js";
+import { ImportRepository } from "../../src/modules/publishing/adapters/sqlite/imports.js";
 import {
   JobRepository,
   type JobRecord,
-} from "../../src/db/repositories/jobs.js";
-import {
-  m1ImportExpiryMs,
-  ImportUploadService,
-} from "../../src/services/import-upload.js";
-import { createStorageLayout } from "../../src/storage/layout.js";
+} from "../../src/modules/publishing/adapters/sqlite/jobs.js";
+import { ImportUploadService } from "../../src/modules/publishing/adapters/filesystem/import-upload.js";
+import { m1ImportExpiryMs } from "../../src/modules/publishing/application/public.js";
+import { createStorageLayout } from "../../src/platform/filesystem/layout.js";
 import { parsePipelineProfileArtifact } from "../../src/observability/pipeline-profile.js";
 import {
   verifyRealMineruFixtures,

@@ -1,6 +1,6 @@
-import type { RequestSession } from "@/auth/session";
-import { getRuntimeDatabase } from "@/auth/session";
-import { InstallationRepository } from "@/db/repositories/installation";
+import type { RequestSession } from "@/modules/identity/application/public";
+import { getRuntimeDatabase } from "@/composition/auth";
+import { createIdentityServer } from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import { authorizeSoleAdministrator } from "@/http/authorization/admin-guard";
 
@@ -11,7 +11,7 @@ export function resolveRuntimeAdministrator(
   decision: ReturnType<typeof authorizeSoleAdministrator>;
 }> {
   const database = getRuntimeDatabase();
-  const adminUserId = new InstallationRepository(database).adminUserId();
+  const adminUserId = createIdentityServer(database).adminUserId();
   const decision =
     adminUserId === null
       ? ({ allowed: false, reason: "NOT_SOLE_ADMINISTRATOR" } as const)

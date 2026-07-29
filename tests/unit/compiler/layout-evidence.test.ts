@@ -4,12 +4,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { readMineruLayoutEvidence } from "@/modules/publishing/adapters/filesystem/read-layout-evidence";
 import {
-  readMineruLayoutEvidence,
   reconstructPrintedLayoutRows,
   supplementMissingListPageLabels,
   type LayoutEvidence,
-} from "@/compiler/document/layout-evidence";
+} from "@/modules/publishing/core/preparation/layout-evidence";
 
 const roots: string[] = [];
 
@@ -779,7 +779,7 @@ describe("bounded MinerU layout evidence", () => {
     const source = await import("node:fs/promises").then(({ readFile }) =>
       readFile(
         new URL(
-          "../../../src/compiler/document/layout-evidence.ts",
+          "../../../src/modules/publishing/adapters/filesystem/read-layout-evidence.ts",
           import.meta.url,
         ),
         "utf8",

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { MarkdownCandidate } from "@/compiler/document/candidate-discovery";
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { JobRepository } from "@/db/repositories/jobs";
-import { SourceRepository } from "@/db/repositories/sources";
+import type { MarkdownCandidate } from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 

@@ -3,13 +3,13 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { MarkdownCandidate } from "@/compiler/document/candidate-discovery";
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { finalizePreparedDraft } from "@/jobs/handlers/finalize-prepared-draft";
-import { prepareDraft } from "@/jobs/handlers/prepare-draft";
-import { parseBookConfigYaml } from "@/schemas/book-config";
-import { queueSourceReprocess } from "@/services/source-reprocess";
+import type { MarkdownCandidate } from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { finalizePreparedDraft } from "@/modules/publishing/adapters/worker/finalize-prepared-draft";
+import { prepareDraft } from "@/modules/publishing/adapters/worker/prepare-draft";
+import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
+import { queueSourceReprocess } from "@/modules/publishing/adapters/filesystem/source-reprocess";
 
 import { buildZip } from "../../../scripts/fixtures/zip-builder.js";
 import { withMigratedTestDatabase } from "../../helpers/database.js";

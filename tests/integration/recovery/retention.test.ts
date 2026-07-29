@@ -3,14 +3,14 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { JobRepository } from "@/db/repositories/jobs";
-import { BookPresentationRepository } from "@/db/repositories/book-presentations";
-import { VersionRepository } from "@/db/repositories/versions";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
+import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import {
   reclaimRetainedStorage,
   versionRetentionGraceMs,
-} from "@/jobs/handlers/reclaim";
-import { publishReadyVersion } from "@/services/publication";
+} from "@/modules/publishing/adapters/worker/reclaim";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
 import { openMigratedTestDatabase } from "../../helpers/database.js";

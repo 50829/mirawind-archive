@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { createOpaqueId } from "@/domain/ids";
-import { shouldReportJobProgress } from "@/worker/progress-throttle";
+import { shouldReportJobProgress } from "@/entrypoints/worker/progress-throttle";
 import {
   isChildToParentMessage,
   isRunJobMessage,
   jobChildProtocolVersion,
-} from "@/worker/protocol";
+} from "@/entrypoints/worker/protocol";
 
 describe("job child IPC protocol", () => {
   it("reports phase changes immediately and limits repeated progress to 250ms", () => {
@@ -41,20 +41,10 @@ describe("job child IPC protocol", () => {
     const message = {
       input: {
         attempt: 1,
-        bookId: null,
-        capturedConfigRevision: null,
-        capturedCurrentVersionId: null,
-        capturedSourceId: null,
-        configYamlRelativePath: null,
         createdAtMs: 1,
-        importId: null,
-        importUploadRelativePath: null,
         jobId,
         kind: "reconcile",
-        selectedCandidateRelativePath: null,
-        sourceRootRelativePath: null,
         stagingRelativePath: `staging/${jobId}`,
-        versionId: null,
       },
       protocolVersion: jobChildProtocolVersion,
       type: "run",
@@ -74,20 +64,12 @@ describe("job child IPC protocol", () => {
     const message = {
       input: {
         attempt: 1,
-        bookId: null,
-        capturedConfigRevision: null,
-        capturedCurrentVersionId: null,
-        capturedSourceId: null,
-        configYamlRelativePath: null,
         createdAtMs: 1,
         importId,
         importUploadRelativePath: `tmp/uploads/${importId}/original.zip`,
         jobId,
         kind: "analyze_import",
-        selectedCandidateRelativePath: null,
-        sourceRootRelativePath: null,
         stagingRelativePath: `staging/${jobId}`,
-        versionId: null,
       },
       protocolVersion: jobChildProtocolVersion,
       type: "run",
@@ -116,14 +98,10 @@ describe("job child IPC protocol", () => {
         capturedSourceId: createOpaqueId("source"),
         configYamlRelativePath: "books/1/draft/configs/2/book.yaml",
         createdAtMs: 1,
-        importId: null,
-        importUploadRelativePath: null,
         jobId,
         kind: "build_publish",
-        selectedCandidateRelativePath: null,
         sourceRootRelativePath: "books/1/draft/sources/source",
         stagingRelativePath: `staging/${jobId}`,
-        versionId: null,
       },
       protocolVersion: jobChildProtocolVersion,
       type: "run",

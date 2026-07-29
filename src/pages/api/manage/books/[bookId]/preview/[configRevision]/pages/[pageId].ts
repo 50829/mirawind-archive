@@ -1,18 +1,17 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-
 import type { APIRoute } from "astro";
 
-import { DraftRepository } from "@/db/repositories/drafts";
+import {
+  createPublishingArtifactServer,
+  createPublishingServer,
+} from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import { authorizePreviewHtmlResources } from "@/http/authorization/preview-resource";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
-import { resolveContainedPath } from "@/storage/path-resolver";
 import {
   getRuntimeEnvironment,
   getRuntimeStorageLayout,
-} from "@/storage/runtime";
+} from "@/composition/storage";
 
 export const prerender = false;
 
@@ -35,9 +34,9 @@ export const GET: APIRoute = async ({ locals, params }) => {
       404,
     );
   }
-  const drafts = new DraftRepository(database);
-  const book = drafts.findBook(bookId);
-  const preview = drafts.findPreview(bookId, revision);
+  const publishing = createPublishingServer(database);
+  const book = publishing.findBook(bookId);
+  const preview = publishing.findPreview(bookId, revision);
   if (
     !session ||
     book?.draftConfigRevision !== revision ||
@@ -52,27 +51,13 @@ export const GET: APIRoute = async ({ locals, params }) => {
     );
   }
   const layout = await getRuntimeStorageLayout();
-  const previewRoot = await resolveContainedPath(
-    layout.root,
-    preview.previewRelativePath,
-  );
-  let html: string;
-  try {
-    html = await readFile(
-      resolve(previewRoot, "pages", `${pageId}.html`),
-      "utf8",
-    );
-  } catch {
-    throw new SafeApplicationError(
-      "NOT_FOUND",
-      "The preview was not found.",
-      404,
-    );
-  }
-  html = authorizePreviewHtmlResources({
+  const html = authorizePreviewHtmlResources({
     authSecret: getRuntimeEnvironment().authSecret,
     bookId,
-    html,
+    html: await createPublishingArtifactServer(layout).readPreviewPage({
+      pageId,
+      previewRelativePath: preview.previewRelativePath,
+    }),
     nowMs: Date.now(),
     revision,
     session,

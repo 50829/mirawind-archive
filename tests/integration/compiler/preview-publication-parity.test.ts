@@ -6,14 +6,14 @@ import { fileURLToPath } from "node:url";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
-import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
-import { createPrintedContentsAnalysisV2 } from "@/compiler/document/printed-contents-analysis";
-import { detectPrintedContents } from "@/compiler/document/printed-toc";
-import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
-import { buildImmutableVersion } from "@/compiler/version-builder";
-import { buildPreview } from "@/jobs/handlers/build-preview";
-import { validateBookConfig } from "@/schemas/book-config";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { createPrintedContentsAnalysisV2 } from "@/modules/publishing/core/preparation/printed-contents-analysis";
+import { detectPrintedContents } from "@/modules/publishing/core/preparation/printed-contents";
+import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
+import { buildImmutableVersion } from "@/modules/publishing/adapters/filesystem/build-version";
+import { buildPreview } from "@/modules/publishing/adapters/worker/build-preview";
+import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
 
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
 

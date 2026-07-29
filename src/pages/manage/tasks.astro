@@ -1,13 +1,15 @@
 ---
-import { TaskMonitor, type TaskView } from "@/components/import/TaskMonitor";
-import { JobRepository } from "@/db/repositories/jobs";
+import {
+  TaskMonitor,
+  type TaskView,
+} from "@/web/components/import/TaskMonitor";
+import { createPublishingServer } from "@/composition/server";
 import {
   hiddenManagementPage,
   redirectToAdministratorLogin,
 } from "@/http/authorization/manage-page";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
-import { serializeJobStatus } from "@/services/job-status";
 import "@/styles/global.css";
 
 export const prerender = false;
@@ -29,9 +31,10 @@ try {
   return hiddenManagementPage();
 }
 applyResponsePolicy(Astro.response.headers, "manage");
-const initialJobs = new JobRepository(database)
-  .listRecent(50)
-  .map((job) => serializeJobStatus(job)) as readonly TaskView[];
+const publishing = createPublishingServer(database);
+const initialJobs = publishing
+  .listRecentJobs(50)
+  .map((job) => publishing.serializeJobStatus(job)) as readonly TaskView[];
 ---
 
 <!doctype html>

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   findTypographyProtectedRanges,
   preprocessMarkdownTypography,
-} from "@/compiler/preprocess/typography";
+} from "@/modules/publishing/core/preparation/typography";
 
 const protectedTokensPath = fileURLToPath(
   new URL(

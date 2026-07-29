@@ -1,0 +1,27 @@
+import type { ReaderTocLink } from "@/modules/reader/core/navigation";
+
+export interface ReaderOutlineLink {
+  readonly blockId: string;
+  readonly href: string;
+  readonly level: number;
+  readonly title: string;
+}
+
+export interface ReaderPageModel {
+  readonly bodyHtml: string;
+  readonly bookKey: string;
+  readonly bookTitle: string;
+  readonly currentHeadingId: string | null;
+  readonly currentPageId: number;
+  readonly firstPageHref: string;
+  readonly mode?: "preview" | "published";
+  readonly nextHref: string | null;
+  readonly originalDownloads: readonly {
+    readonly href: string;
+    readonly label: string;
+  }[];
+  readonly outline: readonly ReaderOutlineLink[];
+  readonly previousHref: string | null;
+  readonly previewRevision?: number;
+  readonly toc: readonly ReaderTocLink[];
+}

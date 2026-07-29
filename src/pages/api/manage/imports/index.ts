@@ -3,7 +3,7 @@ import type { APIRoute } from "astro";
 import {
   getRuntimeEnvironment,
   getRuntimeStorageLayout,
-} from "@/storage/runtime";
+} from "@/composition/storage";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { storeMultipartImport } from "@/http/multipart/import-form";

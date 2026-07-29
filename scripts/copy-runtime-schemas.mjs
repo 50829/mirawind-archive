@@ -29,14 +29,21 @@ const migrationDestination = resolve(
   repositoryRoot,
   "dist",
   "processes",
-  "db",
+  "cli",
   "migrations",
 );
 await mkdir(migrationDestination, { recursive: true });
 await Promise.all(
   ["0001_clean_slate.sql"].map((migrationName) =>
     copyFile(
-      resolve(repositoryRoot, "src", "db", "migrations", migrationName),
+      resolve(
+        repositoryRoot,
+        "src",
+        "platform",
+        "sqlite",
+        "migrations",
+        migrationName,
+      ),
       resolve(migrationDestination, migrationName),
     ),
   ),

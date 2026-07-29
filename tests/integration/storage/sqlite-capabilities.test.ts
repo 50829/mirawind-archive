@@ -4,7 +4,10 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { assertDatabaseCapabilities, openDatabase } from "@/db/connection";
+import {
+  assertDatabaseCapabilities,
+  openDatabase,
+} from "@/platform/sqlite/connection";
 
 const temporaryRoots: string[] = [];
 

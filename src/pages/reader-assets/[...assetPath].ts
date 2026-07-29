@@ -3,34 +3,11 @@ import { resolve } from "node:path";
 
 import type { APIRoute } from "astro";
 
-import { compilerIdentity } from "@/compiler/document/manifest";
+import { acceptedReaderAssetPath } from "@/modules/reader/application/public";
 import { SafeApplicationError } from "@/domain/errors";
 import { applyResponsePolicy } from "@/http/cache/policies";
-import { readerStylesheetIdentity } from "@/styles/assets";
 
 export const prerender = false;
-
-function acceptedAssetPath(assetPath: string | undefined): string | null {
-  if (!assetPath) return null;
-  const rendererPrefix = `renderers/${compilerIdentity.renderer_version}/`;
-  if (assetPath.startsWith(rendererPrefix)) {
-    const relative = assetPath.slice(rendererPrefix.length);
-    if (
-      ["LICENSE", "integrity.json", "katex.css"].includes(relative) ||
-      /^fonts\/KaTeX_[A-Za-z0-9-]+\.woff2$/u.test(relative)
-    ) {
-      return assetPath;
-    }
-    return null;
-  }
-  if (
-    assetPath === `scripts/${readerStylesheetIdentity}.js` ||
-    assetPath === `styles/${readerStylesheetIdentity}.css`
-  ) {
-    return assetPath;
-  }
-  return null;
-}
 
 function contentType(path: string): string {
   if (path.endsWith(".css")) return "text/css; charset=utf-8";
@@ -63,7 +40,7 @@ async function response(
   assetPath: string | undefined,
   includeBody: boolean,
 ): Promise<Response> {
-  const path = acceptedAssetPath(assetPath);
+  const path = acceptedReaderAssetPath(assetPath);
   if (!path) {
     throw new SafeApplicationError(
       "NOT_FOUND",
@@ -92,7 +69,7 @@ export const HEAD: APIRoute = async ({ params }) =>
   response(params.assetPath, false);
 
 export const OPTIONS: APIRoute = ({ params }) => {
-  if (!acceptedAssetPath(params.assetPath)) {
+  if (!acceptedReaderAssetPath(params.assetPath)) {
     throw new SafeApplicationError(
       "NOT_FOUND",
       "The reader asset was not found.",

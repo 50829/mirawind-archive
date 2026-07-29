@@ -5,17 +5,17 @@ import { fileURLToPath } from "node:url";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
-import { prepareConfiguredDocument } from "@/compiler/document/configured-document";
+import { prepareConfiguredDocument } from "@/modules/publishing/core/publication/configured-document";
 import {
   buildDocumentManifest,
   canonicalJson,
-} from "@/compiler/document/manifest";
-import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
-import { detectPrintedContents } from "@/compiler/document/printed-toc";
-import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
-import { buildSearchSpool } from "@/compiler/search/build-spool";
-import { validateBookConfig } from "@/schemas/book-config";
+} from "@/modules/publishing/core/publication/manifest";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { detectPrintedContents } from "@/modules/publishing/core/preparation/printed-contents";
+import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
+import { buildSearchSpool } from "@/modules/publishing/adapters/filesystem/search-spool";
+import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
 
 const fixturePath = fileURLToPath(
   new URL("../../fixtures/publishing-quality/printed-toc.md", import.meta.url),

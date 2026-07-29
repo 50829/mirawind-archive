@@ -4,14 +4,14 @@ import { dirname, join, resolve } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import {
   DocumentParseError,
   parseMarkdownDocument,
-} from "@/compiler/document/parser";
-import type { TransientDocumentNode } from "@/compiler/document/types";
-import { renderSemanticDocument } from "@/compiler/render/document";
-import { resolveDocumentResources } from "@/compiler/resources/resolver";
+} from "@/modules/publishing/core/preparation/parse-markdown";
+import type { TransientDocumentNode } from "@/modules/publishing/core/preparation/document-model";
+import { renderSemanticDocument } from "@/modules/publishing/core/publication/render-document";
+import { resolveDocumentResources } from "@/modules/publishing/adapters/filesystem/resolve-document-resources";
 import { isOpaqueId } from "@/domain/ids";
 
 const temporaryRoots: string[] = [];

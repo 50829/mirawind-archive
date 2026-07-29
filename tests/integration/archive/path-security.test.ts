@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ArchivePathRegistry,
   normalizeArchiveEntryPath,
-} from "@/compiler/archive/path-policy";
+} from "@/modules/publishing/core/preparation/archive-path-policy";
 
 function errorCode(callback: () => unknown): string {
   try {

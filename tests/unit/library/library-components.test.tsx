@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { BookCard } from "@/components/library/BookCard";
-import { LibraryScene } from "@/components/library/LibraryScene";
-import type { PublicLibraryEntry } from "@/services/library";
+import { BookCard } from "@/web/components/library/BookCard";
+import { LibraryScene } from "@/web/components/library/LibraryScene";
+import type { PublicLibraryEntry } from "@/modules/catalog/application/public";
 
 const entry: PublicLibraryEntry = {
   authors: ["Ursula Writer"],

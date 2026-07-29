@@ -1,18 +1,12 @@
-import { constants } from "node:fs";
-import { open } from "node:fs/promises";
-import { Readable } from "node:stream";
-
 import type { APIRoute } from "astro";
 
-import { SafeApplicationError } from "@/domain/errors";
+import { createPublishedBookServer } from "@/composition/server";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
 import { ifNoneMatchMatches } from "@/http/conditional";
 import { originalDownloadFilename } from "@/http/downloads/filename";
 import { parseSingleByteRange } from "@/http/downloads/range";
-import { PublishedBookService } from "@/services/published-book";
-import { resolveContainedPath } from "@/storage/layout";
-import { getRuntimeStorageLayout } from "@/storage/runtime";
+import { getRuntimeStorageLayout } from "@/composition/storage";
 
 export const prerender = false;
 
@@ -35,7 +29,8 @@ function baseHeaders(input: {
 export const GET: APIRoute = async ({ locals, params, request }) => {
   const { database, decision } = resolveRuntimeAdministrator(locals.session);
   const layout = await getRuntimeStorageLayout();
-  const original = new PublishedBookService(database, layout).resolveOriginal({
+  const publishedBook = createPublishedBookServer(database, layout);
+  const original = publishedBook.resolveOriginal({
     administrator: decision,
     bookKey: params.bookKey ?? "",
     fileId: params.fileId ?? "",
@@ -72,45 +67,18 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
     return new Response(null, { headers, status: 416 });
   }
 
-  const path = await resolveContainedPath(
-    layout.root,
-    original.originalRelativePath,
-  );
-  let handle;
-  try {
-    handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-    const metadata = await handle.stat();
-    if (!metadata.isFile() || metadata.size !== original.sizeBytes) {
-      throw new Error("ORIGINAL_FILE_METADATA_MISMATCH");
-    }
-  } catch (cause) {
-    await handle?.close();
-    throw new SafeApplicationError(
-      "BOOK_UNAVAILABLE",
-      "This book is temporarily unavailable.",
-      503,
-      { cause },
-    );
-  }
-
   if (range.kind === "range") {
     headers.set("Content-Length", String(range.range.length));
     headers.set(
       "Content-Range",
       `bytes ${range.range.start}-${range.range.end}/${original.sizeBytes}`,
     );
-    const body = Readable.toWeb(
-      handle.createReadStream({
-        end: range.range.end,
-        start: range.range.start,
-      }),
-    ) as ReadableStream<Uint8Array>;
+    const body = await publishedBook.readOriginalBody(original, range.range);
     return new Response(body, { headers, status: 206 });
   }
 
   headers.set("Content-Length", String(original.sizeBytes));
-  const body = Readable.toWeb(
-    handle.createReadStream(),
-  ) as ReadableStream<Uint8Array>;
-  return new Response(body, { headers });
+  return new Response(await publishedBook.readOriginalBody(original), {
+    headers,
+  });
 };

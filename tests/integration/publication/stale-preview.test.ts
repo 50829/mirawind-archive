@@ -5,16 +5,16 @@ import { resolve } from "node:path";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
-import { compilerIdentity } from "@/compiler/document/manifest";
-import { createPrintedContentsAnalysisV2 } from "@/compiler/document/printed-contents-analysis";
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { JobRepository } from "@/db/repositories/jobs";
-import { SourceRepository } from "@/db/repositories/sources";
-import { buildPreview } from "@/jobs/handlers/build-preview";
-import { finalizeBuiltPreview } from "@/jobs/handlers/preview-finalization";
-import { draftPreparationVersion } from "@/jobs/handlers/prepared-draft-artifact";
-import { assertReadyPreviewIdentity } from "@/services/preview-identity";
+import { compilerIdentity } from "@/modules/publishing/core/publication/manifest";
+import { createPrintedContentsAnalysisV2 } from "@/modules/publishing/core/preparation/printed-contents-analysis";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
+import { buildPreview } from "@/modules/publishing/adapters/worker/build-preview";
+import { finalizeBuiltPreview } from "@/modules/publishing/adapters/worker/preview-finalization";
+import { draftPreparationVersion } from "@/modules/publishing/adapters/worker/prepared-draft-artifact";
+import { assertReadyPreviewIdentity } from "@/modules/publishing/adapters/filesystem/preview-identity";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { DiagnosticsPanel } from "@/components/preview/DiagnosticsPanel";
+import { DiagnosticsPanel } from "@/web/components/manage/DiagnosticsPanel";
 
 describe("workbench diagnostics", () => {
   it("renders typed locations and only non-adjudicating recoveries", () => {

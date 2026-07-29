@@ -9,7 +9,7 @@ import {
   createStorageLayout,
   openExclusiveFile,
   resolveContainedPath,
-} from "@/storage/layout";
+} from "@/platform/filesystem/layout";
 
 const temporaryRoots: string[] = [];
 

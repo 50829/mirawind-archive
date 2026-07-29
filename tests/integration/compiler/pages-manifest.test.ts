@@ -5,13 +5,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildDocumentManifest,
   canonicalJson,
-} from "@/compiler/document/manifest";
-import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
-import { numberConfiguredHeadings } from "@/compiler/document/numbering";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
-import { splitDocumentPages } from "@/compiler/document/pages";
-import { validateDocumentConfig } from "@/compiler/document/validate-config";
-import { renderSemanticDocument } from "@/compiler/render/document";
+} from "@/modules/publishing/core/publication/manifest";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { numberConfiguredHeadings } from "@/modules/publishing/core/publication/numbering";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { splitDocumentPages } from "@/modules/publishing/core/publication/pages";
+import { validateDocumentConfig } from "@/modules/publishing/core/publication/validate-config";
+import { renderSemanticDocument } from "@/modules/publishing/core/publication/render-document";
 
 const versionId = "ver_pages_manifest_test_0001";
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   validateDocumentManifest,
   validateVersionMarker,
-} from "@/schemas/document-manifest";
+} from "@/modules/publishing/core/publication/document-manifest-schema";
 
 const blockId = "blk_0123456789abcdefghij";
 const resourceId = "res_0123456789abcdefghij";

@@ -1,16 +1,16 @@
 import type { APIRoute } from "astro";
 
-import type { TypographyProfile } from "@/compiler/document/types";
+import { publishingServerActions } from "@/composition/server";
+import type { TypographyProfile } from "@/modules/publishing/application/public";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { readBoundedJson } from "@/http/json-body";
 import { requireMutationOrigin } from "@/http/origin";
-import { queueSourceReprocess } from "@/services/source-reprocess";
 import {
   getRuntimeEnvironment,
   getRuntimeStorageLayout,
-} from "@/storage/runtime";
+} from "@/composition/storage";
 
 export const prerender = false;
 
@@ -50,7 +50,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
       400,
     );
   }
-  const queued = await queueSourceReprocess({
+  const queued = await publishingServerActions.queueSourceReprocess({
     bookId,
     database,
     expectedConfigRevision: Number(value.expected_config_revision),

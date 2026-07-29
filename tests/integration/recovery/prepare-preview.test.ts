@@ -5,19 +5,19 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MarkdownCandidate } from "@/compiler/document/candidate-discovery";
+import type { MarkdownCandidate } from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
 import {
   parsePrintedContentsAnalysisV2,
   printedContentsAnalysisIdentity,
-} from "@/compiler/document/printed-contents-analysis";
-import { readPdfContentsEvidence } from "@/compiler/document/pdf-contents-evidence";
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { buildPreview } from "@/jobs/handlers/build-preview";
-import { finalizeBuiltPreview } from "@/jobs/handlers/preview-finalization";
-import { finalizePreparedDraft } from "@/jobs/handlers/finalize-prepared-draft";
-import { prepareDraft } from "@/jobs/handlers/prepare-draft";
-import { parseBookConfigYaml } from "@/schemas/book-config";
+} from "@/modules/publishing/core/preparation/printed-contents-analysis";
+import { readPdfContentsEvidence } from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { buildPreview } from "@/modules/publishing/adapters/worker/build-preview";
+import { finalizeBuiltPreview } from "@/modules/publishing/adapters/worker/preview-finalization";
+import { finalizePreparedDraft } from "@/modules/publishing/adapters/worker/finalize-prepared-draft";
+import { prepareDraft } from "@/modules/publishing/adapters/worker/prepare-draft";
+import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
 import { buildZip } from "../../../scripts/fixtures/zip-builder";
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 

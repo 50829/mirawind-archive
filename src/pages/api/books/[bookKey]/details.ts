@@ -2,16 +2,15 @@ import { createHash } from "node:crypto";
 
 import type { APIRoute } from "astro";
 
+import { createCatalogServer } from "@/composition/server";
+import type { BookDetails } from "@/modules/catalog/application/public";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { publicJsonResponse } from "@/http/cache/library-response";
 import { applyResponsePolicy } from "@/http/cache/policies";
-import { LibraryService } from "@/services/library";
 
 export const prerender = false;
 
-function detailsDigest(
-  details: ReturnType<LibraryService["resolveDetails"]>,
-): string {
+function detailsDigest(details: BookDetails): string {
   const hash = createHash("sha256")
     .update(details.presentationDigest)
     .update("\0")
@@ -29,7 +28,7 @@ function detailsDigest(
 export const GET: APIRoute = ({ locals, params, request }) => {
   const requestedKey = params.bookKey ?? "";
   const { database, decision } = resolveRuntimeAdministrator(locals.session);
-  const details = new LibraryService(database).resolveDetails({
+  const details = createCatalogServer(database).resolveDetails({
     administrator: decision,
     bookKey: requestedKey,
   });

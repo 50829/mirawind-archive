@@ -9,7 +9,7 @@ import {
   type VisionTranscriptTemplate,
 } from "../../../scripts/fixtures/author-mineru-references";
 import type { MineruReferencePack } from "../../../scripts/fixtures/create-mineru-reference-pack";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 
 function hash(value: string): string {
   return createHash("sha256").update(value).digest("hex");

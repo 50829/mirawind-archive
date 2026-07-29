@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   inspectRasterImage,
   rasterImageLimits,
-} from "@/compiler/resources/images";
+} from "@/modules/publishing/core/publication/inspect-image";
 
 function code(error: unknown): string | undefined {
   return error && typeof error === "object" && "code" in error

@@ -3,9 +3,9 @@ import { dirname, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { SourceSnapshotService } from "@/services/source-snapshot";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { SourceSnapshotService } from "@/modules/publishing/adapters/filesystem/source-snapshot";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 

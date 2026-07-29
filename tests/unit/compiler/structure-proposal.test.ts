@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
-import { proposeDocumentStructure } from "@/compiler/document/structure-proposal";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
 
 function requireAt<T>(values: readonly T[], index: number): T {
   const value = values[index];

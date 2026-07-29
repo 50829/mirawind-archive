@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { DraftRepository } from "@/db/repositories/drafts";
-import { JobRepository } from "@/db/repositories/jobs";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SafeApplicationError } from "@/domain/errors";
-import { acceptBookDeletion } from "@/services/book-deletion";
-import { createBookDeletionToken } from "@/services/book-deletion-token";
-import { LibraryService } from "@/services/library";
+import { acceptBookDeletion } from "@/modules/catalog/adapters/sqlite/book-deletion";
+import { createBookDeletionToken } from "@/modules/catalog/core/book-deletion-token";
+import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
 
 import { withMigratedTestDatabase } from "../../helpers/database";
 

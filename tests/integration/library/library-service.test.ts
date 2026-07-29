@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { DraftRepository } from "@/db/repositories/drafts";
-import { publishReadyVersion } from "@/services/publication";
-import { LibraryService } from "@/services/library";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
+import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {

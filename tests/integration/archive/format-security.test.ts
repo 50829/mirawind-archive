@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { inspectZipBytes } from "@/compiler/archive/zip-reader";
+import { inspectZipBytes } from "@/modules/publishing/adapters/filesystem/inspect-zip";
 import { buildZip } from "../../../scripts/fixtures/zip-builder";
 
 function code(error: unknown): string | undefined {

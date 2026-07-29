@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
-import { rendererStylesheetUrl } from "@/compiler/render/assets";
+import { rendererStylesheetUrl } from "@/modules/publishing/core/publication/render-assets";
 import { readerStylesheetUrl } from "@/styles/assets";
 
 const packagePath = new URL("../../../package.json", import.meta.url);

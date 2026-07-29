@@ -15,11 +15,11 @@ import { promisify } from "node:util";
 
 import sharp from "sharp";
 
-import { compilerIdentity } from "../../src/compiler/document/manifest.js";
+import { compilerIdentity } from "../../src/modules/publishing/core/publication/manifest.js";
 import {
   assertDatabaseCapabilities,
   openDatabase,
-} from "../../src/db/connection.js";
+} from "../../src/platform/sqlite/connection.js";
 
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 const packagePath = join(repositoryRoot, "package.json");

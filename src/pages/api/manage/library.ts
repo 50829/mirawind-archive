@@ -1,9 +1,9 @@
 import type { APIRoute } from "astro";
 
+import { createCatalogServer } from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
-import { LibraryService } from "@/services/library";
 
 export const prerender = false;
 
@@ -61,7 +61,7 @@ function encodeCursor(bookId: number | null): string | null {
 export const GET: APIRoute = ({ locals, request }) => {
   const { database } = requireRuntimeAdministrator(locals.session);
   const url = new URL(request.url);
-  const page = new LibraryService(database).administratorLibrary({
+  const page = createCatalogServer(database).administratorLibrary({
     afterBookId: decodeCursor(url.searchParams.get("cursor")),
     limit: limit(url.searchParams.get("limit")),
   });

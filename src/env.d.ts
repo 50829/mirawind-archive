@@ -15,6 +15,7 @@ interface ImportMeta {
 declare namespace App {
   interface Locals {
     requestContext: import("@/http/request-context").RequestContext;
-    session: import("@/auth/session").RequestSession | null;
+    session:
+      import("@/modules/identity/application/public").RequestSession | null;
   }
 }

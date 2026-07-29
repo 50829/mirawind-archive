@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   readPdfContentsEvidence,
   type PdfContentsEvidenceCommands,
-} from "@/compiler/document/pdf-contents-evidence";
+} from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
 
 const temporaryRoots: string[] = [];
 

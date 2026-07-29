@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
-import { renderSemanticDocument } from "@/compiler/render/document";
-import type { ResourceResolution } from "@/compiler/resources/resolver";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { renderSemanticDocument } from "@/modules/publishing/core/publication/render-document";
+import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
 
 function normalized(source: string) {
   let sequence = 0;

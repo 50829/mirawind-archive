@@ -11,9 +11,9 @@ import {
   applyMigrations,
   checksumMigration,
   type Migration,
-} from "@/db/migrate";
-import { loadMigrationManifest } from "@/db/migration-manifest";
-import { runDatabaseMigrations } from "@/cli/commands/db-migrate";
+} from "@/platform/sqlite/migrate";
+import { loadMigrationManifest } from "@/platform/sqlite/migration-manifest";
+import { runDatabaseMigrations } from "@/entrypoints/cli/commands/db-migrate";
 
 const temporaryRoots: string[] = [];
 

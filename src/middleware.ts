@@ -1,6 +1,6 @@
 import { defineMiddleware } from "astro:middleware";
 
-import { resolveRequestSession } from "@/auth/session";
+import { resolveRequestSession } from "@/composition/auth";
 import {
   createSafeHtmlError,
   createSafeJsonError,

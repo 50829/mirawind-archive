@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   acquireMaintenanceLock,
   serviceIsRunning,
-} from "@/storage/maintenance-lock";
+} from "@/platform/filesystem/maintenance-lock";
 
 const roots: string[] = [];
 

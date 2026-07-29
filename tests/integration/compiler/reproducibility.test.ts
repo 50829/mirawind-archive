@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSearchSpool } from "@/compiler/search/build-spool";
-import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
-import { numberConfiguredHeadings } from "@/compiler/document/numbering";
-import { parseMarkdownDocument } from "@/compiler/document/parser";
-import { splitDocumentPages } from "@/compiler/document/pages";
-import { validateDocumentConfig } from "@/compiler/document/validate-config";
+import { buildSearchSpool } from "@/modules/publishing/adapters/filesystem/search-spool";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { numberConfiguredHeadings } from "@/modules/publishing/core/publication/numbering";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { splitDocumentPages } from "@/modules/publishing/core/publication/pages";
+import { validateDocumentConfig } from "@/modules/publishing/core/publication/validate-config";
 
 describe("same-version derived-data reproducibility", () => {
   it("produces identical page and search rows from unchanged normalized content", () => {

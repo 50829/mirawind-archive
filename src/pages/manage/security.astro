@@ -1,12 +1,12 @@
 ---
 import type { Passkey } from "@better-auth/passkey";
 
-import { getRuntimeAuth, getRuntimeDatabase } from "@/auth/session";
+import { getRuntimeAuth, getRuntimeDatabase } from "@/composition/auth";
+import { createIdentityServer } from "@/composition/server";
 import {
   PasskeyManager,
   type ManagedPasskey,
-} from "@/components/auth/PasskeyManager";
-import { InstallationRepository } from "@/db/repositories/installation";
+} from "@/web/components/auth/PasskeyManager";
 import {
   hiddenManagementPage,
   redirectToAdministratorLogin,
@@ -27,9 +27,7 @@ if (!session) {
   return redirectToAdministratorLogin(Astro.url.pathname);
 }
 
-const adminUserId = new InstallationRepository(
-  getRuntimeDatabase(),
-).adminUserId();
+const adminUserId = createIdentityServer(getRuntimeDatabase()).adminUserId();
 if (!adminUserId || session.user.id !== adminUserId) {
   return hiddenManagementPage();
 }

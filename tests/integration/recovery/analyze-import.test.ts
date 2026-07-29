@@ -3,12 +3,12 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { ImportRepository } from "@/db/repositories/imports";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import {
   analyzeImport,
   persistAnalyzeImportArtifact,
   readAnalyzeImportArtifact,
-} from "@/jobs/handlers/analyze-import";
+} from "@/modules/publishing/adapters/worker/analyze-import";
 import { buildZip } from "../../../scripts/fixtures/zip-builder";
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 

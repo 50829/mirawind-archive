@@ -1,12 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "include": [
-    "src/cli/**/*.ts",
+    "src/entrypoints/cli/**/*.ts",
     "src/composition/**/*.ts",
     "src/entrypoints/**/*.ts",
     "src/modules/**/*.ts",
     "src/platform/**/*.ts",
-    "src/worker/**/*.ts",
     "vite.processes.config.ts"
   ],
   "exclude": ["dist", "node_modules", "tests"],

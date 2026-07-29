@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   rendererAssetBaseUrl,
   rendererStylesheetUrl,
-} from "@/compiler/render/assets";
+} from "@/modules/publishing/core/publication/render-assets";
 
 const execFileAsync = promisify(execFile);
 const generatedRoots: string[] = [];

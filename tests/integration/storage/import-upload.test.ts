@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { ImportUploadService } from "@/services/import-upload";
+import { ImportUploadService } from "@/modules/publishing/adapters/filesystem/import-upload";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 

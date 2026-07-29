@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeSearchQuery } from "@/compiler/search/query";
-import { BookSearchRepository } from "@/db/repositories/book-search";
-import { publishReadyVersion } from "@/services/publication";
+import { normalizeSearchQuery } from "@/modules/reader/core/search-query";
+import { BookSearchRepository } from "@/modules/reader/adapters/sqlite/book-search";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {

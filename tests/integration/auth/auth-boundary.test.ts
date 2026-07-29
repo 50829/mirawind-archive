@@ -1,10 +1,10 @@
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
-import { createHttpAuth } from "@/auth/server";
-import { createSetupAuth } from "@/auth/setup-server";
-import { applyMigrations } from "@/db/migrate";
-import { loadMigrationManifest } from "@/db/migration-manifest";
+import { createHttpAuth } from "@/modules/identity/adapters/better-auth/http-auth";
+import { createSetupAuth } from "@/modules/identity/adapters/better-auth/setup-auth";
+import { applyMigrations } from "@/platform/sqlite/migrate";
+import { loadMigrationManifest } from "@/platform/sqlite/migration-manifest";
 import {
   authorizeSoleAdministrator,
   validateFallbackPassword,

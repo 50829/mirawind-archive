@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { getRuntimeAuth } from "@/auth/session";
+import { getRuntimeAuth } from "@/composition/auth";
 
 export const prerender = false;
 

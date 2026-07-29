@@ -49,6 +49,31 @@ interface ImportReference {
   readonly specifier: string;
 }
 
+const forbiddenCoreRuntimeSpecifiers = Object.freeze([
+  "astro",
+  "better-sqlite3",
+  "node:child_process",
+  "node:cluster",
+  "node:fs",
+  "node:http",
+  "node:https",
+  "node:net",
+  "node:process",
+  "node:tls",
+  "node:worker_threads",
+  "react",
+  "react-dom",
+]);
+
+const authoritativeDataSpecifiers = Object.freeze(["@/schemas/"]);
+
+function isForbiddenCoreRuntimeSpecifier(specifier: string): boolean {
+  return forbiddenCoreRuntimeSpecifiers.some(
+    (forbidden) =>
+      specifier === forbidden || specifier.startsWith(`${forbidden}/`),
+  );
+}
+
 function normalizedPath(path: string): string {
   return path.split(sep).join("/");
 }
@@ -263,12 +288,28 @@ export async function analyzeDependencyGraph(input: {
   const diagnostics: ArchitectureDiagnostic[] = [];
   for (const sourceFile of absoluteFiles) {
     const source = relativePath(sourceFile);
+    const location = moduleLocation(source);
     const imports = importsFor(sourceFile, await readFile(sourceFile, "utf8"));
     const targets = new Set<string>();
     for (const imported of imports) {
       if (
+        location?.layer === "core" &&
+        isForbiddenCoreRuntimeSpecifier(imported.specifier)
+      ) {
+        diagnostics.push(
+          diagnostic("FORBIDDEN_DEPENDENCY", source, null, imported.specifier),
+        );
+      }
+      if (
         !imported.specifier.startsWith("@/") &&
         !imported.specifier.startsWith(".")
+      ) {
+        continue;
+      }
+      if (
+        authoritativeDataSpecifiers.some((prefix) =>
+          imported.specifier.startsWith(prefix),
+        )
       ) {
         continue;
       }
@@ -319,7 +360,6 @@ export async function analyzeDependencyGraph(input: {
         diagnostic("DIRECT_INTERNAL_DEPENDENCY_LIMIT", source, null, null),
       );
     }
-    const location = moduleLocation(source);
     if (location?.layer === "application") {
       const ports = orderedTargets.filter(isApplicationPort);
       if (ports.length > maximumInjectedPorts) {

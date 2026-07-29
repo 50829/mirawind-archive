@@ -1,0 +1,21 @@
+{
+  "input": {
+    "attempt": 1,
+    "bookId": null,
+    "capturedConfigRevision": null,
+    "capturedCurrentVersionId": null,
+    "capturedSourceId": null,
+    "configYamlRelativePath": null,
+    "createdAtMs": 1,
+    "importId": null,
+    "importUploadRelativePath": null,
+    "jobId": "job_11111111111111111111111111",
+    "kind": "reconcile",
+    "selectedCandidateRelativePath": null,
+    "sourceRootRelativePath": null,
+    "stagingRelativePath": "staging/job_11111111111111111111111111",
+    "versionId": null
+  },
+  "protocolVersion": 2,
+  "type": "run"
+}

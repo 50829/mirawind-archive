@@ -1,15 +1,15 @@
 ---
-import { AdminLibraryEnhancement } from "@/components/library/AdminLibraryEnhancement";
-import { LibraryScene } from "@/components/library/LibraryScene";
+import { AdminLibraryEnhancement } from "@/web/components/library/AdminLibraryEnhancement";
+import { LibraryScene } from "@/web/components/library/LibraryScene";
+import { createCatalogServer } from "@/composition/server";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { libraryHtmlResponse } from "@/http/cache/library-response";
-import { LibraryService } from "@/services/library";
 import "@/styles/global.css";
 
 export const prerender = false;
 
 const { database } = resolveRuntimeAdministrator(Astro.locals.session);
-const library = new LibraryService(database).publicLibrary();
+const library = createCatalogServer(database).publicLibrary();
 const response = libraryHtmlResponse({
   digest: library.digest,
   rendererIdentity: "library-scene-v1",
@@ -49,7 +49,7 @@ const canonical = new URL("/library", Astro.url);
 </html>
 
 <script>
-  import { installDetailsNavigation } from "@/components/library/details-navigation";
+  import { installDetailsNavigation } from "@/web/components/library/details-navigation";
 
   installDetailsNavigation();
 </script>

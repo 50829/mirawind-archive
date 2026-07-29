@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { BookPresentationRepository } from "@/db/repositories/book-presentations";
-import { publishReadyVersion } from "@/services/publication";
-import { serializeJobStatus } from "@/services/job-status";
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
+import { serializeJobStatus } from "@/modules/publishing/adapters/sqlite/job-status";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {

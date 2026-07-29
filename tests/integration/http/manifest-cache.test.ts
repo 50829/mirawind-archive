@@ -3,11 +3,11 @@ import { resolve } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { publishReadyVersion } from "@/services/publication";
+import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 import {
   PublishedBookService,
   resetPublishedManifestCacheForTests,
-} from "@/services/published-book";
+} from "@/modules/reader/adapters/filesystem/published-book";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 const sourceRoot = fileURLToPath(new URL("./src", import.meta.url));
+const schemaRoot = fileURLToPath(new URL("./docs/schemas", import.meta.url));
 const outputDirectory =
   process.env.MIRAWIND_PROCESS_OUT_DIR ??
   fileURLToPath(new URL("./dist/processes", import.meta.url));
@@ -28,13 +29,13 @@ export default defineConfig({
       external: isExternal,
       input: {
         "cli/index": fileURLToPath(
-          new URL("./src/cli/index.ts", import.meta.url),
+          new URL("./src/entrypoints/cli/index.ts", import.meta.url),
         ),
         "worker/index": fileURLToPath(
-          new URL("./src/worker/index.ts", import.meta.url),
+          new URL("./src/entrypoints/worker/index.ts", import.meta.url),
         ),
         "worker/job-child": fileURLToPath(
-          new URL("./src/worker/job-child.ts", import.meta.url),
+          new URL("./src/entrypoints/worker/job-child.ts", import.meta.url),
         ),
       },
       output: {
@@ -47,8 +48,9 @@ export default defineConfig({
     target: "node24",
   },
   resolve: {
-    alias: {
-      "@": sourceRoot,
-    },
+    alias: [
+      { find: "@/schemas", replacement: schemaRoot },
+      { find: "@", replacement: sourceRoot },
+    ],
   },
 });

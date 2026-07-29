@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { closeRuntimeAuthForTests } from "@/auth/session";
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { InstallationRepository } from "@/db/repositories/installation";
-import { JobRepository } from "@/db/repositories/jobs";
+import { closeRuntimeAuthForTests } from "@/composition/auth";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { InstallationRepository } from "@/modules/identity/adapters/sqlite/installation";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import {
   createSafeJsonError,
   safeErrorInputFromUnknown,
 } from "@/http/errors/responses";
 import { errorPolicyForRequest } from "@/http/errors/error-policy";
-import { m1ImportExpiryMs } from "@/services/import-upload";
-import { resetRuntimeStorageForTests } from "@/storage/runtime";
+import { m1ImportExpiryMs } from "@/modules/publishing/application/public";
+import { resetRuntimeStorageForTests } from "@/composition/storage";
 
 import { GET as getDraft } from "../../../src/pages/api/manage/books/[bookId]/draft.js";
 import { GET as getPreviewAsset } from "../../../src/pages/api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].js";

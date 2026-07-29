@@ -3,15 +3,23 @@ import { PassThrough } from "node:stream";
 import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
 
-import { createHttpAuth } from "@/auth/server";
-import { createSetupAuth } from "@/auth/setup-server";
-import { deleteNonFinalPasskey, recordPasskeyUse } from "@/auth/passkey-policy";
-import { runAdminCli, type AdminCliDependencies } from "@/cli/admin-cli";
-import { bootstrapAdministrator } from "@/cli/commands/admin-bootstrap";
-import { recoverAdministrator } from "@/cli/commands/admin-recover";
-import { applyMigrations } from "@/db/migrate";
-import { loadMigrationManifest } from "@/db/migration-manifest";
-import { deleteFinalPasskey } from "@/services/security/final-passkey";
+import { createHttpAuth } from "@/modules/identity/adapters/better-auth/http-auth";
+import { createSetupAuth } from "@/modules/identity/adapters/better-auth/setup-auth";
+import {
+  deleteNonFinalPasskey,
+  recordPasskeyUse,
+} from "@/modules/identity/adapters/sqlite/passkey-policy";
+import {
+  runAdminCli,
+  type AdminCliDependencies,
+} from "@/entrypoints/cli/admin-cli";
+import {
+  bootstrapAdministrator,
+  recoverAdministrator,
+} from "@/composition/cli";
+import { applyMigrations } from "@/platform/sqlite/migrate";
+import { loadMigrationManifest } from "@/platform/sqlite/migration-manifest";
+import { deleteFinalPasskey } from "@/modules/identity/adapters/sqlite/final-passkey";
 
 const environment = {
   allowedHosts: ["library.example.test"],

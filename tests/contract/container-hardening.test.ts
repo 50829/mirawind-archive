@@ -7,7 +7,10 @@ const composePath = new URL("../../docker/compose.yaml", import.meta.url);
 const dockerfilePath = new URL("../../docker/Dockerfile", import.meta.url);
 const caddyfilePath = new URL("../../docker/Caddyfile", import.meta.url);
 const dockerignorePath = new URL("../../.dockerignore", import.meta.url);
-const migrationDirectory = new URL("../../src/db/migrations/", import.meta.url);
+const migrationDirectory = new URL(
+  "../../src/platform/sqlite/migrations/",
+  import.meta.url,
+);
 const runtimeCopyScript = new URL(
   "../../scripts/copy-runtime-schemas.mjs",
   import.meta.url,
@@ -123,5 +126,10 @@ describe("container deployment hardening", () => {
     )) {
       expect(copyScript).toContain(`"${migration}"`);
     }
+    expect(copyScript).toContain(
+      '"src",\n        "platform",\n        "sqlite"',
+    );
+    expect(copyScript).toContain('"processes",\n  "cli",\n  "migrations"');
+    expect(copyScript).not.toContain('"processes",\n  "db",\n  "migrations"');
   });
 });

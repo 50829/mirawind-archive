@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { BookDeletionDialog } from "@/components/library/AdminLibraryEnhancement";
-import type { AdministratorLibraryEntry } from "@/services/library";
+import { BookDeletionDialog } from "@/web/components/library/AdminLibraryEnhancement";
+import type { AdministratorLibraryEntry } from "@/modules/catalog/application/public";
 
 const book: AdministratorLibraryEntry = {
   bookId: 7,

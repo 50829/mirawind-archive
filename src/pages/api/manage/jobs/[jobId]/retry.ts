@@ -2,14 +2,14 @@ import { createHash } from "node:crypto";
 
 import type { APIRoute } from "astro";
 
-import { JobRepository } from "@/db/repositories/jobs";
+import { createPublishingServer } from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { requireMutationOrigin } from "@/http/origin";
-import { evaluateJobRetry } from "@/jobs/retry-policy";
-import { getRuntimeEnvironment } from "@/storage/runtime";
+import { evaluateJobRetry } from "@/modules/publishing/application/public";
+import { getRuntimeEnvironment } from "@/composition/storage";
 
 export const prerender = false;
 
@@ -41,8 +41,8 @@ export const POST: APIRoute = ({ locals, params, request }) => {
   requireMutationOrigin(request, getRuntimeEnvironment().publicOrigin);
   const jobId = requireJobId(params.jobId);
   const idempotencyKey = requireIdempotencyKey(request);
-  const repository = new JobRepository(database);
-  const original = repository.get(jobId);
+  const publishing = createPublishingServer(database);
+  const original = publishing.getJob(jobId);
   if (!original) {
     throw new SafeApplicationError(
       "JOB_NOT_FOUND",
@@ -58,7 +58,7 @@ export const POST: APIRoute = ({ locals, params, request }) => {
       409,
     );
   }
-  const retry = repository.retry(jobId, {
+  const retry = publishing.retryJob(jobId, {
     automatic: false,
     idempotency: {
       key: createHash("sha256")

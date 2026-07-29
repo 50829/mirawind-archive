@@ -6,16 +6,16 @@ import { promisify } from "node:util";
 
 import { stringify } from "yaml";
 
-import { createSetupAuth } from "@/auth/setup-server";
-import { bootstrapAdministrator } from "@/cli/commands/admin-bootstrap";
-import { openDatabase } from "@/db/connection";
-import { applyMigrations } from "@/db/migrate";
-import { loadMigrationManifest } from "@/db/migration-manifest";
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { JobRepository } from "@/db/repositories/jobs";
-import { SourceRepository } from "@/db/repositories/sources";
-import { createStorageLayout } from "@/storage/layout";
+import { createSetupAuth } from "@/modules/identity/adapters/better-auth/setup-auth";
+import { bootstrapAdministrator } from "@/composition/cli";
+import { openDatabase } from "@/platform/sqlite/connection";
+import { applyMigrations } from "@/platform/sqlite/migrate";
+import { loadMigrationManifest } from "@/platform/sqlite/migration-manifest";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
+import { createStorageLayout } from "@/platform/filesystem/layout";
 
 import { buildZip } from "../../scripts/fixtures/zip-builder.js";
 import { startWorkerProcess } from "./processes.js";
@@ -82,7 +82,7 @@ async function seedPublishedLibraryBook(input: {
   readonly layout: Awaited<ReturnType<typeof createStorageLayout>>;
 }): Promise<void> {
   const { buildPublish, finalizeBuiltPublication } =
-    await import("@/jobs/handlers/build-publish");
+    await import("@/modules/publishing/adapters/worker/build-publish");
   const nowMs = Date.now();
   const drafts = new DraftRepository(input.database);
   const book = drafts.createBook({ nowMs, title: "E2E Library Book" });

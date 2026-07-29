@@ -1,11 +1,10 @@
 import type { APIRoute } from "astro";
 
-import { JobRepository } from "@/db/repositories/jobs";
+import { createPublishingServer } from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
-import { serializeJobStatus } from "@/services/job-status";
 
 export const prerender = false;
 
@@ -21,7 +20,8 @@ export const GET: APIRoute = ({ locals, params }) => {
       404,
     );
   }
-  const job = new JobRepository(database).get(jobId);
+  const publishing = createPublishingServer(database);
+  const job = publishing.getJob(jobId);
   if (!job) {
     throw new SafeApplicationError(
       "JOB_NOT_FOUND",
@@ -31,5 +31,5 @@ export const GET: APIRoute = ({ locals, params }) => {
   }
   const headers = new Headers();
   applyResponsePolicy(headers, "private-api");
-  return Response.json(serializeJobStatus(job, database), { headers });
+  return Response.json(publishing.serializeJobStatus(job, true), { headers });
 };

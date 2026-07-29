@@ -6,17 +6,17 @@ import type Database from "better-sqlite3";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
-import { printedContentsAnalysisIdentity } from "@/compiler/document/printed-contents-analysis";
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { JobRepository } from "@/db/repositories/jobs";
-import { SourceRepository } from "@/db/repositories/sources";
+import { printedContentsAnalysisIdentity } from "@/modules/publishing/core/preparation/printed-contents-analysis";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { createStrongEtag } from "@/http/cache/policies";
-import { parseBookConfigYaml } from "@/schemas/book-config";
+import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
 import {
   patchDraftConfig,
   replaceDraftConfig,
-} from "@/services/config-revisions";
+} from "@/modules/publishing/adapters/filesystem/config-revisions";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 

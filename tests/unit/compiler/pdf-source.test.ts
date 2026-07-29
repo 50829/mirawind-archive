@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { findOriginalPdf } from "@/compiler/document/pdf-source";
+import { findOriginalPdf } from "@/modules/publishing/adapters/filesystem/find-original-pdf";
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
 
 describe("original PDF discovery", () => {

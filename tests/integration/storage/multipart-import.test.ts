@@ -3,9 +3,9 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DraftRepository } from "@/db/repositories/drafts";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { storeMultipartImport } from "@/http/multipart/import-form";
-import { m1ImportExpiryMs } from "@/services/import-upload";
+import { m1ImportExpiryMs } from "@/modules/publishing/application/public";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 

@@ -1,17 +1,13 @@
-import { readFile } from "node:fs/promises";
-
 import type { APIRoute } from "astro";
 
-import { SafeApplicationError } from "@/domain/errors";
+import { createPublishedBookServer } from "@/composition/server";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import {
   conditionalNotModified,
   readingPageHeaders,
 } from "@/http/cache/reading-response";
-import { PublishedBookService } from "@/services/published-book";
-import { resolveContainedPath } from "@/storage/layout";
-import { getRuntimeStorageLayout } from "@/storage/runtime";
+import { getRuntimeStorageLayout } from "@/composition/storage";
 
 export const prerender = false;
 
@@ -20,7 +16,8 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
   const pageKey = params.pageKey ?? "";
   const { database, decision } = resolveRuntimeAdministrator(locals.session);
   const layout = await getRuntimeStorageLayout();
-  const page = await new PublishedBookService(database, layout).resolvePage({
+  const publishedBook = createPublishedBookServer(database, layout);
+  const page = await publishedBook.resolvePage({
     administrator: decision,
     bookKey,
     pageKey,
@@ -53,19 +50,7 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
   );
   if (notModified) return notModified;
 
-  let html: string;
-  try {
-    html = await readFile(
-      await resolveContainedPath(layout.root, page.pageRelativePath),
-      "utf8",
-    );
-  } catch (cause) {
-    throw new SafeApplicationError(
-      "BOOK_UNAVAILABLE",
-      "This book is temporarily unavailable.",
-      503,
-      { cause },
-    );
-  }
-  return new Response(html, { headers: response.headers });
+  return new Response(await publishedBook.readPageHtml(page), {
+    headers: response.headers,
+  });
 };

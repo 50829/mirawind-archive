@@ -1,13 +1,10 @@
 import type { APIRoute } from "astro";
 
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { JobRepository } from "@/db/repositories/jobs";
+import { createPublishingServer } from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
-import { serializeJobStatus } from "@/services/job-status";
 
 export const prerender = false;
 
@@ -37,24 +34,25 @@ export const GET: APIRoute = ({ locals, params }) => {
       404,
     );
   }
+  const publishing = createPublishingServer(database);
   const snapshot = database
     .transaction(() => {
-      const repository = new ImportRepository(database);
-      const imported = repository.find(importId);
+      const imported = publishing.findImport(importId);
       if (!imported) return null;
-      const currentJob = new JobRepository(database).latestForImport(importId);
-      const drafts = new DraftRepository(database);
-      const book = imported.bookId ? drafts.findBook(imported.bookId) : null;
+      const currentJob = publishing.latestJobForImport(importId);
+      const book = imported.bookId
+        ? publishing.findBook(imported.bookId)
+        : null;
       const revision = book?.draftConfigRevision ?? null;
       const preview =
-        book && revision ? drafts.findPreview(book.id, revision) : null;
+        book && revision ? publishing.findPreview(book.id, revision) : null;
       const previewReady =
         preview?.state === "ready" &&
         book?.readyPreviewRevision === revision &&
         revision !== null;
       return {
         book_id: imported.bookId,
-        candidates: repository.candidates(importId).map((candidate) => ({
+        candidates: publishing.importCandidates(importId).map((candidate) => ({
           candidate_id: candidate.id,
           confidence: candidate.confidence,
           diagnostics: candidate.diagnostics.map(
@@ -64,7 +62,9 @@ export const GET: APIRoute = ({ locals, params }) => {
           evidence: evidence(candidate.evidence),
         })),
         created_at: new Date(imported.createdAtMs).toISOString(),
-        current_job: currentJob ? serializeJobStatus(currentJob) : null,
+        current_job: currentJob
+          ? publishing.serializeJobStatus(currentJob)
+          : null,
         error_code: imported.safeErrorCode,
         import_id: imported.id,
         preview: {

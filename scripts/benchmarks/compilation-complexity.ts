@@ -4,13 +4,13 @@ import { performance } from "node:perf_hooks";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { applySourceRegions } from "../../src/compiler/document/source-regions.js";
+import { applySourceRegions } from "../../src/modules/publishing/core/preparation/source-regions.js";
 import type {
   ConfirmedSourceRegion,
   NormalizedDocument,
   SourcePosition,
   TransientDocumentNode,
-} from "../../src/compiler/document/types.js";
+} from "../../src/modules/publishing/core/preparation/document-model.js";
 
 const rootCounts = [500, 1_000, 2_000, 4_000] as const;
 

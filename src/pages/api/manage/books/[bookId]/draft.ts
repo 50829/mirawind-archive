@@ -1,25 +1,19 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-
 import type { APIRoute } from "astro";
 
-import { DraftRepository } from "@/db/repositories/drafts";
 import {
-  SafeApplicationError,
-  createSafeDiagnostic,
-  type SafeDiagnostic,
-} from "@/domain/errors";
+  createPublishingArtifactServer,
+  createPublishingServer,
+  publishingServerActions,
+} from "@/composition/server";
+import { SafeApplicationError, type SafeDiagnostic } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
 import { requireMutationOrigin } from "@/http/origin";
 import { readBoundedJson } from "@/http/json-body";
-import { parseBookConfigYaml } from "@/schemas/book-config";
-import { patchDraftConfig } from "@/services/config-revisions";
-import { resolveContainedPath } from "@/storage/path-resolver";
 import {
   getRuntimeEnvironment,
   getRuntimeStorageLayout,
-} from "@/storage/runtime";
+} from "@/composition/storage";
 
 export const prerender = false;
 
@@ -40,8 +34,8 @@ export const GET: APIRoute = async ({ locals, params }) => {
       404,
     );
   }
-  const drafts = new DraftRepository(database);
-  const book = drafts.findBook(bookId);
+  const publishing = createPublishingServer(database);
+  const book = publishing.findBook(bookId);
   if (!book?.draftConfigRevision || !book.draftSourceId) {
     throw new SafeApplicationError(
       "NOT_FOUND",
@@ -49,18 +43,18 @@ export const GET: APIRoute = async ({ locals, params }) => {
       404,
     );
   }
-  const config = drafts.requireConfig(bookId, book.draftConfigRevision);
+  const config = publishing.requireConfig(bookId, book.draftConfigRevision);
   const layout = await getRuntimeStorageLayout();
-  const configYaml = await readFile(
-    await resolveContainedPath(layout.root, config.yamlRelativePath),
-    "utf8",
-  );
-  const configValue = parseBookConfigYaml(configYaml);
+  const artifacts = createPublishingArtifactServer(layout);
+  const configValue = await artifacts.readBookConfig(config.yamlRelativePath);
   const readyRevision = book.readyPreviewRevision;
   const readyPreview = readyRevision
-    ? drafts.findPreview(bookId, readyRevision)
+    ? publishing.findPreview(bookId, readyRevision)
     : null;
-  const currentPreview = drafts.findPreview(bookId, book.draftConfigRevision);
+  const currentPreview = publishing.findPreview(
+    bookId,
+    book.draftConfigRevision,
+  );
   let previewModel: Record<string, unknown> | null = null;
   let diagnostics: readonly SafeDiagnostic[] = [];
   if (
@@ -68,36 +62,13 @@ export const GET: APIRoute = async ({ locals, params }) => {
     readyPreview?.state === "ready" &&
     readyPreview.previewRelativePath
   ) {
-    const previewRoot = await resolveContainedPath(
-      layout.root,
+    previewModel = await artifacts.readPreviewModel(
       readyPreview.previewRelativePath,
     );
-    previewModel = JSON.parse(
-      await readFile(resolve(previewRoot, "preview-model.json"), "utf8"),
-    ) as Record<string, unknown>;
     if (readyPreview.diagnosticsRelativePath) {
-      const parsed = JSON.parse(
-        await readFile(
-          await resolveContainedPath(
-            layout.root,
-            readyPreview.diagnosticsRelativePath,
-          ),
-          "utf8",
-        ),
-      ) as { diagnostics?: unknown };
-      diagnostics = Array.isArray(parsed.diagnostics)
-        ? parsed.diagnostics
-            .filter((value): value is SafeDiagnostic =>
-              Boolean(
-                value &&
-                typeof value === "object" &&
-                typeof (value as Record<string, unknown>).code === "string" &&
-                typeof (value as Record<string, unknown>).message === "string",
-              ),
-            )
-            .slice(0, 10_000)
-            .map(createSafeDiagnostic)
-        : [];
+      diagnostics = await artifacts.readDiagnostics(
+        readyPreview.diagnosticsRelativePath,
+      );
     }
   }
   const headers = new Headers({
@@ -164,7 +135,7 @@ export const PATCH: APIRoute = async ({ locals, params, request }) => {
       404,
     );
   }
-  const result = await patchDraftConfig({
+  const result = await publishingServerActions.patchDraftConfig({
     bookId,
     database,
     expectedEtag: request.headers.get("if-match"),

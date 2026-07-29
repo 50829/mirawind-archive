@@ -9,7 +9,7 @@ import { operationalMetrics } from "@/observability/metrics";
 import {
   getRuntimeEnvironment,
   getRuntimeStorageLayout,
-} from "@/storage/runtime";
+} from "@/composition/storage";
 
 export const prerender = false;
 

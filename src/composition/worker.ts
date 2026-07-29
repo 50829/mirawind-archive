@@ -7,33 +7,39 @@ import { fileURLToPath } from "node:url";
 import type Database from "better-sqlite3";
 
 import { parseEnvironment } from "@/config/environment";
-import { openDatabase } from "@/db/connection";
-import { DraftRepository } from "@/db/repositories/drafts";
-import { ImportRepository } from "@/db/repositories/imports";
-import { JobRepository, type JobRecord } from "@/db/repositories/jobs";
-import { SourceRepository } from "@/db/repositories/sources";
-import { isJobPhase } from "@/jobs/state-machine";
-import { recoverExpiredJobLeases } from "@/jobs/recovery";
+import { openDatabase } from "@/platform/sqlite/connection";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import {
+  JobRepository,
+  type JobRecord,
+} from "@/modules/publishing/adapters/sqlite/jobs";
+import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
+import { isJobPhase } from "@/modules/publishing/application/job-state";
+import { recoverExpiredJobLeases } from "@/modules/publishing/application/recover-expired-jobs";
 import {
   persistAnalyzeImportArtifact,
   readAnalyzeImportArtifact,
-} from "@/jobs/handlers/analyze-import";
-import { readPreviewBuildArtifact } from "@/jobs/handlers/preview-artifact";
-import { finalizeBuiltPreview } from "@/jobs/handlers/preview-finalization";
-import { finalizeBuiltPublication } from "@/jobs/handlers/build-publish";
-import { finalizePreparedDraft } from "@/jobs/handlers/finalize-prepared-draft";
+} from "@/modules/publishing/adapters/worker/analyze-import";
+import { readPreviewBuildArtifact } from "@/modules/publishing/adapters/worker/preview-artifact";
+import { finalizeBuiltPreview } from "@/modules/publishing/adapters/worker/preview-finalization";
+import { finalizeBuiltPublication } from "@/modules/publishing/adapters/worker/build-publish";
+import { finalizePreparedDraft } from "@/modules/publishing/adapters/worker/finalize-prepared-draft";
 import {
   preparedDraftArtifactPath,
   readPreparedDraftArtifact,
-} from "@/jobs/handlers/prepared-draft-artifact";
+} from "@/modules/publishing/adapters/worker/prepared-draft-artifact";
 import { operationalMetrics } from "@/observability/metrics";
-import { atomicWriteFile, createStorageLayout } from "@/storage/layout";
-import type { StorageLayout } from "@/storage/layout";
-import { resolveContainedPath } from "@/storage/path-resolver";
-import { reconcileStorage } from "@/storage/reconcile";
-import { WorkerCheckpointScheduler } from "@/worker/checkpoint";
-import { runJobChild } from "@/worker/child-runner";
-import type { FrozenJobInput } from "@/worker/protocol";
+import {
+  atomicWriteFile,
+  createStorageLayout,
+} from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/layout";
+import { resolveContainedPath } from "@/platform/filesystem/layout";
+import { reconcileStorage } from "@/composition/storage-reconciliation";
+import { WorkerCheckpointScheduler } from "@/entrypoints/worker/checkpoint";
+import { runJobChild } from "@/entrypoints/worker/child-runner";
+import type { FrozenJobInput } from "@/entrypoints/worker/protocol";
 
 const pollIntervalMs = 1_000;
 const heartbeatIntervalMs = 10_000;
@@ -94,23 +100,91 @@ function frozenInput(
     job.bookId && job.capturedConfigRevision
       ? drafts.requireConfig(job.bookId, job.capturedConfigRevision)
       : null;
-  return Object.freeze({
+  const common = Object.freeze({
     attempt: job.attempt,
-    bookId: imported?.bookId ?? job.bookId,
+    createdAtMs: job.createdAtMs,
+    jobId: job.id,
+    stagingRelativePath: `staging/${job.id}`,
+  });
+  if (job.kind === "reconcile") {
+    return Object.freeze({ ...common, kind: job.kind });
+  }
+  if (job.kind === "reclaim") {
+    return Object.freeze({ ...common, bookId: job.bookId, kind: job.kind });
+  }
+  if (job.kind === "verify_version") {
+    if (!job.versionId) throw new Error("VERIFY_VERSION_INPUT_INVALID");
+    return Object.freeze({
+      ...common,
+      kind: job.kind,
+      versionId: job.versionId,
+    });
+  }
+  if (job.kind === "analyze_import") {
+    if (!imported || !job.importId) {
+      throw new Error("ANALYZE_IMPORT_INPUT_INVALID");
+    }
+    return Object.freeze({
+      ...common,
+      importId: job.importId,
+      importUploadRelativePath: imported.uploadRelativePath,
+      kind: job.kind,
+    });
+  }
+  if (job.kind === "prepare_draft") {
+    const bookId = imported?.bookId ?? job.bookId;
+    if (!imported || !job.importId || !bookId || !selectedCandidate) {
+      throw new Error("PREPARE_DRAFT_INPUT_INVALID");
+    }
+    return Object.freeze({
+      ...common,
+      bookId,
+      capturedConfigRevision: typographyProfile
+        ? job.capturedConfigRevision
+        : null,
+      capturedSourceId: typographyProfile ? job.capturedSourceId : null,
+      configYamlRelativePath: typographyProfile
+        ? (config?.yamlRelativePath ?? null)
+        : null,
+      importId: job.importId,
+      importUploadRelativePath: imported.uploadRelativePath,
+      kind: job.kind,
+      selectedCandidateRelativePath: selectedCandidate.normalizedPath,
+      sourceRootRelativePath: typographyProfile
+        ? (source?.sourceRootRelativePath ?? null)
+        : null,
+      ...(typographyProfile ? { typographyProfile } : {}),
+    });
+  }
+  if (
+    !job.bookId ||
+    !job.capturedConfigRevision ||
+    !job.capturedSourceId ||
+    !config ||
+    !source
+  ) {
+    throw new Error("BUILD_INPUT_INVALID");
+  }
+  if (job.kind === "build_preview") {
+    return Object.freeze({
+      ...common,
+      bookId: job.bookId,
+      capturedConfigRevision: job.capturedConfigRevision,
+      capturedSourceId: job.capturedSourceId,
+      configYamlRelativePath: config.yamlRelativePath,
+      kind: job.kind,
+      sourceRootRelativePath: source.sourceRootRelativePath,
+    });
+  }
+  return Object.freeze({
+    ...common,
+    bookId: job.bookId,
     capturedConfigRevision: job.capturedConfigRevision,
     capturedCurrentVersionId: job.capturedCurrentVersionId,
     capturedSourceId: job.capturedSourceId,
-    configYamlRelativePath: config?.yamlRelativePath ?? null,
-    createdAtMs: job.createdAtMs,
-    importId: job.importId,
-    importUploadRelativePath: imported?.uploadRelativePath ?? null,
-    jobId: job.id,
+    configYamlRelativePath: config.yamlRelativePath,
     kind: job.kind,
-    selectedCandidateRelativePath: selectedCandidate?.normalizedPath ?? null,
-    sourceRootRelativePath: source?.sourceRootRelativePath ?? null,
-    stagingRelativePath: `staging/${job.id}`,
-    typographyProfile,
-    versionId: job.versionId,
+    sourceRootRelativePath: source.sourceRootRelativePath,
   });
 }
 

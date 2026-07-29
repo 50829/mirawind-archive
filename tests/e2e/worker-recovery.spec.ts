@@ -3,8 +3,8 @@ import { resolve } from "node:path";
 
 import { expect, test } from "@playwright/test";
 
-import { openDatabase } from "@/db/connection";
-import { JobRepository } from "@/db/repositories/jobs";
+import { openDatabase } from "@/platform/sqlite/connection";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 
 import { e2eDataRoot, e2eOrigin } from "../helpers/global-setup.js";
 import { loginAsAdministrator } from "../helpers/e2e-login.js";

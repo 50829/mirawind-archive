@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   JobRepository,
   createJobRepositorySchema,
-} from "@/db/repositories/jobs";
+} from "@/modules/publishing/adapters/sqlite/jobs";
 
 const temporaryRoots: string[] = [];
 
