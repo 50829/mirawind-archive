@@ -274,12 +274,20 @@ function pagesForEntries(input: {
   if (firstLabelIndex >= 0) {
     const firstLabel = input.rows[firstLabelIndex];
     if (firstLabel) {
-      const nextLabelIndex = input.rows.findIndex(
-        (row, index) =>
-          index > firstLabelIndex &&
-          row.contentsLabel &&
-          row.page > firstLabel.page,
-      );
+      let previousLabelPage = firstLabel.page;
+      let nextLabelIndex = -1;
+      for (let index = firstLabelIndex + 1; index < input.rows.length; index++) {
+        const row = input.rows[index];
+        if (!row?.contentsLabel || row.page <= firstLabel.page) continue;
+        if (
+          row.title !== firstLabel.title ||
+          row.page > previousLabelPage + 2
+        ) {
+          nextLabelIndex = index;
+          break;
+        }
+        previousLabelPage = row.page;
+      }
       const nextLabel =
         nextLabelIndex >= 0 ? input.rows[nextLabelIndex] : undefined;
       if (nextLabel) {
@@ -302,13 +310,16 @@ function pagesForEntries(input: {
         if (!row.printedPageLabel) continue;
         pageCounts.set(row.page, (pageCounts.get(row.page) ?? 0) + 1);
       }
-      const maximumCount = Math.max(0, ...pageCounts.values());
-      const minimumCount = Math.max(2, Math.ceil(maximumCount * 0.2));
+      const firstPageCount = pageCounts.get(firstLabel.page) ?? 0;
+      const minimumCount = Math.max(2, Math.ceil(firstPageCount * 0.2));
       const pages: number[] = [];
+      let accumulatedLabels = 0;
       for (let page = firstLabel.page; ; page += 1) {
         const count = pageCounts.get(page) ?? 0;
         if (page === firstLabel.page || count >= minimumCount) {
           pages.push(page);
+          accumulatedLabels += count;
+          if (accumulatedLabels >= input.entries.length * 0.9) break;
           continue;
         }
         break;
@@ -459,11 +470,27 @@ function projectCandidates(input: {
           title: printed.title,
         }) as ReferenceContentsEntry;
       });
-      const pageProjection = pagesForEntries({
-        entries,
-        rows,
-        startCursor: rowCursor,
-      });
+      const directPages = [
+        ...new Set(
+          candidate.logicalEntries.flatMap((entry) =>
+            entry.pageIndex === undefined ? [] : [entry.pageIndex],
+          ),
+        ),
+      ].sort((left, right) => left - right);
+      const pageProjection =
+        directPages.length > 0
+          ? Object.freeze({
+              cursor:
+                rows.findLastIndex(
+                  (row) => row.page <= (directPages.at(-1) ?? -1),
+                ) + 1,
+              pages: Object.freeze(directPages),
+            })
+          : pagesForEntries({
+              entries,
+              rows,
+              startCursor: rowCursor,
+            });
       rowCursor = pageProjection.cursor;
       return Object.freeze({
         candidate,
@@ -750,12 +777,11 @@ export async function observeRealMineruFixture(input: {
         sourcePath: basename(markdown.relative_path),
         sourceSha256: typography.provenance.output_sha256,
       });
-      detection =
+      const preferNative =
         shouldPreferNativePdfLayout(repairedLayout, pdfLayout) ||
         repairedLayout === layout ||
-        shouldPreferNativePdfDetection(repairedDetection, nativeDetection)
-          ? nativeDetection
-          : repairedDetection;
+        shouldPreferNativePdfDetection(repairedDetection, nativeDetection);
+      detection = preferNative ? nativeDetection : repairedDetection;
     }
   }
   process.stderr.write(
