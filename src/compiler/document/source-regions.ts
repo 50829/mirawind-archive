@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 
-import { SafeApplicationError } from "../../domain/errors.js";
+import { SafeApplicationError } from "@/domain/errors";
 import type {
   ConfirmedSourceRegion,
   NormalizedDocument,
   TransientDocumentNode,
   Utf8ByteRange,
-} from "./types.js";
+} from "@/compiler/document/types";
 
 export interface SourceRegionDiagnostic {
   readonly code:

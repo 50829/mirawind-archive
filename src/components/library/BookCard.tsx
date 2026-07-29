@@ -1,4 +1,4 @@
-import type { PublicLibraryEntry } from "../../services/library.js";
+import type { PublicLibraryEntry } from "@/services/library";
 
 export function BookCard({ entry }: { readonly entry: PublicLibraryEntry }) {
   const placeholder = [...entry.title.trim()][0]?.toLocaleUpperCase() ?? "书";

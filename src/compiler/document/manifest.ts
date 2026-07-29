@@ -3,11 +3,14 @@ import { createHash } from "node:crypto";
 import type {
   ResourceReference,
   ResolvedResource,
-} from "../resources/resolver.js";
-import { validateDocumentManifest } from "../../schemas/document-manifest.js";
-import type { NormalizedDocument, TransientDocumentNode } from "./types.js";
-import type { NumberedHeading } from "./numbering.js";
-import type { CompiledDocumentPage } from "./pages.js";
+} from "@/compiler/resources/resolver";
+import { validateDocumentManifest } from "@/schemas/document-manifest";
+import type {
+  NormalizedDocument,
+  TransientDocumentNode,
+} from "@/compiler/document/types";
+import type { NumberedHeading } from "@/compiler/document/numbering";
+import type { CompiledDocumentPage } from "@/compiler/document/pages";
 
 export const compilerIdentity = Object.freeze({
   name: "mirawind-book-compiler" as const,

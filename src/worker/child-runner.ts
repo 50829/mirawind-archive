@@ -8,7 +8,7 @@ import {
   type JobProgressMessage,
   type JobResultMessage,
   type RunJobMessage,
-} from "./protocol.js";
+} from "@/worker/protocol";
 
 export interface ChildExecution {
   readonly exitCode: number | null;

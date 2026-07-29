@@ -1,5 +1,5 @@
-import type { PublicLibraryView } from "../../services/library.js";
-import { BookCard } from "./BookCard.js";
+import type { PublicLibraryView } from "@/services/library";
+import { BookCard } from "@/components/library/BookCard";
 
 export function LibraryScene({
   library,

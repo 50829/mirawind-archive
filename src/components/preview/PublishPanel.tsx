@@ -6,7 +6,7 @@ import {
   manageQuietText,
 } from "@/components/ui/manage-classes";
 
-import { publicationPhaseLabel } from "./publication-phase.js";
+import { publicationPhaseLabel } from "@/components/preview/publication-phase";
 
 interface JobStatus {
   readonly error_code: string | null;

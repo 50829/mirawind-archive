@@ -1,8 +1,8 @@
 import { chmod, lstat, rm } from "node:fs/promises";
 
-import type { JobRecord, JobRepository } from "../db/repositories/jobs.js";
-import { resolveContainedPath } from "../storage/layout.js";
-import { evaluateJobRetry } from "./retry-policy.js";
+import type { JobRecord, JobRepository } from "@/db/repositories/jobs";
+import { resolveContainedPath } from "@/storage/layout";
+import { evaluateJobRetry } from "@/jobs/retry-policy";
 
 export interface InterruptedJobRecovery {
   readonly interrupted: JobRecord;

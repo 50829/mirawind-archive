@@ -1,11 +1,11 @@
-import { isOpaqueId } from "../domain/ids.js";
+import { isOpaqueId } from "@/domain/ids";
 import {
   isKnownJobPhase,
   jobKinds,
   type JobKind,
   type JobPhase,
-} from "../jobs/state-machine.js";
-import type { TypographyProfile } from "../compiler/document/types.js";
+} from "@/jobs/state-machine";
+import type { TypographyProfile } from "@/compiler/document/types";
 
 export const jobChildProtocolVersion = 2;
 

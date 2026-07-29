@@ -13,14 +13,10 @@ import {
 import { readPdfContentsEvidence } from "@/compiler/document/pdf-contents-evidence";
 import { DraftRepository } from "@/db/repositories/drafts";
 import { ImportRepository } from "@/db/repositories/imports";
-import {
-  buildPreview,
-  finalizeBuiltPreview,
-} from "@/jobs/handlers/build-preview";
-import {
-  finalizePreparedDraft,
-  prepareDraft,
-} from "@/jobs/handlers/prepare-draft";
+import { buildPreview } from "@/jobs/handlers/build-preview";
+import { finalizeBuiltPreview } from "@/jobs/handlers/preview-finalization";
+import { finalizePreparedDraft } from "@/jobs/handlers/finalize-prepared-draft";
+import { prepareDraft } from "@/jobs/handlers/prepare-draft";
 import { parseBookConfigYaml } from "@/schemas/book-config";
 import { buildZip } from "../../../scripts/fixtures/zip-builder";
 import { withMigratedTestDatabase } from "../../helpers/database.js";

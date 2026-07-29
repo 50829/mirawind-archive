@@ -4,16 +4,13 @@ import { relative, resolve, sep } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import {
-  ImportRepository,
-  type ImportRecord,
-} from "../db/repositories/imports.js";
-import { JobRepository, type JobRecord } from "../db/repositories/jobs.js";
-import { withImmediateTransaction } from "../db/transaction/immediate.js";
-import { SafeApplicationError } from "../domain/errors.js";
-import { createOpaqueId } from "../domain/ids.js";
-import type { StorageLayout } from "../storage/layout.js";
-import { openExclusiveFile } from "../storage/layout.js";
+import { ImportRepository, type ImportRecord } from "@/db/repositories/imports";
+import { JobRepository, type JobRecord } from "@/db/repositories/jobs";
+import { withImmediateTransaction } from "@/db/transaction/immediate";
+import { SafeApplicationError } from "@/domain/errors";
+import { createOpaqueId } from "@/domain/ids";
+import type { StorageLayout } from "@/storage/layout";
+import { openExclusiveFile } from "@/storage/layout";
 
 export const maximumUploadBytes = 2 * 1024 * 1024 * 1024;
 export const m1ImportExpiryMs = Number.MAX_SAFE_INTEGER;

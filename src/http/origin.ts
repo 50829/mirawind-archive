@@ -1,4 +1,4 @@
-import { SafeApplicationError } from "../domain/errors.js";
+import { SafeApplicationError } from "@/domain/errors";
 
 export function requireExactOrigin(
   requestOrigin: string | null,

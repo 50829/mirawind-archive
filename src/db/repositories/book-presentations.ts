@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
-import type { BookVersionPresentation } from "../../services/book-presentation.js";
-import type { BookVersionRecord } from "./versions.js";
+import type { BookVersionPresentation } from "@/db/repositories/book-presentation-record";
+import type { BookVersionRecord } from "@/db/repositories/version-record";
 
 interface PresentationRow {
   alias: string | null;

@@ -3,17 +3,17 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { VersionRepository } from "../db/repositories/versions.js";
-import { isOpaqueId } from "../domain/ids.js";
+import { VersionRepository } from "@/db/repositories/versions";
+import { isOpaqueId } from "@/domain/ids";
 import {
   reconcileBookVersionPresentations,
   type PresentationReconciliation,
-} from "../services/book-presentation.js";
+} from "@/services/book-presentation";
 import {
   verifyAndRecoverCurrentVersions,
   type CurrentVersionRecovery,
-} from "../services/version-verifier.js";
-import type { StorageLayout } from "./layout.js";
+} from "@/services/version-verifier";
+import type { StorageLayout } from "@/storage/layout";
 
 export interface StorageReconciliation {
   readonly corruptDatabaseVersions: readonly string[];

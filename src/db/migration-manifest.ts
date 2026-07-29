@@ -4,7 +4,7 @@ import {
   checksumMigration,
   MigrationChecksumError,
   type Migration,
-} from "./migrate.js";
+} from "@/db/migrate";
 
 const migrationDefinitions = [
   {

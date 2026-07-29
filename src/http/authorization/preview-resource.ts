@@ -2,8 +2,8 @@ import { createHmac, timingSafeEqual, type BinaryLike } from "node:crypto";
 
 import type Database from "better-sqlite3";
 
-import type { RequestSession } from "../../auth/session.js";
-import { isOpaqueId } from "../../domain/ids.js";
+import type { RequestSession } from "@/auth/session";
+import { isOpaqueId } from "@/domain/ids";
 
 const previewAuthorizationVersion = 1;
 export const previewAuthorizationLifetimeMs = 60 * 60 * 1000;

@@ -1,9 +1,9 @@
 import type Database from "better-sqlite3";
 
-import type { CrashPointInjector } from "../jobs/crash-points.js";
-import { injectCrashPoint } from "../jobs/crash-points.js";
-import { SafeApplicationError } from "../domain/errors.js";
-import { withImmediateTransaction } from "../db/transaction/immediate.js";
+import type { CrashPointInjector } from "@/jobs/crash-points";
+import { injectCrashPoint } from "@/jobs/crash-points";
+import { SafeApplicationError } from "@/domain/errors";
+import { withImmediateTransaction } from "@/db/transaction/immediate";
 
 export function makeBookNonPublic(input: {
   readonly actorUserId: string | null;

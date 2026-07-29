@@ -34,15 +34,19 @@ without claiming an optimization.
 
 **CRITICAL**: All later source movement and runtime work depends on this phase.
 
-- [ ] T009 Add failing production-bundle tests proving `@/` imports work in worker and CLI output in `tests/integration/deployment/process-bundle.test.ts`
-- [ ] T010 [P] Add forbidden-edge, deep-import, relative-import, type-only, dynamic-import, cycle and coupling fixtures under `tests/fixtures/architecture/`
-- [ ] T011 Add failing architecture-graph tests for every negative fixture and the real source tree in `tests/architecture/dependency-graph.test.ts`
-- [ ] T012 Configure the existing Vite toolchain to bundle Node worker/CLI entries with `@/` resolution in `vite.processes.config.ts` and `tsconfig.processes.json`
-- [ ] T013 Replace process build/start scripts with the bundled entries while retaining strict typecheck in `package.json`
-- [ ] T014 Implement TypeScript/Astro import extraction, alias resolution, shortest paths, SCC detection and coupling metrics in `scripts/architecture/dependency-graph.ts`
-- [ ] T015 Define module directions, twelve-import/eight-port limits and zero final exceptions in `scripts/architecture/boundaries.ts`
-- [ ] T016 Add fast canonical-import editor feedback and the full graph command to standard lint in `eslint.config.js` and `package.json`
-- [ ] T017 Convert process entrypoint imports needed to pass the production alias smoke test in `src/worker/index.ts` and `src/cli/index.ts`
+- [x] T009 Add failing production-bundle tests proving `@/` imports work in worker and CLI output in `tests/integration/deployment/process-bundle.test.ts`
+- [x] T010 [P] Add forbidden-edge, deep-import, relative-import, type-only, dynamic-import, cycle and coupling fixtures under `tests/fixtures/architecture/`
+- [x] T011 Add failing architecture-graph tests for every negative fixture and the real source tree in `tests/architecture/dependency-graph.test.ts`
+- [x] T012 Configure the existing Vite toolchain to bundle Node worker/CLI entries with `@/` resolution in `vite.processes.config.ts` and `tsconfig.processes.json`
+- [x] T013 Replace process build/start scripts with the bundled entries while retaining strict typecheck in `package.json`
+- [x] T014 Implement TypeScript/Astro import extraction, alias resolution, shortest paths, SCC detection and coupling metrics in `scripts/architecture/dependency-graph.ts`
+- [x] T015 Define module directions, twelve-import/eight-port limits and zero final exceptions in `scripts/architecture/boundaries.ts`
+- [x] T016 Add fast canonical-import editor feedback and the full graph command to standard lint in `eslint.config.js` and `package.json`
+- [x] T017 Convert process entrypoint imports needed to pass the production alias smoke test in `src/worker/index.ts` and `src/cli/index.ts`
+
+Phase 2 evidence: canonical import scan reported zero replacements; the complete 205-file source
+graph reported zero diagnostics; all twelve positive/negative architecture tests, the production
+process bundle smoke test, 639 Vitest tests, format, lint, typecheck and the production build passed.
 
 **Checkpoint**: `pnpm lint`, typecheck and production process smoke tests prove canonical aliases and
 reject every architecture violation class.

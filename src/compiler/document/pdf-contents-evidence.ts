@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import type { LayoutEvidenceRecord } from "./layout-evidence.js";
+import type { LayoutEvidenceRecord } from "@/compiler/document/layout-evidence";
 
 export interface PdfContentsEvidenceDiagnostic {
   readonly code:

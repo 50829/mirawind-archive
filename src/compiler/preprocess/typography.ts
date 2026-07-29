@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 
-import { parseMarkdownDocument } from "../document/parser.js";
+import { parseMarkdownDocument } from "@/compiler/document/parser";
 import type {
   TransientDocumentNode,
   TypographyProfile,
   TypographyProvenance,
-} from "../document/types.js";
+} from "@/compiler/document/types";
 
 export type { TypographyProfile, TypographyProvenance };
 

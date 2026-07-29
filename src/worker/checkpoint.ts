@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { atomicWriteFile, type StorageLayout } from "../storage/layout.js";
+import { atomicWriteFile, type StorageLayout } from "@/storage/layout";
 
 export const passiveCheckpointIntervalMs = 60_000;
 export const walSizeWarningBytes = 256 * 1024 * 1024;

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { createStrongEtag } from "../http/cache/policies.js";
+import { createStrongEtag } from "@/http/cache/policies";
 
 export interface BookDeletionTokenInput {
   readonly alias: string | null;

@@ -1,7 +1,7 @@
-import { SafeApplicationError } from "../../domain/errors.js";
-import { validateBookConfig } from "../../schemas/book-config.js";
-import type { ContentRole } from "./structure-proposal.js";
-import type { NormalizedDocument } from "./types.js";
+import { SafeApplicationError } from "@/domain/errors";
+import { validateBookConfig } from "@/schemas/book-config";
+import type { ContentRole } from "@/compiler/document/structure-proposal";
+import type { NormalizedDocument } from "@/compiler/document/types";
 
 export interface ConfigSemanticDiagnostic {
   readonly block_id?: string;

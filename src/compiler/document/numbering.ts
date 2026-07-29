@@ -1,4 +1,4 @@
-import type { ValidatedConfiguredHeading } from "./validate-config.js";
+import type { ValidatedConfiguredHeading } from "@/compiler/document/validate-config";
 
 export interface NumberedHeading extends ValidatedConfiguredHeading {
   readonly number: string | null;

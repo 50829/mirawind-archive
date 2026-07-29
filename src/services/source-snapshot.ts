@@ -27,11 +27,11 @@ import {
   SourceRepository,
   type OriginalFileRecord,
   type SourceSnapshotRecord,
-} from "../db/repositories/sources.js";
-import { withImmediateTransaction } from "../db/transaction/immediate.js";
-import { createOpaqueId } from "../domain/ids.js";
-import type { StorageLayout } from "../storage/layout.js";
-import { openExclusiveFile, resolveContainedPath } from "../storage/layout.js";
+} from "@/db/repositories/sources";
+import { withImmediateTransaction } from "@/db/transaction/immediate";
+import { createOpaqueId } from "@/domain/ids";
+import type { StorageLayout } from "@/storage/layout";
+import { openExclusiveFile, resolveContainedPath } from "@/storage/layout";
 
 export interface SourceSnapshotResult {
   readonly original: OriginalFileRecord;

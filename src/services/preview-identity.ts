@@ -1,18 +1,18 @@
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { compilerIdentity } from "../compiler/document/manifest.js";
-import type { SemanticCompilationIdentity } from "../compiler/document/types.js";
+import { compilerIdentity } from "@/compiler/document/manifest";
+import type { SemanticCompilationIdentity } from "@/compiler/document/types";
 import type {
   BookRecord,
   ConfigRevisionRecord,
   DraftPreviewRecord,
-} from "../db/repositories/drafts.js";
-import type { SourceSnapshotRecord } from "../db/repositories/sources.js";
-import { SafeApplicationError } from "../domain/errors.js";
-import { previewBuildVersion } from "../jobs/handlers/build-preview.js";
-import { draftPreparationVersion } from "../jobs/handlers/prepare-draft.js";
-import { resolveContainedPath, type StorageLayout } from "../storage/layout.js";
+} from "@/db/repositories/drafts";
+import type { SourceSnapshotRecord } from "@/db/repositories/sources";
+import { SafeApplicationError } from "@/domain/errors";
+import { previewBuildVersion } from "@/jobs/handlers/preview-artifact";
+import { draftPreparationVersion } from "@/jobs/handlers/prepared-draft-artifact";
+import { resolveContainedPath, type StorageLayout } from "@/storage/layout";
 
 const maximumPreviewModelBytes = 8 * 1024 * 1024;
 

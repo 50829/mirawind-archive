@@ -2,7 +2,7 @@ import { extname } from "node:path";
 
 import sharp, { type Metadata } from "sharp";
 
-import { SafeApplicationError } from "../../domain/errors.js";
+import { SafeApplicationError } from "@/domain/errors";
 
 export const rasterImageLimits = Object.freeze({
   maximumPixels: 100_000_000,

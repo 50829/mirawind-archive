@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 
-import { createOpaqueId } from "../../domain/ids.js";
+import { createOpaqueId } from "@/domain/ids";
 import type {
   NormalizedDocument,
   ParsedDocument,
   TransientDocumentNode,
-} from "./types.js";
+} from "@/compiler/document/types";
 
 const blockTypes = new Set([
   "blockquote",

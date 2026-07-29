@@ -2,19 +2,19 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { createSetupAuth } from "../auth/setup-server.js";
-import { parseEnvironment } from "../config/environment.js";
-import { openDatabase } from "../db/connection.js";
-import { loadMigrationManifest } from "../db/migration-manifest.js";
+import { createSetupAuth } from "@/auth/setup-server";
+import { runAdminCli } from "@/cli/admin-cli";
+import { bootstrapAdministrator } from "@/cli/commands/admin-bootstrap";
+import { recoverAdministrator } from "@/cli/commands/admin-recover";
+import { runDatabaseMigrations } from "@/cli/commands/db-migrate";
+import { promptForAdministrator } from "@/cli/prompt";
+import { parseEnvironment } from "@/config/environment";
+import { openDatabase } from "@/db/connection";
+import { loadMigrationManifest } from "@/db/migration-manifest";
 import {
   acquireMaintenanceLock,
   serviceIsRunning,
-} from "../storage/maintenance-lock.js";
-import { runAdminCli } from "./admin-cli.js";
-import { bootstrapAdministrator } from "./commands/admin-bootstrap.js";
-import { recoverAdministrator } from "./commands/admin-recover.js";
-import { runDatabaseMigrations } from "./commands/db-migrate.js";
-import { promptForAdministrator } from "./prompt.js";
+} from "@/storage/maintenance-lock";
 
 const usage = `Usage:
   pnpm db:migrate

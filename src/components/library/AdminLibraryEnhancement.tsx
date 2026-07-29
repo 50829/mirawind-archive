@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { AdministratorLibraryEntry } from "../../services/library.js";
+import type { AdministratorLibraryEntry } from "@/services/library";
 
 interface ResponseBody {
   readonly entries: readonly {

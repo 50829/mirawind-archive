@@ -2,9 +2,9 @@ import { join } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { parseEnvironment } from "../config/environment.js";
-import { openDatabase } from "../db/connection.js";
-import { createHttpAuth } from "./server.js";
+import { parseEnvironment } from "@/config/environment";
+import { openDatabase } from "@/db/connection";
+import { createHttpAuth } from "@/auth/server";
 
 export interface RequestSession {
   readonly authenticatedAtMs: number;

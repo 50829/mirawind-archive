@@ -1,205 +1,31 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
-import { relative, resolve, sep } from "node:path";
+import { mkdir, readFile, rm } from "node:fs/promises";
+import { resolve } from "node:path";
 
-import type Database from "better-sqlite3";
-
-import { renderReaderShell } from "../../components/reader/render.js";
-import { prepareConfiguredDocument } from "../../compiler/document/configured-document.js";
-import { canonicalJson } from "../../compiler/document/manifest.js";
-import {
-  parsePrintedContentsAnalysisV2,
-  type PrintedContentsAnalysisV2,
-} from "../../compiler/document/printed-contents-analysis.js";
+import { prepareConfiguredDocument } from "@/compiler/document/configured-document";
+import { canonicalJson } from "@/compiler/document/manifest";
 import type {
   ConfirmedSourceRegion,
-  SemanticCompilationIdentity,
   TypographyProvenance,
-} from "../../compiler/document/types.js";
+} from "@/compiler/document/types";
+import { inspectRasterImage } from "@/compiler/resources/images";
+import { resolveDocumentResources } from "@/compiler/resources/resolver";
 import {
-  katexCriticalCss,
-  rendererStylesheetUrl,
-} from "../../compiler/render/assets.js";
-import { renderSemanticDocument } from "../../compiler/render/document.js";
-import { inspectRasterImage } from "../../compiler/resources/images.js";
-import { resolveDocumentResources } from "../../compiler/resources/resolver.js";
-import { DraftRepository } from "../../db/repositories/drafts.js";
+  type PreviewBuildArtifact,
+  previewBuildArtifactFilename,
+  previewBuildVersion,
+} from "@/jobs/handlers/preview-artifact";
 import {
-  createSafeDiagnostic,
-  type SafeDiagnostic,
-} from "../../domain/errors.js";
-import { parseBookConfigYaml } from "../../schemas/book-config.js";
-import { atomicWriteFile, resolveContainedPath } from "../../storage/layout.js";
-import type { StorageLayout } from "../../storage/layout.js";
-import { readerStylesheetUrl } from "../../styles/assets.js";
+  printedContentsDiagnostics,
+  readPinnedAnalysis,
+} from "@/jobs/handlers/preview-diagnostics";
+import { renderPreviewPages } from "@/jobs/handlers/preview-pages";
+import { parseBookConfigYaml } from "@/schemas/book-config";
+import { atomicWriteFile, resolveContainedPath } from "@/storage/layout";
 import {
   profilePipelineStage,
   recordPipelineProfileMetrics,
-} from "../../observability/pipeline-profile.js";
-
-export const previewBuildVersion = "draft-preview-v4";
-export const previewBuildArtifactFilename = "preview-build-result.json";
-
-export interface PreviewBuildArtifact {
-  readonly diagnosticsRelativePath: string;
-  readonly identity: SemanticCompilationIdentity;
-  readonly previewRelativePath: "preview";
-  readonly version: typeof previewBuildVersion;
-}
-
-function dataRelativePath(root: string, target: string): string {
-  const result = relative(root, target).split(sep).join("/");
-  if (!result || result === ".." || result.startsWith("../")) {
-    throw new Error("PREVIEW_STORAGE_PATH_INVALID");
-  }
-  return result;
-}
-
-function htmlEscape(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function readerHtmlDocument(input: {
-  readonly body: string;
-  readonly css: string;
-  readonly language: string;
-  readonly title: string;
-}): string {
-  return `<!doctype html>
-<html lang="${htmlEscape(input.language)}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width">
-<title>${htmlEscape(input.title)}</title>
-<link rel="stylesheet" href="${rendererStylesheetUrl}">
-<link rel="stylesheet" href="${readerStylesheetUrl}">
-<style>${katexCriticalCss}${input.css}</style>
-</head>
-<body>${input.body}</body>
-</html>
-`;
-}
-
-function printedContentsDiagnostics(
-  analysis: PrintedContentsAnalysisV2,
-): readonly SafeDiagnostic[] {
-  return Object.freeze([
-    ...analysis.evidence_diagnostics.map((diagnostic) =>
-      createSafeDiagnostic({
-        code: diagnostic.code,
-        confidence: "low",
-        evidence: Object.freeze(["bounded MinerU layout evidence"]),
-        message:
-          "The layout companion could not be used completely; accepted Markdown was retained.",
-        phase: "contents",
-        recovery: Object.freeze(["reload"]),
-        severity: "warning",
-      }),
-    ),
-    ...analysis.pdf_diagnostics.map((diagnostic) =>
-      createSafeDiagnostic({
-        code: diagnostic.code,
-        confidence: "low",
-        evidence: Object.freeze(["bounded native PDF or OCR evidence"]),
-        ...(diagnostic.page_index === null
-          ? {}
-          : { location: { pageIndex: diagnostic.page_index } }),
-        message:
-          "PDF evidence was unavailable or insufficient; no uncertain structure was promoted.",
-        phase: "ocr",
-        recovery: Object.freeze(["reload"]),
-        severity: "warning",
-      }),
-    ),
-    ...analysis.candidates.flatMap((candidate) =>
-      candidate.diagnostics.map((diagnostic) =>
-        createSafeDiagnostic({
-          code: diagnostic.code,
-          confidence:
-            candidate.boundary_confidence === "low" ||
-            candidate.match_confidence === "low"
-              ? "low"
-              : candidate.boundary_confidence === "high" &&
-                  candidate.match_confidence === "high"
-                ? "high"
-                : "medium",
-          evidence: Object.freeze([
-            "printed contents order",
-            analysis.layout_source === "content-list"
-              ? "MinerU page layout"
-              : analysis.layout_source === "none"
-                ? "Markdown numbering"
-                : "PDF page evidence",
-          ]),
-          location: {
-            ...(diagnostic.block_id ? { blockId: diagnostic.block_id } : {}),
-            endByte: candidate.end_byte,
-            ...(candidate.region_id ? { regionId: candidate.region_id } : {}),
-            startByte: candidate.start_byte,
-          },
-          message:
-            diagnostic.code === "PRINTED_TOC_AMBIGUOUS_MATCH"
-              ? "A printed contents entry has more than one plausible body heading."
-              : diagnostic.code === "PRINTED_TOC_UNMATCHED_ENTRY"
-                ? "A printed contents entry could not be matched to a body heading."
-                : "The automatic printed contents evidence was insufficient for a definite proposal.",
-          path: diagnostic.path,
-          phase: diagnostic.code.includes("MATCH") ? "matching" : "contents",
-          recovery: Object.freeze([
-            diagnostic.block_id ? "select_structure" : "reload",
-          ]),
-          severity:
-            diagnostic.code === "PRINTED_TOC_LOW_COVERAGE" ||
-            diagnostic.code === "PRINTED_TOC_RICH_CONTENT"
-              ? "warning"
-              : "info",
-        }),
-      ),
-    ),
-    ...analysis.typography.risk_summaries.map((risk) =>
-      createSafeDiagnostic({
-        code: risk.code,
-        confidence: "medium",
-        evidence: Object.freeze([
-          `${risk.spaces_normalized} spacing edits`,
-          `${risk.punctuation_converted} punctuation edits`,
-        ]),
-        location: { endByte: risk.end_byte, startByte: risk.start_byte },
-        message:
-          "Typography changed a mixed source range; reprocess from retained input to restore verbatim bytes.",
-        phase: "typography",
-        recovery: Object.freeze(["reprocess_verbatim"]),
-        severity: "warning",
-      }),
-    ),
-  ]);
-}
-
-async function readPinnedAnalysis(input: {
-  readonly analysisPath: string;
-  readonly configRevision: number;
-  readonly sourceId: string;
-  readonly sourceSha256: string;
-}): Promise<PrintedContentsAnalysisV2> {
-  if ((await stat(input.analysisPath)).size > 4 * 1024 * 1024) {
-    throw new Error("PREVIEW_ANALYSIS_INVALID");
-  }
-  const analysis = parsePrintedContentsAnalysisV2(
-    JSON.parse(await readFile(input.analysisPath, "utf8")),
-  );
-  if (
-    analysis.config_revision !== input.configRevision ||
-    analysis.source_id !== input.sourceId ||
-    analysis.source_sha256 !== input.sourceSha256
-  ) {
-    throw new Error("PREVIEW_ANALYSIS_CAPTURE_MISMATCH");
-  }
-  return analysis;
-}
+} from "@/observability/pipeline-profile";
 
 export async function buildPreview(input: {
   readonly analysisPath: string;
@@ -295,140 +121,15 @@ export async function buildPreview(input: {
       resource_bytes: resourceBytes,
       resources: resolution.resources.length,
     });
-    const pagesDirectory = resolve(previewDirectory, "pages");
-    await mkdir(pagesDirectory, { mode: 0o700 });
-    const pageHref = (pageId: number) =>
-      `/api/manage/books/${input.bookId}/preview/${input.configRevision}/pages/${pageId}`;
-    const displayHeadingTitle = (
-      heading: (typeof configured.headings)[number],
-    ) =>
-      heading.number
-        ? `${heading.number}. ${heading.display_title}`
-        : heading.display_title;
-    const { pageByHeading, readerToc } = await profilePipelineStage(
-      "page_model",
-      () => {
-        const headingsToPages = new Map(
-          configured.pages.flatMap((page) =>
-            page.document.headings
-              .filter((heading) => page.blockIds.includes(heading.blockId))
-              .map((heading) => [heading.blockId, page.pageId] as const),
-          ),
-        );
-        const pagesById = new Map(
-          configured.pages.map((page) => [page.pageId, page] as const),
-        );
-        const toc = configured.headings
-          .filter((heading) => heading.include_in_toc)
-          .map((heading) => {
-            const pageId = headingsToPages.get(heading.block_id);
-            if (!pageId || !pagesById.has(pageId)) {
-              throw new Error("PREVIEW_HEADING_PAGE_MISSING");
-            }
-            return {
-              blockId: heading.block_id,
-              href: `${pageHref(pageId)}#${heading.block_id}`,
-              level: heading.display_level,
-              pageId,
-              title: displayHeadingTitle(heading),
-            };
-          });
-        return {
-          pageByHeading: headingsToPages,
-          readerToc: toc,
-        };
-      },
-    );
-    const diagnostics: SafeDiagnostic[] = [
-      ...preparationDiagnostics,
-      ...resolution.diagnostics,
-    ];
-    const renderedPages = await profilePipelineStage("page_render", () =>
-      Promise.all(
-        configured.pages.map(async (page) => {
-          const rendered = await renderSemanticDocument({
-            document: page.document,
-            headingHref(blockId) {
-              const pageId = pageByHeading.get(blockId);
-              if (!pageId) throw new Error("PREVIEW_HEADING_PAGE_MISSING");
-              return `${pageHref(pageId)}#${blockId}`;
-            },
-            headingOverrides: page.headingOverrides,
-            publishedResourceUrl: (resourceId) =>
-              `/api/manage/books/${input.bookId}/preview/${input.configRevision}/assets/${resourceId}`,
-            resourceResolution: resolution,
-          });
-          diagnostics.push(...rendered.diagnostics);
-          return { page, rendered };
-        }),
-      ),
-    );
-    const css = renderedPages
-      .map(({ rendered }) => rendered.css)
-      .filter(Boolean)
-      .sort()
-      .filter((value, index, values) => value !== values[index - 1])
-      .join("");
-    const language =
-      typeof (config.metadata as Record<string, unknown> | undefined)
-        ?.language === "string"
-        ? String(
-            (config.metadata as Record<string, unknown> | undefined)?.language,
-          )
-        : "zh-CN";
-    let outputBytes = 0;
-    await profilePipelineStage("page_write", async () => {
-      for (const { page, rendered } of renderedPages) {
-        const pageIndex = configured.pages.findIndex(
-          (candidate) => candidate.pageId === page.pageId,
-        );
-        const nextPage =
-          pageIndex >= 0 ? configured.pages.at(pageIndex + 1) : undefined;
-        const previousPage =
-          pageIndex > 0 ? configured.pages.at(pageIndex - 1) : undefined;
-        const outline = configured.headings
-          .filter(
-            (heading) =>
-              heading.include_in_toc &&
-              page.blockIds.includes(heading.block_id),
-          )
-          .map((heading) => ({
-            blockId: heading.block_id,
-            href: `#${heading.block_id}`,
-            level: heading.display_level,
-            title: displayHeadingTitle(heading),
-          }));
-        const html = readerHtmlDocument({
-          body: renderReaderShell({
-            bodyHtml: rendered.html,
-            bookKey: String(input.bookId),
-            bookTitle: String(config.title),
-            currentHeadingId: outline.at(0)?.blockId ?? null,
-            currentPageId: page.pageId,
-            firstPageHref: pageHref(
-              configured.pages.at(0)?.pageId ?? page.pageId,
-            ),
-            mode: "preview",
-            nextHref: nextPage ? pageHref(nextPage.pageId) : null,
-            originalDownloads: [],
-            outline,
-            previousHref: previousPage ? pageHref(previousPage.pageId) : null,
-            previewRevision: input.configRevision,
-            toc: readerToc,
-          }),
-          css,
-          language,
-          title: page.title,
-        });
-        outputBytes += Buffer.byteLength(html);
-        await atomicWriteFile(
-          resolve(pagesDirectory, `${page.pageId}.html`),
-          html,
-          { mode: 0o600 },
-        );
-      }
+    const { diagnostics, pageByHeading } = await renderPreviewPages({
+      bookId: input.bookId,
+      config,
+      configRevision: input.configRevision,
+      configured,
+      preparationDiagnostics,
+      previewDirectory,
+      resolution,
     });
-    recordPipelineProfileMetrics({ output_bytes: outputBytes });
     return await profilePipelineStage("model_diagnostics", async () => {
       const boundedDiagnostics = [
         ...new Map(
@@ -519,73 +220,4 @@ export async function buildPreview(input: {
     await rm(stagingDirectory, { force: true, recursive: true });
     throw error;
   }
-}
-
-export async function finalizeBuiltPreview(input: {
-  readonly artifact: PreviewBuildArtifact;
-  readonly bookId: number;
-  readonly configRevision: number;
-  readonly database: Database.Database;
-  readonly layout: StorageLayout;
-  readonly nowMs: number;
-  readonly stagingDirectory: string;
-}): Promise<void> {
-  if (input.artifact.version !== previewBuildVersion) {
-    throw new Error("PREVIEW_BUILD_ARTIFACT_INVALID");
-  }
-  const finalDirectory = resolve(
-    input.layout.bookDirectory,
-    String(input.bookId),
-    "draft",
-    "previews",
-    String(input.configRevision),
-  );
-  const stagedPreviewDirectory = await resolveContainedPath(
-    input.stagingDirectory,
-    input.artifact.previewRelativePath,
-  );
-  await mkdir(resolve(finalDirectory, ".."), { mode: 0o700, recursive: true });
-  try {
-    await rename(stagedPreviewDirectory, finalDirectory);
-    const diagnosticsPath = resolve(
-      finalDirectory,
-      input.artifact.diagnosticsRelativePath,
-    );
-    new DraftRepository(input.database).completePreview({
-      bookId: input.bookId,
-      configRevision: input.configRevision,
-      diagnosticsRelativePath: dataRelativePath(
-        input.layout.root,
-        diagnosticsPath,
-      ),
-      nowMs: input.nowMs,
-      previewRelativePath: dataRelativePath(input.layout.root, finalDirectory),
-    });
-  } catch (error) {
-    await rm(finalDirectory, { force: true, recursive: true });
-    throw error;
-  }
-}
-
-export function previewArtifactPath(stagingDirectory: string): string {
-  return resolve(stagingDirectory, previewBuildArtifactFilename);
-}
-
-export async function readPreviewBuildArtifact(
-  stagingDirectory: string,
-): Promise<PreviewBuildArtifact> {
-  const parsed: unknown = JSON.parse(
-    await readFile(previewArtifactPath(stagingDirectory), "utf8"),
-  );
-  if (
-    !parsed ||
-    typeof parsed !== "object" ||
-    (parsed as Record<string, unknown>).version !== previewBuildVersion ||
-    (parsed as Record<string, unknown>).previewRelativePath !== "preview" ||
-    (parsed as Record<string, unknown>).diagnosticsRelativePath !==
-      "diagnostics.json"
-  ) {
-    throw new Error("PREVIEW_BUILD_ARTIFACT_INVALID");
-  }
-  return parsed as PreviewBuildArtifact;
 }

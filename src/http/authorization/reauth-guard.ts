@@ -2,7 +2,7 @@ import {
   authorizeSoleAdministrator,
   type AdministratorSession,
   type AuthorizationDecision,
-} from "./admin-guard.js";
+} from "@/http/authorization/admin-guard";
 
 export function requireRecentAdministratorAuthentication(input: {
   readonly adminUserId: string;

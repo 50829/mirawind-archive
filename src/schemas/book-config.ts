@@ -2,8 +2,8 @@ import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import { isAlias, isMap, isPair, isSeq, parseDocument } from "yaml";
 
 import bookSchema from "../../docs/schemas/book.schema.json" with { type: "json" };
-import { SafeApplicationError } from "../domain/errors.js";
-import { requireSupportedBookSchemaVersion } from "./versioning.js";
+import { SafeApplicationError } from "@/domain/errors";
+import { requireSupportedBookSchemaVersion } from "@/schemas/versioning";
 
 export interface BookConfigDiagnostic {
   readonly instancePath: string;

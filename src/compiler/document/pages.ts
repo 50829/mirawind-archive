@@ -1,5 +1,8 @@
-import type { NormalizedDocument, TransientDocumentNode } from "./types.js";
-import type { NumberedHeading } from "./numbering.js";
+import type {
+  NormalizedDocument,
+  TransientDocumentNode,
+} from "@/compiler/document/types";
+import type { NumberedHeading } from "@/compiler/document/numbering";
 
 export interface CompiledDocumentPage {
   readonly alias?: string;

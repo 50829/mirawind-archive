@@ -1,4 +1,4 @@
 export {
   assertDatabaseCapabilities,
   type DatabaseCapabilities,
-} from "./connection.js";
+} from "@/db/connection";

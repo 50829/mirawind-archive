@@ -2,10 +2,10 @@ import { createHash } from "node:crypto";
 
 import type Database from "better-sqlite3";
 
-import type { AuthorizationDecision } from "../http/authorization/admin-guard.js";
-import { authorizeBookResource } from "../http/authorization/book-guard.js";
-import { SafeApplicationError } from "../domain/errors.js";
-import { createBookDeletionToken } from "./book-deletion-token.js";
+import type { AuthorizationDecision } from "@/http/authorization/admin-guard";
+import { authorizeBookResource } from "@/http/authorization/book-guard";
+import { SafeApplicationError } from "@/domain/errors";
+import { createBookDeletionToken } from "@/services/book-deletion-token";
 
 const maximumPublicEntries = 5_000;
 const maximumAuthors = 100;

@@ -1,7 +1,10 @@
-import { BookSearch } from "./BookSearch.js";
-import { readerBreadcrumbs, type ReaderTocLink } from "./navigation.js";
-import { TableOfContents } from "./TableOfContents.js";
-import { readerScriptUrl } from "../../styles/assets.js";
+import { BookSearch } from "@/components/reader/BookSearch";
+import {
+  readerBreadcrumbs,
+  type ReaderTocLink,
+} from "@/components/reader/navigation";
+import { TableOfContents } from "@/components/reader/TableOfContents";
+import { readerScriptUrl } from "@/styles/assets";
 
 export interface ReaderOutlineLink {
   readonly blockId: string;

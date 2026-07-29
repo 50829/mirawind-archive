@@ -10,7 +10,10 @@ import {
 } from "@/components/ui/manage-classes";
 import { usePolling } from "@/components/manage/use-polling";
 
-import { CandidateReview, type CandidateView } from "./CandidateReview";
+import {
+  CandidateReview,
+  type CandidateView,
+} from "@/components/import/CandidateReview";
 
 type FormSubmitEvent = Parameters<
   NonNullable<ComponentProps<"form">["onSubmit"]>

@@ -13,10 +13,10 @@ import {
 } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
-import { validateVersionMarker } from "../schemas/document-manifest.js";
-import type { CrashPointInjector } from "../jobs/crash-points.js";
-import { injectCrashPoint } from "../jobs/crash-points.js";
-import { resolveContainedPath, type StorageLayout } from "./layout.js";
+import { validateVersionMarker } from "@/schemas/document-manifest";
+import type { CrashPointInjector } from "@/jobs/crash-points";
+import { injectCrashPoint } from "@/jobs/crash-points";
+import { resolveContainedPath, type StorageLayout } from "@/storage/layout";
 
 async function syncDirectory(path: string): Promise<void> {
   const handle = await open(path, "r");

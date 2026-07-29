@@ -1,1 +1,1 @@
-export { resolveContainedPath } from "./layout.js";
+export { resolveContainedPath } from "@/storage/layout";

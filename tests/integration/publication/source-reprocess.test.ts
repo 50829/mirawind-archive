@@ -6,10 +6,8 @@ import { describe, expect, it } from "vitest";
 import type { MarkdownCandidate } from "@/compiler/document/candidate-discovery";
 import { DraftRepository } from "@/db/repositories/drafts";
 import { ImportRepository } from "@/db/repositories/imports";
-import {
-  finalizePreparedDraft,
-  prepareDraft,
-} from "@/jobs/handlers/prepare-draft";
+import { finalizePreparedDraft } from "@/jobs/handlers/finalize-prepared-draft";
+import { prepareDraft } from "@/jobs/handlers/prepare-draft";
 import { parseBookConfigYaml } from "@/schemas/book-config";
 import { queueSourceReprocess } from "@/services/source-reprocess";
 

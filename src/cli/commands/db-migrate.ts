@@ -1,9 +1,9 @@
 import { access, mkdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
-import { openDatabase } from "../../db/connection.js";
-import { loadMigrationManifest } from "../../db/migration-manifest.js";
-import { applyMigrations, withSchemaLock } from "../../db/migrate.js";
+import { openDatabase } from "@/db/connection";
+import { loadMigrationManifest } from "@/db/migration-manifest";
+import { applyMigrations, withSchemaLock } from "@/db/migrate";
 
 async function exists(path: string): Promise<boolean> {
   try {

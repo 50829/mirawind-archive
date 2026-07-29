@@ -32,7 +32,7 @@ import {
   mergeAcceptedNodes,
   type ContentRole,
   type EditableStructureNode as StructureNode,
-} from "./structure-editor-state";
+} from "@/components/preview/structure-editor-state";
 
 interface HeadingContext {
   readonly block_id: string;

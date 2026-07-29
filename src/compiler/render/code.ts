@@ -3,10 +3,7 @@ import { createHash } from "node:crypto";
 import { transformerStyleToClass } from "@shikijs/transformers";
 import { createHighlighter, type HighlighterGeneric } from "shiki";
 
-import {
-  createSafeDiagnostic,
-  type SafeDiagnostic,
-} from "../../domain/errors.js";
+import { createSafeDiagnostic, type SafeDiagnostic } from "@/domain/errors";
 
 interface HastNode {
   children?: HastNode[];

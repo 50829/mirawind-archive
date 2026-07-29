@@ -21,7 +21,7 @@ describe("production renderer and style asset closure", () => {
 
     expect(packageJson.scripts).toMatchObject({
       build:
-        "astro build && tsc -p tsconfig.processes.json && node scripts/copy-runtime-schemas.mjs",
+        "astro build && vite build --config vite.processes.config.ts && node scripts/copy-runtime-schemas.mjs",
       prebuild: "pnpm prepare:assets",
       "prepare:assets":
         "pnpm prepare:renderer-assets && pnpm prepare:reader-assets && pnpm prepare:styles",

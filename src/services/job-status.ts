@@ -1,4 +1,4 @@
-import type { JobRecord } from "../db/repositories/jobs.js";
+import type { JobRecord } from "@/db/repositories/jobs";
 import type Database from "better-sqlite3";
 
 function timestamp(value: number | null): string | null {

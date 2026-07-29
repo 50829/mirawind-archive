@@ -6,18 +6,18 @@ import Busboy, {
 } from "@fastify/busboy";
 import type Database from "better-sqlite3";
 
-import { DraftRepository } from "../../db/repositories/drafts.js";
-import { ImportRepository } from "../../db/repositories/imports.js";
-import { JobRepository } from "../../db/repositories/jobs.js";
-import { SafeApplicationError } from "../../domain/errors.js";
+import { DraftRepository } from "@/db/repositories/drafts";
+import { ImportRepository } from "@/db/repositories/imports";
+import { JobRepository } from "@/db/repositories/jobs";
+import { SafeApplicationError } from "@/domain/errors";
 import {
   ImportUploadService,
   importUploadIdempotencyOperation,
   m1ImportExpiryMs,
   maximumUploadBytes,
   type ImportUploadResult,
-} from "../../services/import-upload.js";
-import type { StorageLayout } from "../../storage/layout.js";
+} from "@/services/import-upload";
+import type { StorageLayout } from "@/storage/layout";
 
 function multipartError(message = "The multipart upload is invalid.") {
   return new SafeApplicationError("INVALID_MULTIPART", message, 400);

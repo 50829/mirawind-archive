@@ -11,34 +11,33 @@ import {
 } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
-import { renderReaderShell } from "../components/reader/render.js";
-import { prepareConfiguredDocument } from "./document/configured-document.js";
+import { prepareConfiguredDocument } from "@/compiler/document/configured-document";
 import {
   buildDocumentManifest,
   canonicalJson,
   compilerIdentity,
   type ManifestResource,
   type ManifestSourceFile,
-} from "./document/manifest.js";
-import { renderSemanticDocument } from "./render/document.js";
-import { katexCriticalCss, rendererStylesheetUrl } from "./render/assets.js";
-import { inspectRasterImage } from "./resources/images.js";
-import { resolveDocumentResources } from "./resources/resolver.js";
-import { buildSearchSpool, writeSearchSpool } from "./search/build-spool.js";
-import { toIsoDateTime } from "../domain/time.js";
-import type { SafeDiagnostic } from "../domain/errors.js";
-import type { SemanticCompilationIdentity } from "./document/types.js";
-import { parseBookConfigYaml } from "../schemas/book-config.js";
+} from "@/compiler/document/manifest";
+import { inspectRasterImage } from "@/compiler/resources/images";
+import { resolveDocumentResources } from "@/compiler/resources/resolver";
+import {
+  buildSearchSpool,
+  writeSearchSpool,
+} from "@/compiler/search/build-spool";
+import { materializeVersionPages } from "@/compiler/version-pages";
+import { toIsoDateTime } from "@/domain/time";
+import type { SemanticCompilationIdentity } from "@/compiler/document/types";
+import { parseBookConfigYaml } from "@/schemas/book-config";
 import {
   validateDocumentManifest,
   validateVersionMarker,
-} from "../schemas/document-manifest.js";
-import { atomicWriteFile, resolveContainedPath } from "../storage/layout.js";
-import { readerStylesheetUrl } from "../styles/assets.js";
+} from "@/schemas/document-manifest";
+import { atomicWriteFile, resolveContainedPath } from "@/storage/layout";
 import {
   profilePipelineStage,
   recordPipelineProfileMetrics,
-} from "../observability/pipeline-profile.js";
+} from "@/observability/pipeline-profile";
 
 export const versionBuildArtifactFilename = "version-build-result.json";
 
@@ -49,23 +48,6 @@ export interface VersionBuildArtifact {
   readonly manifestSha256: string;
   readonly versionDirectory: "version";
   readonly versionId: string;
-}
-
-const nonBlockingRenderDiagnosticCodes = new Set([
-  "CODE_LANGUAGE_UNSUPPORTED",
-  "MATH_RENDER_FAILED",
-]);
-
-function assertNonBlockingRenderDiagnostics(
-  diagnostics: readonly SafeDiagnostic[],
-): void {
-  if (
-    diagnostics.some(
-      (diagnostic) => !nonBlockingRenderDiagnosticCodes.has(diagnostic.code),
-    )
-  ) {
-    throw new Error("VERSION_RENDER_DIAGNOSTIC");
-  }
 }
 
 interface FileDescriptor {
@@ -112,37 +94,6 @@ function mediaType(format: string): string {
   if (format === "gif") return "image/gif";
   if (format === "webp") return "image/webp";
   throw new Error("PUBLISHED_RESOURCE_FORMAT_UNSUPPORTED");
-}
-
-function htmlEscape(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function htmlDocument(input: {
-  readonly body: string;
-  readonly canonicalPath: string;
-  readonly css: string;
-  readonly language: string;
-  readonly title: string;
-}): string {
-  return `<!doctype html>
-<html lang="${htmlEscape(input.language)}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width">
-<title>${htmlEscape(input.title)}</title>
-<link rel="canonical" href="${htmlEscape(input.canonicalPath)}">
-<link rel="stylesheet" href="${rendererStylesheetUrl}">
-<link rel="stylesheet" href="${readerStylesheetUrl}">
-<style>${katexCriticalCss}${input.css}</style>
-</head>
-<body>${input.body}</body>
-</html>
-`;
 }
 
 function relativePath(root: string, target: string): string {
@@ -387,144 +338,15 @@ export async function buildImmutableVersion(input: {
       resources: resourceResolution.resources.length,
     });
 
-    const bookKey =
-      typeof config.alias === "string" ? config.alias : String(input.bookId);
-    const pageHref = (candidate: (typeof pages)[number]) =>
-      `/read/${bookKey}/${candidate.alias ?? candidate.pageId}`;
-    const displayHeadingTitle = (heading: (typeof headings)[number]) =>
-      heading.number
-        ? `${heading.number}. ${heading.display_title}`
-        : heading.display_title;
-    const { pageByHeading, pageById, readerToc } = await profilePipelineStage(
-      "page_model",
-      () => {
-        const headingsToPages = new Map(
-          pages.flatMap((page) =>
-            page.document.headings
-              .filter((heading) => page.blockIds.includes(heading.blockId))
-              .map((heading) => [heading.blockId, page.pageId] as const),
-          ),
-        );
-        const pagesById = new Map(pages.map((page) => [page.pageId, page]));
-        const toc = headings
-          .filter((heading) => heading.include_in_toc)
-          .map((heading) => {
-            const pageId = headingsToPages.get(heading.block_id);
-            const headingPage = pageId ? pagesById.get(pageId) : undefined;
-            if (!pageId || !headingPage) {
-              throw new Error("VERSION_HEADING_PAGE_MISSING");
-            }
-            return Object.freeze({
-              blockId: heading.block_id,
-              href: `${pageHref(headingPage)}#${heading.block_id}`,
-              level: heading.display_level,
-              pageId,
-              title: displayHeadingTitle(heading),
-            });
-          });
-        return {
-          pageByHeading: headingsToPages,
-          pageById: pagesById,
-          readerToc: toc,
-        };
-      },
-    );
-    const renderedPages = await profilePipelineStage("page_render", () =>
-      Promise.all(
-        pages.map(async (page) => {
-          const rendered = await renderSemanticDocument({
-            document: page.document,
-            headingHref(blockId) {
-              const pageId = pageByHeading.get(blockId);
-              if (!pageId) throw new Error("VERSION_HEADING_PAGE_MISSING");
-              const headingPage = pageById.get(pageId);
-              if (!headingPage) throw new Error("VERSION_HEADING_PAGE_MISSING");
-              return `${pageHref(headingPage)}#${blockId}`;
-            },
-            headingOverrides: page.headingOverrides,
-            publishedResourceUrl: (resourceId) =>
-              `/books/${input.bookId}/assets/${input.versionId}/${resourceId}`,
-            resourceResolution,
-          });
-          assertNonBlockingRenderDiagnostics(rendered.diagnostics);
-          return { page, rendered };
-        }),
-      ),
-    );
-    const css = renderedPages
-      .map(({ rendered }) => rendered.css)
-      .filter(Boolean)
-      .sort()
-      .filter((value, index, values) => value !== values[index - 1])
-      .join("");
-    const cssPath = "published/styles/document.css";
-    const language =
-      typeof (config.metadata as Record<string, unknown> | undefined)
-        ?.language === "string"
-        ? String(
-            (config.metadata as Record<string, unknown> | undefined)?.language,
-          )
-        : "zh-CN";
-    let outputBytes = Buffer.byteLength(css);
-    await profilePipelineStage("page_write", async () => {
-      await atomicWriteFile(resolve(versionDirectory, cssPath), css, {
-        mode: 0o400,
-      });
-      for (const { page, rendered } of renderedPages) {
-        const pageIndex = pages.findIndex(
-          (candidate) => candidate.pageId === page.pageId,
-        );
-        const nextPage = pageIndex >= 0 ? pages.at(pageIndex + 1) : undefined;
-        const previousPage =
-          pageIndex > 0 ? pages.at(pageIndex - 1) : undefined;
-        const outline = headings
-          .filter(
-            (heading) =>
-              heading.include_in_toc &&
-              page.blockIds.includes(heading.block_id),
-          )
-          .map((heading) => ({
-            blockId: heading.block_id,
-            href: `#${heading.block_id}`,
-            level: heading.display_level,
-            title: displayHeadingTitle(heading),
-          }));
-        const html = htmlDocument({
-          body: renderReaderShell({
-            bodyHtml: rendered.html,
-            bookKey,
-            bookTitle: String(config.title),
-            currentHeadingId: outline.at(0)?.blockId ?? null,
-            currentPageId: page.pageId,
-            firstPageHref: pageHref(pages[0] ?? page),
-            nextHref: nextPage ? pageHref(nextPage) : null,
-            originalDownloads: originalFiles.map((original) => ({
-              href: `/books/${bookKey}/originals/${String(original.id)}`,
-              label:
-                String(original.role) === "mineru_zip"
-                  ? "下载原始 ZIP"
-                  : "下载原文件",
-            })),
-            outline,
-            previousHref: previousPage ? pageHref(previousPage) : null,
-            toc: readerToc,
-          }),
-          canonicalPath: pageHref(page),
-          css,
-          language,
-          title: page.title,
-        });
-        outputBytes += Buffer.byteLength(html);
-        await atomicWriteFile(
-          resolve(versionDirectory, page.outputPath),
-          html,
-          {
-            mode: 0o400,
-          },
-        );
-      }
+    await materializeVersionPages({
+      bookId: input.bookId,
+      config,
+      configured,
+      originalFiles,
+      resourceResolution,
+      versionDirectory,
+      versionId: input.versionId,
     });
-    recordPipelineProfileMetrics({ output_bytes: outputBytes });
 
     const createdAt = toIsoDateTime(input.createdAtMs);
     const manifestJson = await profilePipelineStage(

@@ -1,4 +1,4 @@
-import { SafeApplicationError } from "../domain/errors.js";
+import { SafeApplicationError } from "@/domain/errors";
 
 export const supportedBookSchemaVersions = Object.freeze([3] as const);
 export const supportedDocumentManifestSchemaVersions = Object.freeze([

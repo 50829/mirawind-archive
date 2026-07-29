@@ -3,10 +3,10 @@ import type Database from "better-sqlite3";
 import type {
   CandidateDiagnostic,
   MarkdownCandidate,
-} from "../../compiler/document/candidate-discovery.js";
-import { createOpaqueId } from "../../domain/ids.js";
-import { withImmediateTransaction } from "../transaction/immediate.js";
-import type { TypographyProfile } from "../../compiler/document/types.js";
+} from "@/compiler/document/candidate-discovery";
+import { createOpaqueId } from "@/domain/ids";
+import { withImmediateTransaction } from "@/db/transaction/immediate";
+import type { TypographyProfile } from "@/compiler/document/types";
 
 export type ImportState =
   | "uploaded"

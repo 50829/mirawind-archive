@@ -4,7 +4,7 @@ import { basename, dirname, relative, resolve, sep } from "node:path";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 
-import { createOpaqueId } from "../../domain/ids.js";
+import { createOpaqueId } from "@/domain/ids";
 
 const maximumMarkdownBytes = 256 * 1024 * 1024;
 const ignoredMarkdownNames = new Set([

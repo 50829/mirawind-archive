@@ -5,15 +5,15 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import type { TypographyProfile } from "../compiler/document/types.js";
-import type { MarkdownCandidate } from "../compiler/document/candidate-discovery.js";
-import { DraftRepository } from "../db/repositories/drafts.js";
-import { ImportRepository } from "../db/repositories/imports.js";
-import { JobRepository, type JobRecord } from "../db/repositories/jobs.js";
-import { SourceRepository } from "../db/repositories/sources.js";
-import { SafeApplicationError } from "../domain/errors.js";
-import { createOpaqueId } from "../domain/ids.js";
-import { resolveContainedPath, type StorageLayout } from "../storage/layout.js";
+import type { TypographyProfile } from "@/compiler/document/types";
+import type { MarkdownCandidate } from "@/compiler/document/candidate-discovery";
+import { DraftRepository } from "@/db/repositories/drafts";
+import { ImportRepository } from "@/db/repositories/imports";
+import { JobRepository, type JobRecord } from "@/db/repositories/jobs";
+import { SourceRepository } from "@/db/repositories/sources";
+import { SafeApplicationError } from "@/domain/errors";
+import { createOpaqueId } from "@/domain/ids";
+import { resolveContainedPath, type StorageLayout } from "@/storage/layout";
 
 const retainedImportExpiry = Number.MAX_SAFE_INTEGER;
 

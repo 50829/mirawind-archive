@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-import type { NormalizedSearchQuery } from "../../compiler/search/query.js";
+import type { NormalizedSearchQuery } from "@/compiler/search/query";
 
 export interface BookSearchResult {
   readonly blockId: string;

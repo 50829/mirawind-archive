@@ -1,9 +1,6 @@
 import katex from "katex";
 
-import {
-  createSafeDiagnostic,
-  type SafeDiagnostic,
-} from "../../domain/errors.js";
+import { createSafeDiagnostic, type SafeDiagnostic } from "@/domain/errors";
 
 export interface MathRenderResult {
   readonly diagnostic?: SafeDiagnostic;

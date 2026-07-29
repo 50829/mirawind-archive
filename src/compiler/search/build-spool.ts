@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 
-import { canonicalJson } from "../document/manifest.js";
-import type { NormalizedDocument } from "../document/types.js";
-import type { NumberedHeading } from "../document/numbering.js";
-import type { CompiledDocumentPage } from "../document/pages.js";
-import { atomicWriteFile } from "../../storage/layout.js";
+import { canonicalJson } from "@/compiler/document/manifest";
+import type { NormalizedDocument } from "@/compiler/document/types";
+import type { NumberedHeading } from "@/compiler/document/numbering";
+import type { CompiledDocumentPage } from "@/compiler/document/pages";
+import { atomicWriteFile } from "@/storage/layout";
 
 export interface SearchFtsRow {
   readonly authors: string;

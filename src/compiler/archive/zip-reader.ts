@@ -7,11 +7,11 @@ import {
   type Entry,
 } from "@zip.js/zip.js";
 
-import { SafeApplicationError } from "../../domain/errors.js";
+import { SafeApplicationError } from "@/domain/errors";
 import {
   ArchivePathRegistry,
   type NormalizedArchiveEntryPath,
-} from "./path-policy.js";
+} from "@/compiler/archive/path-policy";
 
 export const maximumArchiveEntries = 20_000;
 

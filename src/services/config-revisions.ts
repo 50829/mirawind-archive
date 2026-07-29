@@ -8,22 +8,19 @@ import { stringify } from "yaml";
 import {
   parsePrintedContentsAnalysisV2,
   type PrintedContentsAnalysisV2,
-} from "../compiler/document/printed-contents-analysis.js";
-import { prepareConfiguredDocument } from "../compiler/document/configured-document.js";
-import { canonicalJson } from "../compiler/document/manifest.js";
-import { DraftRepository } from "../db/repositories/drafts.js";
-import { SourceRepository } from "../db/repositories/sources.js";
-import { SafeApplicationError } from "../domain/errors.js";
-import { createStrongEtag } from "../http/cache/policies.js";
-import {
-  parseBookConfigYaml,
-  validateBookConfig,
-} from "../schemas/book-config.js";
+} from "@/compiler/document/printed-contents-analysis";
+import { prepareConfiguredDocument } from "@/compiler/document/configured-document";
+import { canonicalJson } from "@/compiler/document/manifest";
+import { DraftRepository } from "@/db/repositories/drafts";
+import { SourceRepository } from "@/db/repositories/sources";
+import { SafeApplicationError } from "@/domain/errors";
+import { createStrongEtag } from "@/http/cache/policies";
+import { parseBookConfigYaml, validateBookConfig } from "@/schemas/book-config";
 import {
   atomicWriteFile,
   resolveContainedPath,
   type StorageLayout,
-} from "../storage/layout.js";
+} from "@/storage/layout";
 
 const maximumConfigBytes = 4 * 1024 * 1024;
 const maximumAnalysisBytes = 4 * 1024 * 1024;

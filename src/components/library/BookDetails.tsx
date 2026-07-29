@@ -1,4 +1,4 @@
-import type { BookDetails as BookDetailsView } from "../../services/library.js";
+import type { BookDetails as BookDetailsView } from "@/services/library";
 
 function formatBytes(value: number): string {
   if (value < 1_000) return `${value} B`;

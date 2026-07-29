@@ -4,7 +4,7 @@ import {
   isDeletionSafeErrorCode,
   type BookDeletionState,
   type DeletionSafeErrorCode,
-} from "../../domain/book-deletion.js";
+} from "@/domain/book-deletion";
 
 interface DeletionRow {
   book_id: number;

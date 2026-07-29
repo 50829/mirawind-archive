@@ -2,14 +2,14 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { BookDeletionRepository } from "../db/repositories/book-deletions.js";
-import type { DeletionSafeErrorCode } from "../domain/book-deletion.js";
-import { isOpaqueId } from "../domain/ids.js";
+import { BookDeletionRepository } from "@/db/repositories/book-deletions";
+import type { DeletionSafeErrorCode } from "@/domain/book-deletion";
+import { isOpaqueId } from "@/domain/ids";
 import {
   removeExactContainedTree,
   UnsafePermanentRemovalTargetError,
-} from "../storage/permanent-removal.js";
-import type { StorageLayout } from "../storage/layout.js";
+} from "@/storage/permanent-removal";
+import type { StorageLayout } from "@/storage/layout";
 
 export interface PermanentBookCleanupResult {
   readonly removedStagingDirectories: number;

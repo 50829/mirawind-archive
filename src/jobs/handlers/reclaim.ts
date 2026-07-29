@@ -3,8 +3,8 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { VersionRepository } from "../../db/repositories/versions.js";
-import type { StorageLayout } from "../../storage/layout.js";
+import { VersionRepository } from "@/db/repositories/versions";
+import type { StorageLayout } from "@/storage/layout";
 
 export const versionRetentionGraceMs = 24 * 60 * 60 * 1_000;
 

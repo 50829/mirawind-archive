@@ -52,6 +52,14 @@ export default defineConfig({
           name: "contract",
         },
       },
+      {
+        extends: true,
+        test: {
+          ...shared,
+          include: ["tests/architecture/**/*.test.ts"],
+          name: "architecture",
+        },
+      },
     ],
   },
 });

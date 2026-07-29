@@ -1,21 +1,30 @@
 import { createHash } from "node:crypto";
 
-import { validateBookConfig } from "../../schemas/book-config.js";
-import { compilerIdentity, semanticCompilationDigest } from "./manifest.js";
-import { normalizeDocumentBlocks } from "./normalize.js";
-import { numberConfiguredHeadings, type NumberedHeading } from "./numbering.js";
-import { parseMarkdownDocument } from "./parser.js";
-import { splitDocumentPages, type CompiledDocumentPage } from "./pages.js";
-import { applySourceRegions } from "./source-regions.js";
+import { validateBookConfig } from "@/schemas/book-config";
+import {
+  compilerIdentity,
+  semanticCompilationDigest,
+} from "@/compiler/document/manifest";
+import { normalizeDocumentBlocks } from "@/compiler/document/normalize";
+import {
+  numberConfiguredHeadings,
+  type NumberedHeading,
+} from "@/compiler/document/numbering";
+import { parseMarkdownDocument } from "@/compiler/document/parser";
+import {
+  splitDocumentPages,
+  type CompiledDocumentPage,
+} from "@/compiler/document/pages";
+import { applySourceRegions } from "@/compiler/document/source-regions";
 import type {
   ConfirmedSourceRegion,
   NormalizedDocument,
   SemanticCompilationIdentity,
-} from "./types.js";
+} from "@/compiler/document/types";
 import {
   validateDocumentConfig,
   type ValidatedDocumentConfig,
-} from "./validate-config.js";
+} from "@/compiler/document/validate-config";
 
 interface ConfigStructureNode {
   readonly block_id: string;

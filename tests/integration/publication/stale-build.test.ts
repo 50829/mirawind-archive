@@ -8,7 +8,7 @@ import { JobRepository } from "@/db/repositories/jobs";
 import { SourceRepository } from "@/db/repositories/sources";
 import { VersionRepository } from "@/db/repositories/versions";
 import { publishReadyVersion } from "@/services/publication";
-import type { BookVersionPresentation } from "@/services/book-presentation";
+import type { BookVersionPresentation } from "@/db/repositories/book-presentation-record";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 

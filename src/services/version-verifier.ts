@@ -5,14 +5,12 @@ import { relative, resolve, sep } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { BookPresentationRepository } from "../db/repositories/book-presentations.js";
-import {
-  type BookVersionRecord,
-  VersionRepository,
-} from "../db/repositories/versions.js";
-import { withImmediateTransaction } from "../db/transaction/immediate.js";
-import { validateVersionMarker } from "../schemas/document-manifest.js";
-import { resolveContainedPath, type StorageLayout } from "../storage/layout.js";
+import { BookPresentationRepository } from "@/db/repositories/book-presentations";
+import type { BookVersionRecord } from "@/db/repositories/version-record";
+import { VersionRepository } from "@/db/repositories/versions";
+import { withImmediateTransaction } from "@/db/transaction/immediate";
+import { validateVersionMarker } from "@/schemas/document-manifest";
+import { resolveContainedPath, type StorageLayout } from "@/storage/layout";
 
 export type VersionVerificationCode =
   | "VERSION_DIRECTORY_INVALID"

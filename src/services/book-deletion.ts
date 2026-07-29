@@ -2,14 +2,14 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 import type Database from "better-sqlite3";
 
-import { BookDeletionRepository } from "../db/repositories/book-deletions.js";
-import { withImmediateTransaction } from "../db/transaction/immediate.js";
-import { SafeApplicationError } from "../domain/errors.js";
-import { createOpaqueId } from "../domain/ids.js";
+import { BookDeletionRepository } from "@/db/repositories/book-deletions";
+import { withImmediateTransaction } from "@/db/transaction/immediate";
+import { SafeApplicationError } from "@/domain/errors";
+import { createOpaqueId } from "@/domain/ids";
 import {
   createBookDeletionToken,
   normalizeMutationToken,
-} from "./book-deletion-token.js";
+} from "@/services/book-deletion-token";
 
 interface DeletableBookRow {
   alias: string | null;

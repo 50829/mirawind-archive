@@ -3,11 +3,11 @@ import addFormats from "ajv-formats";
 
 import manifestSchema from "../../docs/schemas/document-manifest.schema.json" with { type: "json" };
 import versionSchema from "../../docs/schemas/version.schema.json" with { type: "json" };
-import { SafeApplicationError } from "../domain/errors.js";
+import { SafeApplicationError } from "@/domain/errors";
 import {
   requireSupportedDocumentManifestSchemaVersion,
   requireSupportedVersionMarkerSchemaVersion,
-} from "./versioning.js";
+} from "@/schemas/versioning";
 
 interface SchemaDiagnostic {
   readonly instancePath: string;

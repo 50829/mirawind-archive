@@ -1,8 +1,8 @@
-import type { RequestSession } from "../../auth/session.js";
-import { getRuntimeDatabase } from "../../auth/session.js";
-import { InstallationRepository } from "../../db/repositories/installation.js";
-import { SafeApplicationError } from "../../domain/errors.js";
-import { authorizeSoleAdministrator } from "./admin-guard.js";
+import type { RequestSession } from "@/auth/session";
+import { getRuntimeDatabase } from "@/auth/session";
+import { InstallationRepository } from "@/db/repositories/installation";
+import { SafeApplicationError } from "@/domain/errors";
+import { authorizeSoleAdministrator } from "@/http/authorization/admin-guard";
 
 export function resolveRuntimeAdministrator(
   session: RequestSession | null,

@@ -1,14 +1,20 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/cli/**/*.ts", "src/worker/**/*.ts"],
+  "include": [
+    "src/cli/**/*.ts",
+    "src/composition/**/*.ts",
+    "src/entrypoints/**/*.ts",
+    "src/modules/**/*.ts",
+    "src/platform/**/*.ts",
+    "src/worker/**/*.ts",
+    "vite.processes.config.ts"
+  ],
   "exclude": ["dist", "node_modules", "tests"],
   "compilerOptions": {
     "allowImportingTsExtensions": false,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "noEmit": false,
-    "outDir": "dist/processes",
-    "rootDir": "src",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
     "types": ["node"]
   }
 }

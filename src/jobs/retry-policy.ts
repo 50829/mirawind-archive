@@ -1,5 +1,5 @@
-import type { JobRecord } from "../db/repositories/jobs.js";
-import { isTerminalJobState } from "./state-machine.js";
+import type { JobRecord } from "@/db/repositories/jobs";
+import { isTerminalJobState } from "@/jobs/state-machine";
 
 export type JobRetryMode = "automatic" | "manual";
 

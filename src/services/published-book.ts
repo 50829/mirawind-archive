@@ -2,17 +2,17 @@ import { readFile } from "node:fs/promises";
 
 import type Database from "better-sqlite3";
 
-import type { AuthorizationDecision } from "../http/authorization/admin-guard.js";
+import type { AuthorizationDecision } from "@/http/authorization/admin-guard";
 import {
   authorizeBookResource,
   type BookVisibility,
   type VersionState,
-} from "../http/authorization/book-guard.js";
-import { SafeApplicationError } from "../domain/errors.js";
-import { isOpaqueId } from "../domain/ids.js";
-import { validateDocumentManifest } from "../schemas/document-manifest.js";
-import type { StorageLayout } from "../storage/layout.js";
-import { resolveContainedPath } from "../storage/layout.js";
+} from "@/http/authorization/book-guard";
+import { SafeApplicationError } from "@/domain/errors";
+import { isOpaqueId } from "@/domain/ids";
+import { validateDocumentManifest } from "@/schemas/document-manifest";
+import type { StorageLayout } from "@/storage/layout";
+import { resolveContainedPath } from "@/storage/layout";
 
 interface CurrentBookRow {
   current_version_id: string | null;

@@ -1,5 +1,5 @@
-import { parseEnvironment } from "../config/environment.js";
-import { createStorageLayout, type StorageLayout } from "./layout.js";
+import { parseEnvironment } from "@/config/environment";
+import { createStorageLayout, type StorageLayout } from "@/storage/layout";
 
 let runtimeLayout: Promise<StorageLayout> | undefined;
 

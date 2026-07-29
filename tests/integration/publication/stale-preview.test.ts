@@ -11,11 +11,9 @@ import { DraftRepository } from "@/db/repositories/drafts";
 import { ImportRepository } from "@/db/repositories/imports";
 import { JobRepository } from "@/db/repositories/jobs";
 import { SourceRepository } from "@/db/repositories/sources";
-import {
-  buildPreview,
-  finalizeBuiltPreview,
-} from "@/jobs/handlers/build-preview";
-import { draftPreparationVersion } from "@/jobs/handlers/prepare-draft";
+import { buildPreview } from "@/jobs/handlers/build-preview";
+import { finalizeBuiltPreview } from "@/jobs/handlers/preview-finalization";
+import { draftPreparationVersion } from "@/jobs/handlers/prepared-draft-artifact";
 import { assertReadyPreviewIdentity } from "@/services/preview-identity";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";

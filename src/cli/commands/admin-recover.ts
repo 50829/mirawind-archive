@@ -1,9 +1,9 @@
 import type Database from "better-sqlite3";
 
-import { type createSetupAuth } from "../../auth/setup-server.js";
-import { AuditEventRepository } from "../../db/repositories/audit-events.js";
-import { InstallationRepository } from "../../db/repositories/installation.js";
-import { withImmediateTransaction } from "../../db/transaction/immediate.js";
+import { type createSetupAuth } from "@/auth/setup-server";
+import { AuditEventRepository } from "@/db/repositories/audit-events";
+import { InstallationRepository } from "@/db/repositories/installation";
+import { withImmediateTransaction } from "@/db/transaction/immediate";
 
 export async function recoverAdministrator(input: {
   readonly auth: ReturnType<typeof createSetupAuth>;

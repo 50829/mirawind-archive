@@ -1,16 +1,13 @@
 import { lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  createSafeDiagnostic,
-  type SafeDiagnostic,
-} from "../../domain/errors.js";
-import { createOpaqueId } from "../../domain/ids.js";
+import { createSafeDiagnostic, type SafeDiagnostic } from "@/domain/errors";
+import { createOpaqueId } from "@/domain/ids";
 import type {
   ParsedDocument,
   SourcePosition,
   TransientDocumentNode,
-} from "../document/types.js";
+} from "@/compiler/document/types";
 
 export interface ResolvedResource {
   readonly absolutePath: string;

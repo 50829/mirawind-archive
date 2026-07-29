@@ -12,13 +12,16 @@ import {
 } from "@/components/ui/manage-classes";
 import { usePolling } from "@/components/manage/use-polling";
 
-import { DiagnosticsPanel, type PreviewDiagnostic } from "./DiagnosticsPanel";
-import { PublishPanel } from "./PublishPanel";
+import {
+  DiagnosticsPanel,
+  type PreviewDiagnostic,
+} from "@/components/preview/DiagnosticsPanel";
+import { PublishPanel } from "@/components/preview/PublishPanel";
 import {
   StructureEditor,
   type StructureEditorHandle,
   type StructureEditorState,
-} from "./StructureEditor";
+} from "@/components/preview/StructureEditor";
 
 interface PreviewHeading {
   readonly block_id: string;

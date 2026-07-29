@@ -4,39 +4,20 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { canonicalJson } from "../compiler/document/manifest.js";
-import { BookPresentationRepository } from "../db/repositories/book-presentations.js";
-import type { BookVersionRecord } from "../db/repositories/versions.js";
-import {
-  parseBookConfigYaml,
-  validateBookConfig,
-} from "../schemas/book-config.js";
-import { validateDocumentManifest } from "../schemas/document-manifest.js";
-import type { StorageLayout } from "../storage/layout.js";
-import { resolveContainedPath } from "../storage/layout.js";
+import { canonicalJson } from "@/compiler/document/manifest";
+import type { BookVersionPresentation } from "@/db/repositories/book-presentation-record";
+import { BookPresentationRepository } from "@/db/repositories/book-presentations";
+import type { BookVersionRecord } from "@/db/repositories/version-record";
+import { parseBookConfigYaml, validateBookConfig } from "@/schemas/book-config";
+import { validateDocumentManifest } from "@/schemas/document-manifest";
+import type { StorageLayout } from "@/storage/layout";
+import { resolveContainedPath } from "@/storage/layout";
 
 const maximumMetadataBytes = 65_536;
 const maximumTocPreviewBytes = 262_144;
 const maximumTocPreviewEntries = 200;
 const maximumConfigBytes = 4 * 1024 * 1024;
 const maximumManifestBytes = 64 * 1024 * 1024;
-
-export interface BookVersionPresentation {
-  readonly alias: string | null;
-  readonly bookId: number;
-  readonly configRevision: number;
-  readonly coverResourceId: string | null;
-  readonly createdAtMs: number;
-  readonly firstPageAlias: string | null;
-  readonly firstPageId: number;
-  readonly metadataJson: string;
-  readonly projectionSchemaVersion: 1;
-  readonly projectionSha256: string;
-  readonly title: string;
-  readonly tocEntryCount: number;
-  readonly tocPreviewJson: string;
-  readonly versionId: string;
-}
 
 interface ManifestPage {
   readonly alias?: string;

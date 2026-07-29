@@ -5,18 +5,18 @@ import rehypeStringify from "rehype-stringify";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 
-import type { SafeDiagnostic } from "../../domain/errors.js";
+import type { SafeDiagnostic } from "@/domain/errors";
 import type {
   NormalizedDocument,
   TransientDocumentNode,
-} from "../document/types.js";
-import type { ResourceResolution } from "../resources/resolver.js";
-import { renderCode } from "./code.js";
-import { renderMath } from "./math.js";
+} from "@/compiler/document/types";
+import type { ResourceResolution } from "@/compiler/resources/resolver";
+import { renderCode } from "@/compiler/render/code";
+import { renderMath } from "@/compiler/render/math";
 import {
   importedHtmlSanitizationSchema,
   rehypeRestrictResources,
-} from "./sanitize.js";
+} from "@/compiler/render/sanitize";
 
 interface TreeNode {
   alt?: string;

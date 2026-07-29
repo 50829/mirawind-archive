@@ -1,6 +1,6 @@
-import { applyResponsePolicy, createStrongEtag } from "./policies.js";
-import { ifNoneMatchMatches } from "../conditional.js";
-import type { BookVisibility } from "../authorization/book-guard.js";
+import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
+import { ifNoneMatchMatches } from "@/http/conditional";
+import type { BookVisibility } from "@/http/authorization/book-guard";
 
 export function readingPageHeaders(input: {
   readonly pageIdentity: string;

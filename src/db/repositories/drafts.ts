@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
-import { createOpaqueId } from "../../domain/ids.js";
-import { withImmediateTransaction } from "../transaction/immediate.js";
+import { createOpaqueId } from "@/domain/ids";
+import { withImmediateTransaction } from "@/db/transaction/immediate";
 
 export type BookVisibility = "draft" | "private" | "public";
 export type DraftPreviewState = "building" | "failed" | "ready";

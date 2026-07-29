@@ -1,4 +1,4 @@
-import { validateFallbackPassword } from "../http/authorization/admin-guard.js";
+import { validateFallbackPassword } from "@/http/authorization/admin-guard";
 
 export interface AdminPromptResult {
   readonly confirmation?: boolean;

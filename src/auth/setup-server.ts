@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 
-import { type AuthFactoryInput } from "./server.js";
+import { type AuthFactoryInput } from "@/auth/server";
 
 export function createSetupAuth(input: AuthFactoryInput) {
   return betterAuth({

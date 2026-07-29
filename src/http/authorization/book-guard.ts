@@ -1,4 +1,4 @@
-import type { AuthorizationDecision } from "./admin-guard.js";
+import type { AuthorizationDecision } from "@/http/authorization/admin-guard";
 
 export type BookVisibility = "draft" | "private" | "public";
 export type VersionState =

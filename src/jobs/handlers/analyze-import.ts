@@ -4,21 +4,18 @@ import { dirname, resolve } from "node:path";
 import {
   extractZipFile,
   type ArchiveExtractionLimits,
-} from "../../compiler/archive/extractor.js";
+} from "@/compiler/archive/extractor";
 import {
   discoverMarkdownCandidates,
   type CandidateDiscovery,
   type MarkdownCandidate,
-} from "../../compiler/document/candidate-discovery.js";
-import {
-  ImportRepository,
-  type ImportRecord,
-} from "../../db/repositories/imports.js";
-import { atomicWriteFile } from "../../storage/layout.js";
+} from "@/compiler/document/candidate-discovery";
+import { ImportRepository, type ImportRecord } from "@/db/repositories/imports";
+import { atomicWriteFile } from "@/storage/layout";
 import {
   profilePipelineStage,
   recordPipelineProfileMetrics,
-} from "../../observability/pipeline-profile.js";
+} from "@/observability/pipeline-profile";
 
 export const importAnalysisVersion = "mineru-candidate-v1";
 export const analysisArtifactFilename = "analysis-result.json";

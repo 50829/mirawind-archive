@@ -1,9 +1,9 @@
-import { isOpaqueId } from "../../domain/ids.js";
-import type { LayoutEvidenceDiagnostic } from "./layout-evidence.js";
-import type { PdfContentsEvidenceDiagnostic } from "./pdf-contents-evidence.js";
-import type { PdfSourceDiagnostic } from "./pdf-source.js";
-import type { PrintedContentsDetection } from "./printed-toc.js";
-import type { TypographyRiskSummary } from "../preprocess/typography.js";
+import { isOpaqueId } from "@/domain/ids";
+import type { LayoutEvidenceDiagnostic } from "@/compiler/document/layout-evidence";
+import type { PdfContentsEvidenceDiagnostic } from "@/compiler/document/pdf-contents-evidence";
+import type { PdfSourceDiagnostic } from "@/compiler/document/pdf-source";
+import type { PrintedContentsDetection } from "@/compiler/document/printed-toc";
+import type { TypographyRiskSummary } from "@/compiler/preprocess/typography";
 
 export const printedContentsAnalysisIdentity =
   "printed-contents-analysis-v2" as const;

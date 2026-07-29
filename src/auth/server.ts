@@ -2,11 +2,11 @@ import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import type Database from "better-sqlite3";
 
-import type { EnvironmentConfig } from "../config/environment.js";
+import type { EnvironmentConfig } from "@/config/environment";
 import {
   createPasskeyPolicyHooks,
   recordPasskeyUse,
-} from "./passkey-policy.js";
+} from "@/auth/passkey-policy";
 
 export interface AuthFactoryInput {
   readonly database: Database.Database;

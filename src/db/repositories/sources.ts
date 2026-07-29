@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-import { createOpaqueId } from "../../domain/ids.js";
+import { createOpaqueId } from "@/domain/ids";
 
 interface SourceRow {
   analysis_version: string;

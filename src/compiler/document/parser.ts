@@ -3,13 +3,13 @@ import remarkMath from "remark-math";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 
-import { SafeApplicationError } from "../../domain/errors.js";
+import { SafeApplicationError } from "@/domain/errors";
 import type {
   ParsedDocument,
   SemanticContainerKind,
   SourcePosition,
   TransientDocumentNode,
-} from "./types.js";
+} from "@/compiler/document/types";
 
 const containerKinds = new Set<SemanticContainerKind>([
   "definition",

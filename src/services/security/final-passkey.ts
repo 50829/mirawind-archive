@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
-import { type createHttpAuth } from "../../auth/server.js";
-import { AuditEventRepository } from "../../db/repositories/audit-events.js";
+import { type createHttpAuth } from "@/auth/server";
+import { AuditEventRepository } from "@/db/repositories/audit-events";
 
 export type FinalPasskeyDeletionResult =
   | { readonly deleted: true }

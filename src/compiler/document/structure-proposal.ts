@@ -3,13 +3,13 @@ import {
   inferPrintedReferenceLevel,
   inferPrintedReferenceLevels,
   isLocalPartHeading,
-} from "./printed-toc.js";
+} from "@/compiler/document/printed-toc";
 import type {
   ConfirmedSourceRegion,
   NormalizedDocument,
   NormalizedHeading,
   TransientDocumentNode,
-} from "./types.js";
+} from "@/compiler/document/types";
 
 export type ContentRole = "appendix" | "backmatter" | "body" | "frontmatter";
 

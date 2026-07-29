@@ -1,13 +1,14 @@
 import type Database from "better-sqlite3";
 
-import type { SearchSpool } from "../../compiler/search/build-spool.js";
-import type { BookVersionPresentation } from "../../services/book-presentation.js";
-import { withImmediateTransaction } from "../transaction/immediate.js";
-import { BookPresentationRepository } from "./book-presentations.js";
-import { SearchIndexRepository } from "./search-index.js";
-
-export type BookVersionState =
-  "corrupt" | "failed" | "published" | "ready" | "superseded";
+import type { SearchSpool } from "@/compiler/search/build-spool";
+import type { BookVersionPresentation } from "@/db/repositories/book-presentation-record";
+import { withImmediateTransaction } from "@/db/transaction/immediate";
+import { BookPresentationRepository } from "@/db/repositories/book-presentations";
+import { SearchIndexRepository } from "@/db/repositories/search-index";
+import type {
+  BookVersionRecord,
+  BookVersionState,
+} from "@/db/repositories/version-record";
 
 interface VersionRow {
   book_id: number;
@@ -26,25 +27,6 @@ interface VersionRow {
   state: BookVersionState;
   verified_at: number | null;
   version_rel_path: string;
-}
-
-export interface BookVersionRecord {
-  readonly bookId: number;
-  readonly compilerVersion: string;
-  readonly completeAtMs: number;
-  readonly configRevision: number;
-  readonly createdByJobId: string;
-  readonly id: string;
-  readonly manifestSchemaVersion: number;
-  readonly manifestSha256: string;
-  readonly predecessorVersionId: string | null;
-  readonly publishedAtMs: number | null;
-  readonly reclaimedAtMs: number | null;
-  readonly rendererVersion: string;
-  readonly sourceId: string;
-  readonly state: BookVersionState;
-  readonly verifiedAtMs: number | null;
-  readonly versionRelativePath: string;
 }
 
 function mapVersion(row: VersionRow): BookVersionRecord {

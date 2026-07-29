@@ -1,4 +1,4 @@
-import { isOpaqueId } from "./ids.js";
+import { isOpaqueId } from "@/domain/ids";
 
 export class SafeApplicationError extends Error {
   constructor(

@@ -3,16 +3,13 @@ import { dirname, resolve } from "node:path";
 
 import { ZipReader } from "@zip.js/zip.js";
 
-import { SafeApplicationError } from "../../domain/errors.js";
-import {
-  openExclusiveFile,
-  resolveContainedPath,
-} from "../../storage/layout.js";
+import { SafeApplicationError } from "@/domain/errors";
+import { openExclusiveFile, resolveContainedPath } from "@/storage/layout";
 import {
   inspectZipFile,
   NodeFileReader,
   toArchiveFormatError,
-} from "./zip-reader.js";
+} from "@/compiler/archive/zip-reader";
 
 export const archiveResourceLimits = Object.freeze({
   entryBytes: 2 * 1024 * 1024 * 1024,

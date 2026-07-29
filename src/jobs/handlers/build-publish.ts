@@ -7,19 +7,19 @@ import type Database from "better-sqlite3";
 import {
   buildImmutableVersion,
   readVersionBuildArtifact,
-} from "../../compiler/version-builder.js";
-import { parseSearchSpool } from "../../compiler/search/build-spool.js";
-import { VersionRepository } from "../../db/repositories/versions.js";
-import type { CrashPointInjector } from "../crash-points.js";
-import { injectCrashPoint } from "../crash-points.js";
+} from "@/compiler/version-builder";
+import { parseSearchSpool } from "@/compiler/search/build-spool";
+import { VersionRepository } from "@/db/repositories/versions";
+import type { CrashPointInjector } from "@/jobs/crash-points";
+import { injectCrashPoint } from "@/jobs/crash-points";
 import {
   validateDocumentManifest,
   validateVersionMarker,
-} from "../../schemas/document-manifest.js";
-import { deriveBookVersionPresentation } from "../../services/book-presentation.js";
-import { publishReadyVersion } from "../../services/publication.js";
-import { finalizeImmutableVersion } from "../../storage/finalize-version.js";
-import type { StorageLayout } from "../../storage/layout.js";
+} from "@/schemas/document-manifest";
+import { deriveBookVersionPresentation } from "@/services/book-presentation";
+import { publishReadyVersion } from "@/services/publication";
+import { finalizeImmutableVersion } from "@/storage/finalize-version";
+import type { StorageLayout } from "@/storage/layout";
 
 export function versionIdForPublishJob(jobId: string): string {
   return `ver_${createHash("sha256")

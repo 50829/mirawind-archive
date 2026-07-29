@@ -1,9 +1,9 @@
-import { SafeApplicationError } from "../../domain/errors.js";
+import { SafeApplicationError } from "@/domain/errors";
 import {
   applyResponsePolicy,
   type ResponsePolicyKind,
-} from "../cache/policies.js";
-import { robotsMetaContent } from "../seo/robots.js";
+} from "@/http/cache/policies";
+import { robotsMetaContent } from "@/http/seo/robots";
 
 export interface SafeErrorInput {
   readonly cause?: unknown;

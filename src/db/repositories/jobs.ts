@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import type Database from "better-sqlite3";
 
-import { createOpaqueId } from "../../domain/ids.js";
+import { createOpaqueId } from "@/domain/ids";
 import {
   assertJobTransition,
   assertJobPhase,
@@ -11,8 +11,8 @@ import {
   type JobKind,
   type JobState,
   type TerminalJobState,
-} from "../../jobs/state-machine.js";
-import { isJobProgress, type JobProgress } from "../../worker/protocol.js";
+} from "@/jobs/state-machine";
+import { isJobProgress, type JobProgress } from "@/worker/protocol";
 
 export { jobKinds, type JobKind };
 export type JobErrorClass =

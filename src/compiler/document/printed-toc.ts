@@ -1,17 +1,17 @@
 import { createHash } from "node:crypto";
 
-import { createOpaqueId } from "../../domain/ids.js";
+import { createOpaqueId } from "@/domain/ids";
 import {
   reconstructPrintedLayoutRows,
   type LayoutEvidence,
-} from "./layout-evidence.js";
-import { utf8ByteOffset } from "./source-regions.js";
+} from "@/compiler/document/layout-evidence";
+import { utf8ByteOffset } from "@/compiler/document/source-regions";
 import type {
   ConfirmedSourceRegion,
   NormalizedDocument,
   NormalizedHeading,
   TransientDocumentNode,
-} from "./types.js";
+} from "@/compiler/document/types";
 
 export interface PrintedContentsDiagnostic {
   readonly blockId?: string;

@@ -1,13 +1,13 @@
 import type Database from "better-sqlite3";
 
-import { VersionRepository } from "../../db/repositories/versions.js";
+import { VersionRepository } from "@/db/repositories/versions";
 import {
   verifyAndRecoverCurrentVersions,
   verifyVersionFully,
   type CurrentVersionRecovery,
   type VersionVerificationResult,
-} from "../../services/version-verifier.js";
-import type { StorageLayout } from "../../storage/layout.js";
+} from "@/services/version-verifier";
+import type { StorageLayout } from "@/storage/layout";
 
 export interface VersionVerificationOutcome {
   readonly recovery: CurrentVersionRecovery | null;

@@ -5,9 +5,9 @@ import {
 } from "better-auth/api";
 import type Database from "better-sqlite3";
 
-import { AuditEventRepository } from "../db/repositories/audit-events.js";
-import { InstallationRepository } from "../db/repositories/installation.js";
-import { withImmediateTransaction } from "../db/transaction/immediate.js";
+import { AuditEventRepository } from "@/db/repositories/audit-events";
+import { InstallationRepository } from "@/db/repositories/installation";
+import { withImmediateTransaction } from "@/db/transaction/immediate";
 
 const mutationPaths = new Set([
   "/passkey/delete-passkey",
