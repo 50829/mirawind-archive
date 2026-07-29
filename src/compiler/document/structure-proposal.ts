@@ -170,7 +170,36 @@ function collapseMissingNestedChapterLevels(
   const headingByBlockId = new Map(
     headings.map((heading) => [heading.blockId, heading] as const),
   );
-  return entries.map((entry) => {
+  const headingIndexByBlockId = new Map(
+    headings.map((heading, index) => [heading.blockId, index] as const),
+  );
+  const hasInterveningBodyHeading = (entryIndex: number): boolean => {
+    const previousEntry = entries
+      .slice(0, entryIndex)
+      .findLast((entry) => entry.bodyHeadingBlockId);
+    if (
+      inferPrintedHeadingEvidence(previousEntry?.sourceTitle ?? "")?.kind !==
+      "part"
+    ) {
+      return false;
+    }
+    const previousBlockId = previousEntry?.bodyHeadingBlockId;
+    const nextBlockId = entries
+      .slice(entryIndex + 1)
+      .find((entry) => entry.bodyHeadingBlockId)?.bodyHeadingBlockId;
+    const previousIndex = previousBlockId
+      ? headingIndexByBlockId.get(previousBlockId)
+      : undefined;
+    const nextIndex = nextBlockId
+      ? headingIndexByBlockId.get(nextBlockId)
+      : undefined;
+    return (
+      previousIndex !== undefined &&
+      nextIndex !== undefined &&
+      nextIndex > previousIndex + 1
+    );
+  };
+  return entries.map((entry, entryIndex) => {
     while (
       missingLevels.length > 0 &&
       (missingLevels.at(-1) ?? 0) >= entry.referenceLevel
@@ -194,7 +223,8 @@ function collapseMissingNestedChapterLevels(
     if (
       !entry.bodyHeadingBlockId &&
       entry.referenceLevel > 1 &&
-      printedEvidence?.kind === "chapter"
+      printedEvidence?.kind === "chapter" &&
+      !hasInterveningBodyHeading(entryIndex)
     ) {
       missingLevels.push(entry.referenceLevel);
     }
@@ -732,11 +762,13 @@ export function proposeDocumentStructure(
     ) {
       detachedNumericChapterMarkerIndexes.add(index - 1);
       if (!purePartLabel.test(title.normalize("NFKC"))) {
+        const matchedLatinChapter =
+          printedKinds.get(heading.blockId) === "chapter" &&
+          !/^\p{Script=Han}/u.test(title);
         const precedingLevel = nodes[index - 2]?.display_level;
-        previousNode.display_level = Math.min(
-          3,
-          (precedingLevel ?? node.display_level) + 1,
-        );
+        previousNode.display_level = matchedLatinChapter
+          ? node.display_level
+          : Math.min(3, (precedingLevel ?? node.display_level) + 1);
       }
       previousNode.include_in_toc = false;
       previousNode.starts_page = false;

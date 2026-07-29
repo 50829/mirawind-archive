@@ -1100,7 +1100,7 @@ describe("default document structure proposal", () => {
     });
   });
 
-  it("splits chapter-local appendix headings as independent reading units", () => {
+  it("keeps chapter-local appendix headings on their parent reading unit", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
         [
@@ -1138,8 +1138,8 @@ describe("default document structure proposal", () => {
     });
 
     expect(proposal.nodes.slice(1).map((node) => node.starts_page)).toEqual([
-      true,
-      true,
+      false,
+      false,
     ]);
   });
 
@@ -1188,7 +1188,7 @@ describe("default document structure proposal", () => {
 
     expect(proposal.nodes.slice(3)).toMatchObject([
       {
-        display_level: 3,
+        display_level: 1,
         include_in_toc: false,
         starts_page: false,
       },
@@ -1201,7 +1201,7 @@ describe("default document structure proposal", () => {
     ]);
   });
 
-  it("does not push a detached numeric marker below h3", () => {
+  it("keeps a detached numeric marker level with its chapter title", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
         [
@@ -1237,9 +1237,85 @@ describe("default document structure proposal", () => {
     });
 
     expect(proposal.nodes[2]).toMatchObject({
+      display_level: 1,
+      include_in_toc: false,
+      starts_page: false,
+    });
+  });
+
+  it("keeps a detached Chinese numeric marker below prior section context", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## 1.1 Previous section",
+          "",
+          "## Exercises",
+          "",
+          "## 2",
+          "",
+          "## 数学和统计基础",
+        ].join("\n"),
+      ),
+    );
+    const [section, exercises, , chapter] = document.headings;
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: section?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "1.1 Previous section",
+        },
+        {
+          bodyHeadingBlockId: exercises?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "Exercises",
+        },
+        {
+          bodyHeadingBlockId: chapter?.blockId ?? "",
+          referenceLevel: 1,
+          sourceTitle: "第 2 章 数学和统计基础",
+        },
+      ],
+    });
+
+    expect(proposal.nodes[2]).toMatchObject({
       display_level: 3,
       include_in_toc: false,
       starts_page: false,
+    });
+    expect(proposal.nodes[3]).toMatchObject({
+      display_level: 1,
+      include_in_toc: true,
+      starts_page: true,
+    });
+  });
+
+  it("splits a matched Chinese appendix as a major local reading unit", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        "## 3.16 Previous section\n\nBody\n\n## 附录:数学推导\n",
+      ),
+    );
+    const [section, appendix] = document.headings;
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: [
+        {
+          bodyHeadingBlockId: section?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "3.16 Previous section",
+        },
+        {
+          bodyHeadingBlockId: appendix?.blockId ?? "",
+          referenceLevel: 2,
+          sourceTitle: "附录:数学推导",
+        },
+      ],
+    });
+
+    expect(proposal.nodes[1]).toMatchObject({
+      display_level: 2,
+      include_in_toc: true,
+      starts_page: true,
     });
   });
 
@@ -1373,10 +1449,15 @@ describe("default document structure proposal", () => {
           "## 8.1.1 First detail",
           "",
           "## 8.1.2 Second detail",
+          "",
+          "## 8.2 Second section",
+          "",
+          "## 8.2.1 Third detail",
         ].join("\n"),
       ),
     );
-    const [part, chapter, previousSection, firstSection] = document.headings;
+    const [part, chapter, previousSection, firstSection, , , secondSection] =
+      document.headings;
 
     expect(
       proposeDocumentStructure(document, {
@@ -1405,9 +1486,61 @@ describe("default document structure proposal", () => {
             referenceLevel: 3,
             sourceTitle: "8.1 First section",
           },
+          {
+            bodyHeadingBlockId: secondSection?.blockId ?? "",
+            referenceLevel: 3,
+            sourceTitle: "8.2 Second section",
+          },
         ],
       }).nodes.map((node) => node.display_level),
-    ).toEqual([1, 2, 3, 2, 3, 3]);
+    ).toEqual([1, 2, 3, 2, 3, 3, 2, 3]);
+  });
+
+  it("preserves printed depth when an unmatched body heading fills the chapter gap", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        [
+          "## Part One",
+          "",
+          "## Storage structures",
+          "",
+          "## 8.1 First section",
+          "",
+          "## 8.1.1 First detail",
+          "",
+          "## 8.2 Second section",
+          "",
+          "## 8.2.1 Second detail",
+        ].join("\n"),
+      ),
+    );
+    const [part, , firstSection, , secondSection] = document.headings;
+
+    expect(
+      proposeDocumentStructure(document, {
+        printedEntries: [
+          {
+            bodyHeadingBlockId: part?.blockId ?? "",
+            referenceLevel: 1,
+            sourceTitle: "Part One",
+          },
+          {
+            referenceLevel: 2,
+            sourceTitle: "Chapter 8 Missing heading",
+          },
+          {
+            bodyHeadingBlockId: firstSection?.blockId ?? "",
+            referenceLevel: 3,
+            sourceTitle: "8.1 First section",
+          },
+          {
+            bodyHeadingBlockId: secondSection?.blockId ?? "",
+            referenceLevel: 3,
+            sourceTitle: "8.2 Second section",
+          },
+        ],
+      }).nodes.map((node) => node.display_level),
+    ).toEqual([1, 1, 2, 3, 3, 4]);
   });
 
   it("restores a nested chapter after an unlisted top-level appendix", () => {

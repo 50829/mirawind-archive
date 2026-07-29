@@ -28,8 +28,7 @@ import { createPrintedContentsAnalysisV2 } from "../../compiler/document/printed
 import {
   detectPrintedContents,
   requiresSupplementalPdfEvidence,
-  shouldPreferNativePdfDetection,
-  shouldPreferNativePdfLayout,
+  shouldUseNativePdfDetection,
   supplementalPdfPageIndices,
   type PrintedContentsCandidate,
   type PrintedContentsDetection,
@@ -227,13 +226,12 @@ export async function prepareDraft(input: {
             sourcePath: basename(input.selectedCandidatePath),
             sourceSha256: typography.provenance.output_sha256,
           });
-          const preferNative =
-            shouldPreferNativePdfLayout(
-              repairedLayoutEvidence,
-              pdfLayoutEvidence,
-            ) ||
-            repairedLayoutEvidence === layoutEvidence ||
-            shouldPreferNativePdfDetection(repairedDetection, nativeDetection);
+          const preferNative = shouldUseNativePdfDetection({
+            nativeDetection,
+            nativeLayout: pdfLayoutEvidence,
+            sourceDetection: repairedDetection,
+            sourceLayout: repairedLayoutEvidence,
+          });
           effectiveLayoutEvidence = preferNative
             ? pdfLayoutEvidence
             : repairedLayoutEvidence;

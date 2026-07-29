@@ -16,8 +16,7 @@ import {
   detectPrintedContents,
   inferPrintedHeadingEvidence,
   requiresSupplementalPdfEvidence,
-  shouldPreferNativePdfDetection,
-  shouldPreferNativePdfLayout,
+  shouldUseNativePdfDetection,
   supplementalPdfPageIndices,
   type PrintedContentsCandidate,
 } from "../../src/compiler/document/printed-toc.js";
@@ -777,10 +776,12 @@ export async function observeRealMineruFixture(input: {
         sourcePath: basename(markdown.relative_path),
         sourceSha256: typography.provenance.output_sha256,
       });
-      const preferNative =
-        shouldPreferNativePdfLayout(repairedLayout, pdfLayout) ||
-        repairedLayout === layout ||
-        shouldPreferNativePdfDetection(repairedDetection, nativeDetection);
+      const preferNative = shouldUseNativePdfDetection({
+        nativeDetection,
+        nativeLayout: pdfLayout,
+        sourceDetection: repairedDetection,
+        sourceLayout: repairedLayout,
+      });
       detection = preferNative ? nativeDetection : repairedDetection;
     }
   }

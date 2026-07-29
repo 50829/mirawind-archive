@@ -12,6 +12,7 @@ import {
   inferPrintedHeadingEvidence,
   inferPrintedReferenceLevels,
   shouldPreferNativePdfDetection,
+  shouldUseNativePdfDetection,
   supplementalPdfPageIndices,
   type PrintedContentsDetection,
 } from "@/compiler/document/printed-toc";
@@ -119,12 +120,19 @@ describe("printed contents detection", () => {
     const detection = (
       entryCount: number,
       boundaryConfidence: "high" | "low" = "high",
+      unresolvedPages = 0,
+      sourceTitles?: readonly string[],
     ) =>
       ({
         candidates: [
           {
             boundaryConfidence,
             entryCount,
+            logicalEntries:
+              sourceTitles?.map((sourceTitle) => ({ sourceTitle })) ??
+              Array.from({ length: unresolvedPages }, () => ({
+                sourceTitle: "Bibliographic Notes ......",
+              })),
             proposedRegion: {},
           },
         ],
@@ -138,6 +146,56 @@ describe("printed contents detection", () => {
     expect(
       shouldPreferNativePdfDetection(detection(10), detection(20, "low")),
     ).toBe(false);
+    expect(
+      shouldPreferNativePdfDetection(detection(10, "high", 3), detection(10)),
+    ).toBe(true);
+    expect(
+      shouldPreferNativePdfDetection(detection(10, "high", 2), detection(10)),
+    ).toBe(false);
+    const ordered = detection(6, "high", 3, [
+      "5.9 Long-term investments ...... 118",
+      "Bibliographic Notes ......",
+      "Exercises ......",
+      "Projects ......",
+      "Chapter 6 Asset allocation ...... 129",
+      "8.2 Index models ...... 191",
+    ]);
+    const inverted = detection(6, "high", 0, [
+      "5.9 Long-term investments ...... 118",
+      "Bibliographic Notes ...... 120",
+      "Exercises ...... 121",
+      "Projects ...... 122",
+      "8.2 Index models ...... 191",
+      "Chapter 6 Asset allocation ...... 129",
+    ]);
+    expect(shouldPreferNativePdfDetection(ordered, inverted)).toBe(false);
+    expect(shouldPreferNativePdfDetection(inverted, ordered)).toBe(true);
+    const contentListLayout = {
+      diagnostics: [],
+      records: [],
+      source: "content-list",
+    } as const;
+    const nativeLayout = {
+      diagnostics: [],
+      records: [],
+      source: "native-pdf",
+    } as const;
+    expect(
+      shouldUseNativePdfDetection({
+        nativeDetection: detection(10),
+        nativeLayout,
+        sourceDetection: detection(10),
+        sourceLayout: contentListLayout,
+      }),
+    ).toBe(false);
+    expect(
+      shouldUseNativePdfDetection({
+        nativeDetection: detection(10),
+        nativeLayout,
+        sourceDetection: { candidates: [] },
+        sourceLayout: { diagnostics: [], records: [], source: "none" },
+      }),
+    ).toBe(true);
   });
 
   it("matches decorative stars and equivalent technical math tokens", () => {
@@ -168,6 +226,44 @@ describe("printed contents detection", () => {
         (entry) => entry.bodyHeadingBlockId !== undefined,
       ),
     ).toEqual([true, true]);
+  });
+
+  it("preserves clean printed math titles when body headings contain LaTeX", () => {
+    const expected = [
+      "2.6.1 A Statistical Model for the Joint Distribution Pr(X, Y ) ...... 28",
+      "4.4.4 L _ { 1 } Regularized Logistic Regression ...... 125",
+      "5 Basis Expansions ...... 143",
+    ];
+    const source = [
+      "## Contents",
+      "",
+      expected[0],
+      "",
+      "4.4.4 $L _ { 1 }$ Regularized Logistic Regression ...... 125",
+      "",
+      expected[2],
+      "",
+      "## 2.6.1 A Statistical Model for the Joint Distribution $\\operatorname* { P r } ( X , Y )$",
+      "",
+      "Body",
+      "",
+      "## $4 { \\cdot } 4 { \\cdot } 4 \\quad L _ { 1 }$ Regularized Logistic Regression",
+      "",
+      "Body",
+      "",
+      "## 5 Basis Expansions",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual(expected);
+    expect(result.candidates[0]?.matchedHeadingCount).toBe(3);
   });
 
   it("preserves product-version numbers in major titles", () => {
@@ -280,6 +376,13 @@ describe("printed contents detection", () => {
     expect(inferPrintedHeadingEvidence("附录 4.2 因子模型")).toMatchObject({
       kind: "appendix",
       level: 2,
+    });
+    expect(
+      inferPrintedHeadingEvidence("Appendix: Local computations"),
+    ).toBeUndefined();
+    expect(inferPrintedHeadingEvidence("附录:数学推导")).toMatchObject({
+      kind: "appendix",
+      level: 1,
     });
     expect(
       inferPrintedReferenceLevels([
@@ -617,6 +720,27 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          "11 Neural Networks ...... 389",
+          "12 Support Vector Machines and Flexible Discriminants 417",
+          "Flexible Discriminants 417",
+          "12.1 Introduction ...... 417",
+          "13 Prototype Methods ...... 459",
+        ].map((text, index) => ({
+          bbox: [
+            20,
+            [20, 50, 105, 135, 165][index] ?? 20 + index * 30,
+            700,
+            [40, 70, 125, 155, 185][index] ?? 40 + index * 30,
+          ] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
       sourcePath: "source/full.md",
       sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
@@ -1847,6 +1971,7 @@ describe("printed contents detection", () => {
     expect(numberedHeading).toBeDefined();
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
       bodyHeadingBlockId: numberedHeading?.blockId,
+      sourceTitle: "多项式在 R 上的分解 ...... 107",
     });
     expect(result.candidates[0]?.diagnostics).not.toEqual(
       expect.arrayContaining([
@@ -2174,6 +2299,66 @@ describe("printed contents detection", () => {
     );
   });
 
+  it("recovers page-less contextual rows from native PDF evidence", () => {
+    const markdownEntries = [
+      "2.9 Model Selection ...... 37",
+      "Bibliographic Notes ......",
+      "Exercises ......",
+      "3 Linear Methods ...... 43",
+    ];
+    const layoutEntries = [
+      "2.9 Model Selection ...... 37",
+      "Bibliographic Notes ...... 39",
+      "Exercises ...... 39",
+      "3 Linear Methods ...... 43",
+    ];
+    const source = [
+      "# Contents",
+      "",
+      ...markdownEntries.flatMap((entry) => [entry, ""]),
+      "## 2.9 Model Selection",
+      "",
+      "Body",
+      "",
+      "## Bibliographic Notes",
+      "",
+      "Body",
+      "",
+      "## Exercises",
+      "",
+      "Body",
+      "",
+      "## 3 Linear Methods",
+      "",
+      "Body",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: layoutEntries.map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual([
+      "2.9 Model Selection ...... 37",
+      "Bibliographic Notes ......  39",
+      "Exercises ......  39",
+      "3 Linear Methods ...... 43",
+    ]);
+  });
+
   it("recovers visual row order when MinerU crosses native PDF columns", () => {
     const markdownEntries = [
       "第四部分 高级设计和分析技术",
@@ -2248,6 +2433,69 @@ describe("printed contents detection", () => {
     ).toBe(true);
   });
 
+  it("attributes uniquely matching layout rows after a local order crossing", () => {
+    const source = [
+      "# Contents",
+      "",
+      "1.1 Alpha ...... 1",
+      "",
+      "1.2 Beta ...... 2",
+      "",
+      "1.3 Gamma ...... 3",
+      "",
+      "1.4 Delta ...... 4",
+      "",
+      "## 1.1 Alpha",
+      "",
+      "## 1.2 Beta",
+      "",
+      "## 1.3 Gamma",
+      "",
+      "## 1.4 Delta",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: [
+          {
+            bbox: [20, 20, 300, 40],
+            pageIndex: 0,
+            pageLabelSupplemented: true,
+            text: "1.1 Alpha ...... 1",
+            type: "text",
+          },
+          {
+            bbox: [20, 50, 300, 70],
+            pageIndex: 0,
+            text: "1.2 Beta ...... 2",
+            type: "text",
+          },
+          {
+            bbox: [20, 20, 300, 40],
+            pageIndex: 1,
+            text: "1.4 Delta ...... 4",
+            type: "text",
+          },
+          {
+            bbox: [20, 50, 300, 70],
+            pageIndex: 1,
+            text: "1.3 Gamma ...... 3",
+            type: "text",
+          },
+        ],
+        source: "content-list",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.pageIndex),
+    ).toEqual([0, 0, 1, 1]);
+  });
+
   it("preserves a semantic page-label restart across an appendix part", () => {
     const markdownEntries = [
       "PART ONE OVERVIEW",
@@ -2293,6 +2541,76 @@ describe("printed contents detection", () => {
     ).toEqual(markdownEntries);
   });
 
+  it("repairs a page-label inversion across an ordinary chapter", () => {
+    const leading = Array.from(
+      { length: 9 },
+      (_, index) =>
+        `5.${index + 1} Topic ${index + 1} ...... ${100 + index * 2}`,
+    );
+    const chapterSix = [
+      "Chapter 6 Asset allocation ...... 129",
+      ...Array.from(
+        { length: 6 },
+        (_, index) =>
+          `6.${index + 1} Topic ${index + 1} ...... ${129 + index * 3}`,
+      ),
+    ];
+    const chapterEight = [
+      "Chapter 8 Index models ...... 189",
+      "8.1 Single-factor market ...... 189",
+      "8.2 Single-index model ...... 191",
+      "8.3 Estimating the model ...... 194",
+      "8.4 Portfolio construction ...... 199",
+      "8.5 Portfolio applications ...... 205",
+    ];
+    const appendix = [
+      "PART TEN APPENDICES",
+      "Chapter A Systems",
+      "A.1 System one ...... 1",
+      "A.2 System two ...... 2",
+    ];
+    const markdownEntries = [
+      ...leading,
+      ...chapterSix,
+      ...chapterEight,
+      ...appendix,
+    ];
+    const crossedLayout = [
+      ...leading,
+      ...chapterEight.slice(2),
+      ...chapterSix,
+      ...chapterEight.slice(0, 2),
+      ...appendix,
+    ];
+    const source = [
+      "# Contents",
+      "",
+      ...markdownEntries.flatMap((entry) => [entry, ""]),
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      layoutEvidence: {
+        diagnostics: [],
+        records: crossedLayout.map((text, index) => ({
+          bbox: [20, 20 + index * 30, 700, 40 + index * 30] as const,
+          pageIndex: 0,
+          text,
+          type: "text" as const,
+        })),
+        source: "native-pdf",
+      },
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(
+      result.candidates
+        .find((candidate) => candidate.entryCount === markdownEntries.length)
+        ?.logicalEntries.map((entry) => entry.sourceTitle),
+    ).toEqual(markdownEntries);
+  });
+
   it("rejects native page artifacts and orders a chapter before same-page sections", () => {
     const markdownEntries = [
       "第四部分 高级设计和分析技术",
@@ -2303,6 +2621,7 @@ describe("printed contents detection", () => {
     ];
     const layoutEntries = [
       "第四部分 高级设计和分析技术",
+      "This is page xiii",
       "15.1 钢条切割 ...... 204",
       "第 15 章 动态规划 ...... 204",
       "147 活动选择问题 ............",
