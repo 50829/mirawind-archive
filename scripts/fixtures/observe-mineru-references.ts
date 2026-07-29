@@ -218,11 +218,7 @@ function kindFor(
   const evidence = inferPrintedHeadingEvidence(title);
   if (evidence?.kind === "part") return "part";
   if (evidence?.kind === "chapter") return "chapter";
-  if (evidence?.kind === "appendix") {
-    return level > 1 && /^(?:附录|appendix)\s*[:：]/iu.test(title)
-      ? "other"
-      : "appendix";
-  }
+  if (evidence?.kind === "appendix") return "appendix";
   if (evidence?.kind === "decimal") return "section";
   if (frontmatter.test(title)) return "frontmatter";
   if (
@@ -276,7 +272,11 @@ function pagesForEntries(input: {
     if (firstLabel) {
       let previousLabelPage = firstLabel.page;
       let nextLabelIndex = -1;
-      for (let index = firstLabelIndex + 1; index < input.rows.length; index++) {
+      for (
+        let index = firstLabelIndex + 1;
+        index < input.rows.length;
+        index++
+      ) {
         const row = input.rows[index];
         if (!row?.contentsLabel || row.page <= firstLabel.page) continue;
         if (

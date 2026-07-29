@@ -1100,7 +1100,7 @@ describe("default document structure proposal", () => {
     });
   });
 
-  it("does not split chapter-local appendix headings", () => {
+  it("splits chapter-local appendix headings as independent reading units", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
         [
@@ -1138,8 +1138,8 @@ describe("default document structure proposal", () => {
     });
 
     expect(proposal.nodes.slice(1).map((node) => node.starts_page)).toEqual([
-      false,
-      false,
+      true,
+      true,
     ]);
   });
 
@@ -1188,7 +1188,7 @@ describe("default document structure proposal", () => {
 
     expect(proposal.nodes.slice(3)).toMatchObject([
       {
-        display_level: 1,
+        display_level: 3,
         include_in_toc: false,
         starts_page: false,
       },

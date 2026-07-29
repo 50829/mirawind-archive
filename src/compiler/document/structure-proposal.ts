@@ -36,7 +36,6 @@ const optionalBackmatterTitle = /^(?:glossary)$/iu;
 const acknowledgementTitle = /^(?:致谢|acknowledg(?:e)?ments?)$/iu;
 const chapterLocalTitle =
   /^(?:简要回顾|供讨论的问题|延伸思考|习题|练习|家庭作业|参考文献(?:说明)?|阅读材料|休息一会儿|bibliographic notes|exercises|review questions)$/iu;
-const inlineAppendixTitle = /^(?:附录|appendix)\s*[:：]/iu;
 const nonNavigationalLocalTitle =
   /^(?:学习目标|learning objectives?|chapter objectives?)$/iu;
 const pureMajorLabel =
@@ -541,6 +540,7 @@ export function proposeDocumentStructure(
     );
   };
   const detachedPartLabelIndexes = new Set<number>();
+  const detachedNumericChapterMarkerIndexes = new Set<number>();
   const onlyOrnamentalPartBetween = (
     previous: NormalizedHeading,
     current: NormalizedHeading,
@@ -615,13 +615,9 @@ export function proposeDocumentStructure(
       firstChapterInPart = true;
       major = true;
     } else if (semanticKind === "appendix") {
-      if (inlineAppendixTitle.test(title)) {
-        major = false;
-      } else {
-        insidePart = false;
-        firstChapterInPart = false;
-        major = true;
-      }
+      insidePart = false;
+      firstChapterInPart = false;
+      major = true;
     } else if (semanticKind === "chapter") {
       major = !insidePart || !firstChapterInPart;
       firstChapterInPart = false;
@@ -703,8 +699,13 @@ export function proposeDocumentStructure(
       (/^\p{Script=Han}/u.test(title) ||
         printedKinds.get(heading.blockId) === "chapter")
     ) {
+      detachedNumericChapterMarkerIndexes.add(index - 1);
       if (!purePartLabel.test(title.normalize("NFKC"))) {
-        previousNode.display_level = 1;
+        const precedingLevel = nodes[index - 2]?.display_level;
+        previousNode.display_level = Math.min(
+          4,
+          (precedingLevel ?? node.display_level) + 1,
+        );
       }
       previousNode.include_in_toc = false;
       previousNode.starts_page = false;
@@ -780,6 +781,9 @@ export function proposeDocumentStructure(
       semanticKind !== "chapter" &&
       semanticKind !== "appendix"
     ) {
+      node.starts_page = false;
+    }
+    if (detachedNumericChapterMarkerIndexes.has(index)) {
       node.starts_page = false;
     }
     previousActiveLevel = node.display_level;

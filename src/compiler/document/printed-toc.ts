@@ -1116,6 +1116,13 @@ function recoveredMatchedSourceTitle(
   ) {
     return sourceTitle;
   }
+  if (
+    entry.numbering === undefined &&
+    headingNumber?.kind === "decimal" &&
+    similarity(entry.normalizedTitle, headingTitle) >= 0.9
+  ) {
+    return bodyTitleWithPage();
+  }
   if (similarity(entry.normalizedTitle, headingTitle) >= 0.9) {
     return sourceTitle;
   }

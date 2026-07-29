@@ -963,6 +963,40 @@ describe("printed contents detection", () => {
     );
   });
 
+  it("recovers a decimal number omitted from a uniquely matched printed row", () => {
+    const source = [
+      "## Contents",
+      "",
+      "## 1.1.3 术语 ...... 5",
+      "",
+      "## 练习 ...... 6",
+      "",
+      "## 1.1.5 符号算术 ...... 7",
+      "",
+      "## 1.1.3 术语",
+      "",
+      "Body",
+      "",
+      "## 1.1.4 练习",
+      "",
+      "Body",
+      "",
+      "## 1.1.5 符号算术",
+    ].join("\n");
+    const result = detectPrintedContents({
+      document: documentFor(source),
+      idFactory: () => "region_abcdefghijklmnop",
+      sourcePath: "source/full.md",
+      sourceSha256: createHash("sha256").update(source).digest("hex"),
+    });
+
+    expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
+      bodyHeadingBlockId: expect.stringMatching(/^blk_/u),
+      referenceLevel: 3,
+      sourceTitle: "1.1.4 练习 ...... 6",
+    });
+  });
+
   it("repairs an unnumbered damaged row only inside reliable neighbor anchors", () => {
     const source = [
       "## Contents",
