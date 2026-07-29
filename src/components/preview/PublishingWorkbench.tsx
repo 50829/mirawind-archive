@@ -365,11 +365,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     ? selectedPage
     : (preview?.pages.at(0)?.page_id ?? null);
   const blockingDiagnostics = draft.diagnostics.filter(
-    (diagnostic) =>
-      diagnostic.severity === "error" ||
-      !["CODE_LANGUAGE_UNSUPPORTED", "MATH_RENDER_FAILED"].includes(
-        diagnostic.code,
-      ),
+    (diagnostic) => diagnostic.severity === "error",
   );
   const previewReady =
     draft.preview_state === "ready" &&

@@ -2,7 +2,10 @@ import { expect, test } from "@playwright/test";
 
 import { loginAsAdministrator } from "../helpers/e2e-login.js";
 
-function draftProjection(size: number) {
+function draftProjection(
+  size: number,
+  diagnosticSeverity: "error" | "warning" = "warning",
+) {
   const structure = Array.from({ length: size }, (_, index) => ({
     block_id: `blk_workbench_${String(index).padStart(16, "0")}`,
     display_level: (index % 4) + 1,
@@ -26,7 +29,7 @@ function draftProjection(size: number) {
         },
         message: "Locatable test diagnostic",
         recovery: ["select_structure", "reload", "reprocess_verbatim"],
-        severity: "warning",
+        severity: diagnosticSeverity,
       },
     ],
     preview: {
@@ -66,6 +69,34 @@ function draftProjection(size: number) {
     title: `Workbench ${size}`,
   };
 }
+
+test("blocks publication only for error diagnostics", async ({ page }) => {
+  let diagnosticSeverity: "error" | "warning" = "warning";
+  await page.route("**/api/manage/books/99/draft", (route) =>
+    route.fulfill({
+      body: JSON.stringify(draftProjection(20, diagnosticSeverity)),
+      contentType: "application/json",
+      headers: { ETag: `"${"a".repeat(43)}"` },
+      status: 200,
+    }),
+  );
+  await page.route("**/api/manage/books/99/preview/**", (route) =>
+    route.fulfill({
+      body: "<!doctype html><html lang='en'><body>Preview</body></html>",
+      contentType: "text/html",
+      status: 200,
+    }),
+  );
+  await loginAsAdministrator(page, "192.0.2.17");
+  await page.goto("/manage/books/99/preview");
+
+  const publish = page.getByRole("button", { name: "发布当前修订" });
+  await expect(publish).toBeEnabled();
+
+  diagnosticSeverity = "error";
+  await page.reload();
+  await expect(publish).toBeDisabled();
+});
 
 test("keeps representative and stress structure DOM bounded", async ({
   page,
