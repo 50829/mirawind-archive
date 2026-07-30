@@ -22,7 +22,7 @@ the old and new publication job paths must not coexist in a commit.
 - [x] T005 Implement baseline/candidate worktree orchestration, randomized fixture order and isolated data roots in `scripts/benchmarks/pipeline-paired.ts`
 - [x] T006 Extend environment and pipeline profiles with commit, dirty state, lockfile, runtime, filesystem, resource counts, stage timings and process-tree RSS in `scripts/benchmarks/environment.ts` and `scripts/benchmarks/pipeline-profile.ts`
 - [x] T007 Add `benchmark:pipeline-paired` and `benchmark:compilation-complexity` commands in `package.json`
-- [x] T008 Run the current reference preflight and preserve the frozen reference-exact `6be12808` baseline identity in ignored `.cache/008-publishing-performance/baseline.json`
+- [x] T008 Run the current reference preflight and preserve the frozen reference-exact `93e01432` baseline identity in ignored `.cache/008-publishing-performance/baseline.json`
 
 **Checkpoint**: The runner rejects unbound/noisy/incorrect evidence and can reproduce the old result
 without claiming an optimization.

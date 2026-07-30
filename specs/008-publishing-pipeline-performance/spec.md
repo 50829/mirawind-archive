@@ -230,8 +230,9 @@ work and measure page, resource and search behavior.
 ## Assumptions
 
 - The fifteen registered MinerU 3.4.4 bundles and reference v2 files remain locally available.
-- The frozen reference-exact performance baseline commit is `6be12808`, whose parent is the original
-  `c176fdd` diagnostic baseline and whose only change corrects nested body-role inheritance.
+- The frozen reference-exact performance baseline commit is `93e01432`, based directly on the
+  original `c176fdd` diagnostic baseline with only the nested body-role correction and matching
+  validator contract backported.
 - Catalog and identity internals may move to enforce global boundaries, but their user-visible
   behavior and interface design do not change.
 - A shared semantic page may be materialized into distinct preview and public shells because their
