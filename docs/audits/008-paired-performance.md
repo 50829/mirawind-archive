@@ -455,3 +455,30 @@ Raw evidence is under ignored
 `.cache/008-publishing-performance/prepared-source-files-*` and
 `.cache/008-publishing-performance/prepared-source-files-reference-report.json`. This focused run
 does not replace or complete the owner-deferred T092 paired rounds.
+
+## Single raster validation pass
+
+Preparation previously read and fully decoded every resolved image, then candidate asset
+materialization read and decoded the same image again to obtain the manifest dimensions and enforce
+format, animation, side and pixel limits. The duplicate preparation pass has been removed. Resource
+closure still resolves before the source snapshot is accepted, while the isolated candidate remains
+the one enforcement boundary and cannot become ready until every retained image passes complete
+decode validation.
+
+| Fixture | Prepare child | Prepare phase | Candidate asset copy | Candidate job |  Wall |   RSS |
+| ------- | ------------: | ------------: | -------------------: | ------------: | ----: | ----: |
+| `a53`   |         -2.7% |         -1.9% |               -24.0% |         +0.1% | -0.8% | +5.8% |
+| `106e`  |        -16.8% |        -15.0% |                -3.6% |         -0.6% | -6.8% | +2.9% |
+| `81d`   |        -12.3% |        -11.9% |               -24.4% |         -4.7% | -6.8% | +3.0% |
+| `f840`  |         -8.8% |         -7.7% |                -4.9% |         -6.7% | -3.8% | -4.6% |
+
+The `a53` RSS change is about 63.1 MiB and remains below the 64 MiB focused tolerance; the other
+three changes are smaller. A candidate integration test supplies a corrupt referenced PNG and proves
+that it fails with `IMAGE_FORMAT_UNSUPPORTED` before immutable rename. Fresh observations remain
+`4/4` reference-v2 exact. Format, lint/architecture, both TypeScript builds, all 640 tests and the
+production build pass.
+
+Raw evidence is under ignored
+`.cache/008-publishing-performance/single-image-inspection-*` and
+`.cache/008-publishing-performance/single-image-inspection-reference-report.json`. This focused run
+does not replace or complete the owner-deferred T092 paired rounds.

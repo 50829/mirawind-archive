@@ -579,3 +579,15 @@ reference-v2 exact. Format, lint/architecture, both TypeScript builds, all 639 t
 production build passed. Raw evidence is under ignored
 `.cache/008-publishing-performance/prepared-source-files-*`. This focused evidence does not
 complete owner-deferred T092.
+
+- [x] T112 Remove duplicate full raster decoding from draft preparation and retain the isolated
+      candidate asset boundary as the single format/animation/dimension/pixel validation pass
+      (partial)
+
+Across the same four books, prepare job duration improved by `1.9%–15.0%` and complete wall by
+`0.8%–6.8%`; candidate asset materialization did not regress. RSS stayed within the per-book
+`max(5%, 64 MiB)` tolerance. A referenced corrupt PNG still fails before candidate readiness and
+leaves no immutable version tree. Fresh observations remained `4/4` reference-v2 exact. Raw
+evidence is under ignored `.cache/008-publishing-performance/single-image-inspection-*`. Format,
+lint/architecture, both TypeScript builds, all 640 tests and the production build passed. This focused
+evidence does not complete owner-deferred T092.

@@ -212,7 +212,10 @@ adapter-local state, then retain one independent whole-tree hash validation befo
 Retain only the normalized main Markdown and its already-resolved resource closure in each immutable
 draft source snapshot; keep the original ZIP separately as the reprocess input and discard MinerU
 sidecars and unreferenced files. Hand the bounded resource-path list from the prepare child to the
-parent through its short-lived staging tree so finalization does not parse the document again.
+parent through its short-lived staging tree so finalization does not parse the document again. Decode
+and validate each retained raster once during isolated candidate asset materialization, before any
+candidate can become ready; preparation resolves the closure but does not repeat the same full pixel
+decode.
 Add immutable manifest single-flight
 plus O(1) page/resource lookup, and stream preview resources from validated metadata. A successful
 import analysis atomically seals its validated extraction under that import;

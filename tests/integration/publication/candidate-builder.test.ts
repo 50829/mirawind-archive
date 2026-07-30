@@ -82,6 +82,10 @@ async function writeCandidateInput(
   options: {
     readonly originalContents?: string;
     readonly originalSha256?: string;
+    readonly resource?: {
+      readonly contents: Uint8Array;
+      readonly filename: string;
+    };
   } = {},
 ): Promise<void> {
   const markdown = [
@@ -92,6 +96,9 @@ async function writeCandidateInput(
     "# Second chapter",
     "",
     "Final body.",
+    ...(options.resource
+      ? ["", `![Fixture image](${options.resource.filename})`]
+      : []),
   ].join("\n");
   const markdownSha256 = sha256(markdown);
   const sourceRoot = resolve(dataRoot.path, command.sourceRootRelativePath);
@@ -122,6 +129,13 @@ async function writeCandidateInput(
     mkdir(resolve(configPath, ".."), { mode: 0o700, recursive: true }),
   ]);
   await writeFile(resolve(sourceRoot, "book.md"), markdown, { mode: 0o400 });
+  if (options.resource) {
+    await writeFile(
+      resolve(sourceRoot, options.resource.filename),
+      options.resource.contents,
+      { mode: 0o400 },
+    );
+  }
   await writeFile(
     configPath,
     stringify(
@@ -413,6 +427,40 @@ describe("isolated candidate child builder", () => {
           preparationDiagnostics: [],
         }),
       ).rejects.toThrow("VERSION_FILE_INTEGRITY_MISMATCH");
+      await expect(
+        access(
+          resolve(
+            dataRoot.layout.bookDirectory,
+            String(bookId),
+            "versions",
+            command.versionId,
+          ),
+        ),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await dataRoot.cleanup();
+    }
+  });
+
+  it("rejects an invalid referenced image before a candidate becomes ready", async () => {
+    const dataRoot = await createTemporaryDataRoot("candidate-image-security");
+    try {
+      const command = commandFor("image_security_0001");
+      await writeCandidateInput(dataRoot, command, {
+        resource: {
+          contents: Buffer.from("not a raster image"),
+          filename: "image.png",
+        },
+      });
+
+      await expect(
+        buildCandidateVersion({
+          command,
+          createdAtMs,
+          layout: dataRoot.layout,
+          preparationDiagnostics: [],
+        }),
+      ).rejects.toMatchObject({ code: "IMAGE_FORMAT_UNSUPPORTED" });
       await expect(
         access(
           resolve(

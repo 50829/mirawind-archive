@@ -12,7 +12,6 @@ import {
   preprocessMarkdownTypography,
   type TypographyProvenance,
 } from "@/modules/publishing/core/preparation/typography";
-import { inspectRasterImage } from "@/modules/publishing/core/publication/inspect-image";
 import { resolveDocumentResources } from "@/modules/publishing/adapters/filesystem/resolve-document-resources";
 import { claimSealedExtraction } from "@/modules/publishing/adapters/filesystem/sealed-extraction";
 import { analyzeDraftContents } from "@/modules/publishing/adapters/worker/draft-contents-analysis";
@@ -135,19 +134,7 @@ export async function prepareDraft(input: {
     if (resources.diagnostics.length > 0) {
       throw new Error("IMPORT_RESOURCE_CLOSURE_FAILED");
     }
-    let resourceBytes = 0;
-    await profilePipelineStage("image_inspection", async () => {
-      for (const resource of resources.resources) {
-        const bytes = await readFile(resource.absolutePath);
-        resourceBytes += bytes.byteLength;
-        await inspectRasterImage({
-          bytes,
-          filename: resource.relativePath,
-        });
-      }
-    });
     recordPipelineProfileMetrics({
-      resource_bytes: resourceBytes,
       resources: resources.resources.length,
     });
     const contents = await analyzeDraftContents({
