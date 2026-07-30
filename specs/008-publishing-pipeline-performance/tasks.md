@@ -527,3 +527,16 @@ focused tolerance. Production build, both TypeScript builds, lint/architecture a
 tests passed; newly generated observations remained `4/4` reference-v2 exact. Raw evidence is under
 ignored `.cache/008-publishing-performance/heading-link-index-*`. This focused evidence does not
 complete owner-deferred T092.
+
+- [x] T108 Record route-neutral URL attribute ranges while each semantic page is rendered, consume
+      those ranges directly for preview/public materialization, and delete the per-page SAX parse and
+      its dependency (partial)
+
+Across four representative books, candidate materialization improved by `29.5%`, `36.4%`, `35.9%`
+and `16.8%`; complete candidate-child time improved by `12.5%`, `18.0%`, `9.8%` and `1.5%`.
+All wall times improved. Three peak-RSS results decreased; `106e` increased by about `32 MiB` or
+`4.2%`, within both memory tolerances. The complete 645-test suite, both TypeScript builds,
+lint/architecture and production build passed, and fresh observations remained `4/4` reference-v2
+exact. `parse5-sax-parser` is no longer a runtime or lockfile dependency. Raw evidence is under
+ignored `.cache/008-publishing-performance/route-offsets-*`. This focused evidence does not complete
+owner-deferred T092.

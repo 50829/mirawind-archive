@@ -11,8 +11,8 @@ import {
 } from "@/modules/publishing/core/publication/render-document";
 import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
 import {
-  routeNeutralHeadingHref,
-  routeNeutralResourceUrl,
+  createRouteNeutralLinkScope,
+  type RouteNeutralReference,
 } from "@/modules/publishing/core/publication/route-neutral-links";
 
 const maximumConcurrentPages = 4;
@@ -31,6 +31,7 @@ export interface RenderedPage {
   readonly html: string;
   readonly ordinal: number;
   readonly page: PagePlan;
+  readonly routeReferences: readonly RouteNeutralReference[];
 }
 
 export type PageRenderer = (
@@ -76,13 +77,16 @@ export async function* renderPages(input: {
     const promise = Promise.resolve()
       .then(async () => {
         throwIfCancelled(input.signal);
+        const routeLinks = createRouteNeutralLinkScope(
+          `${input.book.identity.semantic_digest.slice(0, 64)}-${page.pageId}`,
+        );
         const rendered = await renderer({
           document: documentForPage(input.book, page),
-          headingHref: routeNeutralHeadingHref,
+          headingHref: routeLinks.headingHref,
           headingLinkIndex: input.book.headingLinkIndex,
           headingOverrides: input.book.headingOverrides,
           page,
-          publishedResourceUrl: routeNeutralResourceUrl,
+          publishedResourceUrl: routeLinks.resourceUrl,
           resourceResolution: input.resourceResolution,
         });
         throwIfCancelled(input.signal);
@@ -92,6 +96,7 @@ export async function* renderPages(input: {
           html: rendered.html,
           ordinal,
           page,
+          routeReferences: routeLinks.referencesIn(rendered.html),
         });
       })
       .then<RenderSettlement, RenderSettlement>(

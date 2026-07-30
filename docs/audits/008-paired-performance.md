@@ -295,11 +295,12 @@ or complete the owner-deferred T092 paired rounds.
 ## SAX route materialization
 
 After removing duplicate parsing, the remaining full parse5 fragment DOM still dominated route
-materialization and retained hundreds of megabytes for the largest formula page. The replacement
-uses the maintained `parse5-sax-parser` from the same parse5 project with source locations enabled.
-It records only parsed route-neutral `href` and `src` attribute ranges, validates both URL policies,
-and reconstructs those attributes with `entities.escapeAttribute()`. It does not use regex or scan
-text for token-like strings. The old DOM construction and serialization path was deleted.
+materialization and retained hundreds of megabytes for the largest formula page. At this checkpoint,
+the replacement used `parse5-sax-parser` with source locations enabled. It recorded only parsed
+route-neutral `href` and `src` attribute ranges, validated both URL policies, and reconstructed those
+attributes with `entities.escapeAttribute()`. The old DOM construction and serialization path was
+deleted. The later structured route-reference checkpoint below removed this remaining SAX pass and
+dependency.
 
 Focused results against the immediately preceding unused-byte-scan removal were:
 
@@ -350,3 +351,28 @@ reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/recurrence-shortcut-*` and
 `.cache/008-publishing-performance/recurrence-observed-v2/`. These focused runs do not replace or
 complete the owner-deferred T092 paired rounds.
+
+## Structured route-reference materialization
+
+The current CPU profile showed the remaining SAX pass taking about `1.02 s` on `f840` while the two
+actual URL variants took about `41 ms`. Each page renderer now derives a deterministic token scope
+from the whole-book semantic digest and page ID, records the exact ordered `href`/`src` attribute
+ranges immediately after semantic serialization, and includes those bounded references in the
+ephemeral `RenderedPage`. The candidate adapter validates each recorded attribute against its token,
+escapes both policy URLs, and reconstructs the two variants directly. Final preview/public HTML is
+unchanged and contains no scope token. `parse5-sax-parser` and its lockfile entry were deleted.
+
+Focused results against the immediately preceding heading-link-index checkpoint were:
+
+| Fixture | Materialization before | Materialization after | Change | Candidate before | Candidate after | Wall change | RSS change |
+| ------- | ---------------------: | --------------------: | -----: | ---------------: | --------------: | ----------: | ---------: |
+| `f840`  |             3,438.6 ms |            2,423.5 ms | -29.5% |       9,174.9 ms |      8,028.7 ms |       -5.8% |      -7.4% |
+| `a53`   |             3,453.5 ms |            2,197.2 ms | -36.4% |       6,665.4 ms |      5,466.8 ms |       -8.1% |      -2.1% |
+| `106e`  |             1,949.6 ms |            1,248.9 ms | -35.9% |       6,024.8 ms |      5,432.2 ms |       -2.3% |      +4.2% |
+| `81d`   |             1,682.3 ms |            1,398.9 ms | -16.8% |       6,767.5 ms |      6,667.5 ms |       -1.0% |      -9.4% |
+
+The `106e` memory increase was about `32 MiB`, below both the 5% and 64 MiB focused tolerances; the
+other three books decreased. The complete 645-test suite, both TypeScript builds, lint and the
+235-file architecture graph, production build, and fresh `4/4` reference-v2 comparison passed. Raw
+evidence is under ignored `.cache/008-publishing-performance/route-offsets-*`. These focused runs do
+not replace or complete the owner-deferred T092 paired rounds.

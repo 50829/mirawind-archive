@@ -36,9 +36,11 @@ document and supplies that bounded result to page rendering.
 
 ### RenderedPage
 
-One route-neutral page result with its `PagePlan`, ordinal, logical-resource HTML, renderer CSS and
-ordered diagnostics. It is consumed once and released after the candidate adapter writes the body,
-manifest and search spool entries and materializes the preview/public ReaderShell documents.
+One route-neutral page result with its `PagePlan`, ordinal, logical-resource HTML, renderer CSS,
+ordered diagnostics and bounded ordered URL attribute references captured during semantic
+serialization. It is consumed once and released after the candidate adapter validates those ranges,
+writes both ReaderShell documents and appends manifest and search spool entries. The adapter does
+not reparse the completed page HTML.
 
 ### CandidateBuildArtifact
 

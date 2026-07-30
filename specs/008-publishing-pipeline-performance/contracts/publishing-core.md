@@ -32,12 +32,22 @@ interface CompiledBook {
   // are immutable whole-book values. Adapters and route policy are forbidden.
 }
 
+interface RouteNeutralReference {
+  readonly endOffset: number;
+  readonly id: string;
+  readonly kind: "heading" | "resource";
+  readonly name: "href" | "src";
+  readonly startOffset: number;
+  readonly token: string;
+}
+
 interface RenderedPage {
   readonly css: string;
   readonly diagnostics: readonly PublishingDiagnostic[];
   readonly html: string;
   readonly ordinal: number;
   readonly page: PagePlan;
+  readonly routeReferences: readonly RouteNeutralReference[];
 }
 
 interface CompileBookInput {
@@ -68,6 +78,8 @@ rather than preview/public URLs and does not expose intermediate analysis/layout
 - Diagnostics are deterministic independent of completion timing.
 - Preview/public materialization and search/manifest spooling cannot mutate `CompiledBook` or
   `RenderedPage`.
+- Route references are ordered, bounded attribute ranges captured during semantic serialization;
+  adapters validate them against their tokens and do not reparse the completed page HTML.
 - No core module imports React, Astro, SQLite, filesystem, process, HTTP or module adapters.
 
 ## Child Result

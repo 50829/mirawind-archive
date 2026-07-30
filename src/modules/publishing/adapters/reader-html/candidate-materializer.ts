@@ -252,7 +252,7 @@ export async function materializeCandidatePages(input: {
           level: heading.display_level,
           title: displayHeadingTitle(heading),
         }));
-      const materializedBody = await materializeRouteNeutralHtmlVariants({
+      const materializedBody = materializeRouteNeutralHtmlVariants({
         html: rendered.html,
         preview: {
           headingHref(blockId) {
@@ -272,6 +272,7 @@ export async function materializeCandidatePages(input: {
           resourceUrl: (resourceId) =>
             `/books/${input.bookId}/assets/${input.versionId}/${resourceId}`,
         },
+        references: rendered.routeReferences,
       });
       const common = {
         bookKey,
