@@ -131,6 +131,37 @@ describe("published semantic document rendering", () => {
     ]);
   });
 
+  it("keeps generated math bound to its source through raw HTML normalization", async () => {
+    const document = normalized(
+      [
+        "$$",
+        '<div class="mineru-algorithm" style="white-space: pre-wrap;">',
+        "input:",
+        "        if $x &lt; y$ then",
+        "        return $x$",
+        "</div>",
+        "$$",
+      ].join("\n"),
+    );
+
+    const rendered = await renderSemanticDocument({
+      document,
+      headingLinkIndex: createHeadingLinkIndex(document, new Map()),
+      publishedResourceUrl: () => {
+        throw new Error("No resource expected");
+      },
+      resourceResolution: { diagnostics: [], references: [], resources: [] },
+    });
+
+    expect(rendered.html).toContain("math-fallback");
+    expect(rendered.html).toContain('&#x3C;div class="mineru-algorithm"');
+    expect(rendered.html).toContain("\n        if $x &#x26;lt; y$ then");
+    expect(rendered.html).not.toContain('<div class="mineru-algorithm">');
+    expect(rendered.diagnostics).toEqual([
+      expect.objectContaining({ code: "MATH_RENDER_FAILED" }),
+    ]);
+  });
+
   it("highlights only approved code languages without inline styles", async () => {
     const document = normalized(
       [

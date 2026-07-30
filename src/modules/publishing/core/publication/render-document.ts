@@ -331,14 +331,10 @@ function renderMathNodes(
     displayMode: boolean,
     sourceMetadata: MathSource | undefined,
   ): void => {
-    const source = textContent(scope);
-    if (
-      sourceMetadata &&
-      (sourceMetadata.displayMode !== displayMode ||
-        sourceMetadata.source !== source)
-    ) {
+    if (sourceMetadata && sourceMetadata.displayMode !== displayMode) {
       throw new Error("MATH_SOURCE_ALIGNMENT_INVALID");
     }
+    const source = sourceMetadata?.source ?? textContent(scope);
     const rendered = renderMath({
       ...(sourceMetadata?.blockId ? { blockId: sourceMetadata.blockId } : {}),
       displayMode,
