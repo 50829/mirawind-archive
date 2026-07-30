@@ -68,6 +68,21 @@ The focused after-run remained reference-v2 exact. The printed-contents and sour
 passed 94 tests, followed by the full typecheck. This result fixes the observed per-book regression,
 but it is not substituted for a fresh fifteen-book paired result.
 
+## Correctness receipt reuse
+
+The paired runner previously regenerated all fifteen observed references after every timed run.
+Correctness depends on the implementation commit and the bound fixture/reference set, not pair
+position, so a complete three-pair run repeated the same observer work six times. The runner now
+stores one exact receipt per implementation commit, fixture-manifest hash and ZIP/reference-binding
+hash. A later pair reuses that receipt; a resumed run may seed it from its existing `reference.json`
+only after the report hash recorded by the run matches.
+
+The focused helper test proves that two requests for one binding call the observer producer once and
+that a changed binding is rejected. Both existing pair-01 reports were also hash-verified and seeded
+locally as `15/15` exact without processing the books again. A normal `AB/BA/AB` run therefore needs
+two observer passes instead of six. This removes benchmark-only duplicate work and is not counted as
+a product pipeline speedup or a new formal pair.
+
 ## Focused memory diagnosis
 
 A retained diagnostic run of `real-mineru-a53faf7243d4` measured 43.035 seconds wall time, 2.114 GB

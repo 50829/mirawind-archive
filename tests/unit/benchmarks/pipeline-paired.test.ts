@@ -1,3 +1,7 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,6 +10,8 @@ import {
 } from "../../../scripts/benchmarks/paired-report.js";
 import {
   fixtureOrderForPair,
+  loadOrCreateCorrectnessReceipt,
+  parseCorrectnessReceipt,
   parsePipelinePairedArguments,
 } from "../../../scripts/benchmarks/pipeline-paired.js";
 import {
@@ -62,6 +68,17 @@ function report(): PairedBenchmarkReport {
     fixture_manifest_sha256: "a".repeat(64),
     order: ["AB", "BA", "AB"],
     runs: [],
+    schema_version: 1,
+  };
+}
+
+function referenceReport(): Readonly<Record<string, unknown>> {
+  return {
+    comparisons: fixtureOrder.map((fixtureId) => ({
+      fixture_id: fixtureId,
+      issues: [],
+      ok: true,
+    })),
     schema_version: 1,
   };
 }
@@ -149,5 +166,48 @@ describe("paired benchmark report schema", () => {
     expect(first).toEqual(fixtureOrderForPair(bindings, "a".repeat(64), 1));
     expect(first).not.toEqual(fixtureOrder);
     expect(fixtureOrderForPair(bindings, "a".repeat(64), 2)).not.toEqual(first);
+  });
+
+  it("reuses an exact correctness receipt only for the bound source set", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pipeline-correctness-receipt-"));
+    const path = join(root, "receipt.json");
+    const binding = {
+      commitSha: "c".repeat(40),
+      fixtureManifestSha256: "a".repeat(64),
+      referenceBindingsSha256: "b".repeat(64),
+    };
+    let observations = 0;
+    try {
+      const first = await loadOrCreateCorrectnessReceipt({
+        ...binding,
+        createReferenceReport: async () => {
+          observations += 1;
+          return referenceReport();
+        },
+        path,
+      });
+      const second = await loadOrCreateCorrectnessReceipt({
+        ...binding,
+        createReferenceReport: async () => {
+          observations += 1;
+          return referenceReport();
+        },
+        path,
+      });
+
+      expect(observations).toBe(1);
+      expect(first.exactByFixture.size).toBe(15);
+      expect(second.value).toEqual(first.value);
+
+      const receipt = JSON.parse(await readFile(path, "utf8")) as unknown;
+      expect(() =>
+        parseCorrectnessReceipt(receipt, {
+          ...binding,
+          referenceBindingsSha256: "d".repeat(64),
+        }),
+      ).toThrow("PIPELINE_PAIRED_CORRECTNESS_RECEIPT_BINDING_MISMATCH");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 });

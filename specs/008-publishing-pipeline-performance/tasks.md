@@ -313,6 +313,10 @@ RSS and was removed. The actual duplicate work was one discarded KaTeX render pl
 exact while reducing the memory-heavy candidate build from 19.075 seconds to 10.554 seconds; the
 regression fixture improved again from 31.955 seconds total wall to 27.346 seconds. Focused RSS is
 2.099 GB and 899.9 MB respectively, and the current observation remains 15/15 reference exact.
+The paired runner now reuses one exact correctness receipt per implementation commit and bound
+fixture/reference set, reducing a normal three-pair run from six observer passes to two. A focused
+test proves reuse and binding rejection, and both stored pair-01 reports were hash-verified before
+local receipt seeding; no books were reprocessed for this runner-only optimization.
 T092 remains open because these focused results are not an `AB/BA/AB` completion claim.
 
 - [ ] T095 After the last source change, run the standard format, lint/architecture, typecheck, full

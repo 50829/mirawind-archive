@@ -37,6 +37,7 @@ import {
 } from "./reference-preflight.js";
 
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
+const commitPattern = /^[a-f0-9]{40}$/u;
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 const maximumCommandTail = 64 * 1024;
 
@@ -298,10 +299,13 @@ export function fixtureOrderForPair(
   );
 }
 
-function parseReferenceReport(value: unknown): {
+export interface ParsedReferenceReport {
   readonly exactByFixture: ReadonlyMap<string, boolean>;
   readonly ok: boolean;
-} {
+  readonly value: Readonly<Record<string, unknown>>;
+}
+
+function parseReferenceReport(value: unknown): ParsedReferenceReport {
   if (
     !isRecord(value) ||
     value.schema_version !== 1 ||
@@ -330,7 +334,105 @@ function parseReferenceReport(value: unknown): {
   return Object.freeze({
     exactByFixture,
     ok: entries.every(([, exact]) => exact),
+    value: Object.freeze({ ...value }),
   });
+}
+
+export function parseCorrectnessReceipt(
+  value: unknown,
+  expected: {
+    readonly commitSha: string;
+    readonly fixtureManifestSha256: string;
+    readonly referenceBindingsSha256: string;
+  },
+): ParsedReferenceReport {
+  if (
+    !isRecord(value) ||
+    Object.keys(value).sort().join(",") !==
+      "commit_sha,fixture_manifest_sha256,reference_bindings_sha256,reference_report,schema_version" ||
+    value.schema_version !== 1 ||
+    typeof value.commit_sha !== "string" ||
+    !commitPattern.test(value.commit_sha) ||
+    typeof value.fixture_manifest_sha256 !== "string" ||
+    !sha256Pattern.test(value.fixture_manifest_sha256) ||
+    typeof value.reference_bindings_sha256 !== "string" ||
+    !sha256Pattern.test(value.reference_bindings_sha256)
+  ) {
+    throw new Error("PIPELINE_PAIRED_CORRECTNESS_RECEIPT_INVALID");
+  }
+  if (
+    value.commit_sha !== expected.commitSha ||
+    value.fixture_manifest_sha256 !== expected.fixtureManifestSha256 ||
+    value.reference_bindings_sha256 !== expected.referenceBindingsSha256
+  ) {
+    throw new Error("PIPELINE_PAIRED_CORRECTNESS_RECEIPT_BINDING_MISMATCH");
+  }
+  const report = parseReferenceReport(value.reference_report);
+  if (!report.ok) {
+    throw new Error("PIPELINE_PAIRED_CORRECTNESS_RECEIPT_INVALID");
+  }
+  return report;
+}
+
+async function loadCorrectnessReceipt(input: {
+  readonly commitSha: string;
+  readonly fixtureManifestSha256: string;
+  readonly path: string;
+  readonly referenceBindingsSha256: string;
+}): Promise<ParsedReferenceReport | null> {
+  const bytes = await readFile(input.path).catch((error: unknown) => {
+    if (isRecord(error) && error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (bytes === null) return null;
+  return parseCorrectnessReceipt(
+    JSON.parse(bytes.toString("utf8")) as unknown,
+    {
+      commitSha: input.commitSha,
+      fixtureManifestSha256: input.fixtureManifestSha256,
+      referenceBindingsSha256: input.referenceBindingsSha256,
+    },
+  );
+}
+
+async function writeCorrectnessReceipt(input: {
+  readonly commitSha: string;
+  readonly fixtureManifestSha256: string;
+  readonly path: string;
+  readonly referenceBindingsSha256: string;
+  readonly referenceReport: Readonly<Record<string, unknown>>;
+}): Promise<void> {
+  await atomicJson(input.path, {
+    commit_sha: input.commitSha,
+    fixture_manifest_sha256: input.fixtureManifestSha256,
+    reference_bindings_sha256: input.referenceBindingsSha256,
+    reference_report: input.referenceReport,
+    schema_version: 1,
+  });
+}
+
+export async function loadOrCreateCorrectnessReceipt(input: {
+  readonly commitSha: string;
+  readonly createReferenceReport: () => Promise<unknown>;
+  readonly fixtureManifestSha256: string;
+  readonly path: string;
+  readonly referenceBindingsSha256: string;
+}): Promise<ParsedReferenceReport> {
+  const existing = await loadCorrectnessReceipt(input);
+  if (existing) return existing;
+
+  const report = parseReferenceReport(await input.createReferenceReport());
+  if (!report.ok) {
+    throw new Error("PIPELINE_PAIRED_CORRECTNESS_RECEIPT_INVALID");
+  }
+  await writeCorrectnessReceipt({
+    commitSha: input.commitSha,
+    fixtureManifestSha256: input.fixtureManifestSha256,
+    path: input.path,
+    referenceBindingsSha256: input.referenceBindingsSha256,
+    referenceReport: report.value,
+  });
+  return report;
 }
 
 function parseMeasurements(
@@ -406,6 +508,7 @@ async function runOne(input: {
   readonly position: number;
   readonly realDirectory: string;
   readonly realManifest: string;
+  readonly referenceBindingsSha256: string;
   readonly referenceDirectory: string;
   readonly worktree: PreparedWorktree;
 }): Promise<BenchmarkRun> {
@@ -413,6 +516,17 @@ async function runOne(input: {
   const recordPath = join(
     input.outputDirectory,
     `pair-${String(input.pairIndex).padStart(2, "0")}-${input.worktree.variant}.json`,
+  );
+  const runRoot = join(
+    input.outputDirectory,
+    `pair-${String(input.pairIndex).padStart(2, "0")}-${input.worktree.variant}`,
+  );
+  const referenceReportPath = join(runRoot, "reference.json");
+  const correctnessReceiptPath = join(
+    input.outputDirectory,
+    "correctness",
+    input.worktree.commitSha,
+    `${input.fixtureManifestSha256}.${input.referenceBindingsSha256}.json`,
   );
   const existing = await readFile(recordPath, "utf8").catch(() => null);
   if (existing) {
@@ -428,20 +542,28 @@ async function runOne(input: {
       parsed.order === order &&
       parsed.position === input.position
     ) {
+      await loadOrCreateCorrectnessReceipt({
+        commitSha: input.worktree.commitSha,
+        createReferenceReport: async () => {
+          const referenceBytes = await readFile(referenceReportPath);
+          if (sha256(referenceBytes) !== parsed.reference_report_sha256) {
+            throw new Error("PIPELINE_PAIRED_RESUME_REFERENCE_MISMATCH");
+          }
+          return JSON.parse(referenceBytes.toString("utf8")) as unknown;
+        },
+        fixtureManifestSha256: input.fixtureManifestSha256,
+        path: correctnessReceiptPath,
+        referenceBindingsSha256: input.referenceBindingsSha256,
+      });
       return parsed;
     }
     throw new Error("PIPELINE_PAIRED_RESUME_BINDING_MISMATCH");
   }
 
-  const runRoot = join(
-    input.outputDirectory,
-    `pair-${String(input.pairIndex).padStart(2, "0")}-${input.worktree.variant}`,
-  );
   const environmentPath = join(runRoot, "environment.json");
   const profilePath = join(runRoot, "pipeline.json");
   const profileDirectory = join(runRoot, "profiles");
   const observedDirectory = join(runRoot, "observed-v2");
-  const referenceReportPath = join(runRoot, "reference.json");
   await mkdir(runRoot, { mode: 0o700, recursive: true });
 
   await runCommand({
@@ -495,30 +617,40 @@ async function runOne(input: {
     schema_version: 1,
     status: "passed",
   });
-  await runCommand({
-    arguments: [
-      "fixtures:observe-references",
-      "--real-dir",
-      input.realDirectory,
-      "--output",
-      observedDirectory,
-    ],
-    command: "pnpm",
-    cwd: input.worktree.path,
+  const reference = await loadOrCreateCorrectnessReceipt({
+    commitSha: input.worktree.commitSha,
+    createReferenceReport: async () => {
+      await runCommand({
+        arguments: [
+          "fixtures:observe-references",
+          "--real-dir",
+          input.realDirectory,
+          "--output",
+          observedDirectory,
+        ],
+        command: "pnpm",
+        cwd: input.worktree.path,
+      });
+      await runCommand({
+        arguments: [
+          "fixtures:compare-references",
+          "--reference-dir",
+          input.referenceDirectory,
+          "--observed-dir",
+          observedDirectory,
+          "--output",
+          referenceReportPath,
+        ],
+        command: "pnpm",
+        cwd: input.worktree.path,
+      });
+      return JSON.parse(await readFile(referenceReportPath, "utf8")) as unknown;
+    },
+    fixtureManifestSha256: input.fixtureManifestSha256,
+    path: correctnessReceiptPath,
+    referenceBindingsSha256: input.referenceBindingsSha256,
   });
-  await runCommand({
-    arguments: [
-      "fixtures:compare-references",
-      "--reference-dir",
-      input.referenceDirectory,
-      "--observed-dir",
-      observedDirectory,
-      "--output",
-      referenceReportPath,
-    ],
-    command: "pnpm",
-    cwd: input.worktree.path,
-  });
+  await atomicJson(referenceReportPath, reference.value);
 
   const [environmentBytes, profileBytes, referenceBytes] = await Promise.all([
     readFile(environmentPath),
@@ -527,9 +659,6 @@ async function runOne(input: {
   ]);
   const environment = parseBenchmarkEnvironment(
     JSON.parse(environmentBytes.toString("utf8")) as unknown,
-  );
-  const reference = parseReferenceReport(
-    JSON.parse(referenceBytes.toString("utf8")) as unknown,
   );
   assertBenchmarkEnvironmentCompatible(input.hostEnvironment, environment);
   const [commitSha, status] = await Promise.all([
@@ -586,6 +715,7 @@ export async function runPipelinePaired(
     throw new Error("PIPELINE_PAIRED_REFS_IDENTICAL");
   }
   const outputDirectory = `${input.output}.runs`;
+  const referenceBindingsSha256 = sha256(JSON.stringify(preflight.bindings));
   await mkdir(outputDirectory, { mode: 0o700, recursive: true });
   await atomicJson(
     join(outputDirectory, "reference-bindings.json"),
@@ -660,6 +790,7 @@ export async function runPipelinePaired(
             position: index + 1,
             realDirectory: fixtureView,
             realManifest: input.realManifest,
+            referenceBindingsSha256,
             referenceDirectory: join(input.realDirectory, "references-v2"),
             worktree,
           }),
