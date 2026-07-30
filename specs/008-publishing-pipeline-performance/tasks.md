@@ -501,3 +501,16 @@ preview suites passed 14 tests, both TypeScript builds and the production build 
 representative observations remained `4/4` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/immediate-page-write-*`. This focused evidence does not complete
 owner-deferred T092.
+
+- [x] T106 Short-circuit printed-contents recurrence evidence through each entry's already-aligned
+      later heading, retain the exhaustive scan as an exact fallback, and verify representative
+      structure and performance (partial)
+
+Across three representative books, repaired printed-contents improved by `12.5%`, `17.8%` and
+`7.9%`; initial detection improved by up to `15.1%`. Adjacent reruns showed prepare-draft improvements
+of `4.6%` and `6.6%` on the two largest beneficiaries. A transient RSS spike on one run disappeared
+on the adjacent rerun; all retained comparisons stayed within the per-book memory gate. The focused
+92-test suite, both TypeScript builds and production build passed, and newly generated observations
+remained `3/3` reference-v2 exact. Raw evidence is under ignored
+`.cache/008-publishing-performance/recurrence-*`. This focused evidence does not complete
+owner-deferred T092.

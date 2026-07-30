@@ -3208,6 +3208,7 @@ interface CandidateHeadingIndex {
   readonly bodyHeadingFacts: readonly HeadingMatchFacts[];
   readonly bodyHeadings: readonly NormalizedHeading[];
   readonly laterHeadingFacts: readonly HeadingMatchFacts[];
+  readonly laterHeadingIndexByBlockId: ReadonlyMap<string, number>;
   readonly laterHeadings: readonly NormalizedHeading[];
 }
 
@@ -3251,10 +3252,14 @@ function indexCandidateHeadings(
       eligibleHeading(heading, start > candidateEndOffset)
     );
   });
+  const laterHeadingFacts = Object.freeze(laterHeadings.map(factsFor));
   return Object.freeze({
     bodyHeadingFacts: Object.freeze(bodyHeadings.map(factsFor)),
     bodyHeadings: Object.freeze(bodyHeadings),
-    laterHeadingFacts: Object.freeze(laterHeadings.map(factsFor)),
+    laterHeadingFacts,
+    laterHeadingIndexByBlockId: new Map(
+      laterHeadings.map((heading, index) => [heading.blockId, index]),
+    ),
     laterHeadings: Object.freeze(laterHeadings),
   });
 }
@@ -3581,7 +3586,8 @@ function evaluateCandidateRegion(
 ): CandidateRegionDecision | undefined {
   const { roots, similarityIndex, sourceIndex } = context;
   const { candidateEndIndex, richContent, window } = recovered;
-  const { laterHeadingFacts, laterHeadings } = headingIndex;
+  const { laterHeadingFacts, laterHeadingIndexByBlockId, laterHeadings } =
+    headingIndex;
   const { alignment, entries, diagnostics: alignmentDiagnostics } = aligned;
   const diagnostics = [...alignmentDiagnostics];
   if (entries.length < 3) {
@@ -3621,8 +3627,27 @@ function evaluateCandidateRegion(
   if (!firstNode?.position || !candidateEnd?.position) return;
   const startByte = sourceIndex.byteOffsetAt(firstNode.position.start.offset);
   const endByte = sourceIndex.byteOffsetAt(candidateEnd.position.end.offset);
-  const recurrenceCount = entries.filter((entry) =>
-    laterHeadings.some(
+  const recursInLaterHeadings = (entry: AlignedEntry): boolean => {
+    const matchedBlockId = alignedBodyHeadingBlockId(entry);
+    const matchedLaterIndex = matchedBlockId
+      ? laterHeadingIndexByBlockId.get(matchedBlockId)
+      : undefined;
+    if (matchedLaterIndex !== undefined) {
+      const matchedHeading = laterHeadings[matchedLaterIndex];
+      if (
+        matchedHeading &&
+        matchScore(
+          entry,
+          matchedHeading,
+          laterHeadingFacts[matchedLaterIndex] ??
+            createHeadingMatchFacts(matchedHeading),
+          similarityIndex,
+        ) > 0
+      ) {
+        return true;
+      }
+    }
+    return laterHeadings.some(
       (heading, laterHeadingIndex) =>
         matchScore(
           entry,
@@ -3631,8 +3656,9 @@ function evaluateCandidateRegion(
             createHeadingMatchFacts(heading),
           similarityIndex,
         ) > 0,
-    ),
-  ).length;
+    );
+  };
+  const recurrenceCount = entries.filter(recursInLaterHeadings).length;
   const recurrenceCoverage =
     entries.length === 0 ? 0 : recurrenceCount / entries.length;
   const boundaryEvidenceCount = entries.filter(

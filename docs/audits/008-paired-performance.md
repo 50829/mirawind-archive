@@ -324,3 +324,29 @@ Raw machine-readable evidence is under ignored
 `.cache/008-publishing-performance/sax-route-materialization-*` and
 `.cache/008-publishing-performance/sax-route-observed-v2/`. These focused runs do not replace or
 complete the owner-deferred T092 paired rounds.
+
+## Aligned recurrence evidence
+
+Printed-contents boundary scoring checked whether each extracted directory entry recurred among
+later body headings. It previously rescored every entry against every later heading even though the
+global alignment had already selected a monotonic body heading for most entries. The retained path
+first verifies that selected heading when it is later than the candidate. Unmatched, ambiguous or
+non-equivalent selections still execute the original exhaustive scan, so each recurrence decision
+is unchanged and worst-case behavior remains available.
+
+Focused current-source results against the preceding candidate-materialization checkpoint were:
+
+| Fixture | Initial before | Initial after | Repaired before | Repaired after | Prepare change |
+| ------- | -------------: | ------------: | --------------: | -------------: | -------------: |
+| `106e`  |       509.3 ms |      495.5 ms |      1,349.3 ms |     1,179.5 ms |          -4.6% |
+| `81d`   |       921.9 ms |      782.4 ms |      1,918.2 ms |     1,577.0 ms |          -6.6% |
+| `f840`  |       753.4 ms |      663.9 ms |        925.0 ms |       852.3 ms |          -1.5% |
+
+The first `106e` run reported an unrelated candidate-phase RSS spike; an adjacent rerun measured
+805 MB versus the 771 MB baseline, within the 64 MiB tolerance. The other process-tree RSS results
+also remained within their gates. The focused 92-test printed-contents suite, both TypeScript builds
+and production build passed. Fresh observations generated after the change remained `3/3`
+reference-v2 exact. Raw evidence is under ignored
+`.cache/008-publishing-performance/recurrence-shortcut-*` and
+`.cache/008-publishing-performance/recurrence-observed-v2/`. These focused runs do not replace or
+complete the owner-deferred T092 paired rounds.
