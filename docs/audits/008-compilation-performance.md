@@ -92,3 +92,25 @@ focused gate rather than claimed as either a regression or improvement. Process-
 within the per-book tolerance for all four comparisons. The 14 focused candidate tests, both
 TypeScript builds, production build and `4/4` reference-v2 comparison passed. These focused runs do
 not replace formal T092 evidence.
+
+## Whole-book heading link index follow-up
+
+Semantic page rendering previously rebuilt the complete heading block-ID and normalized-title slug
+lookup for every page. `compileBook()` now builds that immutable lookup once and every page renderer
+must receive it explicitly; there is no optional compatibility path that can restore the repeated
+scan.
+
+The nearest retained prior runs and current focused runs produced:
+
+| Fixture | Pages | Headings | Candidate before ms | Candidate after ms | Materialization before ms | Materialization after ms |
+| ------- | ----: | -------: | ------------------: | -----------------: | ------------------------: | -----------------------: |
+| `81d`   |    55 |    1,266 |           7,359.847 |          6,767.529 |                 2,012.892 |                1,682.313 |
+| `106e`  |    25 |      474 |           6,017.331 |          6,024.786 |                 1,923.912 |                1,949.552 |
+| `f840`  |    43 |      883 |           9,164.384 |          9,174.940 |                 3,455.740 |                3,438.552 |
+| `a53`   |     9 |      233 |           6,782.976 |          6,665.408 |                 3,409.872 |                3,453.530 |
+
+The largest heading-by-page workload shows the intended reduction; smaller products stay within
+single-run noise. Peak process-tree RSS changed from `905,220,096` to `830,586,880` bytes for `81d`,
+decreased for `106e` and `f840`, and increased by 3.0% for `a53`, within the focused per-book gate.
+All four fresh observations match reference v2 exactly. These adjacent focused runs establish that
+the change is worth retaining, but are not formal T092 paired evidence.

@@ -125,6 +125,7 @@ describe("deterministic publication pages and manifest", () => {
       book.pages.map((page) =>
         renderSemanticDocument({
           document: documentForPage(book, page),
+          headingLinkIndex: book.headingLinkIndex,
           headingOverrides: book.headingOverrides,
           publishedResourceUrl: () => {
             throw new Error("No resource expected");

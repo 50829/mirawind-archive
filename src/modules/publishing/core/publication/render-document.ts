@@ -12,6 +12,10 @@ import type {
   TransientDocumentNode,
 } from "@/modules/publishing/core/preparation/document-model";
 import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
+import {
+  resolveHeadingLinkTarget,
+  type HeadingLinkIndex,
+} from "@/modules/publishing/core/publication/compiled-book";
 import { renderCode } from "@/modules/publishing/core/publication/render-code";
 import { renderMath } from "@/modules/publishing/core/publication/render-math";
 import {
@@ -60,6 +64,7 @@ export interface SemanticRenderResult {
 export interface RenderSemanticDocumentOptions {
   readonly document: NormalizedDocument;
   readonly headingHref?: (blockId: string) => string;
+  readonly headingLinkIndex: HeadingLinkIndex;
   readonly headingOverrides?: ReadonlyMap<string, HeadingRenderOverride>;
   readonly publishedResourceUrl: (resourceId: string) => string;
   readonly resourceResolution: ResourceResolution;
@@ -502,36 +507,11 @@ function repairFootnoteLinks(
   visit(tree);
 }
 
-function headingSlug(value: string): string {
-  return value
-    .normalize("NFC")
-    .trim()
-    .toLocaleLowerCase("en")
-    .replaceAll(/[^\p{Letter}\p{Number}\s_-]/gu, "")
-    .replaceAll(/\s+/gu, "-")
-    .replaceAll(/-+/gu, "-");
-}
-
 function repairInternalHeadingLinks(
   tree: TreeNode,
-  document: NormalizedDocument,
-  overrides: ReadonlyMap<string, HeadingRenderOverride> | undefined,
+  headingLinkIndex: HeadingLinkIndex,
   headingHref: ((blockId: string) => string) | undefined,
 ): void {
-  const headingIds = new Set(
-    document.headings.map((heading) => heading.blockId),
-  );
-  const targets = new Map<string, string>();
-  for (const heading of document.headings) {
-    const override = overrides?.get(heading.blockId);
-    for (const title of [
-      heading.sourceTitle,
-      ...(override ? [override.displayTitle] : []),
-    ]) {
-      const slug = headingSlug(title);
-      if (slug && !targets.has(slug)) targets.set(slug, heading.blockId);
-    }
-  }
   const visit = (node: TreeNode) => {
     if (
       node.type === "element" &&
@@ -548,9 +528,7 @@ function repairInternalHeadingLinks(
       } catch {
         // Keep the literal fragment; an unresolved link fails below.
       }
-      const target = headingIds.has(decoded)
-        ? decoded
-        : targets.get(headingSlug(decoded));
+      const target = resolveHeadingLinkTarget(headingLinkIndex, decoded);
       if (!target) throw new Error("INTERNAL_HEADING_LINK_UNRESOLVED");
       const href = headingHref?.(target) ?? `#${target}`;
       if (
@@ -620,8 +598,7 @@ export async function renderSemanticDocument(
   );
   repairInternalHeadingLinks(
     transformed,
-    options.document,
-    options.headingOverrides,
+    options.headingLinkIndex,
     options.headingHref,
   );
   const css = await highlightCodeBlocks(

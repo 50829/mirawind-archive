@@ -62,6 +62,7 @@ export async function* renderPages(input: {
       renderSemanticDocument({
         document: options.document,
         headingHref: options.headingHref,
+        headingLinkIndex: options.headingLinkIndex,
         headingOverrides: options.headingOverrides,
         publishedResourceUrl: options.publishedResourceUrl,
         resourceResolution: options.resourceResolution,
@@ -78,6 +79,7 @@ export async function* renderPages(input: {
         const rendered = await renderer({
           document: documentForPage(input.book, page),
           headingHref: routeNeutralHeadingHref,
+          headingLinkIndex: input.book.headingLinkIndex,
           headingOverrides: input.book.headingOverrides,
           page,
           publishedResourceUrl: routeNeutralResourceUrl,

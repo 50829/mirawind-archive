@@ -10,6 +10,7 @@ import {
   parseMarkdownDocument,
 } from "@/modules/publishing/core/preparation/parse-markdown";
 import type { TransientDocumentNode } from "@/modules/publishing/core/preparation/document-model";
+import { createHeadingLinkIndex } from "@/modules/publishing/core/publication/compiled-book";
 import { renderSemanticDocument } from "@/modules/publishing/core/publication/render-document";
 import { resolveDocumentResources } from "@/modules/publishing/adapters/filesystem/resolve-document-resources";
 import { isOpaqueId } from "@/domain/ids";
@@ -215,6 +216,7 @@ describe("contained document resources and sanitized preview", () => {
     });
     const rendered = await renderSemanticDocument({
       document,
+      headingLinkIndex: createHeadingLinkIndex(document, new Map()),
       headingOverrides: new Map(
         document.headings.map((heading) => [
           heading.blockId,

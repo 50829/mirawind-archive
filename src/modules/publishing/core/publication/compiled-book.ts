@@ -29,6 +29,52 @@ export interface HeadingOverride {
   readonly number: string | null;
 }
 
+export interface HeadingLinkIndex {
+  readonly blockIdBySlug: ReadonlyMap<string, string>;
+  readonly blockIds: ReadonlySet<string>;
+}
+
+function headingSlug(value: string): string {
+  return value
+    .normalize("NFC")
+    .trim()
+    .toLocaleLowerCase("en")
+    .replaceAll(/[^\p{Letter}\p{Number}\s_-]/gu, "")
+    .replaceAll(/\s+/gu, "-")
+    .replaceAll(/-+/gu, "-");
+}
+
+export function createHeadingLinkIndex(
+  document: NormalizedDocument,
+  overrides: ReadonlyMap<string, Pick<HeadingOverride, "displayTitle">>,
+): HeadingLinkIndex {
+  const blockIds = new Set<string>();
+  const blockIdBySlug = new Map<string, string>();
+  for (const heading of document.headings) {
+    blockIds.add(heading.blockId);
+    const override = overrides.get(heading.blockId);
+    for (const title of [
+      heading.sourceTitle,
+      ...(override ? [override.displayTitle] : []),
+    ]) {
+      const slug = headingSlug(title);
+      if (slug && !blockIdBySlug.has(slug)) {
+        blockIdBySlug.set(slug, heading.blockId);
+      }
+    }
+  }
+  return Object.freeze({ blockIdBySlug, blockIds });
+}
+
+export function resolveHeadingLinkTarget(
+  index: HeadingLinkIndex,
+  value: string,
+): string | undefined {
+  return index.blockIds.has(value)
+    ? value
+    : index.blockIdBySlug.get(headingSlug(value));
+}
+
 export interface CompiledBook {
   readonly blockById: ReadonlyMap<string, NormalizedDocument["blocks"][number]>;
   readonly blockIds: readonly string[];
@@ -38,6 +84,7 @@ export interface CompiledBook {
   readonly excludedBlockIds: ReadonlySet<string>;
   readonly fullDocument: NormalizedDocument;
   readonly headingByBlockId: ReadonlyMap<string, NumberedHeading>;
+  readonly headingLinkIndex: HeadingLinkIndex;
   readonly headingOverrides: ReadonlyMap<string, HeadingOverride>;
   readonly headings: readonly NumberedHeading[];
   readonly identity: SemanticCompilationIdentity;

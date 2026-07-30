@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { createHeadingLinkIndex } from "@/modules/publishing/core/publication/compiled-book";
 import { renderSemanticDocument } from "@/modules/publishing/core/publication/render-document";
 import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
 
@@ -54,14 +55,16 @@ describe("published semantic document rendering", () => {
         },
       ],
     };
+    const headingOverrides = new Map([
+      [
+        document.headings[0]?.blockId ?? "",
+        { displayLevel: 1, displayTitle: "Published heading" },
+      ],
+    ]);
     const rendered = await renderSemanticDocument({
       document,
-      headingOverrides: new Map([
-        [
-          document.headings[0]?.blockId ?? "",
-          { displayLevel: 1, displayTitle: "Published heading" },
-        ],
-      ]),
+      headingLinkIndex: createHeadingLinkIndex(document, headingOverrides),
+      headingOverrides,
       publishedResourceUrl: (resourceId) =>
         `/books/1/versions/ver_test/resources/${resourceId}`,
       resourceResolution: resolution,
@@ -109,6 +112,7 @@ describe("published semantic document rendering", () => {
     );
     const rendered = await renderSemanticDocument({
       document,
+      headingLinkIndex: createHeadingLinkIndex(document, new Map()),
       publishedResourceUrl: () => {
         throw new Error("No resource expected");
       },
@@ -141,6 +145,7 @@ describe("published semantic document rendering", () => {
     );
     const rendered = await renderSemanticDocument({
       document,
+      headingLinkIndex: createHeadingLinkIndex(document, new Map()),
       publishedResourceUrl: () => {
         throw new Error("No resource expected");
       },
@@ -182,6 +187,7 @@ describe("published semantic document rendering", () => {
     );
     const rendered = await renderSemanticDocument({
       document,
+      headingLinkIndex: createHeadingLinkIndex(document, new Map()),
       publishedResourceUrl: () => {
         throw new Error("No resource expected");
       },
@@ -204,6 +210,7 @@ describe("published semantic document rendering", () => {
     const rendered = await renderSemanticDocument({
       document,
       headingHref: (blockId) => `/books/1/pages/2#${blockId}`,
+      headingLinkIndex: createHeadingLinkIndex(document, new Map()),
       publishedResourceUrl: () => {
         throw new Error("No resource expected");
       },
@@ -227,6 +234,7 @@ describe("published semantic document rendering", () => {
     );
     const rendered = await renderSemanticDocument({
       document,
+      headingLinkIndex: createHeadingLinkIndex(document, new Map()),
       publishedResourceUrl: () => {
         throw new Error("No resource expected");
       },

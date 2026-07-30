@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 
-import type {
-  CompiledBook,
-  HeadingOverride,
-  PageMetadata,
-  PagePlan,
+import {
+  createHeadingLinkIndex,
+  type CompiledBook,
+  type HeadingOverride,
+  type PageMetadata,
+  type PagePlan,
 } from "@/modules/publishing/core/publication/compiled-book";
 import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
 import {
@@ -288,6 +289,10 @@ export function compileBook(input: {
       }),
     ]),
   );
+  const headingLinkIndex = createHeadingLinkIndex(
+    applied.document,
+    headingOverrides,
+  );
   const pageById = new Map(pages.map((page) => [page.pageId, page]));
   const pageByBlockId = new Map<string, PagePlan>();
   for (const page of pages) {
@@ -319,6 +324,7 @@ export function compileBook(input: {
     excludedBlockIds: applied.excludedBlockIds,
     fullDocument,
     headingByBlockId: headingByBlockId as ReadonlyMap<string, NumberedHeading>,
+    headingLinkIndex,
     headingOverrides: headingOverrides as ReadonlyMap<string, HeadingOverride>,
     headings,
     pageByBlockId: pageByBlockId as ReadonlyMap<string, PagePlan>,

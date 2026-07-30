@@ -514,3 +514,16 @@ on the adjacent rerun; all retained comparisons stayed within the per-book memor
 remained `3/3` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/recurrence-*`. This focused evidence does not complete
 owner-deferred T092.
+
+- [x] T107 Build the whole-book heading fragment lookup once in `compileBook()`, require page
+      rendering to consume that immutable index without a per-page fallback, and verify four
+      representative books remain reference exact (partial)
+
+The heading-heavy `81d` fixture reduced candidate materialization from `2,012.892 ms` to
+`1,682.313 ms` (`-16.4%`) and the complete candidate child from `7,359.847 ms` to `6,767.529 ms`
+(`-8.0%`). The other three representative books stayed within run noise: complete candidate child
+changes were `-1.7%`, `+0.1%` and `+0.1%`, with no per-book wall or RSS regression beyond the
+focused tolerance. Production build, both TypeScript builds, lint/architecture and the 20 focused
+tests passed; newly generated observations remained `4/4` reference-v2 exact. Raw evidence is under
+ignored `.cache/008-publishing-performance/heading-link-index-*`. This focused evidence does not
+complete owner-deferred T092.
