@@ -591,3 +591,17 @@ leaves no immutable version tree. Fresh observations remained `4/4` reference-v2
 evidence is under ignored `.cache/008-publishing-performance/single-image-inspection-*`. Format,
 lint/architecture, both TypeScript builds, all 640 tests and the production build passed. This focused
 evidence does not complete owner-deferred T092.
+
+- [x] T113 Skip full-document Markdown masking when no semantic container exists and reuse
+      typography protection ranges across length-preserving punctuation passes (partial)
+
+The four representative books reduced typography by `2.7%–14.0%`, parse/normalize by
+`4.4%–10.2%`, and complete draft preparation by `3.2%–8.4%`. Two complete wall measurements
+improved by `0.9%` and `1.5%`; the other two changed by only `+0.10%` and `+0.39%`. An adjacent
+rerun brought the one noisy memory sample back within the 64 MiB tolerance. The existing parser,
+typography and compiler suites passed, and fresh observations remained `4/4` reference-v2 exact.
+Format, lint and the 236-file architecture graph, both TypeScript builds, all 640 tests and the
+production build passed.
+Raw evidence is under ignored `.cache/008-publishing-performance/current-f840-profile/`,
+`container-fastpath-f840/`, `parser-typography-four/` and `parser-typography-81d-rerun/`. This
+focused evidence does not complete owner-deferred T092.

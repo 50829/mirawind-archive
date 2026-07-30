@@ -58,6 +58,13 @@ function containerRanges(source: string): {
   readonly masked: string;
   readonly ranges: readonly ContainerRange[];
 } {
+  const linePattern =
+    /^(?<indent>[ \t]*)(?<marker>:::)(?:[ \t]+(?<kind>[a-z]+))?[ \t]*$/gmu;
+  if (!linePattern.test(source)) {
+    return { masked: source, ranges: Object.freeze([]) };
+  }
+  linePattern.lastIndex = 0;
+
   const characters = source.split("");
   const ranges: ContainerRange[] = [];
   const stack: {
@@ -65,8 +72,6 @@ function containerRanges(source: string): {
     readonly kind: SemanticContainerKind;
     readonly start: number;
   }[] = [];
-  const linePattern =
-    /^(?<indent>[ \t]*)(?<marker>:::)(?:[ \t]+(?<kind>[a-z]+))?[ \t]*$/gmu;
   let match: RegExpExecArray | null;
   while ((match = linePattern.exec(source))) {
     const kind = match.groups?.kind;

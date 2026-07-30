@@ -482,3 +482,34 @@ Raw evidence is under ignored
 `.cache/008-publishing-performance/single-image-inspection-*` and
 `.cache/008-publishing-performance/single-image-inspection-reference-report.json`. This focused run
 does not replace or complete the owner-deferred T092 paired rounds.
+
+## Container fast path and stable typography ranges
+
+Every Markdown parse previously split the complete source into a character array and joined it
+again to mask semantic-container markers, even when the document had no container marker. The
+parser now returns the original source directly after the same line-level marker scan finds no
+match; documents containing a marker retain the existing masking, nesting and validation path.
+
+Typography also rebuilt technical-token ranges after length-preserving parentheses, quotes and
+punctuation substitutions. It now rebuilds after ellipsis only when that substitution changed the
+string length, retains the stable ranges through the length-preserving passes, and still rebuilds
+after whitespace removal changes offsets.
+
+| Fixture | Typography | Parse/normalize | Draft preparation | Complete wall | Process-tree RSS |
+| ------- | ---------: | --------------: | ----------------: | ------------: | ---------------: |
+| `a53`   |     -12.6% |           -6.5% |             -5.9% |         -1.5% |            +4.5% |
+| `106e`  |      -2.7% |           -4.4% |             -3.2% |         +0.1% |            +3.2% |
+| `81d`   |     -14.0% |           -7.9% |             -6.1% |         -0.9% |       +55.8 MiB* |
+| `f840`  |     -14.0% |          -10.2% |             -8.4% |         +0.4% |            +4.4% |
+
+`*` The first `81d` sample increased by about 66.4 MiB; an adjacent rerun measured a 55.8 MiB
+increase and remained inside the 64 MiB tolerance. The two small wall increases are below the
+per-book tolerance and occurred outside the improved parse and preparation stages. Existing parser,
+typography and compiler tests passed, and newly generated observations remained `4/4`
+reference-v2 exact. Format, lint and the 236-file architecture graph, both TypeScript builds, all
+640 tests and the production build passed.
+
+Raw evidence is under ignored `.cache/008-publishing-performance/current-f840-profile/`,
+`container-fastpath-f840/`, `parser-typography-four/`, `parser-typography-81d-rerun/` and
+`parser-typography-observed-v2/`. This focused run does not replace or complete the owner-deferred
+T092 paired rounds.

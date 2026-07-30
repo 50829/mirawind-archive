@@ -332,6 +332,7 @@ function normalizePunctuation(value: string): {
   let converted = 0;
   let ranges = protectedRanges(output);
 
+  const beforeEllipsis = output;
   output = output.replace(/(?<!\.)\.{3}(?!\.)/gu, (match, offset: number) => {
     if (
       [0, 1, 2].some((delta) => isProtected(ranges, offset + delta)) ||
@@ -343,7 +344,7 @@ function normalizePunctuation(value: string): {
     converted += 1;
     return "……";
   });
-  ranges = protectedRanges(output);
+  if (output !== beforeEllipsis) ranges = protectedRanges(output);
 
   const characters = [...output];
   const pairStack: number[] = [];
@@ -413,7 +414,6 @@ function normalizePunctuation(value: string): {
     }
   }
   output = characters.join("");
-  ranges = protectedRanges(output);
 
   const withPeriods = [...output];
   for (let index = 0; index < withPeriods.length; index += 1) {
