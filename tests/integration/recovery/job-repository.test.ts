@@ -1,33 +1,25 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { openDatabase } from "@/platform/sqlite/connection";
 import {
-  JobRepository,
-  createJobRepositorySchema,
-} from "@/modules/publishing/adapters/sqlite/jobs";
+  createTemporaryDataRoot,
+  type TemporaryDataRoot,
+} from "../../helpers/data-root";
+import { openMigratedTestDatabase } from "../../helpers/database";
 
-const temporaryRoots: string[] = [];
+const temporaryRoots: TemporaryDataRoot[] = [];
 
 afterEach(async () => {
-  await Promise.all(
-    temporaryRoots
-      .splice(0)
-      .map((root) => rm(root, { recursive: true, force: true })),
-  );
+  await Promise.all(temporaryRoots.splice(0).map((root) => root.cleanup()));
 });
 
 async function connections(): Promise<[Database.Database, Database.Database]> {
-  const root = await mkdtemp(join(tmpdir(), "mirawind-jobs-"));
+  const root = await createTemporaryDataRoot("jobs");
   temporaryRoots.push(root);
-  const path = join(root, "jobs.sqlite");
-  const first = new Database(path);
-  first.pragma("journal_mode = WAL");
-  createJobRepositorySchema(first);
-  return [first, new Database(path)];
+  const migrated = await openMigratedTestDatabase(root);
+  return [migrated.database, openDatabase(migrated.path, { role: "worker" })];
 }
 
 describe("durable job repository", () => {

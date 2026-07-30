@@ -189,59 +189,8 @@ function validateOperation(operation: string): void {
   }
 }
 
-export function createJobRepositorySchema(database: Database.Database): void {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS jobs (
-      id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      state TEXT NOT NULL CHECK(state IN ('queued','running','succeeded','failed','canceled','interrupted')),
-      import_id TEXT,
-      book_id INTEGER,
-      candidate_id TEXT,
-      version_id TEXT,
-      captured_source_id TEXT,
-      captured_config_revision INTEGER,
-      captured_current_version_id TEXT,
-      retry_of_job_id TEXT REFERENCES jobs(id),
-      attempt INTEGER NOT NULL CHECK(attempt >= 1),
-      automatic_retry_count INTEGER NOT NULL CHECK(automatic_retry_count BETWEEN 0 AND 1),
-      lease_owner TEXT,
-      lease_until INTEGER,
-      heartbeat_at INTEGER,
-      phase TEXT NOT NULL,
-      progress_json TEXT NOT NULL DEFAULT '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}',
-      error_code TEXT,
-      error_class TEXT,
-      error_detail_json TEXT,
-      cancellation_requested_at INTEGER,
-      created_at INTEGER NOT NULL,
-      started_at INTEGER,
-      finished_at INTEGER
-    ) STRICT;
-    CREATE INDEX IF NOT EXISTS jobs_claim_order ON jobs(state, created_at, id);
-    CREATE TABLE IF NOT EXISTS job_idempotency_keys (
-      operation TEXT NOT NULL,
-      key_sha256 TEXT NOT NULL,
-      job_id TEXT NOT NULL REFERENCES jobs(id),
-      created_at INTEGER NOT NULL,
-      PRIMARY KEY (operation, key_sha256)
-    ) STRICT, WITHOUT ROWID;
-  `);
-}
-
 export class JobRepository {
   constructor(private readonly database: Database.Database) {}
-
-  private hasTable(name: string): boolean {
-    return (
-      this.database
-        .prepare(
-          `SELECT 1 FROM sqlite_master
-           WHERE type = 'table' AND name = ?`,
-        )
-        .get(name) !== undefined
-    );
-  }
 
   findByIdempotency(operation: string, key: string): JobRecord | null {
     validateOperation(operation);
@@ -363,11 +312,7 @@ export class JobRepository {
     safeErrorCode: string,
     nowMs: number,
   ): void {
-    if (
-      job.kind !== "build_candidate" ||
-      job.candidateId === null ||
-      !this.hasTable("draft_candidates")
-    ) {
+    if (job.kind !== "build_candidate" || job.candidateId === null) {
       return;
     }
     const result = this.database
@@ -566,11 +511,7 @@ export class JobRepository {
     safeErrorCode: string,
     nowMs: number,
   ): void {
-    if (
-      job.kind !== "reclaim" ||
-      job.bookId === null ||
-      !this.hasTable("book_deletions")
-    ) {
+    if (job.kind !== "reclaim" || job.bookId === null) {
       return;
     }
     this.database
@@ -765,10 +706,7 @@ export class JobRepository {
         if (original.errorCode === "JOB_SUBJECT_DELETED") {
           throw new Error("JOB_SUBJECT_DELETED");
         }
-        const supportsBookDeletion =
-          this.hasTable("books") && this.hasTable("book_deletions");
         const currentDeletionCleanup =
-          supportsBookDeletion &&
           original.kind === "reclaim" &&
           this.database
             .prepare(
@@ -777,7 +715,6 @@ export class JobRepository {
             )
             .get(original.id) !== undefined;
         const deletedSubject =
-          supportsBookDeletion &&
           this.database
             .prepare(
               `SELECT 1
@@ -961,11 +898,7 @@ export class JobRepository {
               input.nowMs,
             );
         }
-        if (
-          supportsBookDeletion &&
-          original.kind === "reclaim" &&
-          original.bookId !== null
-        ) {
+        if (original.kind === "reclaim" && original.bookId !== null) {
           this.database
             .prepare(
               `UPDATE book_deletions

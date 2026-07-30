@@ -1,29 +1,16 @@
-import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-import Database from "better-sqlite3";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   JobRepository,
-  createJobRepositorySchema,
   type JobRecord,
 } from "@/modules/publishing/adapters/sqlite/jobs";
 import { recoverExpiredJobLeases } from "@/modules/publishing/application/recover-expired-jobs";
 import { evaluateJobRetry } from "@/modules/publishing/application/retry-policy";
 import { withMigratedTestDatabase } from "../../helpers/database";
 import { setupPublicationFixture } from "../../helpers/publication";
-
-const temporaryRoots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    temporaryRoots
-      .splice(0)
-      .map((root) => rm(root, { force: true, recursive: true })),
-  );
-});
 
 function terminalJob(overrides: Partial<JobRecord> = {}): JobRecord {
   return {
@@ -97,66 +84,67 @@ describe("job retry policy", () => {
   });
 
   it("cleans expired staging and creates at most one infrastructure retry", async () => {
-    const root = await mkdtemp(join(tmpdir(), "mirawind-job-recovery-"));
-    temporaryRoots.push(root);
-    const database = new Database(join(root, "jobs.sqlite"));
-    createJobRepositorySchema(database);
-    const repository = new JobRepository(database);
-    const original = repository.create({
-      kind: "reconcile",
-      nowMs: 1_000,
-    });
-    repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
-    await mkdir(join(root, "staging", original.id), { recursive: true });
+    await withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const repository = new JobRepository(database);
+      const original = repository.create({
+        kind: "reconcile",
+        nowMs: 1_000,
+      });
+      repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
+      await mkdir(join(dataRoot.path, "staging", original.id), {
+        recursive: true,
+      });
 
-    expect(repository.interruptExpired({ nowMs: 62_001 })).toHaveLength(1);
-    const firstRecovery = await recoverExpiredJobLeases({
-      nowMs: 62_001,
-      repository,
-      storageRoot: root,
-    });
-    expect(firstRecovery).toEqual([
-      expect.objectContaining({
-        interrupted: expect.objectContaining({
-          errorCode: "JOB_LEASE_EXPIRED",
-          id: original.id,
-          state: "interrupted",
+      expect(repository.interruptExpired({ nowMs: 62_001 })).toHaveLength(1);
+      const firstRecovery = await recoverExpiredJobLeases({
+        nowMs: 62_001,
+        repository,
+        storageRoot: dataRoot.path,
+      });
+      expect(firstRecovery).toEqual([
+        expect.objectContaining({
+          interrupted: expect.objectContaining({
+            errorCode: "JOB_LEASE_EXPIRED",
+            id: original.id,
+            state: "interrupted",
+          }),
+          retry: expect.objectContaining({
+            attempt: 2,
+            automaticRetryCount: 1,
+            retryOfJobId: original.id,
+            state: "queued",
+          }),
         }),
-        retry: expect.objectContaining({
-          attempt: 2,
-          automaticRetryCount: 1,
-          retryOfJobId: original.id,
-          state: "queued",
-        }),
-      }),
-    ]);
-    await expect(
-      stat(join(root, "staging", original.id)),
-    ).rejects.toMatchObject({ code: "ENOENT" });
+      ]);
+      await expect(
+        stat(join(dataRoot.path, "staging", original.id)),
+      ).rejects.toMatchObject({ code: "ENOENT" });
 
-    const retry = firstRecovery[0]?.retry;
-    if (!retry) throw new Error("Expected automatic retry");
-    repository.claimNext({ leaseOwner: "worker-b", nowMs: 63_000 });
-    await mkdir(join(root, "staging", retry.id), { recursive: true });
-    const secondRecovery = await recoverExpiredJobLeases({
-      nowMs: 123_001,
-      repository,
-      storageRoot: root,
-    });
-    expect(secondRecovery).toEqual([
-      expect.objectContaining({
-        interrupted: expect.objectContaining({
-          automaticRetryCount: 1,
-          id: retry.id,
-          state: "interrupted",
+      const retry = firstRecovery[0]?.retry;
+      if (!retry) throw new Error("Expected automatic retry");
+      repository.claimNext({ leaseOwner: "worker-b", nowMs: 63_000 });
+      await mkdir(join(dataRoot.path, "staging", retry.id), {
+        recursive: true,
+      });
+      const secondRecovery = await recoverExpiredJobLeases({
+        nowMs: 123_001,
+        repository,
+        storageRoot: dataRoot.path,
+      });
+      expect(secondRecovery).toEqual([
+        expect.objectContaining({
+          interrupted: expect.objectContaining({
+            automaticRetryCount: 1,
+            id: retry.id,
+            state: "interrupted",
+          }),
+          retry: null,
         }),
-        retry: null,
-      }),
-    ]);
-    expect(
-      database.prepare("SELECT COUNT(*) AS count FROM jobs").get(),
-    ).toEqual({ count: 2 });
-    database.close();
+      ]);
+      expect(
+        database.prepare("SELECT COUNT(*) AS count FROM jobs").get(),
+      ).toEqual({ count: 2 });
+    });
   });
 
   it.each([
@@ -294,14 +282,10 @@ describe("job retry policy", () => {
     }));
 
   it("terminalizes an expired candidate before creating its one automatic retry", async () => {
-    await withMigratedTestDatabase(async ({ database }) => {
+    await withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const fixture = setupPublicationFixture(database, {
         registerReady: false,
       });
-      const root = await mkdtemp(
-        join(tmpdir(), "mirawind-candidate-recovery-"),
-      );
-      temporaryRoots.push(root);
       fixture.jobs.heartbeat({
         jobId: fixture.candidateJob.id,
         leaseOwner: "worker:test",
@@ -318,7 +302,7 @@ describe("job retry policy", () => {
       const recovered = await recoverExpiredJobLeases({
         nowMs: 60_011,
         repository: fixture.jobs,
-        storageRoot: root,
+        storageRoot: dataRoot.path,
       });
       const retry = recovered[0]?.retry;
       if (!retry?.candidateId) throw new Error("CANDIDATE_RETRY_MISSING");

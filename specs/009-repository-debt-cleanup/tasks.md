@@ -15,7 +15,7 @@ because deletion and status behavior both depend on the cleaned job model.
 
 **Purpose**: Preserve the current evidence and local data boundary before source changes.
 
-- [ ] T001 Record the focused deletion/recovery/architecture baseline and protected untracked paths
+- [x] T001 Record the focused deletion/recovery/architecture baseline and protected untracked paths
       in `specs/009-repository-debt-cleanup/evidence.md` without opening private fixtures.
 
 ---
@@ -25,11 +25,11 @@ because deletion and status behavior both depend on the cleaned job model.
 **Purpose**: Remove the partial test database and clean-switch the shared task identity before
 changing either deletion or status orchestration.
 
-- [ ] T002 Replace `createJobRepositorySchema()` usage with the complete migrated database helper
+- [x] T002 Replace `createJobRepositorySchema()` usage with the complete migrated database helper
       and same-file second connections in `tests/integration/recovery/job-repository.test.ts`,
       `tests/integration/recovery/retry-policy.test.ts` and
       `tests/integration/recovery/worker-leases.test.ts`.
-- [ ] T003 Remove the test-only schema creator, table probes and missing-table branches from
+- [x] T003 Remove the test-only schema creator, table probes and missing-table branches from
       `src/modules/publishing/adapters/sqlite/jobs.ts` after T002 passes.
 - [ ] T004 Clean-switch the single baseline from `reclaim` to `reclaim_versions | purge_book`, update
       its identity/checksum and baseline evidence, and enforce authoritative book scope in
