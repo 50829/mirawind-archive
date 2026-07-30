@@ -402,3 +402,27 @@ TypeScript builds, lint and the 236-file architecture graph, production build, a
 reference-v2 comparison passed. Raw evidence is under ignored
 `.cache/008-publishing-performance/write-time-inventory-*`. This focused run does not replace or
 complete the owner-deferred T092 paired rounds.
+
+## Frozen original metadata
+
+Each original ZIP has already been size-bounded and SHA-256 hashed while it is uploaded, then frozen
+into the strictly validated source/config revision. Candidate assembly nevertheless copied the ZIP,
+reopened the destination immediately, and recomputed the same metadata before the independent
+finalizer reopened it again. Candidate assembly now records the frozen size and digest after a
+successful copy. The finalizer still hashes the destination, compares every declared file, rejects
+extra files, fsyncs the tree and atomically renames it; a focused mismatch test proves corrupt copied
+bytes cannot reach an immutable version directory.
+
+Focused results against the write-time inventory checkpoint were:
+
+| Fixture | Original copy before | Original copy after | Change | Candidate change | Wall change | Process-tree RSS change |
+| ------- | -------------------: | ------------------: | -----: | ---------------: | ----------: | ----------------------: |
+| `a53`   |              52.1 ms |             21.4 ms | -59.0% |            -4.2% |       -2.6% |                   +1.0% |
+| `106e`  |              56.9 ms |             18.3 ms | -67.8% |            -0.0% |       +0.4% |                   -2.8% |
+| `81d`   |              63.0 ms |             21.4 ms | -66.1% |            +0.2% |       +0.5% |                   +3.0% |
+| `f840`  |             200.3 ms |             64.3 ms | -67.9% |            -1.5% |       +0.0% |                   -3.0% |
+
+All wall and RSS changes remain within their focused per-book tolerances, and fresh observations
+remain `4/4` reference-v2 exact. Raw evidence is under ignored
+`.cache/008-publishing-performance/trusted-original-metadata-*`. This focused run does not replace
+or complete the owner-deferred T092 paired rounds.

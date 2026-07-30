@@ -554,3 +554,14 @@ fixture. Candidate construction, preview and recovery tests, both TypeScript bui
 evidence is under ignored `.cache/008-publishing-performance/write-time-inventory-*`. The finalizer
 still rereads and hashes every declared file, rejects extra or changed files, fsyncs the complete
 tree and atomically renames it. This focused evidence does not complete owner-deferred T092.
+
+- [x] T110 Record copied originals from their strict frozen `book.yaml` size/SHA-256 metadata,
+      delete the immediate destination reread, and retain finalizer closure verification (partial)
+
+Across four representative books, `original_copy` improved by `59.0%`, `67.8%`, `66.1%` and
+`67.9%`. Complete candidate-child time changed by `-4.2%`, `-0.0%`, `+0.2%` and `-1.5%`; the sole
+increase was 13.3 ms. Wall and process-tree RSS stayed within the per-book tolerances. A focused
+integrity test proves mismatched copied bytes are still rejected by the finalizer before immutable
+rename, and fresh observations remained `4/4` reference-v2 exact. Raw evidence is under ignored
+`.cache/008-publishing-performance/trusted-original-metadata-*`. This focused evidence does not
+complete owner-deferred T092.

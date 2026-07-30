@@ -79,6 +79,10 @@ function commandFor(suffix: string): BuildCandidateCommand {
 async function writeCandidateInput(
   dataRoot: TemporaryDataRoot,
   command: BuildCandidateCommand,
+  options: {
+    readonly originalContents?: string;
+    readonly originalSha256?: string;
+  } = {},
 ): Promise<void> {
   const markdown = [
     "# First chapter",
@@ -92,6 +96,27 @@ async function writeCandidateInput(
   const markdownSha256 = sha256(markdown);
   const sourceRoot = resolve(dataRoot.path, command.sourceRootRelativePath);
   const configPath = resolve(dataRoot.path, command.configRelativePath);
+  const originalId = "file_candidate_builder_0001";
+  const originalPath = resolve(
+    dataRoot.layout.bookDirectory,
+    String(command.bookId),
+    "draft/originals",
+    originalId,
+  );
+  const originalFiles =
+    options.originalContents === undefined
+      ? []
+      : [
+          {
+            filename: "original.zip",
+            id: originalId,
+            media_type: "application/zip",
+            path: `originals/${originalId}`,
+            role: "mineru_zip",
+            sha256: options.originalSha256 ?? sha256(options.originalContents),
+            size: Buffer.byteLength(options.originalContents),
+          },
+        ];
   await Promise.all([
     mkdir(sourceRoot, { mode: 0o700, recursive: true }),
     mkdir(resolve(configPath, ".."), { mode: 0o700, recursive: true }),
@@ -112,7 +137,7 @@ async function writeCandidateInput(
         source: {
           main_markdown: "book.md",
           main_markdown_sha256: markdownSha256,
-          original_files: [],
+          original_files: originalFiles,
           preprocessing: {
             typography: {
               input_sha256: markdownSha256,
@@ -138,6 +163,10 @@ async function writeCandidateInput(
     ),
     { mode: 0o400 },
   );
+  if (options.originalContents !== undefined) {
+    await mkdir(resolve(originalPath, ".."), { mode: 0o700, recursive: true });
+    await writeFile(originalPath, options.originalContents, { mode: 0o400 });
+  }
 }
 
 function distinctPhases(
@@ -360,6 +389,40 @@ describe("isolated candidate child builder", () => {
           resolve(dataRoot.layout.bookDirectory, String(bookId), "versions"),
         ).catch(() => []),
       ).toEqual([]);
+    } finally {
+      await dataRoot.cleanup();
+    }
+  });
+
+  it("rejects a copied original that does not match its frozen digest", async () => {
+    const dataRoot = await createTemporaryDataRoot(
+      "candidate-original-integrity",
+    );
+    try {
+      const command = commandFor("original_integrity_0001");
+      await writeCandidateInput(dataRoot, command, {
+        originalContents: "not the registered original",
+        originalSha256: "f".repeat(64),
+      });
+
+      await expect(
+        buildCandidateVersion({
+          command,
+          createdAtMs,
+          layout: dataRoot.layout,
+          preparationDiagnostics: [],
+        }),
+      ).rejects.toThrow("VERSION_FILE_INTEGRITY_MISMATCH");
+      await expect(
+        access(
+          resolve(
+            dataRoot.layout.bookDirectory,
+            String(bookId),
+            "versions",
+            command.versionId,
+          ),
+        ),
+      ).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
       await dataRoot.cleanup();
     }

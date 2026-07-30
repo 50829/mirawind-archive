@@ -300,17 +300,10 @@ export async function assembleCandidate(
         await mkdir(dirname(destination), { mode: 0o700, recursive: true });
         await copyFile(originalPath, destination);
         await chmod(destination, 0o400);
-        const copied = await digestFile(destination);
-        if (
-          copied.size !== original.size ||
-          copied.sha256 !== original.sha256
-        ) {
-          throw new Error("VERSION_ORIGINAL_HASH_MISMATCH");
-        }
         files.record({
           path: `originals/${String(original.id)}`,
-          sha256: copied.sha256,
-          size: copied.size,
+          sha256: String(original.sha256),
+          size: Number(original.size),
         });
       }
     });
