@@ -448,3 +448,11 @@ by 10.6% and total wall by 7.4% by median across two before and two after runs. 
 and four representative books remained `4/4` reference-v2 exact. The post-change CPU profile no
 longer lists page-label parsing or supplementation as a hotspot. This focused evidence does not
 complete owner-deferred T092.
+
+- [x] T101 Reuse already-computed typography protection ranges across transformations and verify
+      four representative books remain reference exact (partial)
+
+Typography stage time improved by a median 8.4% across the four books. A monotonic protected-range
+cursor regressed all four measurements and was deleted; only the independently beneficial range
+reuse remains. The regenerated observations stayed `4/4` reference-v2 exact. This focused evidence
+does not complete owner-deferred T092.

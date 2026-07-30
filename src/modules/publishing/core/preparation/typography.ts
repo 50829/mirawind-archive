@@ -286,9 +286,9 @@ function isProtected(
 
 function transformUnprotected(
   value: string,
+  ranges: readonly ProtectedRange[],
   transform: (segment: string) => string,
 ): string {
-  const ranges = protectedRanges(value);
   if (ranges.length === 0) return transform(value);
   let cursor = 0;
   let output = "";
@@ -434,7 +434,7 @@ function normalizePunctuation(value: string): {
 
   return Object.freeze({
     converted,
-    value: transformUnprotected(withPeriods.join(""), (segment) =>
+    value: transformUnprotected(withPeriods.join(""), ranges, (segment) =>
       segment
         .replace(
           new RegExp(
@@ -465,12 +465,14 @@ function normalizePunctuation(value: string): {
   });
 }
 
-function normalizeUnprotectedSpacing(value: string): {
+function normalizeUnprotectedSpacing(
+  value: string,
+  ranges: readonly ProtectedRange[],
+): {
   readonly normalized: number;
   readonly value: string;
 } {
   let normalized = 0;
-  const ranges = protectedRanges(value);
   const forward = new RegExp(
     `(\\p{Script=Han})(${horizontalWhitespace}*)([\\p{Script=Latin}0-9])`,
     "gu",
@@ -537,7 +539,7 @@ function normalizeText(value: string): {
 } {
   const punctuation = normalizePunctuation(value);
   const ranges = protectedRanges(punctuation.value);
-  const spacing = normalizeUnprotectedSpacing(punctuation.value);
+  const spacing = normalizeUnprotectedSpacing(punctuation.value, ranges);
   return Object.freeze({
     protectedTokens: ranges.length,
     punctuationConverted: punctuation.converted,

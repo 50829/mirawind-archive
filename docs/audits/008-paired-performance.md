@@ -231,3 +231,17 @@ slowest case were regenerated and remained `4/4` reference-v2 exact. Post-change
 longer lists `pageLabel` or `supplementMissingListPageLabels` as hotspots. Raw focused evidence is
 retained under the ignored `.cache/008-publishing-performance/after-layout-index*` paths. This
 focused result does not replace or complete the owner-deferred T092 paired rounds.
+
+## Reused typography protection ranges
+
+Typography normalization recomputed identical protected-token ranges while cleaning punctuation
+and then spacing on the same stable string. The retained change computes those ranges once and
+passes them into both transformations; parsing rules and output are unchanged.
+
+Across four representative books, typography stage time changed by `9.8%`, `-1.1%`, `8.7%` and
+`8.1%`, for a median 8.4% improvement. A follow-up monotonic range cursor regressed all four stage
+measurements and was deleted rather than retained. Fresh observations from the retained output
+remain `4/4` reference-v2 exact. Raw evidence is under ignored
+`.cache/008-publishing-performance/after-typography-range-reuse*` and
+`.cache/008-publishing-performance/after-typography-cursor*` paths. This focused result does not
+replace or complete the owner-deferred T092 paired rounds.
