@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -10,10 +10,13 @@ const contractPath = fileURLToPath(
     import.meta.url,
   ),
 );
-const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
+let contractPromise: Promise<Record<string, unknown>> | undefined;
 
-async function contract(): Promise<Record<string, unknown>> {
-  return parse(await readFile(contractPath, "utf8")) as Record<string, unknown>;
+function contract(): Promise<Record<string, unknown>> {
+  contractPromise ??= readFile(contractPath, "utf8").then(
+    (source) => parse(source) as Record<string, unknown>,
+  );
+  return contractPromise;
 }
 
 function at(
@@ -119,18 +122,5 @@ describe("import and draft-preview OpenAPI contract", () => {
       additionalProperties: false,
       required: ["state", "revision", "url"],
     });
-  });
-
-  it("has concrete Astro handlers for every US1 contract path", async () => {
-    await Promise.all(
-      [
-        "src/pages/api/manage/imports/index.ts",
-        "src/pages/api/manage/imports/[importId]/index.ts",
-        "src/pages/api/manage/imports/[importId]/main-markdown.ts",
-        "src/pages/api/manage/books/[bookId]/draft.ts",
-        "src/pages/api/manage/books/[bookId]/preview/[configRevision]/pages/[pageId].ts",
-        "src/pages/api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].ts",
-      ].map((path) => access(`${projectRoot}${path}`)),
-    );
   });
 });

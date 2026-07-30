@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -10,10 +10,13 @@ const contractPath = fileURLToPath(
     import.meta.url,
   ),
 );
-const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
+let contractPromise: Promise<Record<string, unknown>> | undefined;
 
-async function contract(): Promise<Record<string, unknown>> {
-  return parse(await readFile(contractPath, "utf8")) as Record<string, unknown>;
+function contract(): Promise<Record<string, unknown>> {
+  contractPromise ??= readFile(contractPath, "utf8").then(
+    (source) => parse(source) as Record<string, unknown>,
+  );
+  return contractPromise;
 }
 
 function at(
@@ -96,16 +99,5 @@ describe("public reading, search and original-download OpenAPI contract", () => 
     expect(at(download, "responses")).toHaveProperty("304");
     expect(at(download, "responses")).toHaveProperty("404");
     expect(at(download, "responses")).toHaveProperty("416");
-  });
-
-  it("has concrete handlers for every frozen public operation", async () => {
-    await Promise.all(
-      [
-        "src/pages/read/[bookKey]/[pageKey].ts",
-        "src/pages/books/[bookKey]/assets/[versionId]/[resourceId].ts",
-        "src/pages/api/books/[bookKey]/search.ts",
-        "src/pages/books/[bookKey]/originals/[fileId].ts",
-      ].map((path) => access(`${projectRoot}${path}`)),
-    );
   });
 });

@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -10,8 +10,6 @@ const contractPath = fileURLToPath(
     import.meta.url,
   ),
 );
-const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
-
 function at(
   value: Record<string, unknown>,
   ...keys: readonly string[]
@@ -70,15 +68,5 @@ describe("durable job operation contract", () => {
       expect.arrayContaining(["attempt", "retry_of_job_id"]),
     );
     expect(at(jobSchema, "properties")).toHaveProperty("retry_of_job_id");
-  });
-
-  it("has concrete handlers for all three operations", async () => {
-    await Promise.all(
-      [
-        "src/pages/api/manage/jobs/[jobId]/index.ts",
-        "src/pages/api/manage/jobs/[jobId]/cancel.ts",
-        "src/pages/api/manage/jobs/[jobId]/retry.ts",
-      ].map((path) => access(`${projectRoot}${path}`)),
-    );
   });
 });

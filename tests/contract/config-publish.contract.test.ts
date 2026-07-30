@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -10,10 +10,13 @@ const contractPath = fileURLToPath(
     import.meta.url,
   ),
 );
-const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
+let contractPromise: Promise<Record<string, unknown>> | undefined;
 
-async function contract(): Promise<Record<string, unknown>> {
-  return parse(await readFile(contractPath, "utf8")) as Record<string, unknown>;
+function contract(): Promise<Record<string, unknown>> {
+  contractPromise ??= readFile(contractPath, "utf8").then(
+    (source) => parse(source) as Record<string, unknown>,
+  );
+  return contractPromise;
 }
 
 function at(
@@ -133,20 +136,5 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
         "visibility",
       ).enum,
     ).toEqual(["draft", "private"]);
-  });
-
-  it("has concrete handlers for each mutating operation", async () => {
-    const draftSource = await readFile(
-      `${projectRoot}src/pages/api/manage/books/[bookId]/draft.ts`,
-      "utf8",
-    );
-    expect(draftSource).toContain("export const PATCH");
-    await Promise.all(
-      [
-        "src/pages/api/manage/books/[bookId]/publish.ts",
-        "src/pages/api/manage/books/[bookId]/reprocess.ts",
-        "src/pages/api/manage/books/[bookId]/visibility.ts",
-      ].map((path) => access(`${projectRoot}${path}`)),
-    );
   });
 });

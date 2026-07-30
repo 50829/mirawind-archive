@@ -34,6 +34,15 @@ function objectValue(value: unknown, label: string): ObjectValue {
   return value as ObjectValue;
 }
 
+let contractPromise: Promise<ObjectValue> | undefined;
+
+function contract(): Promise<ObjectValue> {
+  contractPromise ??= SwaggerParser.validate(contractPath).then((document) =>
+    objectValue(document, "OpenAPI document"),
+  );
+  return contractPromise;
+}
+
 function routeModulePath(contractRoute: string): readonly string[] {
   const route = contractRoute
     .replaceAll(/\{([^}]+)\}/gu, "[$1]")
@@ -55,10 +64,7 @@ async function findRouteModule(contractRoute: string): Promise<string> {
 
 describe("generated OpenAPI validation", () => {
   it("validates and dereferences the complete OpenAPI 3.1 document", async () => {
-    const document = objectValue(
-      await SwaggerParser.validate(contractPath),
-      "OpenAPI document",
-    );
+    const document = await contract();
     expect(document.openapi).toBe("3.1.0");
 
     const schemas = objectValue(
@@ -74,10 +80,7 @@ describe("generated OpenAPI validation", () => {
   });
 
   it("maps every unique operation to a concrete Astro method export", async () => {
-    const document = objectValue(
-      await SwaggerParser.dereference(contractPath),
-      "OpenAPI document",
-    );
+    const document = await contract();
     const paths = objectValue(document.paths, "paths");
     const operationIds = new Set<string>();
 
@@ -105,10 +108,7 @@ describe("generated OpenAPI validation", () => {
   });
 
   it("declares cache behavior for every response and required security headers for binaries", async () => {
-    const document = objectValue(
-      await SwaggerParser.dereference(contractPath),
-      "OpenAPI document",
-    );
+    const document = await contract();
     const paths = objectValue(document.paths, "paths");
     const missingCacheHeaders: string[] = [];
 

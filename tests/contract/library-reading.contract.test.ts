@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -11,17 +11,6 @@ import {
 const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 describe("library HTTP contract", () => {
-  it("provides concrete public, details and private enhancement routes", async () => {
-    await Promise.all(
-      [
-        "src/pages/library/index.astro",
-        "src/pages/books/[bookKey]/index.astro",
-        "src/pages/api/books/[bookKey]/details.ts",
-        "src/pages/api/manage/library.ts",
-      ].map((path) => access(`${projectRoot}${path}`)),
-    );
-  });
-
   it("uses strong session-independent public HTML identities", () => {
     const request = new Request("https://library.example/library");
     const first = libraryHtmlResponse({

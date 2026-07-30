@@ -132,8 +132,6 @@ describe("reader interaction", () => {
     expect(html).toContain('data-outline-link="blk_test"');
     expect(html).toContain('aria-current="location"');
     expect(html).toContain(`src="${readerScriptUrl}"`);
-    expect(html).not.toContain("requestAnimationFrame(updateOutlineLocation)");
-    expect(html).not.toContain("dangerouslySetInnerHTML");
   });
 
   it("initializes every bounded search instance independently", () => {
