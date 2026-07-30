@@ -1081,3 +1081,18 @@
   API、UI 与旧 preview/publish 链在同一 clean-switch 提交替换。不得保留运行时 fallback、
   转发 export 或两条可发布路径。本决策取代 D-102、D-108 中与双构建、异步发布和旧模块
   边界冲突的部分；D-108 的一次性替换原则继续有效。
+
+## D-118：008 最终性能验收复用冻结基线并自适应补测候选
+
+- 状态：Accepted
+- 决策：008 不再重复运行基线。最终证据复用 `93e01432` 已保存且
+  reference-exact 的 pair-01 baseline；只有其 commit、fixture/reference hash、环境指纹和
+  原始报告 hash 全部核验通过时才可使用。当前候选以干净 commit 在相同环境和十五本固定
+  书序完整运行一次，并独立生成 `15/15` reference-v2 exact 证据。
+- 补测：任何整体指标距离门槛不足 5 个百分点、单本 wall/RSS 超出回退容差、运行失败或
+  reference 不一致时，只对相关候选样本再运行两次并取候选中位数。冻结 A 缺失、损坏或
+  绑定不一致时必须重新建立 A，不能用不相干的历史数字替代。
+- 报告：结果称为 frozen-A anchored comparison，不称 paired AB/BA/AB。继续记录候选 commit、
+  dirty 状态、环境、fixture/reference/lockfile hash、阶段耗时、书序和进程树 RSS。
+- 替代：本决策取代 D-117 和 008 文档中要求继续运行 AB/BA/AB 的部分；性能阈值、十五本
+  正确性、逐本回退、Reader/Search 并发门禁及压力测试不变。

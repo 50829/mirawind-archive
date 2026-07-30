@@ -15,9 +15,9 @@ Publishing core exposes only `BuildCandidateCommand`, `CompiledBook`, an ordered
 block, range and page indexes remain implementation details. Linearize the measured source,
 typography and pagination hotspots, then cleanly replace `build_preview` and `build_publish` with
 one `build_candidate` job whose ready immutable output is synchronously promoted. Prove the
-change with architecture fixtures, crash boundaries, fifteen reference-exact books and paired
-performance runs against `93e01432`, the pre-optimization baseline with the nested-role correctness
-fix and its validator contract backported onto `c176fdd`.
+change with architecture fixtures, crash boundaries, fifteen reference-exact books and a bound
+frozen-A comparison against `93e01432`, the pre-optimization baseline with the nested-role
+correctness fix and its validator contract backported onto `c176fdd`.
 
 ## Technical Context
 
@@ -30,19 +30,19 @@ Sharp 0.35, better-sqlite3 12.11, zip.js 2.8, Ajv 8.20
 staging/source/version trees
 
 **Testing**: Vitest unit/contract/integration projects, Playwright E2E, fixture comparators,
-microbenchmarks and paired real-book benchmark runners
+microbenchmarks and bound real-book benchmark runners
 
 **Target Platform**: One Linux host, one Astro Web process, one same-codebase worker process
 
 **Project Type**: Server-rendered monolithic web application with an isolated background compiler
 
-**Performance Goals**: Fifteen-book paired median wall total at least 30% lower; slowest five at
+**Performance Goals**: Fifteen-book anchored wall total at least 30% lower; slowest five at
 least 35% lower; accepted-to-preview at least 25% lower; publish-to-public at least 90% lower;
 fourfold source-region input below sixfold runtime; reader p95 at most 300 ms and search p95 below
 1,000 ms during at least 200 overlapping requests
 
 **Constraints**: Focused development comparisons use a declared three-to-five-book workload and
-must remain exact for every selected reference; the formal paired benchmark and final acceptance
+must remain exact for every selected reference; the frozen-baseline comparison and final acceptance
 must remain fifteen out of fifteen exact. No measured book may regress above `max(5%, 1 s)`; RSS
 increase may not exceed `max(5%, 64 MiB)`; at most four rendered pages may be in flight; the job
 timeout remains 30 minutes with a 10-second cancellation grace; no request-path parsing/rendering
@@ -178,8 +178,9 @@ book, candidate, version, user or route concepts.
 
 ### Phase A - Reproducible Baseline and Boundaries
 
-Add environment/commit/fixture binding, AB/BA/AB orchestration, per-stage/RSS output, statistical
-validation, algorithm complexity fixtures and architecture negative fixtures. Configure TypeScript,
+Add environment/commit/fixture binding, candidate profiling, per-stage/RSS output, statistical
+validation, algorithm complexity fixtures and architecture negative fixtures. Retain the existing
+paired runner for diagnostics, while final acceptance follows D-118's frozen-A anchored method. Configure TypeScript,
 worker output and test tooling so all product imports can use `@/`. Add AST-based import graph checks
 for aliases, cycles, reverse dependencies, module public surfaces and high-coupling thresholds.
 
@@ -227,7 +228,7 @@ cleanup removes only the derived tree. Archive validation is unchanged.
 ### Phase F - Evidence and Convergence
 
 Run format, lint, architecture, typecheck, unit, contract, integration, E2E, build, hostile input,
-recovery, synthetic stress, fifteen-book exact and paired benchmarks. Update the performance report
+recovery, synthetic stress, fifteen-book exact and frozen-baseline candidate comparison. Update the performance report
 from machine-readable evidence, remove obsolete directories/files, run Spec Kit analyze and converge,
 and require zero unmitigated CRITICAL findings before completion.
 

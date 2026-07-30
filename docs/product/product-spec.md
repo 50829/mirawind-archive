@@ -1217,12 +1217,16 @@ Cookie 而改变字节或加入 `Vary: Cookie`。管理员书库增强使用
 响应基准；后台重建耗时不得转化为读者打开页面的等待时间。
 
 内容正确性与出版性能优化验收使用十五份已登记 MinerU `3.4.4` 真实样本执行
-reference v2 exact 和同机交替 paired A/B；每轮均不得用性能结果替代正确性比较。
+reference v2 exact 和冻结基线锚定比较；不得用性能结果替代正确性比较。冻结 A 只有在
+commit、fixture/reference hash、环境指纹和原始报告 hash 全部匹配时才可复用；当前 B
+必须来自干净 commit，并独立完成十五本正确性比较。
 既有 583 页、441 页和 97 页真实样本继续作为历史兼容性锚点，500 页合成压力书继续
 提供普通 CI 可重复的固定压力和资源边界回归，但都不能替代十五本的整体性能分布。
-正式比较必须记录 fixture hash、baseline commit、环境、顺序、阶段耗时和峰值 RSS；
-十五本总 wall 中位数至少降低 30%，最慢五本至少降低 35%，accepted-to-preview 至少
+正式比较必须记录 fixture hash、baseline/candidate commit、环境、顺序、阶段耗时和峰值
+RSS；十五本总 wall 至少降低 30%，最慢五本至少降低 35%，accepted-to-preview 至少
 降低 25%，publish-to-public 至少降低 90%，且任何单本不得回退超过 `max(5%, 1 s)`。
+整体指标距离门槛不足 5 个百分点、单本 wall/RSS 超限、失败或 reference 不一致时，只对
+相关 B 样本追加两次并取候选中位数；A 绑定失效时才重新建立基线。
 
 真实样本保存在服务器仓库外的受控目录，或本机工作树内被 Git 整目录忽略的
 `tests/fixtures/mineru/real/`。已跟踪文件只登记不含书名或正文的样本格式与

@@ -137,7 +137,7 @@ whole-book lookup maps and ordered four-page rendering are active in both existi
 publication builds; the old configured-document/page-copy implementation is deleted. Format, lint,
 typecheck, 660 Vitest tests, architecture checks and the production build pass. All fifteen local
 ZIP bindings pass hash/size preflight and the frozen observed-v2 set remains 15/15 reference exact.
-This does not replace T053: candidate-code fifteen-book compilation and paired AB/BA/AB evidence are
+This did not replace T053: candidate-code fifteen-book compilation and final T092 evidence were
 still required after a committed checkpoint.
 
 The indexed structure-proposal checkpoint changed the 1,000/4,000-heading medians from
@@ -159,8 +159,8 @@ Final pre-cutover evidence is recorded in `docs/audits/008-compilation-performan
 source-region 4,000/1,000 ratio is 3.3275x; fresh reference v2 comparison is 15/15 exact; and the
 real direct-candidate chain passes 15/15 with zero blocking diagnostics. Total direct wall time is
 580.333 seconds and candidate-build time is 114.265 seconds. The long-lived direct harness peak RSS
-is explicitly non-gating; isolated committed `AB/BA/AB` performance, RSS, Reader and search evidence
-remains required by T092 after the clean switch.
+is explicitly non-gating; committed performance, RSS, Reader and search evidence remained required
+by T092 after the clean switch.
 
 **Checkpoint**: Candidate core is reference-exact and measurably linear but is not yet a second
 user-selectable runtime path. Do not commit the cutover until US2 removes both old job kinds.
@@ -299,36 +299,26 @@ peaked at 633,589,760 bytes of process-tree RSS. The 2,000/20,000-item workbench
 the virtualized structure DOM remained bounded to at most 30 rows, and the 20,000-item view remained
 navigable and could be exited.
 
-- [ ] T092 Run the formal fifteen-book AB/BA/AB paired benchmark, expand only when CV exceeds 10%, validate all frozen thresholds and publish the bounded report
+- [x] T092 Verify the saved frozen A binding, run one clean current B over all fifteen books, apply
+      D-118 adaptive rerun triggers, validate every frozen threshold and publish the bounded report
 
-The first requested `A -> B` pair is recorded in `docs/audits/008-paired-performance.md`. Both sides
-were 15/15 reference exact. Total wall improved 29.72% and slowest-five time improved 35.72%, while
-accepted-to-preview improved only 3.46%, one fixture regressed 10.79%, and peak RSS increased 34.27%.
-The regressing fixture was then reduced from 59.694 seconds to 31.955 seconds by reusing one
-`SourceTextIndex` during printed-directory extraction; it remained reference-v2 exact and passed
-the 94-test focused suite plus full typecheck. Retained profiling corrected the memory hypothesis:
-the 6.42 MB manifest inherits an already-high heap. A measured page-weight scheduler did not reduce
-RSS and was removed. The actual duplicate work was one discarded KaTeX render plus a second
-`rehype-katex` render/HAST expansion per valid formula. Rendering once kept 15,911 formula subtrees
-exact while reducing the memory-heavy candidate build from 19.075 seconds to 10.554 seconds; the
-regression fixture improved again from 31.955 seconds total wall to 27.346 seconds. Focused RSS is
-2.099 GB and 899.9 MB respectively, and the current observation remains 15/15 reference exact.
-The paired runner now reuses one exact correctness receipt per implementation commit and bound
-fixture/reference set, reducing a normal three-pair run from six observer passes to two. A focused
-test proves reuse and binding rejection, and both stored pair-01 reports were hash-verified before
-local receipt seeding; no books were reprocessed for this runner-only optimization.
-The next CPU-guided change shares one immutable source/title/heading index across the initial,
-repaired and native printed-contents detections. On the focused regression fixture, draft
-preparation changed from 15.371 seconds to 10.507 seconds, initial printed-contents from 2.143 to
-0.685 seconds and repaired printed-contents from 7.143 to 3.408 seconds. Total wall changed from
-28.481 to 23.650 seconds while peak process-tree RSS remained within the 5% tolerance. A fresh
-current-source observation of all fifteen real fixtures remains 15/15 reference-v2 exact. The run
-also exposed and fixed an incorrect whole-tree formula/HAST cardinality assumption by binding
-visible generated formulas with per-render markers rather than traversal order.
-T092 remains open because these focused results are not an `AB/BA/AB` completion claim.
+The saved pair-01 baseline is commit `93e01432`, clean, `15/15` exact and hash-bound to the current
+fifteen-fixture manifest. Its environment fingerprint `10eb6d…9e1` matches current candidate commit
+`828d503`; the baseline/reference report hashes were revalidated before reuse. The clean B run
+completed all fifteen worker pipelines and a separately regenerated observed-v2 set remained
+`15/15` reference exact.
+
+Anchored total wall changed from `887.842 s` to `214.655 s` (`75.82%` faster), accepted-to-preview
+from `642.958 s` to `211.885 s` (`67.05%` faster), and publish-to-public from `241.975 s` to
+`15.593 ms` (`99.99%` faster). The baseline's slowest five changed from `532.479 s` to `120.165 s`
+(`77.43%` faster). Peak process-tree RSS changed from `2.240 GB` to `1.229 GB`; no fixture exceeded
+the wall or RSS regression tolerance. Every aggregate gate has more than five percentage points of
+margin, and there were no failures or correctness differences, so D-118 triggered no additional B
+runs. Raw evidence is under ignored `.cache/008-publishing-performance/current-b-15-fixed/`; the
+method and bounded result are recorded in `docs/audits/008-paired-performance.md`.
 
 - [ ] T095 After the last source change, run the standard format, lint/architecture, typecheck, full
-      Vitest, E2E and build gates once; reuse the T091 stress and T092 paired-benchmark artifacts instead
+      Vitest, E2E and build gates once; reuse the T091 stress and T092 anchored-comparison artifacts instead
       of rerunning those workloads
 
 The prior checkpoint passed format, lint and the 235-file architecture graph,
@@ -353,7 +343,7 @@ unchanged.
 The prior Spec Kit checkpoint covered all requirements, measurable outcomes, acceptance scenarios and current
 tasks with no CRITICAL/HIGH inconsistency or constitution conflict. The only LOW evidence drift was
 the pre-T098 architecture/test count above, which is now synchronized. Convergence found no new
-implementation gap: the owner-deferred formal paired benchmark is already represented by T092, so
+implementation gap: final frozen-baseline evidence is already represented by T092, so
 no duplicate convergence task was appended. T098-T115 changed product source after that checkpoint;
 analyze and converge must run again after the final source change.
 
@@ -379,7 +369,7 @@ US1 compile/index/candidate core
 US2 single clean switch and synchronous publish
       ↓
 US3 recovery ─────┐
-                  ├──> formal paired benchmark and convergence
+                  ├──> final performance evidence and convergence
 US5 reader/I/O ───┘
 ```
 
@@ -405,7 +395,7 @@ US5 reader/I/O ───┘
 3. Prove linear algorithms and bounded page rendering against references before activation.
 4. Activate candidate schema/job/API/UI and delete both legacy job paths in one commit.
 5. Close recovery and reader performance independently.
-6. Run formal paired performance only on committed states; never optimize against a dirty one-off run.
+6. Run final frozen-baseline evidence only on committed states; never accept a dirty one-off run.
 7. Mark tasks complete incrementally and create Conventional Commits only at the documented logical
    checkpoints after their gates pass.
 
@@ -439,7 +429,7 @@ printed-contents hotspot. One detection-scoped index now reuses those immutable 
 global cache or contract change. On the 1,278-page focused fixture, repaired printed-contents time
 improved by 14.6%, draft preparation by 8.0% and total wall by 3.7% by median across two before and
 two after runs. Peak RSS showed no median regression, and a fresh all-book comparison remained
-`15/15` reference exact. This focused evidence does not complete owner-deferred T092.
+`15/15` reference exact. This focused evidence does not complete the then-open T092 gate.
 
 - [x] T100 Replace repeated layout page-label supplementation scans with detection-local page,
       bottom, candidate and nearest-label indexes; delete the old helpers and verify representative
@@ -449,7 +439,7 @@ The 1,278-page focused fixture reduced repaired printed-contents time by 54.0%, 
 by 10.6% and total wall by 7.4% by median across two before and two after runs. Median RSS decreased,
 and four representative books remained `4/4` reference-v2 exact. The post-change CPU profile no
 longer lists page-label parsing or supplementation as a hotspot. This focused evidence does not
-complete owner-deferred T092.
+complete the then-open T092 gate.
 
 - [x] T101 Reuse already-computed typography protection ranges across transformations and verify
       four representative books remain reference exact (partial)
@@ -457,7 +447,7 @@ complete owner-deferred T092.
 Typography stage time improved by a median 8.4% across the four books. A monotonic protected-range
 cursor regressed all four measurements and was deleted; only the independently beneficial range
 reuse remains. The regenerated observations stayed `4/4` reference-v2 exact. This focused evidence
-does not complete owner-deferred T092.
+does not complete the then-open T092 gate.
 
 - [x] T102 Parse each route-neutral semantic page once, materialize preview/public URL policies from
       the same recorded attribute references, delete the old single-output materializer, and verify
@@ -468,7 +458,7 @@ across the four books. Candidate job duration improved for every fixture; proces
 for three and increased by only 1.6% (about 16 MiB) for the fourth. The independently regenerated
 observations stayed `4/4` reference-v2 exact. Raw stage evidence is under ignored
 `.cache/008-publishing-performance/after-route-variants-*`. This focused evidence does not complete
-owner-deferred T092.
+the then-open T092 gate.
 
 - [x] T103 Delete the unused candidate HTML byte-count result and its full preview/public rescans;
       retain no compatibility field or absence-only test (partial)
@@ -478,7 +468,7 @@ the same four books; all four complete candidate jobs improved. The sole materia
 was 13 ms and within run noise. This deletion cannot alter generated content, and the existing
 candidate preview integration test, both TypeScript builds and production build passed. Raw evidence
 is under ignored `.cache/008-publishing-performance/after-output-byte-removal-*`. This focused
-evidence does not complete owner-deferred T092.
+evidence does not complete the then-open T092 gate.
 
 - [x] T104 Replace full parse5 DOM construction/serialization during route materialization with the
       maintained parse5 SAX parser, preserve structured attribute validation and escaping, and verify
@@ -489,7 +479,7 @@ Complete candidate jobs improved by a median `6.3%`; the sole regression was 158
 per-book tolerance. Formula-heavy process-tree RSS decreased by `32.1%`. Preview/public behavior,
 four representative HTML fragment DOMs and fresh observations stayed exact. Raw evidence is under
 ignored `.cache/008-publishing-performance/sax-route-*`. This focused evidence does not complete
-owner-deferred T092.
+the then-open T092 gate.
 
 - [x] T105 Materialize each preview/public ReaderShell while its ordered `RenderedPage` is current,
       inline only that page's renderer CSS, retain the complete shared document stylesheet, and
@@ -502,7 +492,7 @@ old/new rerun; its two-run medians differed by only `3.6%`, while complete wall 
 preview suites passed 14 tests, both TypeScript builds and the production build passed, and four
 representative observations remained `4/4` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/immediate-page-write-*`. This focused evidence does not complete
-owner-deferred T092.
+the then-open T092 gate.
 
 - [x] T106 Short-circuit printed-contents recurrence evidence through each entry's already-aligned
       later heading, retain the exhaustive scan as an exact fallback, and verify representative
@@ -515,7 +505,7 @@ on the adjacent rerun; all retained comparisons stayed within the per-book memor
 92-test suite, both TypeScript builds and production build passed, and newly generated observations
 remained `3/3` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/recurrence-*`. This focused evidence does not complete
-owner-deferred T092.
+the then-open T092 gate.
 
 - [x] T107 Build the whole-book heading fragment lookup once in `compileBook()`, require page
       rendering to consume that immutable index without a per-page fallback, and verify four
@@ -528,7 +518,7 @@ changes were `-1.7%`, `+0.1%` and `+0.1%`, with no per-book wall or RSS regressi
 focused tolerance. Production build, both TypeScript builds, lint/architecture and the 20 focused
 tests passed; newly generated observations remained `4/4` reference-v2 exact. Raw evidence is under
 ignored `.cache/008-publishing-performance/heading-link-index-*`. This focused evidence does not
-complete owner-deferred T092.
+complete the then-open T092 gate.
 
 - [x] T108 Record route-neutral URL attribute ranges while each semantic page is rendered, consume
       those ranges directly for preview/public materialization, and delete the per-page SAX parse and
@@ -541,7 +531,7 @@ All wall times improved. Three peak-RSS results decreased; `106e` increased by a
 lint/architecture and production build passed, and fresh observations remained `4/4` reference-v2
 exact. `parse5-sax-parser` is no longer a runtime or lockfile dependency. Raw evidence is under
 ignored `.cache/008-publishing-performance/route-offsets-*`. This focused evidence does not complete
-owner-deferred T092.
+the then-open T092 gate.
 
 - [x] T109 Build `version.json` from hashes captured when candidate files are successfully written
       or verified, delete the preceding whole-tree reread, and retain the finalizer's independent
@@ -555,7 +545,7 @@ fixture. Candidate construction, preview and recovery tests, both TypeScript bui
 236-file architecture graph, production build, and fresh `4/4` reference-v2 comparison passed. Raw
 evidence is under ignored `.cache/008-publishing-performance/write-time-inventory-*`. The finalizer
 still rereads and hashes every declared file, rejects extra or changed files, fsyncs the complete
-tree and atomically renames it. This focused evidence does not complete owner-deferred T092.
+tree and atomically renames it. This focused evidence does not complete the then-open T092 gate.
 
 - [x] T110 Record copied originals from their strict frozen `book.yaml` size/SHA-256 metadata,
       delete the immediate destination reread, and retain finalizer closure verification (partial)
@@ -566,7 +556,7 @@ increase was 13.3 ms. Wall and process-tree RSS stayed within the per-book toler
 integrity test proves mismatched copied bytes are still rejected by the finalizer before immutable
 rename, and fresh observations remained `4/4` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/trusted-original-metadata-*`. This focused evidence does not
-complete owner-deferred T092.
+complete the then-open T092 gate.
 
 - [x] T111 Retain only normalized Markdown and its prepare-resolved resource closure in draft source
       snapshots and candidate source trees; discard MinerU sidecars and unreferenced files without
@@ -580,7 +570,7 @@ fourth. Reprocess and resource-closure tests passed, and fresh observations rema
 reference-v2 exact. Format, lint/architecture, both TypeScript builds, all 639 tests and the
 production build passed. Raw evidence is under ignored
 `.cache/008-publishing-performance/prepared-source-files-*`. This focused evidence does not
-complete owner-deferred T092.
+complete the then-open T092 gate.
 
 - [x] T112 Remove duplicate full raster decoding from draft preparation and retain the isolated
       candidate asset boundary as the single format/animation/dimension/pixel validation pass
@@ -592,7 +582,7 @@ Across the same four books, prepare job duration improved by `1.9%–15.0%` and 
 leaves no immutable version tree. Fresh observations remained `4/4` reference-v2 exact. Raw
 evidence is under ignored `.cache/008-publishing-performance/single-image-inspection-*`. Format,
 lint/architecture, both TypeScript builds, all 640 tests and the production build passed. This focused
-evidence does not complete owner-deferred T092.
+evidence does not complete the then-open T092 gate.
 
 - [x] T113 Skip full-document Markdown masking when no semantic container exists and reuse
       typography protection ranges across length-preserving punctuation passes (partial)
@@ -606,7 +596,7 @@ Format, lint and the 236-file architecture graph, both TypeScript builds, all 64
 production build passed.
 Raw evidence is under ignored `.cache/008-publishing-performance/current-f840-profile/`,
 `container-fastpath-f840/`, `parser-typography-four/` and `parser-typography-81d-rerun/`. This
-focused evidence does not complete owner-deferred T092.
+focused evidence does not complete the then-open T092 gate.
 
 - [x] T114 Remove the candidate adapter's second full validation of the already validated and
       deeply frozen document manifest (partial)
@@ -617,7 +607,7 @@ manifest bytes are written. Across four representative books, `manifest_build` i
 `+0.05%`. Complete wall improved for all four by `0.08%–2.71%`, RSS decreased by
 `10.7–43.6 MiB`, and fresh observations remained `4/4` reference-v2 exact. Raw evidence is under
 ignored `.cache/008-publishing-performance/single-manifest-validation-*`. This focused evidence
-does not complete owner-deferred T092.
+does not complete the then-open T092 gate.
 
 - [x] T115 Reuse each typography leaf's protected-token ranges, fuse punctuation-adjacent
       whitespace cleanup into the mixed-spacing pass, and reuse invariant matchers across leaves
@@ -628,7 +618,7 @@ by up to `16.7%`; complete draft preparation improved for three books by `0.8%�
 changed by `+2.9%`. Complete wall improved for three books and changed by `+1.2%` (`170 ms`) for the
 fourth. RSS remained within `max(5%, 64 MiB)`, and fresh observations remained `4/4` reference-v2
 exact. Raw evidence is under ignored `.cache/008-publishing-performance/typography-fused-*`. This
-focused evidence does not complete owner-deferred T092. A following four-book comparison compiled
+focused evidence does not complete the then-open T092 gate. A following four-book comparison compiled
 the invariant whitespace and punctuation expressions once per module. Typography improved for all
 four books by `3.4%–18.9%`; prepare improved for three books by `1.4%–9.1%` and changed by `+2.6%`
 for the fourth. Complete wall improved for two books and changed by only `+0.1%/+1.5%` for the

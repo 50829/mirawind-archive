@@ -51,28 +51,35 @@ Expected: one `build_candidate` produces preview/public semantic parity, publish
 compile/render work, every crash point leaves the old publication plus a registered candidate or a
 reclaimable orphan, and cancellation terminates within its bounded grace.
 
-## Full Paired Benchmark
+## Final Frozen-Baseline Comparison
 
-Run only from committed baseline and candidate states:
+First verify the saved baseline report, environment, fixture manifest and reference report hashes
+under `.cache/008-publishing-performance/paired.json.runs/pair-01-baseline*`. Its commit must be
+`93e01432` and its environment fingerprint must match the current host. Then run the clean current
+candidate once over all fifteen books, using the baseline report's `fixture_order`:
 
 ```sh
-pnpm benchmark:pipeline-paired \
-  --baseline-ref 93e0143225aad5570640b875ffc12d011cd784f9 \
-  --candidate-ref HEAD \
+pnpm benchmark:pipeline-profile \
   --real-dir "$PWD/tests/fixtures/mineru/real" \
-  --output "$PWD/.cache/008-publishing-performance/paired.json"
+  --fixture-ids "<comma-separated pair-01 baseline fixture_order>" \
+  --profile-dir "$PWD/.cache/008-publishing-performance/current-b/profile" \
+  --output "$PWD/.cache/008-publishing-performance/current-b/result.json"
 ```
 
-The runner expands to five pairs when CV exceeds 10%. Expected machine-readable gates:
+Regenerate and compare all fifteen observed-v2 files independently. Expected gates:
 
 - every run is 15/15 reference exact;
-- paired median wall total improves at least 30%;
+- anchored wall total improves at least 30%;
 - slowest-five median improves at least 35%;
 - accepted-to-preview improves at least 25%;
 - publish-to-public improves at least 90%;
 - no single book exceeds `max(5%, 1 s)` regression;
 - RSS stays within `max(5%, 64 MiB)` of baseline;
 - overlapping uncached reader p95 is at most 300 ms and search p95 is below 1,000 ms.
+
+If an aggregate metric is within five percentage points of its gate, a book exceeds its wall/RSS
+tolerance, a run fails or reference comparison is not exact, rerun only the affected B fixtures
+twice and use their candidate median. Rerun A only when its saved binding is missing or invalid.
 
 ## Final Gate
 
@@ -89,6 +96,6 @@ pnpm test:e2e
 pnpm build
 ```
 
-Reuse the successful stress and paired-benchmark artifacts produced by T091 and T092; the final
+Reuse the successful stress and frozen-baseline comparison artifacts produced by T091 and T092; the final
 static/test/build pass does not rerun those workloads. Then run Spec Kit analyze and converge.
 Completion requires no unmitigated CRITICAL finding and no alternate publication path.

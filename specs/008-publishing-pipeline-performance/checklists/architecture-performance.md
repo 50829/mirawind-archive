@@ -53,8 +53,8 @@ before task generation and implementation.
       regression and RSS thresholds all objectively measurable? [Measurability, Spec SC-002-SC-005]
 - [x] CHK017 Is source-region complexity expressed as a scale ratio with explicit input and output
       thresholds? [Measurability, Spec SC-006]
-- [x] CHK018 Are baseline/candidate order, minimum pairs, variability expansion and environment
-      binding specified? [Measurability, Spec NFR-003, NFR-008]
+- [x] CHK018 Are frozen-baseline binding, the complete candidate run, adaptive rerun triggers and
+      environment evidence specified? [Measurability, Spec NFR-003, NFR-008]
 - [x] CHK019 Are reader request count, cache state, overlap condition and page/search latency targets
       stated? [Measurability, Spec SC-007, NFR-009]
 - [x] CHK020 Can preview/public sameness be measured by semantic digest and normalized content for

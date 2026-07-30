@@ -1,19 +1,44 @@
-# 008 paired publishing performance
+# 008 publishing performance evidence
 
 Date: 2026-07-30
 
 ## Current status
 
-This report currently contains only the first committed `A -> B` pair requested during focused
-optimization. It is valid diagnostic evidence, but it does not complete T092 or the required
-`AB/BA/AB` result.
+T092 is complete under D-118's frozen-A anchored method. The saved pair-01 baseline was reused only
+after its commit, raw report, fixture manifest, reference report and environment fingerprint were
+verified. Candidate commit `828d503a6d426dabd9817e720992914e486ccc17` was clean and ran all
+fifteen fixtures once in the baseline order on the same environment fingerprint.
 
 - Baseline: `93e0143225aad5570640b875ffc12d011cd784f9`
-- Candidate: `f5c91a5698634770e3732e71f9de4bc93911d54f`
-- Both worktrees were clean and used the same bound environment and fifteen-fixture order.
-- Baseline and candidate were both `15/15` reference-v2 exact.
+- Candidate: `828d503a6d426dabd9817e720992914e486ccc17`
+- Environment fingerprint: `10eb6d65eaadd5bbb77303f7bdeda35603d0aed2af886608fc01ea83e47bd9e1`
+- Fixture manifest: `c1bdeac4338b7831cb9929a17a81587095e8e040a3d98de2f470d3677445b7e8`
+- Baseline and freshly regenerated candidate observations are both `15/15` reference-v2 exact.
+- The report is an anchored comparison, not an AB/BA/AB paired claim.
 
-## First pair
+| Gate                  |  Frozen A | Current B |        Change |          Required | Result |
+| --------------------- | --------: | --------: | ------------: | ----------------: | ------ |
+| Total wall            | 887.842 s | 214.655 s | 75.82% faster |             >=30% | PASS   |
+| Slowest five          | 532.479 s | 120.165 s | 77.43% faster |             >=35% | PASS   |
+| Accepted to preview   | 642.958 s | 211.885 s | 67.05% faster |             >=25% | PASS   |
+| Publish to public     | 241.975 s | 15.593 ms | 99.99% faster |             >=90% | PASS   |
+| Peak process-tree RSS |  2.240 GB |  1.229 GB |  45.15% lower | <=max(5%, 64 MiB) | PASS   |
+
+No fixture exceeded its wall or RSS regression tolerance. Every aggregate metric has more than five
+percentage points of margin, and no run or reference comparison failed, so D-118 triggered no extra
+B repetitions. The smallest per-book wall improvement was `40.84%`; every per-book RSS result also
+decreased, with the smallest reduction at `2.04%`. Raw evidence is under ignored
+`.cache/008-publishing-performance/current-b-15-fixed/`; the candidate result SHA-256 is
+`4296768f0e2e86177d109fb954b2a42b67501f3458fcba52075965f07c2a2b0b`.
+
+The first B attempt also provided correctness evidence that focused four-book runs had missed:
+`b309` and `c281` rejected generated math whose MinerU source contained indented HTML-like algorithm
+blocks. `rehypeRaw` normalizes that indentation, so comparing transformed text byte-for-byte with the
+marker-bound source was invalid. Commit `828d503` now renders marker-bound formulas from their
+original parsed source while retaining unique-marker and inline/display checks. Both books then
+completed the worker pipeline, and the complete B run passed.
+
+## Historical first pair
 
 | Gate                  |  Baseline | Candidate |        Change |          Required | Result |
 | --------------------- | --------: | --------: | ------------: | ----------------: | ------ |
@@ -154,9 +179,10 @@ A later clean benchmark exposed that the first single-pass implementation also a
 node in the source tree survived into HAST in the same order. That is false for non-rendered
 definition/metadata nodes and caused `MATH_SOURCE_ALIGNMENT_INVALID` on a real candidate build.
 Generated formula nodes now carry a per-render opaque marker through sanitization, resolve their
-source without depending on traversal order, and remove the marker before serialization. Visible
-formula source/display-mode checks and duplicate-marker rejection remain; the invalid whole-tree
-cardinality gate was removed. The same real fixture completed after this correction.
+original parsed source without depending on HAST text or traversal order, and remove the marker
+before serialization. Display-mode validation and duplicate-marker rejection remain; unmarked
+imported HTML math continues to use sanitized HAST text. The invalid whole-tree cardinality gate was
+removed. The same real fixture completed after this correction.
 
 Raw machine-readable evidence remains in the ignored
 `.cache/008-publishing-performance/paired.json.runs/` directory. Focused profiler evidence is in
@@ -183,8 +209,8 @@ proves removal of the duplicate extraction but is not used as a formal aggregate
 fifteen-book profiles measured about 53.2 seconds in the removed second extraction.
 
 Raw results are retained under ignored
-`.cache/008-publishing-performance/sealed-extraction-current*/` directories. T092 remains open; this
-focused evidence does not replace the owner-deferred remaining paired rounds.
+`.cache/008-publishing-performance/sealed-extraction-current*/` directories. At that checkpoint,
+this focused evidence did not by itself complete T092.
 
 ## Detection-scoped title similarity profiles
 
@@ -206,7 +232,7 @@ Peak process-tree RSS was 812.4/815.3 MB before and 835.9/774.0 MB after, with n
 regression. The current source regenerated every observed-v2 artifact and compared `15/15` exact
 against `references-v2`. Raw focused and comparison evidence remains under the ignored
 `.cache/008-publishing-performance/after-similarity-index*` paths. This focused result does not
-replace or complete the owner-deferred T092 paired rounds.
+replace or complete the then-open T092 gate.
 
 ## Indexed layout page-label supplementation
 
@@ -230,7 +256,7 @@ the large printed-contents case, the former wall regression, the formula/memory 
 slowest case were regenerated and remained `4/4` reference-v2 exact. Post-change CPU evidence no
 longer lists `pageLabel` or `supplementMissingListPageLabels` as hotspots. Raw focused evidence is
 retained under the ignored `.cache/008-publishing-performance/after-layout-index*` paths. This
-focused result does not replace or complete the owner-deferred T092 paired rounds.
+focused result does not replace or complete the then-open T092 gate.
 
 ## Reused typography protection ranges
 
@@ -244,7 +270,7 @@ measurements and was deleted rather than retained. Fresh observations from the r
 remain `4/4` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/after-typography-range-reuse*` and
 `.cache/008-publishing-performance/after-typography-cursor*` paths. This focused result does not
-replace or complete the owner-deferred T092 paired rounds.
+replace or complete the then-open T092 gate.
 
 ## Single-parse route materialization
 
@@ -273,7 +299,7 @@ Raw machine-readable results are under ignored
 `.cache/008-publishing-performance/candidate-stage-attribution*`,
 `.cache/008-publishing-performance/after-route-variants-*` and
 `.cache/008-publishing-performance/after-route-variants-observed-v2/`. These focused runs do not
-replace or complete the owner-deferred T092 paired rounds.
+replace or complete the then-open T092 gate.
 
 ## Removed unused output-byte rescans
 
@@ -290,7 +316,7 @@ integration test, both TypeScript configurations and production build passed.
 
 Raw evidence is under ignored
 `.cache/008-publishing-performance/after-output-byte-removal-*`. This focused run does not replace
-or complete the owner-deferred T092 paired rounds.
+or complete the then-open T092 gate.
 
 ## SAX route materialization
 
@@ -324,7 +350,7 @@ the four representative books compared `4/4` reference-v2 exact.
 Raw machine-readable evidence is under ignored
 `.cache/008-publishing-performance/sax-route-materialization-*` and
 `.cache/008-publishing-performance/sax-route-observed-v2/`. These focused runs do not replace or
-complete the owner-deferred T092 paired rounds.
+complete the then-open T092 gate.
 
 ## Aligned recurrence evidence
 
@@ -350,7 +376,7 @@ and production build passed. Fresh observations generated after the change remai
 reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/recurrence-shortcut-*` and
 `.cache/008-publishing-performance/recurrence-observed-v2/`. These focused runs do not replace or
-complete the owner-deferred T092 paired rounds.
+complete the then-open T092 gate.
 
 ## Structured route-reference materialization
 
@@ -375,7 +401,7 @@ The `106e` memory increase was about `32 MiB`, below both the 5% and 64 MiB focu
 other three books decreased. The complete 645-test suite, both TypeScript builds, lint and the
 235-file architecture graph, production build, and fresh `4/4` reference-v2 comparison passed. Raw
 evidence is under ignored `.cache/008-publishing-performance/route-offsets-*`. These focused runs do
-not replace or complete the owner-deferred T092 paired rounds.
+not replace or complete the then-open T092 gate.
 
 ## Write-time candidate inventory
 
@@ -401,7 +427,7 @@ while its candidate child is 211.3 ms faster. The focused candidate/preview/reco
 TypeScript builds, lint and the 236-file architecture graph, production build, and fresh `4/4`
 reference-v2 comparison passed. Raw evidence is under ignored
 `.cache/008-publishing-performance/write-time-inventory-*`. This focused run does not replace or
-complete the owner-deferred T092 paired rounds.
+complete the then-open T092 gate.
 
 ## Frozen original metadata
 
@@ -425,7 +451,7 @@ Focused results against the write-time inventory checkpoint were:
 All wall and RSS changes remain within their focused per-book tolerances, and fresh observations
 remain `4/4` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/trusted-original-metadata-*`. This focused run does not replace
-or complete the owner-deferred T092 paired rounds.
+or complete the then-open T092 gate.
 
 ## Rebuildable source closure
 
@@ -454,7 +480,7 @@ observations remain `4/4` reference-v2 exact. Format, lint/architecture, both Ty
 Raw evidence is under ignored
 `.cache/008-publishing-performance/prepared-source-files-*` and
 `.cache/008-publishing-performance/prepared-source-files-reference-report.json`. This focused run
-does not replace or complete the owner-deferred T092 paired rounds.
+does not replace or complete the then-open T092 gate.
 
 ## Single raster validation pass
 
@@ -481,7 +507,7 @@ production build pass.
 Raw evidence is under ignored
 `.cache/008-publishing-performance/single-image-inspection-*` and
 `.cache/008-publishing-performance/single-image-inspection-reference-report.json`. This focused run
-does not replace or complete the owner-deferred T092 paired rounds.
+does not replace or complete the then-open T092 gate.
 
 ## Container fast path and stable typography ranges
 
@@ -511,8 +537,8 @@ reference-v2 exact. Format, lint and the 236-file architecture graph, both TypeS
 
 Raw evidence is under ignored `.cache/008-publishing-performance/current-f840-profile/`,
 `container-fastpath-f840/`, `parser-typography-four/`, `parser-typography-81d-rerun/` and
-`parser-typography-observed-v2/`. This focused run does not replace or complete the owner-deferred
-T092 paired rounds.
+`parser-typography-observed-v2/`. This focused run did not by itself complete the then-open T092
+gate.
 
 ## Single document-manifest validation
 
@@ -532,7 +558,7 @@ validation and the finalizer's independent on-disk hash/closure validation remai
 The candidate/manifest/recovery suites passed 22 tests, and newly generated observations remained
 `4/4` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/single-manifest-validation-*`. This focused run does not replace
-or complete the owner-deferred T092 paired rounds.
+or complete the then-open T092 gate.
 
 ## Fused typography protected-range pass
 
@@ -556,7 +582,7 @@ non-profiled run above is used for the complete timing and memory comparison. On
 passed 14 tests, and newly generated observations remained `4/4` reference-v2 exact. Raw evidence is
 under ignored `.cache/008-publishing-performance/typography-fused-four*`,
 `typography-fused-observed-v2/` and `typography-fused-comparison.json`. This focused run does not
-replace or complete the owner-deferred T092 paired rounds.
+replace or complete the then-open T092 gate.
 
 The subsequent CPU profile showed that invariant whitespace and punctuation expressions were still
 being constructed for every editable text leaf. Those expressions and the punctuation lookup now

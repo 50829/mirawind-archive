@@ -162,7 +162,7 @@ work and measure page, resource and search behavior.
 - **FR-013**: Published reading MUST resolve current pages, resources, originals and search through
   a dedicated reading boundary and MUST NOT execute publishing analysis or compilation.
 - **FR-014**: Every accepted focused optimization comparison MUST remain reference-exact for its
-  declared three-to-five-book workload. The formal paired benchmark and final acceptance MUST use
+  declared three-to-five-book workload. The final frozen-baseline comparison and acceptance MUST use
   the complete fifteen-book reference set and remain exact for all fifteen fixtures.
 - **FR-015**: The implementation MUST remove the old preview-build, publish-build and mixed compiler
   runtime paths when the candidate path becomes active.
@@ -183,9 +183,11 @@ work and measure page, resource and search behavior.
 - **NFR-007**: Outside composition roots, no product source file may have more than twelve direct
   internal dependencies and no application use case may require more than eight injected ports;
   the completed architecture gate MUST contain no coupling exception allowlist.
-- **NFR-008**: Formal performance evidence MUST run baseline and candidate in `AB/BA/AB` paired
-  order on the same host and expand to five pairs when a measured comparison has coefficient of
-  variation above 10%.
+- **NFR-008**: Final performance evidence MUST verify the saved `93e01432` baseline commit,
+  fixture/reference hashes, report hash and environment fingerprint, then run one clean current
+  candidate over all fifteen books. An aggregate result within five percentage points of a gate,
+  any per-book wall/RSS regression, failure or reference mismatch MUST trigger two additional
+  candidate runs for the affected fixtures; an invalid baseline binding MUST trigger a new baseline.
 - **NFR-009**: The concurrent reading gate MUST overlap candidate work with at least 200 uncached
   page requests and MUST report page, resource and search results separately.
 
@@ -212,9 +214,9 @@ work and measure page, resource and search behavior.
 - **SC-001**: Every formal performance round and final acceptance matches all fifteen reference v2
   fixtures exactly; every focused development comparison matches its declared three-to-five-book
   subset exactly.
-- **SC-002**: Paired median total wall time across the fifteen books is at least 30% lower than the
+- **SC-002**: Anchored total wall time across the fifteen books is at least 30% lower than the
   frozen baseline and the slowest five books improve by at least 35%.
-- **SC-003**: Median accepted-to-preview time improves by at least 25% and publish-to-public time
+- **SC-003**: Aggregate accepted-to-preview time improves by at least 25% and publish-to-public time
   improves by at least 90%.
 - **SC-004**: No individual book regresses by more than the greater of 5% or one second.
 - **SC-005**: Peak resident memory does not exceed the baseline by more than the greater of 5% or

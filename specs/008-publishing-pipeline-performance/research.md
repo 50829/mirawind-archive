@@ -105,7 +105,7 @@ peak RSS. SQLite/FTS and resource copy are not the leading measured wall-time fa
 **Alternatives considered**: tuning WAL or INSERT batching lacks evidence; increasing concurrency may
 raise RSS and reader latency; weakening security/hash/fsync checks is prohibited.
 
-## Decision 8: Use Paired, Reference-Exact Performance Evidence
+## Decision 8: Bind Reference-Exact Performance Evidence
 
 **Decision**: compare baseline `93e01432` and candidate on one host in AB/BA/AB order, expanding to
 five pairs when coefficient of variation exceeds 10%. The baseline is `c176fdd` plus the minimal
@@ -119,6 +119,10 @@ least 200 reader requests.
 and does not match one current reference role. It locates hotspots but cannot by itself prove
 improvement. Paired runs against the corrected baseline reduce time/order noise and prevent faster
 but incorrect candidates from passing.
+
+**Final amendment**: D-118 reuses the hash-verified pair-01 baseline and runs one clean fifteen-book
+candidate. Only near-threshold, regressing, failed or non-exact candidate fixtures receive two
+additional B runs; a broken baseline binding requires a new A. The final report is anchored, not paired.
 
 **Alternatives considered**: a single before/after run is too noisy; aggregate-only gates hide
 single-book regressions; synthetic-only benchmarks do not represent real MinerU structures.
