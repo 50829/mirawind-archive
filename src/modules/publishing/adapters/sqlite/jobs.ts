@@ -434,11 +434,6 @@ export class JobRepository {
             "JOB_CANCELED",
             nowMs,
           );
-          this.markDeletionCleanupFailure(
-            current,
-            "CLEANUP_INTERRUPTED",
-            nowMs,
-          );
         } else {
           this.database
             .prepare(
@@ -487,15 +482,6 @@ export class JobRepository {
       phase: nextState,
       progress: current.progress,
     });
-    this.markDeletionCleanupFailure(
-      current,
-      input.errorClass === "timeout"
-        ? "CLEANUP_TIMEOUT"
-        : input.errorClass === "infrastructure"
-          ? "CLEANUP_INTERRUPTED"
-          : "CLEANUP_FILESYSTEM_IO",
-      input.nowMs,
-    );
     return completed;
   }
 
@@ -518,24 +504,6 @@ export class JobRepository {
       phase: "interrupted",
       progress: current.progress,
     });
-  }
-
-  private markDeletionCleanupFailure(
-    job: JobRecord,
-    safeErrorCode: string,
-    nowMs: number,
-  ): void {
-    if (job.kind !== "purge_book" || job.bookId === null) {
-      return;
-    }
-    this.database
-      .prepare(
-        `UPDATE book_deletions
-         SET state = 'failed', safe_error_code = ?, updated_at = ?
-         WHERE cleanup_job_id = ? AND book_id = ?
-           AND state IN ('pending', 'purging')`,
-      )
-      .run(safeErrorCode, nowMs, job.id, job.bookId);
   }
 
   private completeOwned(input: {
@@ -593,7 +561,10 @@ export class JobRepository {
       .immediate();
   }
 
-  interruptExpired(input: { readonly nowMs: number }): readonly JobRecord[] {
+  interruptExpired(input: {
+    readonly nowMs: number;
+    readonly onInterrupted?: (job: JobRecord) => void;
+  }): readonly JobRecord[] {
     return this.database
       .transaction(() => {
         const rows = this.database
@@ -619,11 +590,7 @@ export class JobRepository {
               "JOB_LEASE_EXPIRED",
               input.nowMs,
             );
-            this.markDeletionCleanupFailure(
-              job,
-              "CLEANUP_INTERRUPTED",
-              input.nowMs,
-            );
+            input.onInterrupted?.(job);
             interrupted.push(job);
           }
         }
@@ -678,13 +645,6 @@ export class JobRepository {
             input.errorCode,
             input.nowMs,
           );
-          this.markDeletionCleanupFailure(
-            current,
-            input.errorClass === "timeout"
-              ? "CLEANUP_TIMEOUT"
-              : "CLEANUP_INTERRUPTED",
-            input.nowMs,
-          );
           return this.getRequired(id);
         })
         .immediate();
@@ -718,45 +678,6 @@ export class JobRepository {
           throw new Error("JOB_NOT_RETRYABLE");
         }
         if (original.errorCode === "JOB_SUBJECT_DELETED") {
-          throw new Error("JOB_SUBJECT_DELETED");
-        }
-        const currentDeletionCleanup =
-          original.kind === "purge_book" &&
-          this.database
-            .prepare(
-              `SELECT 1 FROM book_deletions
-               WHERE cleanup_job_id = ? AND state != 'completed'`,
-            )
-            .get(original.id) !== undefined;
-        const deletedSubject =
-          this.database
-            .prepare(
-              `SELECT 1
-               FROM books
-               WHERE deletion_requested_at IS NOT NULL
-                 AND (
-                   id = @bookId
-                   OR id = (
-                     SELECT book_id FROM imports WHERE id = @importId
-                   )
-                   OR id = (
-                     SELECT book_id FROM source_snapshots
-                     WHERE id = @sourceId
-                   )
-                   OR id = (
-                     SELECT book_id FROM book_versions WHERE id = @versionId
-                   )
-                 )
-               LIMIT 1`,
-            )
-            .get({
-              bookId: original.bookId,
-              importId: original.importId,
-              sourceId: original.capturedSourceId,
-              versionId:
-                original.versionId ?? original.capturedCurrentVersionId,
-            }) !== undefined;
-        if (deletedSubject && !currentDeletionCleanup) {
           throw new Error("JOB_SUBJECT_DELETED");
         }
         const automaticRetryCount =
@@ -911,18 +832,6 @@ export class JobRepository {
               progressJson(initialProgress),
               input.nowMs,
             );
-        }
-        if (original.kind === "purge_book" && original.bookId !== null) {
-          this.database
-            .prepare(
-              `UPDATE book_deletions
-               SET cleanup_job_id = ?, state = 'pending',
-                   safe_error_code = NULL, completed_at = NULL,
-                   updated_at = ?
-               WHERE cleanup_job_id = ? AND book_id = ?
-                 AND state != 'completed'`,
-            )
-            .run(retryId, input.nowMs, original.id, original.bookId);
         }
         if (operation && keySha256) {
           this.database

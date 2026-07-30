@@ -23,11 +23,14 @@ export async function recoverExpiredJobLeases<
   Job extends RecoverableJob,
 >(input: {
   readonly nowMs: number;
+  readonly onInterrupted?: (job: Job) => void;
   readonly repository: ExpiredJobLeaseRepository<Job>;
+  readonly retryJob?: (job: Job, nowMs: number) => Job;
   readonly storageRoot: string;
 }): Promise<readonly InterruptedJobRecovery<Job>[]> {
   const newlyInterrupted = input.repository.interruptExpired({
     nowMs: input.nowMs,
+    ...(input.onInterrupted ? { onInterrupted: input.onInterrupted } : {}),
   });
   const interrupted = new Map(
     newlyInterrupted.map((job) => [job.id, job] as const),
@@ -43,10 +46,12 @@ export async function recoverExpiredJobLeases<
       Object.freeze({
         interrupted: job,
         retry: decision.allowed
-          ? input.repository.retry(job.id, {
-              automatic: true,
-              nowMs: input.nowMs,
-            })
+          ? input.retryJob
+            ? input.retryJob(job, input.nowMs)
+            : input.repository.retry(job.id, {
+                automatic: true,
+                nowMs: input.nowMs,
+              })
           : null,
       }),
     );

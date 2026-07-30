@@ -4,9 +4,14 @@ import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { serializeJobStatus } from "@/modules/publishing/adapters/sqlite/job-status";
 import { SafeApplicationError } from "@/domain/errors";
-import { acceptBookDeletion } from "@/modules/catalog/adapters/sqlite/book-deletion";
+import { acceptBookDeletion as acceptBookDeletionWithPorts } from "@/modules/catalog/adapters/sqlite/book-deletion";
+import { SqliteBookPublishingCleanup } from "@/modules/publishing/adapters/sqlite/book-cleanup";
 import { createBookDeletionToken } from "@/modules/catalog/core/book-deletion-token";
 import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
+import {
+  completeBookDeletionInterruption,
+  markBookDeletionPurging,
+} from "@/composition/book-deletion";
 
 import { withMigratedTestDatabase } from "../../helpers/database";
 import {
@@ -24,6 +29,20 @@ function token(book: ReturnType<DraftRepository["createBook"]>): string {
     draftSourceId: book.draftSourceId,
     title: book.title,
     updatedAtMs: book.updatedAtMs,
+  });
+}
+
+function acceptBookDeletion(
+  input: Omit<
+    Parameters<typeof acceptBookDeletionWithPorts>[0],
+    "deletionTasks" | "publishingCleanup"
+  >,
+) {
+  const publishingCleanup = new SqliteBookPublishingCleanup(input.database);
+  return acceptBookDeletionWithPorts({
+    ...input,
+    deletionTasks: publishingCleanup,
+    publishingCleanup,
   });
 }
 
@@ -192,7 +211,7 @@ describe("permanent book deletion acceptance", () => {
     });
   });
 
-  it("cancels indirectly related queued work and requests termination of running work", async () => {
+  it("cancels book-scoped queued work and requests termination of running work", async () => {
     await withMigratedTestDatabase(({ database }) => {
       const drafts = new DraftRepository(database);
       const book = drafts.createBook({ nowMs: 1_000, title: "Busy book" });
@@ -213,6 +232,7 @@ describe("permanent book deletion acceptance", () => {
         );
       const jobs = new JobRepository(database);
       const indirect = jobs.create({
+        bookId: book.id,
         importId,
         kind: "analyze_import",
         nowMs: 1_100,
@@ -275,6 +295,46 @@ describe("permanent book deletion acceptance", () => {
       ).toMatchObject({
         safeErrorCode: "JOB_CANCELED",
         state: "canceled",
+      });
+    });
+  });
+
+  it("records an interrupted cleanup task and tombstone in one terminal outcome", async () => {
+    await withMigratedTestDatabase(({ database }) => {
+      const drafts = new DraftRepository(database);
+      const book = drafts.createBook({ nowMs: 1_000, title: "Interrupted" });
+      const accepted = acceptBookDeletion({
+        actorUserId: "admin",
+        bookId: book.id,
+        confirmationTitle: book.title,
+        database,
+        idempotencyKey: "delete-interrupted-0001",
+        mutationToken: token(book),
+        nowMs: 2_000,
+      });
+      const jobs = new JobRepository(database);
+      const claimed = jobs.claimNext({ leaseOwner: "worker", nowMs: 2_100 });
+      if (!claimed) throw new Error("Expected cleanup job");
+      markBookDeletionPurging(database, claimed.id, 2_100);
+
+      completeBookDeletionInterruption({
+        database,
+        errorCode: "WORKER_SHUTDOWN",
+        job: claimed,
+        leaseOwner: "worker",
+        nowMs: 2_200,
+      });
+
+      expect(jobs.get(accepted.jobId)).toMatchObject({ state: "interrupted" });
+      expect(
+        database
+          .prepare(
+            "SELECT state, safe_error_code FROM book_deletions WHERE id = ?",
+          )
+          .get(accepted.deletionId),
+      ).toEqual({
+        safe_error_code: "CLEANUP_INTERRUPTED",
+        state: "failed",
       });
     });
   });

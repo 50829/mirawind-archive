@@ -1,5 +1,10 @@
 import type Database from "better-sqlite3";
 
+import {
+  cancelBookDeletion,
+  retryBookDeletion,
+} from "@/composition/book-deletion";
+
 import { acceptBookDeletion } from "@/modules/catalog/adapters/sqlite/book-deletion";
 import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
 import { deleteFinalPasskey } from "@/modules/identity/adapters/sqlite/final-passkey";
@@ -14,6 +19,7 @@ import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { serializeJobStatus } from "@/modules/publishing/adapters/sqlite/job-status";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { SqliteBookPublishingCleanup } from "@/modules/publishing/adapters/sqlite/book-cleanup";
 import { makeBookNonPublic } from "@/modules/publishing/adapters/sqlite/publication";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { confirmImportCandidateAndQueuePreparation } from "@/modules/publishing/application/commands/confirm-import-candidate";
@@ -33,7 +39,13 @@ export function createPublishingServer(database: Database.Database) {
   const jobs = new JobRepository(database);
   const sources = new SourceRepository(database);
   return Object.freeze({
-    cancelJob: jobs.requestCancellation.bind(jobs),
+    cancelJob: (jobId: string, nowMs: number) => {
+      const job = jobs.get(jobId);
+      if (job?.kind === "purge_book") {
+        return cancelBookDeletion(database, job, nowMs);
+      }
+      return jobs.requestCancellation(jobId, nowMs);
+    },
     confirmImportCandidateAndQueuePreparation: (input: {
       readonly candidateId: string;
       readonly importId: string;
@@ -74,7 +86,17 @@ export function createPublishingServer(database: Database.Database) {
         policy: m1PublishPolicy,
         publication: new CandidatePublicationRepository(database),
       }),
-    retryJob: jobs.retry.bind(jobs),
+    retryJob: (jobId: string, input: Parameters<JobRepository["retry"]>[1]) => {
+      const job = jobs.get(jobId);
+      if (job?.kind === "purge_book") {
+        return retryBookDeletion({
+          ...input,
+          database,
+          jobId,
+        });
+      }
+      return jobs.retry(jobId, input);
+    },
     storeImport: (layout: StorageLayout) =>
       new ImportUploadService(database, layout),
     serializeJobStatus: (job: NonNullable<ReturnType<JobRepository["get"]>>) =>
@@ -90,8 +112,19 @@ export function createCatalogServer(database: Database.Database) {
   const library = new LibraryService(database);
   return Object.freeze({
     acceptBookDeletion: (
-      input: Omit<Parameters<typeof acceptBookDeletion>[0], "database">,
-    ) => acceptBookDeletion({ ...input, database }),
+      input: Omit<
+        Parameters<typeof acceptBookDeletion>[0],
+        "database" | "deletionTasks" | "publishingCleanup"
+      >,
+    ) => {
+      const publishingCleanup = new SqliteBookPublishingCleanup(database);
+      return acceptBookDeletion({
+        ...input,
+        database,
+        deletionTasks: publishingCleanup,
+        publishingCleanup,
+      });
+    },
     administratorLibrary: library.administratorLibrary.bind(library),
     publicLibrary: library.publicLibrary.bind(library),
     resolveDetails: library.resolveDetails.bind(library),

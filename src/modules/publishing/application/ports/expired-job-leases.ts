@@ -7,7 +7,10 @@ export interface RecoverableJob extends RetryableJob {
 export interface ExpiredJobLeaseRepository<
   Job extends RecoverableJob = RecoverableJob,
 > {
-  interruptExpired(input: { readonly nowMs: number }): readonly Job[];
+  interruptExpired(input: {
+    readonly nowMs: number;
+    readonly onInterrupted?: (job: Job) => void;
+  }): readonly Job[];
   listPendingAutomaticRetries(): readonly Job[];
   retry(
     id: string,

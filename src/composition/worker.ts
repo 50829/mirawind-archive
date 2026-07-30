@@ -10,6 +10,14 @@ import { parseEnvironment } from "@/config/environment";
 import { openDatabase } from "@/platform/sqlite/connection";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import { CandidateRegistrationAdapter } from "@/modules/publishing/adapters/sqlite/candidate-registration";
+import {
+  completeBookDeletionFailure,
+  completeBookDeletionInterruption,
+  finalizeBookDeletion,
+  markBookDeletionPurging,
+  recordExpiredBookDeletion,
+  retryBookDeletion,
+} from "@/composition/book-deletion";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
@@ -210,6 +218,46 @@ async function cancelImportJob(input: {
   }
 }
 
+function completeJobFailure(input: {
+  readonly database: Database.Database;
+  readonly errorClass: NonNullable<JobRecord["errorClass"]>;
+  readonly errorCode: string;
+  readonly job: JobRecord;
+  readonly leaseOwner: string;
+  readonly nowMs: number;
+  readonly repository: JobRepository;
+}): JobRecord {
+  if (input.job.kind === "purge_book") {
+    return completeBookDeletionFailure(input);
+  }
+  return input.repository.completeFailure({
+    errorClass: input.errorClass,
+    errorCode: input.errorCode,
+    jobId: input.job.id,
+    leaseOwner: input.leaseOwner,
+    nowMs: input.nowMs,
+  });
+}
+
+function completeJobInterruption(input: {
+  readonly database: Database.Database;
+  readonly errorCode: string;
+  readonly job: JobRecord;
+  readonly leaseOwner: string;
+  readonly nowMs: number;
+  readonly repository: JobRepository;
+}): JobRecord {
+  if (input.job.kind === "purge_book") {
+    return completeBookDeletionInterruption(input);
+  }
+  return input.repository.completeInterruption({
+    errorCode: input.errorCode,
+    jobId: input.job.id,
+    leaseOwner: input.leaseOwner,
+    nowMs: input.nowMs,
+  });
+}
+
 async function executeClaimedJob(input: {
   readonly candidates: DraftCandidateRepository;
   readonly database: Database.Database;
@@ -242,6 +290,9 @@ async function executeClaimedJob(input: {
   }, heartbeatIntervalMs);
 
   try {
+    if (input.job.kind === "purge_book") {
+      markBookDeletionPurging(input.database, input.job.id, Date.now());
+    }
     if (input.job.kind === "analyze_import" && input.job.importId) {
       input.imports.startAnalysis(input.job.importId, Date.now());
     }
@@ -298,27 +349,40 @@ async function executeClaimedJob(input: {
         layout: input.layout,
         nowMs: Date.now(),
       });
-      input.repository.completeFailure({
+      completeJobFailure({
+        database: input.database,
         errorClass: "canceled",
         errorCode: "JOB_CANCELED",
-        jobId: input.job.id,
+        job: input.job,
         leaseOwner: input.leaseOwner,
         nowMs: Date.now(),
+        repository: input.repository,
       });
       return;
     }
     if (input.shutdownSignal.aborted) {
-      const interrupted = input.repository.completeInterruption({
+      const interrupted = completeJobInterruption({
+        database: input.database,
         errorCode: "WORKER_SHUTDOWN",
-        jobId: input.job.id,
+        job: input.job,
         leaseOwner: input.leaseOwner,
         nowMs: Date.now(),
+        repository: input.repository,
       });
       if (evaluateJobRetry(interrupted, "automatic").allowed) {
-        input.repository.retry(interrupted.id, {
-          automatic: true,
-          nowMs: Date.now(),
-        });
+        if (interrupted.kind === "purge_book") {
+          retryBookDeletion({
+            automatic: true,
+            database: input.database,
+            jobId: interrupted.id,
+            nowMs: Date.now(),
+          });
+        } else {
+          input.repository.retry(interrupted.id, {
+            automatic: true,
+            nowMs: Date.now(),
+          });
+        }
       }
       return;
     }
@@ -419,6 +483,18 @@ async function executeClaimedJob(input: {
         });
         return;
       }
+      if (input.job.kind === "purge_book") {
+        if (input.job.bookId === null)
+          throw new Error("PURGE_BOOK_INPUT_INVALID");
+        finalizeBookDeletion({
+          bookId: input.job.bookId,
+          database: input.database,
+          jobId: input.job.id,
+          leaseOwner: input.leaseOwner,
+          nowMs: Date.now(),
+        });
+        return;
+      }
       input.repository.completeSuccess({
         jobId: input.job.id,
         leaseOwner: input.leaseOwner,
@@ -453,12 +529,14 @@ async function executeClaimedJob(input: {
         input.imports.reject(input.job.importId, errorCode, Date.now());
       }
     }
-    input.repository.completeFailure({
+    completeJobFailure({
+      database: input.database,
       errorClass,
       errorCode,
-      jobId: input.job.id,
+      job: input.job,
       leaseOwner: input.leaseOwner,
       nowMs: Date.now(),
+      repository: input.repository,
     });
   } catch (error) {
     const latest = input.repository.get(input.job.id);
@@ -467,12 +545,14 @@ async function executeClaimedJob(input: {
         error instanceof Error && /^[A-Z][A-Z0-9_]{2,79}$/u.test(error.message)
           ? error.message
           : "WORKER_JOB_FINALIZATION_FAILED";
-      input.repository.completeFailure({
+      completeJobFailure({
+        database: input.database,
         errorClass: "infrastructure",
         errorCode,
-        jobId: input.job.id,
+        job: input.job,
         leaseOwner: input.leaseOwner,
         nowMs: Date.now(),
+        repository: input.repository,
       });
     }
   } finally {
@@ -497,7 +577,18 @@ export async function runWorkerLoop(input: {
     const loopNowMs = Date.now();
     const recovered = await recoverExpiredJobLeases({
       nowMs: loopNowMs,
+      onInterrupted: (job) =>
+        recordExpiredBookDeletion(input.database, job, loopNowMs),
       repository: input.repository,
+      retryJob: (job, nowMs) =>
+        job.kind === "purge_book"
+          ? retryBookDeletion({
+              automatic: true,
+              database: input.database,
+              jobId: job.id,
+              nowMs,
+            })
+          : input.repository.retry(job.id, { automatic: true, nowMs }),
       storageRoot: input.layout.root,
     });
     for (const item of recovered) {
@@ -565,7 +656,18 @@ async function main(): Promise<void> {
     const repository = new JobRepository(database);
     const recovered = await recoverExpiredJobLeases({
       nowMs: Date.now(),
+      onInterrupted: (job) =>
+        recordExpiredBookDeletion(database, job, Date.now()),
       repository,
+      retryJob: (job, nowMs) =>
+        job.kind === "purge_book"
+          ? retryBookDeletion({
+              automatic: true,
+              database,
+              jobId: job.id,
+              nowMs,
+            })
+          : repository.retry(job.id, { automatic: true, nowMs }),
       storageRoot: layout.root,
     });
     for (const item of recovered) {

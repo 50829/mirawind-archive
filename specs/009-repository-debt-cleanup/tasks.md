@@ -65,29 +65,29 @@ retry path leaves matching task/deletion state while unrelated books remain avai
 
 ### Evidence for User Story 1
 
-- [ ] T008 [US1] Add only the missing atomic failure/interruption/retry assertions to
+- [x] T008 [US1] Add only the missing atomic failure/interruption/retry assertions to
       `tests/integration/deletion/book-deletion-service.test.ts` and
       `tests/integration/deletion/permanent-book-cleanup.test.ts`, confirming they fail before the
       transaction refactor.
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Define the current-operation-only Publishing cleanup port and transaction inputs in
+- [x] T009 [US1] Define the current-operation-only Publishing cleanup port and transaction inputs in
       `src/modules/catalog/application/ports/book-publishing-cleanup.ts` and export it from
       `src/modules/catalog/application/public.ts`.
-- [ ] T010 [US1] Implement book-scoped task cancellation, opaque removal inventory and
+- [x] T010 [US1] Implement book-scoped task cancellation, opaque removal inventory and
       Publishing-owned row purge behind the cleanup port in
       `src/modules/publishing/adapters/sqlite/book-cleanup.ts`.
-- [ ] T011 [US1] Reduce Catalog deletion SQL to Catalog-owned books, tombstones and presentations in
+- [x] T011 [US1] Reduce Catalog deletion SQL to Catalog-owned books, tombstones and presentations in
       `src/modules/catalog/adapters/sqlite/book-deletion.ts` and
       `src/modules/catalog/adapters/sqlite/book-deletions.ts`.
-- [ ] T012 [US1] Move deletion enqueue, terminalization and retry association out of the generic job
+- [x] T012 [US1] Move deletion enqueue, terminalization and retry association out of the generic job
       repository into the Catalog deletion lifecycle in
       `src/modules/catalog/application/commands/manage-book-deletion.ts` and the Catalog SQLite stores.
-- [ ] T013 [US1] Wire Catalog deletion state, Publishing cleanup and the shared immediate transaction
+- [x] T013 [US1] Wire Catalog deletion state, Publishing cleanup and the shared immediate transaction
       in `src/composition/server.ts`, `src/composition/worker.ts` and
       `src/modules/catalog/adapters/filesystem/permanent-book-cleanup.ts`.
-- [ ] T014 [US1] Remove deletion-table reads, writes and deletion-specific retry branches from
+- [x] T014 [US1] Remove deletion-table reads, writes and deletion-specific retry branches from
       `src/modules/publishing/adapters/sqlite/jobs.ts`, then pass the focused deletion and recovery
       suites.
 

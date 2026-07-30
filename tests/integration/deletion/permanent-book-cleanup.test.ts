@@ -6,9 +6,17 @@ import { describe, expect, it } from "vitest";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { BookDeletionRepository } from "@/modules/catalog/adapters/sqlite/book-deletions";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
-import { acceptBookDeletion } from "@/modules/catalog/adapters/sqlite/book-deletion";
+import { acceptBookDeletion as acceptBookDeletionWithPorts } from "@/modules/catalog/adapters/sqlite/book-deletion";
 import { createBookDeletionToken } from "@/modules/catalog/core/book-deletion-token";
-import { permanentlyCleanupBook } from "@/modules/catalog/adapters/filesystem/permanent-book-cleanup";
+import { permanentlyCleanupBook as removePermanentBookFiles } from "@/modules/catalog/adapters/filesystem/permanent-book-cleanup";
+import { SqliteBookPublishingCleanup } from "@/modules/publishing/adapters/sqlite/book-cleanup";
+import {
+  completeBookDeletionFailure,
+  failQueuedBookDeletion,
+  finalizeBookDeletion,
+  markBookDeletionPurging,
+  retryBookDeletion,
+} from "@/composition/book-deletion";
 import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
 import { PublishedBookService } from "@/modules/reader/adapters/filesystem/published-book";
 import {
@@ -17,6 +25,69 @@ import {
 } from "@/platform/filesystem/permanent-removal";
 
 import { withMigratedTestDatabase } from "../../helpers/database";
+
+function acceptBookDeletion(
+  input: Omit<
+    Parameters<typeof acceptBookDeletionWithPorts>[0],
+    "deletionTasks" | "publishingCleanup"
+  >,
+) {
+  const publishingCleanup = new SqliteBookPublishingCleanup(input.database);
+  return acceptBookDeletionWithPorts({
+    ...input,
+    deletionTasks: publishingCleanup,
+    publishingCleanup,
+  });
+}
+
+async function permanentlyCleanupBook(input: {
+  readonly bookId: number;
+  readonly database: Parameters<typeof finalizeBookDeletion>[0]["database"];
+  readonly jobId: string;
+  readonly layout: Parameters<typeof removePermanentBookFiles>[0]["layout"];
+  readonly nowMs: number;
+}) {
+  const jobs = new JobRepository(input.database);
+  const claimed = jobs.claimNext({
+    leaseOwner: "worker:deletion-test",
+    nowMs: input.nowMs - 1,
+  });
+  if (!claimed || claimed.id !== input.jobId) {
+    throw new Error("Expected cleanup job to be claimed");
+  }
+  markBookDeletionPurging(input.database, input.jobId, input.nowMs - 1);
+  let result;
+  try {
+    result = await removePermanentBookFiles({
+      bookId: input.bookId,
+      layout: input.layout,
+      publishingCleanup: new SqliteBookPublishingCleanup(input.database),
+    });
+  } catch (error) {
+    const code =
+      error instanceof Error ? error.message : "CLEANUP_FILESYSTEM_IO";
+    const job = jobs.get(input.jobId);
+    if (job?.state === "running") {
+      completeBookDeletionFailure({
+        database: input.database,
+        errorClass: "infrastructure",
+        errorCode: code,
+        job,
+        leaseOwner: "worker:deletion-test",
+        nowMs: input.nowMs,
+      });
+    }
+    throw error;
+  }
+  finalizeBookDeletion({
+    bookId: input.bookId,
+    database: input.database,
+    jobId: input.jobId,
+    leaseOwner: "worker:deletion-test",
+    nowMs: input.nowMs,
+  });
+  return result;
+}
 
 describe("permanent book cleanup", () => {
   it("removes files before relational content and retains one content-free tombstone", async () => {
@@ -429,21 +500,31 @@ describe("permanent book cleanup", () => {
         }),
         nowMs: 2_000,
       });
-      const jobs = new JobRepository(database);
-      jobs.fail(accepted.jobId, {
-        errorClass: "infrastructure",
-        errorCode: "JOB_HANDLER_FAILED",
-        nowMs: 2_500,
-      });
+      expect(
+        failQueuedBookDeletion({
+          database,
+          errorClass: "infrastructure",
+          errorCode: "JOB_HANDLER_FAILED",
+          jobId: accepted.jobId,
+          nowMs: 2_500,
+        }),
+      ).toMatchObject({ state: "failed" });
       expect(
         new BookDeletionRepository(database).findById(accepted.deletionId),
       ).toMatchObject({
         safeErrorCode: "CLEANUP_INTERRUPTED",
         state: "failed",
       });
-      const retry = jobs.retry(accepted.jobId, {
+      const retry = retryBookDeletion({
         automatic: false,
+        database,
+        jobId: accepted.jobId,
         nowMs: 3_000,
+      });
+      expect(retry).toMatchObject({
+        bookId: book.id,
+        kind: "purge_book",
+        state: "queued",
       });
       expect(
         new BookDeletionRepository(database).findById(accepted.deletionId),

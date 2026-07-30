@@ -13,6 +13,7 @@ import {
 } from "@/modules/publishing/adapters/worker/preview-diagnostics";
 import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
 import { reclaimRetainedStorage } from "@/modules/publishing/adapters/worker/reclaim";
+import { SqliteBookPublishingCleanup } from "@/modules/publishing/adapters/sqlite/book-cleanup";
 import { permanentlyCleanupBook } from "@/modules/catalog/adapters/filesystem/permanent-book-cleanup";
 import { reconcileStorage } from "@/composition/storage-reconciliation";
 import { verifyVersion } from "@/composition/verify-version-job";
@@ -288,10 +289,8 @@ async function execute(message: RunJobMessage): Promise<void> {
           message.input.kind === "purge_book"
             ? await permanentlyCleanupBook({
                 bookId: message.input.bookId,
-                database,
-                jobId: message.input.jobId,
                 layout,
-                nowMs: Date.now(),
+                publishingCleanup: new SqliteBookPublishingCleanup(database),
               })
             : null;
         const outcome = deletionOutcome

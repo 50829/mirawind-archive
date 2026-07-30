@@ -10,6 +10,10 @@ import {
   createBookDeletionToken,
   normalizeMutationToken,
 } from "@/modules/catalog/core/book-deletion-token";
+import type {
+  BookDeletionTaskPort,
+  BookPublishingCleanupPort,
+} from "@/modules/catalog/application/public";
 
 interface DeletableBookRow {
   alias: string | null;
@@ -79,70 +83,16 @@ function response(input: {
   });
 }
 
-function cancelRelatedJobs(
-  database: Database.Database,
-  bookId: number,
-  cleanupJobId: string,
-  nowMs: number,
-): void {
-  const relationship = `
-    id != @cleanupJobId AND (
-      book_id = @bookId
-      OR import_id IN (
-        SELECT id FROM imports
-        WHERE book_id = @bookId
-           OR id IN (
-             SELECT created_from_import_id
-             FROM source_snapshots WHERE book_id = @bookId
-           )
-      )
-      OR captured_source_id IN (
-        SELECT id FROM source_snapshots WHERE book_id = @bookId
-      )
-      OR version_id IN (
-        SELECT id FROM book_versions WHERE book_id = @bookId
-      )
-      OR captured_current_version_id IN (
-        SELECT id FROM book_versions WHERE book_id = @bookId
-      )
-    )`;
-  database
-    .prepare(
-      `UPDATE draft_candidates
-       SET state = 'canceled', safe_error_code = 'JOB_CANCELED',
-           completed_at = @nowMs
-       WHERE state = 'building' AND job_id IN (
-         SELECT id FROM jobs WHERE state = 'queued' AND ${relationship}
-       )`,
-    )
-    .run({ bookId, cleanupJobId, nowMs });
-  database
-    .prepare(
-      `UPDATE jobs
-       SET state = 'canceled', cancellation_requested_at = @nowMs,
-           finished_at = @nowMs, error_class = 'canceled',
-           error_code = 'JOB_CANCELED', phase = 'canceled',
-           error_detail_json = NULL
-       WHERE state = 'queued' AND ${relationship}`,
-    )
-    .run({ bookId, cleanupJobId, nowMs });
-  database
-    .prepare(
-      `UPDATE jobs
-       SET cancellation_requested_at = COALESCE(cancellation_requested_at, @nowMs)
-       WHERE state = 'running' AND ${relationship}`,
-    )
-    .run({ bookId, cleanupJobId, nowMs });
-}
-
 export function acceptBookDeletion(input: {
   readonly actorUserId: string;
   readonly bookId: number;
   readonly confirmationTitle: string;
   readonly database: Database.Database;
+  readonly deletionTasks: BookDeletionTaskPort;
   readonly idempotencyKey: string;
   readonly mutationToken: string;
   readonly nowMs: number;
+  readonly publishingCleanup: BookPublishingCleanupPort;
 }): AcceptedBookDeletion {
   if (!Number.isSafeInteger(input.bookId) || input.bookId < 1) {
     throw new SafeApplicationError("NOT_FOUND", "The book was not found.", 404);
@@ -226,25 +176,10 @@ export function acceptBookDeletion(input: {
     }
 
     const deletionId = createOpaqueId("deletion");
-    const cleanupJobId = createOpaqueId("job");
-    input.database
-      .prepare(
-        `INSERT INTO jobs (
-          id, kind, state, import_id, book_id, version_id,
-          captured_source_id, captured_config_revision,
-          captured_current_version_id, retry_of_job_id, attempt,
-          automatic_retry_count, lease_owner, lease_until, heartbeat_at,
-          phase, progress_json, error_code, error_class, error_detail_json,
-          cancellation_requested_at, created_at, started_at, finished_at
-        ) VALUES (
-          ?, 'purge_book', 'queued', NULL, ?, NULL, NULL, NULL, NULL, NULL, 1,
-          0, NULL, NULL, NULL, 'queued',
-          '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}',
-          NULL, NULL, NULL,
-          NULL, ?, NULL, NULL
-        )`,
-      )
-      .run(cleanupJobId, input.bookId, input.nowMs);
+    const cleanupJobId = input.deletionTasks.createPurgeTask({
+      bookId: input.bookId,
+      nowMs: input.nowMs,
+    }).id;
     input.database
       .prepare(
         `INSERT INTO book_deletions (
@@ -278,7 +213,11 @@ export function acceptBookDeletion(input: {
         412,
       );
     }
-    cancelRelatedJobs(input.database, input.bookId, cleanupJobId, input.nowMs);
+    input.publishingCleanup.cancelBookWork({
+      bookId: input.bookId,
+      cleanupJobId,
+      nowMs: input.nowMs,
+    });
     input.database
       .prepare(
         `INSERT INTO audit_events (

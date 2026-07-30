@@ -117,174 +117,64 @@ export class BookDeletionRepository {
     return this.requireByCleanupJobId(jobId);
   }
 
-  completeContentPurge(input: {
+  assignRetry(input: {
+    readonly bookId: number;
+    readonly nextJobId: string;
+    readonly nowMs: number;
+    readonly previousJobId: string;
+  }): BookDeletionRecord {
+    const changed = this.database
+      .prepare(
+        `UPDATE book_deletions
+         SET cleanup_job_id = ?, state = 'pending', safe_error_code = NULL,
+             completed_at = NULL, updated_at = ?
+         WHERE cleanup_job_id = ? AND book_id = ? AND state = 'failed'`,
+      )
+      .run(input.nextJobId, input.nowMs, input.previousJobId, input.bookId);
+    if (changed.changes !== 1) throw new Error("CLEANUP_INVALID_STATE");
+    return this.requireByCleanupJobId(input.nextJobId);
+  }
+
+  clearBookPointers(bookId: number): void {
+    const cleared = this.database
+      .prepare(
+        `UPDATE books
+         SET draft_source_id = NULL, draft_config_revision = NULL,
+             current_candidate_id = NULL, current_version_id = NULL
+         WHERE id = ? AND deletion_requested_at IS NOT NULL`,
+      )
+      .run(bookId);
+    if (cleared.changes !== 1) throw new Error("CLEANUP_DATABASE_CONFLICT");
+  }
+
+  completeBookRemoval(input: {
     readonly bookId: number;
     readonly cleanupJobId: string;
     readonly nowMs: number;
   }): BookDeletionRecord {
-    return this.database
-      .transaction(() => {
-        const deletion = this.requireByCleanupJobId(input.cleanupJobId);
-        if (deletion.state === "completed") return deletion;
-        if (deletion.bookId !== input.bookId) {
-          throw new Error("CLEANUP_DATABASE_CONFLICT");
-        }
-        const active = this.database
-          .prepare(
-            `SELECT deletion_requested_at
-             FROM books WHERE id = ?`,
-          )
-          .get(input.bookId) as
-          { deletion_requested_at: number | null } | undefined;
-        if (!active || active.deletion_requested_at === null) {
-          throw new Error("CLEANUP_DATABASE_CONFLICT");
-        }
-        const importIds = (
-          this.database
-            .prepare(
-              `SELECT DISTINCT imports.id
-               FROM imports
-               LEFT JOIN source_snapshots
-                 ON source_snapshots.created_from_import_id = imports.id
-               WHERE imports.book_id = ? OR source_snapshots.book_id = ?
-               ORDER BY imports.id`,
-            )
-            .all(input.bookId, input.bookId) as { id: string }[]
-        ).map((row) => row.id);
-        const importPlaceholders = importIds.map(() => "?").join(", ");
-
-        const relatedJobsSql = `
-          SELECT id FROM jobs
-          WHERE book_id = @bookId
-             OR import_id IN (
-               SELECT id FROM imports
-               WHERE book_id = @bookId
-                  OR id IN (
-                    SELECT created_from_import_id
-                    FROM source_snapshots WHERE book_id = @bookId
-                  )
-             )
-             OR captured_source_id IN (
-               SELECT id FROM source_snapshots WHERE book_id = @bookId
-             )
-             OR version_id IN (
-               SELECT id FROM book_versions WHERE book_id = @bookId
-             )
-             OR captured_current_version_id IN (
-               SELECT id FROM book_versions WHERE book_id = @bookId
-             )`;
-        this.database
-          .prepare(
-            `DELETE FROM audit_events
-             WHERE book_id = @bookId
-                OR version_id IN (
-                  SELECT id FROM book_versions WHERE book_id = @bookId
-                )
-                OR job_id IN (${relatedJobsSql})`,
-          )
-          .run({ bookId: input.bookId });
-        this.database
-          .prepare("DELETE FROM search_fts WHERE book_id = ?")
-          .run(input.bookId);
-        this.database
-          .prepare("DELETE FROM search_short_fields WHERE book_id = ?")
-          .run(input.bookId);
-        this.database
-          .prepare(
-            `UPDATE books
-             SET draft_source_id = NULL, draft_config_revision = NULL,
-                 current_candidate_id = NULL, current_version_id = NULL
-             WHERE id = ? AND deletion_requested_at IS NOT NULL`,
-          )
-          .run(input.bookId);
-        this.database
-          .prepare("DELETE FROM book_version_presentations WHERE book_id = ?")
-          .run(input.bookId);
-        this.database
-          .prepare(
-            `UPDATE jobs
-             SET import_id = NULL, book_id = NULL, candidate_id = NULL,
-                 version_id = NULL,
-                 captured_source_id = NULL, captured_config_revision = NULL,
-                 captured_current_version_id = NULL,
-                 progress_json = '{}', error_detail_json = NULL,
-                 error_code = CASE
-                   WHEN id != @cleanupJobId AND state != 'succeeded'
-                     THEN 'JOB_SUBJECT_DELETED'
-                   ELSE error_code
-                 END
-             WHERE id IN (${relatedJobsSql})`,
-          )
-          .run({
-            bookId: input.bookId,
-            cleanupJobId: input.cleanupJobId,
-          });
-        this.database
-          .prepare("DELETE FROM draft_candidates WHERE book_id = ?")
-          .run(input.bookId);
-        this.database
-          .prepare(
-            "UPDATE book_versions SET predecessor_version_id = NULL WHERE book_id = ?",
-          )
-          .run(input.bookId);
-        this.database
-          .prepare("DELETE FROM book_versions WHERE book_id = ?")
-          .run(input.bookId);
-        this.database
-          .prepare("DELETE FROM original_files WHERE book_id = ?")
-          .run(input.bookId);
-        this.database
-          .prepare("DELETE FROM config_revisions WHERE book_id = ?")
-          .run(input.bookId);
-        if (importIds.length > 0) {
-          this.database
-            .prepare(
-              `UPDATE imports SET selected_candidate_id = NULL
-               WHERE id IN (${importPlaceholders})`,
-            )
-            .run(...importIds);
-          this.database
-            .prepare(
-              `DELETE FROM import_candidates
-               WHERE import_id IN (${importPlaceholders})`,
-            )
-            .run(...importIds);
-        }
-        this.database
-          .prepare("DELETE FROM source_snapshots WHERE book_id = ?")
-          .run(input.bookId);
-        if (importIds.length > 0) {
-          this.database
-            .prepare(`DELETE FROM imports WHERE id IN (${importPlaceholders})`)
-            .run(...importIds);
-        }
-        const removed = this.database
-          .prepare(
-            "DELETE FROM books WHERE id = ? AND deletion_requested_at IS NOT NULL",
-          )
-          .run(input.bookId);
-        if (removed.changes !== 1) {
-          throw new Error("CLEANUP_DATABASE_CONFLICT");
-        }
-        const completed = this.database
-          .prepare(
-            `UPDATE book_deletions
-             SET state = 'completed', safe_error_code = NULL,
-                 completed_at = ?, updated_at = ?
-             WHERE cleanup_job_id = ? AND state != 'completed'`,
-          )
-          .run(input.nowMs, input.nowMs, input.cleanupJobId);
-        if (completed.changes !== 1) {
-          throw new Error("CLEANUP_DATABASE_CONFLICT");
-        }
-        const integrity = this.database.pragma(
-          "foreign_key_check",
-        ) as unknown[];
-        if (integrity.length > 0) {
-          throw new Error("CLEANUP_DATABASE_INTEGRITY");
-        }
-        return this.requireByCleanupJobId(input.cleanupJobId);
-      })
-      .immediate();
+    const deletion = this.requireByCleanupJobId(input.cleanupJobId);
+    if (deletion.state === "completed") return deletion;
+    if (deletion.bookId !== input.bookId) {
+      throw new Error("CLEANUP_DATABASE_CONFLICT");
+    }
+    this.database
+      .prepare("DELETE FROM book_version_presentations WHERE book_id = ?")
+      .run(input.bookId);
+    const removed = this.database
+      .prepare(
+        "DELETE FROM books WHERE id = ? AND deletion_requested_at IS NOT NULL",
+      )
+      .run(input.bookId);
+    if (removed.changes !== 1) throw new Error("CLEANUP_DATABASE_CONFLICT");
+    const completed = this.database
+      .prepare(
+        `UPDATE book_deletions
+         SET state = 'completed', safe_error_code = NULL,
+             completed_at = ?, updated_at = ?
+         WHERE cleanup_job_id = ? AND state != 'completed'`,
+      )
+      .run(input.nowMs, input.nowMs, input.cleanupJobId);
+    if (completed.changes !== 1) throw new Error("CLEANUP_DATABASE_CONFLICT");
+    return this.requireByCleanupJobId(input.cleanupJobId);
   }
 }
