@@ -43,7 +43,7 @@ export function evaluateJobRetry(
     return { allowed: false, reason: "JOB_NOT_RETRYABLE" };
   }
 
-  if (job.kind === "build_publish" && job.versionId !== null) {
+  if (job.kind === "build_candidate" && job.versionId !== null) {
     return {
       allowed: false,
       reason: "READY_PUBLICATION_REQUIRES_PUBLISH_ACTION",

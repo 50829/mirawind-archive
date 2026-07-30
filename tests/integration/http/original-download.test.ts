@@ -7,17 +7,16 @@ import {
   closeRuntimeAuthForTests,
   getRuntimeDatabase,
 } from "@/composition/auth";
-import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 import { resetRuntimeStorageForTests } from "@/composition/storage";
 
 import { GET as getOriginal } from "../../../src/pages/books/[bookKey]/originals/[fileId].js";
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
 import { openMigratedTestDatabase } from "../../helpers/database.js";
 import {
-  publicationTestLeaseOwner,
+  publishReadyCandidateForTest,
   publicationTestVersionId,
   setupPublicationFixture,
-} from "../publication/stale-build.test.js";
+} from "../../helpers/publication.js";
 
 const environmentKeys = [
   "MIRAWIND_ALLOWED_HOSTS",
@@ -95,13 +94,10 @@ describe("registered original HTTP download", () => {
           sizeBytes,
           "a".repeat(64),
         );
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database: migrated.database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       migrated.close();
 

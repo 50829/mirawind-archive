@@ -88,8 +88,8 @@ test("keeps upload progress honest across retry, acceptance and abort", async ({
             cancellation_requested_at: null,
             error_class: null,
             error_code: null,
-            job_id: "job_controlled_preview_0001",
-            kind: "build_preview",
+            job_id: "job_controlled_candidate_0001",
+            kind: "build_candidate",
             phase: "complete",
             progress: {
               completed: 1,

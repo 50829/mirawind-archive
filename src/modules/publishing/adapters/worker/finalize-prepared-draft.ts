@@ -9,13 +9,13 @@ import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
 import { createPrintedContentsAnalysisV2 } from "@/modules/publishing/core/preparation/printed-contents-analysis";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import {
+  DraftCandidateRepository,
+  type DraftCandidateRecord,
+} from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
+import {
   ImportRepository,
   type ReprocessPreparationEvidence,
 } from "@/modules/publishing/adapters/sqlite/imports";
-import {
-  JobRepository,
-  type JobRecord,
-} from "@/modules/publishing/adapters/sqlite/jobs";
 import {
   draftPreparationVersion,
   type PreparedDraftArtifact,
@@ -36,8 +36,8 @@ import {
 
 export interface FinalizedPreparedDraft {
   readonly bookId: number;
+  readonly candidate: DraftCandidateRecord;
   readonly configRevision: number;
-  readonly previewJob: JobRecord;
   readonly snapshot: SourceSnapshotResult;
 }
 
@@ -139,7 +139,7 @@ export async function finalizePreparedDraft(input: {
 }): Promise<FinalizedPreparedDraft> {
   const imports = new ImportRepository(input.database);
   const drafts = new DraftRepository(input.database);
-  const jobs = new JobRepository(input.database);
+  const candidates = new DraftCandidateRepository(input.database);
   const imported = imports.require(input.importId);
   if (imported.state !== "preparing" || imported.bookId === null) {
     throw new Error("IMPORT_PREPARE_STATE_CONFLICT");
@@ -231,9 +231,9 @@ export async function finalizePreparedDraft(input: {
   );
   await atomicWriteFile(analysisPath, canonicalJson(analysis), { mode: 0o600 });
   await chmod(analysisPath, 0o400);
-  let previewJob: JobRecord;
+  let candidate: DraftCandidateRecord;
   if (reprocess && currentConfigRecord) {
-    const replaced = drafts.replaceSourceConfigAndQueuePreview({
+    candidate = candidates.replaceSourceConfigAndCreate({
       bookId: imported.bookId,
       expectedRevision: reprocess.expectedConfigRevision,
       expectedSourceId: reprocess.expectedSourceId,
@@ -247,12 +247,10 @@ export async function finalizePreparedDraft(input: {
       yamlRelativePath,
       yamlSha256,
     });
-    const queuedPreview = jobs.get(replaced.jobId);
-    if (!queuedPreview) throw new Error("PREVIEW_JOB_NOT_FOUND");
-    previewJob = queuedPreview;
   } else {
-    drafts.addConfigRevision({
+    candidate = candidates.addInitialConfigAndCreate({
       bookId: imported.bookId,
+      importId: imported.id,
       nowMs: input.nowMs,
       revision,
       schemaVersion: 3,
@@ -260,24 +258,6 @@ export async function finalizePreparedDraft(input: {
       title: input.artifact.title,
       yamlRelativePath,
       yamlSha256,
-    });
-    previewJob = jobs.create({
-      bookId: imported.bookId,
-      capturedConfigRevision: revision,
-      capturedSourceId: snapshot.source.id,
-      idempotency: {
-        key: `preview-import-${imported.id}`,
-        operation: "preview.build",
-      },
-      importId: imported.id,
-      kind: "build_preview",
-      nowMs: input.nowMs,
-    });
-    drafts.createPreview({
-      bookId: imported.bookId,
-      configRevision: revision,
-      jobId: previewJob.id,
-      sourceId: snapshot.source.id,
     });
   }
   imports.attachPreparedBook({
@@ -287,8 +267,8 @@ export async function finalizePreparedDraft(input: {
   });
   return Object.freeze({
     bookId: imported.bookId,
+    candidate,
     configRevision: revision,
-    previewJob,
     snapshot,
   });
 }

@@ -8,7 +8,7 @@ import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
-import { presentationForTest } from "./stale-build.test.js";
+import { presentationForTest } from "../../helpers/publication.js";
 
 const hash = "a".repeat(64);
 const sourceId = "src_search_index_test_0001";
@@ -90,13 +90,14 @@ describe("ready-version and search index transaction", () => {
         bookId: book.id,
         capturedConfigRevision: 1,
         capturedSourceId: sourceId,
-        kind: "build_publish",
+        kind: "build_candidate",
         nowMs: 5,
+        versionId,
       });
       const versions = new VersionRepository(database);
       const ready = versions.registerReadyWithSearch({
         bookId: book.id,
-        compilerVersion: "compiler-v4",
+        compilerVersion: "compiler-v5",
         completeAtMs: 6,
         configRevision: 1,
         createdByJobId: firstJob.id,
@@ -105,7 +106,7 @@ describe("ready-version and search index transaction", () => {
         manifestSha256: hash,
         predecessorVersionId: null,
         presentation: presentationForTest(book.id, versionId),
-        rendererVersion: "semantic-html-v4-katex-0.18.1",
+        rendererVersion: "semantic-html-v5-katex-0.18.1",
         sourceId,
         spool: spool({ bookId: book.id, versionId }),
         versionId,
@@ -121,18 +122,23 @@ describe("ready-version and search index transaction", () => {
           .get(versionId),
       ).toEqual({ count: 1 });
 
+      database
+        .prepare("UPDATE book_versions SET state = 'discarded' WHERE id = ?")
+        .run(versionId);
+
       const secondJob = jobs.create({
         bookId: book.id,
         capturedConfigRevision: 1,
         capturedCurrentVersionId: versionId,
         capturedSourceId: sourceId,
-        kind: "build_publish",
+        kind: "build_candidate",
         nowMs: 7,
+        versionId: secondVersionId,
       });
       expect(() =>
         versions.registerReadyWithSearch({
           bookId: book.id,
-          compilerVersion: "compiler-v4",
+          compilerVersion: "compiler-v5",
           completeAtMs: 8,
           configRevision: 1,
           createdByJobId: secondJob.id,
@@ -141,7 +147,7 @@ describe("ready-version and search index transaction", () => {
           manifestSha256: hash,
           predecessorVersionId: versionId,
           presentation: presentationForTest(book.id, secondVersionId),
-          rendererVersion: "semantic-html-v4-katex-0.18.1",
+          rendererVersion: "semantic-html-v5-katex-0.18.1",
           sourceId,
           spool: spool({ bookId: book.id, versionId: secondVersionId }),
           versionId: secondVersionId,
@@ -149,7 +155,7 @@ describe("ready-version and search index transaction", () => {
         }),
       ).toThrow("SEARCH_BLOCK_ID_SET_MISMATCH");
       expect(versions.find(secondVersionId)).toBeNull();
-      expect(jobs.get(secondJob.id)?.versionId).toBeNull();
+      expect(jobs.get(secondJob.id)?.versionId).toBe(secondVersionId);
       expect(
         database
           .prepare(

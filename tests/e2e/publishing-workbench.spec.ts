@@ -16,6 +16,15 @@ function draftProjection(
   }));
   return {
     book_id: 99,
+    candidate: {
+      attempt_id: "candidate_workbench_0000000001",
+      preview_url: "/api/manage/books/99/preview/1/pages/1",
+      revision: 1,
+      safe_error_code: null,
+      semantic_digest: "b".repeat(64),
+      state: "ready",
+      version_id: "ver_workbench_000000000001",
+    },
     config_revision: 1,
     diagnostics: [
       {
@@ -33,7 +42,7 @@ function draftProjection(
       },
     ],
     preview: {
-      compiler_version: "compiler-v4",
+      compiler_version: "compiler-v5",
       config_revision: 1,
       config_sha256: "a".repeat(64),
       headings: structure.map((node, index) => ({
@@ -45,7 +54,7 @@ function draftProjection(
       })),
       is_stale: false,
       pages: [{ page_id: 1, title: "Preview page" }],
-      renderer_version: "semantic-html-v4-katex-0.18.1",
+      renderer_version: "semantic-html-v5-katex-0.18.1",
       semantic_digest: "b".repeat(64),
       source_regions: [],
       source_sha256: "c".repeat(64),
@@ -56,7 +65,6 @@ function draftProjection(
         spaces_normalized: 1,
       },
     },
-    preview_state: "ready",
     regions: [
       {
         applied: true,

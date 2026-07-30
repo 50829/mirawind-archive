@@ -2,10 +2,11 @@ import { randomBytes } from "node:crypto";
 
 const prefixes = {
   block: "blk",
-  candidate: "cand",
   deletion: "del",
+  draftCandidate: "candidate",
   file: "file",
   import: "imp",
+  importCandidate: "cand",
   job: "job",
   region: "region",
   resource: "res",

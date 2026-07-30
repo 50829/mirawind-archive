@@ -234,7 +234,7 @@ export async function discoverMarkdownCandidates(
     for (const url of evidence.resourceUrls) {
       if (!(await localResourceExists(directory, url))) missing.push(url);
     }
-    const id = options.idFactory?.() ?? createOpaqueId("candidate");
+    const id = options.idFactory?.() ?? createOpaqueId("importCandidate");
     const diagnostics: CandidateDiagnostic[] =
       missing.length === 0
         ? []

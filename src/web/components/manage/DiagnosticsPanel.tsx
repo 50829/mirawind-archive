@@ -7,34 +7,7 @@ import {
   manageQuietButton,
   manageQuietText,
 } from "@/web/components/ui/manage-classes";
-
-export interface PreviewDiagnostic {
-  readonly blockId?: string;
-  readonly code: string;
-  readonly confidence?: "high" | "low" | "medium";
-  readonly evidence?: readonly string[];
-  readonly location?: {
-    readonly blockId?: string;
-    readonly endByte?: number;
-    readonly pageIndex?: number;
-    readonly regionId?: string;
-    readonly startByte?: number;
-  };
-  readonly message: string;
-  readonly path?: string;
-  readonly phase?:
-    | "contents"
-    | "matching"
-    | "ocr"
-    | "selection"
-    | "splitting"
-    | "structure"
-    | "typography";
-  readonly recovery?: readonly (
-    "reload" | "reprocess_verbatim" | "select_structure"
-  )[];
-  readonly severity?: "error" | "info" | "warning";
-}
+import type { PreviewDiagnostic } from "@/web/contracts/publishing";
 
 const recoveryLabels = {
   reload: "重新载入",

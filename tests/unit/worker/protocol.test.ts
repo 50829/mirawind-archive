@@ -87,21 +87,28 @@ describe("job child IPC protocol", () => {
     ).toBe(false);
   });
 
-  it("requires frozen config and source captures for publish jobs", () => {
+  it("requires the complete immutable candidate build capture", () => {
+    const bookId = 1;
+    const candidateId = createOpaqueId("draftCandidate");
     const jobId = createOpaqueId("job");
+    const sourceId = createOpaqueId("source");
+    const versionId = createOpaqueId("version");
     const message = {
       input: {
-        attempt: 1,
-        bookId: 1,
-        capturedConfigRevision: 2,
+        bookId,
+        candidateId,
         capturedCurrentVersionId: null,
-        capturedSourceId: createOpaqueId("source"),
-        configYamlRelativePath: "books/1/draft/configs/2/book.yaml",
-        createdAtMs: 1,
+        compilerIdentity: "compiler-v5",
+        configRelativePath: `books/${bookId}/draft/configs/2/book.yaml`,
+        configRevision: 2,
         jobId,
-        kind: "build_publish",
-        sourceRootRelativePath: "books/1/draft/sources/source",
-        stagingRelativePath: `staging/${jobId}`,
+        kind: "build_candidate",
+        previewIdentity: "draft-preview-v5",
+        readerIdentity: "mirawind-reader-v2-tailwind-4.3.3",
+        rendererIdentity: "semantic-html-v5-katex-0.18.1",
+        sourceId,
+        sourceRootRelativePath: `books/${bookId}/draft/sources/${sourceId}`,
+        versionId,
       },
       protocolVersion: jobChildProtocolVersion,
       type: "run",

@@ -1,21 +1,20 @@
 import { isOpaqueId } from "@/domain/ids";
 import {
+  candidateBuildPhases,
   isKnownJobPhase,
   jobKinds,
   parseBuildCandidateCommand,
   parseCandidateBuildArtifact,
   type BuildCandidateCommand,
+  type CandidateBuildPhase,
   type CandidateBuildArtifact,
   type JobKind,
   type JobPhase,
   type TypographyProfile,
 } from "@/modules/publishing/application/public";
 
-export const jobChildProtocolVersion = 2;
-export const candidateJobChildProtocolVersion = 3;
-
-export type CandidateBuildPhase =
-  "compile_book" | "render_pages" | "build_search" | "finalize_candidate";
+export const jobChildProtocolVersion = 3;
+export const candidateJobChildProtocolVersion = jobChildProtocolVersion;
 
 export interface BuildCandidateRunMessage {
   readonly input: BuildCandidateCommand;
@@ -79,25 +78,6 @@ export interface PrepareDraftCommand extends FrozenJobCommandBase {
   readonly typographyProfile?: TypographyProfile | null;
 }
 
-export interface BuildPreviewCommand extends FrozenJobCommandBase {
-  readonly bookId: number;
-  readonly capturedConfigRevision: number;
-  readonly capturedSourceId: string;
-  readonly configYamlRelativePath: string;
-  readonly kind: "build_preview";
-  readonly sourceRootRelativePath: string;
-}
-
-export interface BuildPublishCommand extends FrozenJobCommandBase {
-  readonly bookId: number;
-  readonly capturedConfigRevision: number;
-  readonly capturedCurrentVersionId: string | null;
-  readonly capturedSourceId: string;
-  readonly configYamlRelativePath: string;
-  readonly kind: "build_publish";
-  readonly sourceRootRelativePath: string;
-}
-
 export interface VerifyVersionCommand extends FrozenJobCommandBase {
   readonly kind: "verify_version";
   readonly versionId: string;
@@ -114,8 +94,7 @@ export interface ReclaimCommand extends FrozenJobCommandBase {
 
 export type FrozenJobInput =
   | AnalyzeImportCommand
-  | BuildPreviewCommand
-  | BuildPublishCommand
+  | BuildCandidateCommand
   | PrepareDraftCommand
   | ReclaimCommand
   | ReconcileCommand
@@ -249,12 +228,9 @@ export function isJobProgress(value: unknown): value is JobProgress {
   );
 }
 
-const candidateBuildPhases = new Set<CandidateBuildPhase>([
-  "compile_book",
-  "render_pages",
-  "build_search",
-  "finalize_candidate",
-]);
+const candidateBuildPhaseSet = new Set<CandidateBuildPhase>(
+  candidateBuildPhases,
+);
 
 const safeErrorClasses = new Set<
   NonNullable<JobResultMessage["safeErrorClass"]>
@@ -314,7 +290,7 @@ export function parseBuildCandidateChildMessage(
         "type",
       ]) ||
       typeof value.phase !== "string" ||
-      !candidateBuildPhases.has(value.phase as CandidateBuildPhase) ||
+      !candidateBuildPhaseSet.has(value.phase as CandidateBuildPhase) ||
       !isJobProgress(value.progress)
     ) {
       throw new TypeError("BUILD_CANDIDATE_CHILD_MESSAGE_INVALID");
@@ -367,6 +343,14 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
   if (value.protocolVersion !== jobChildProtocolVersion) return false;
   const input = value.input;
   if (!isRecord(input)) return false;
+  if (input.kind === "build_candidate") {
+    try {
+      parseBuildCandidateCommand(input);
+      return true;
+    } catch {
+      return false;
+    }
+  }
   const baseKeys = [
     "attempt",
     "createdAtMs",
@@ -448,32 +432,7 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
           input.sourceRootRelativePath === null)
     );
   }
-  const buildKeys = [
-    ...baseKeys,
-    "bookId",
-    "capturedConfigRevision",
-    "capturedSourceId",
-    "configYamlRelativePath",
-    "sourceRootRelativePath",
-    ...(input.kind === "build_publish" ? ["capturedCurrentVersionId"] : []),
-  ];
-  return (
-    exactKeys(input, buildKeys) &&
-    isNullablePositiveInteger(input.bookId) &&
-    input.bookId !== null &&
-    isNullablePositiveInteger(input.capturedConfigRevision) &&
-    input.capturedConfigRevision !== null &&
-    typeof input.capturedSourceId === "string" &&
-    isOpaqueId("source", input.capturedSourceId) &&
-    typeof input.configYamlRelativePath === "string" &&
-    input.configYamlRelativePath.length > 0 &&
-    typeof input.sourceRootRelativePath === "string" &&
-    input.sourceRootRelativePath.length > 0 &&
-    (input.kind !== "build_publish" ||
-      input.capturedCurrentVersionId === null ||
-      (typeof input.capturedCurrentVersionId === "string" &&
-        isOpaqueId("version", input.capturedCurrentVersionId)))
-  );
+  return false;
 }
 
 export function isCancelJobMessage(value: unknown): value is CancelJobMessage {

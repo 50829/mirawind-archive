@@ -14,6 +14,15 @@ import { loadMigrationManifest } from "@/platform/sqlite/migration-manifest";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
+import { CandidateRegistrationAdapter } from "@/modules/publishing/adapters/sqlite/candidate-registration";
+import { CandidatePublicationRepository } from "@/modules/publishing/adapters/sqlite/candidate-publication";
+import { buildCandidateVersion } from "@/modules/publishing/adapters/filesystem/build-candidate-version";
+import {
+  finalizeCandidate,
+  m1PublishPolicy,
+  publishCandidate,
+} from "@/modules/publishing/application/public";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { createStorageLayout } from "@/platform/filesystem/layout";
 
@@ -81,8 +90,6 @@ async function seedPublishedLibraryBook(input: {
   readonly database: ReturnType<typeof openDatabase>;
   readonly layout: Awaited<ReturnType<typeof createStorageLayout>>;
 }): Promise<void> {
-  const { buildPublish, finalizeBuiltPublication } =
-    await import("@/modules/publishing/adapters/worker/build-publish");
   const nowMs = Date.now();
   const drafts = new DraftRepository(input.database);
   const book = drafts.createBook({ nowMs, title: "E2E Library Book" });
@@ -196,7 +203,6 @@ async function seedPublishedLibraryBook(input: {
   await mkdir(dirname(configPath), { mode: 0o700, recursive: true });
   await writeFile(configPath, configYaml, { mode: 0o400 });
   drafts.addConfigRevision({
-    alias: config.alias,
     bookId: book.id,
     nowMs: nowMs + 3,
     revision: 1,
@@ -206,62 +212,40 @@ async function seedPublishedLibraryBook(input: {
     yamlRelativePath: `books/${book.id}/draft/configs/1/book.yaml`,
     yamlSha256: createHash("sha256").update(configYaml).digest("hex"),
   });
-  const jobs = new JobRepository(input.database);
-  const preview = jobs.create({
+  const candidates = new DraftCandidateRepository(input.database);
+  const candidate = candidates.createForCurrentRevision({
     bookId: book.id,
-    capturedConfigRevision: 1,
-    capturedSourceId: sourceId,
-    kind: "build_preview",
+    configRevision: 1,
     nowMs: nowMs + 4,
-  });
-  drafts.createPreview({
-    bookId: book.id,
-    configRevision: 1,
-    jobId: preview.id,
     sourceId,
   });
+  const jobs = new JobRepository(input.database);
   jobs.claimNext({ leaseOwner: "e2e-seed", nowMs: nowMs + 5 });
-  jobs.completeSuccess({
-    jobId: preview.id,
-    leaseOwner: "e2e-seed",
-    nowMs: nowMs + 6,
-  });
-  drafts.completePreview({
-    bookId: book.id,
-    configRevision: 1,
-    diagnosticsRelativePath: `books/${book.id}/draft/previews/1/diagnostics.json`,
-    nowMs: nowMs + 7,
-    previewRelativePath: `books/${book.id}/draft/previews/1`,
-  });
-  const publish = jobs.create({
-    bookId: book.id,
-    capturedConfigRevision: 1,
-    capturedSourceId: sourceId,
-    kind: "build_publish",
-    nowMs: nowMs + 8,
-  });
-  jobs.claimNext({ leaseOwner: "e2e-seed", nowMs: nowMs + 9 });
-  const stagingDirectory = resolve(input.layout.temporaryDirectory, publish.id);
-  await buildPublish({
-    bookId: book.id,
-    configRevision: 1,
-    configYamlPath: configPath,
-    createdAtMs: nowMs + 10,
-    draftRoot,
-    jobId: publish.id,
-    predecessorVersionId: null,
-    sourceId,
-    sourceRoot,
-    stagingDirectory,
-  });
-  await finalizeBuiltPublication({
-    actorUserId: null,
-    database: input.database,
-    jobId: publish.id,
+  const command = candidates.buildCommand(candidate.attemptId);
+  const artifact = await buildCandidateVersion({
+    command,
+    createdAtMs: nowMs + 6,
     layout: input.layout,
+    preparationDiagnostics: [],
+  });
+  await finalizeCandidate({
+    artifact,
+    command,
     leaseOwner: "e2e-seed",
-    nowMs: nowMs + 11,
-    stagingDirectory,
+    nowMs: nowMs + 7,
+    registration: new CandidateRegistrationAdapter(
+      input.database,
+      input.layout,
+    ),
+  });
+  await publishCandidate({
+    actorUserId: null,
+    bookId: book.id,
+    expectedConfigRevision: 1,
+    expectedVersionId: artifact.versionId,
+    nowMs: nowMs + 8,
+    policy: m1PublishPolicy,
+    publication: new CandidatePublicationRepository(input.database),
   });
 }
 

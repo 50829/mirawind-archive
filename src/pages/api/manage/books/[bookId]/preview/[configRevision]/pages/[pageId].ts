@@ -36,13 +36,13 @@ export const GET: APIRoute = async ({ locals, params }) => {
   }
   const publishing = createPublishingServer(database);
   const book = publishing.findBook(bookId);
-  const preview = publishing.findPreview(bookId, revision);
+  const candidate = publishing.findCurrentCandidate(bookId);
   if (
     !session ||
     book?.draftConfigRevision !== revision ||
-    book.readyPreviewRevision !== revision ||
-    preview?.state !== "ready" ||
-    !preview.previewRelativePath
+    candidate?.configRevision !== revision ||
+    candidate.state !== "ready" ||
+    !candidate.versionId
   ) {
     throw new SafeApplicationError(
       "NOT_FOUND",
@@ -56,7 +56,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
     bookId,
     html: await createPublishingArtifactServer(layout).readPreviewPage({
       pageId,
-      previewRelativePath: preview.previewRelativePath,
+      previewRelativePath: `books/${bookId}/versions/${candidate.versionId}/preview`,
     }),
     nowMs: Date.now(),
     revision,

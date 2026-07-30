@@ -13,10 +13,10 @@ function token(book: ReturnType<DraftRepository["createBook"]>): string {
   return createBookDeletionToken({
     alias: book.alias,
     bookId: book.id,
+    currentCandidateId: book.currentCandidateId,
     currentVersionId: book.currentVersionId,
     draftConfigRevision: book.draftConfigRevision,
     draftSourceId: book.draftSourceId,
-    readyPreviewRevision: book.readyPreviewRevision,
     title: book.title,
     updatedAtMs: book.updatedAtMs,
   });

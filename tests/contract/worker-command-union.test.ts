@@ -39,8 +39,7 @@ describe("worker command union", () => {
     };
     const registry = {
       analyze_import: handler,
-      build_preview: handler,
-      build_publish: handler,
+      build_candidate: handler,
       prepare_draft: handler,
       reclaim: handler,
       reconcile: handler,

@@ -40,12 +40,12 @@ export const GET: APIRoute = async ({ params, request }) => {
   }
   const publishing = createPublishingServer(database);
   const book = publishing.findBook(bookId);
-  const preview = publishing.findPreview(bookId, revision);
+  const candidate = publishing.findCurrentCandidate(bookId);
   if (
     book?.draftConfigRevision !== revision ||
-    book.readyPreviewRevision !== revision ||
-    preview?.state !== "ready" ||
-    !preview.previewRelativePath ||
+    candidate?.configRevision !== revision ||
+    candidate.state !== "ready" ||
+    !candidate.versionId ||
     !authorizePreviewResource({
       authorization: new URL(request.url).searchParams.get("authorization"),
       authSecret: getRuntimeEnvironment().authSecret,
@@ -66,7 +66,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   const resource = await createPublishingArtifactServer(
     layout,
   ).readPreviewResource({
-    previewRelativePath: preview.previewRelativePath,
+    previewRelativePath: `books/${bookId}/versions/${candidate.versionId}/published`,
     resourceId,
   });
   const headers = new Headers({

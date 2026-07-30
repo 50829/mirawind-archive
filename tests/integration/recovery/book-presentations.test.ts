@@ -7,7 +7,7 @@ import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
   publicationTestVersionId,
   setupPublicationFixture,
-} from "../publication/stale-build.test.js";
+} from "../../helpers/publication.js";
 
 describe("book presentation reconciliation", () => {
   it("rebuilds a missing projection idempotently off the request path", () =>

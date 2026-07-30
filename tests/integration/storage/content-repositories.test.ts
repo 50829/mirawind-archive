@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { MarkdownCandidate } from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
+import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
-import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
@@ -84,12 +84,11 @@ describe("M1 import, source and draft repositories", () => {
       ).toThrow("IMPORT_CONFIRMATION_CONFLICT");
     }));
 
-  it("indexes immutable source, original, config and preview records", () =>
+  it("indexes immutable source, original, config and current candidate records", () =>
     withMigratedTestDatabase(({ database }) => {
       const drafts = new DraftRepository(database);
       const imports = new ImportRepository(database);
       const sources = new SourceRepository(database);
-      const jobs = new JobRepository(database);
       const book = drafts.createBook({ nowMs: 1, title: "Book" });
       const importRecord = imports.createUploaded({
         bookId: book.id,
@@ -131,35 +130,23 @@ describe("M1 import, source and draft repositories", () => {
         yamlRelativePath: "books/1/config/1/book.yaml",
         yamlSha256: sha256,
       });
-      const job = jobs.create({
+      const candidateRecord = new DraftCandidateRepository(
+        database,
+      ).createForCurrentRevision({
         bookId: book.id,
-        capturedConfigRevision: config.revision,
-        capturedSourceId: source.id,
-        kind: "build_preview",
+        configRevision: config.revision,
         nowMs: 5,
-      });
-      drafts.createPreview({
-        bookId: book.id,
-        configRevision: config.revision,
-        jobId: job.id,
         sourceId: source.id,
-      });
-      const preview = drafts.completePreview({
-        bookId: book.id,
-        configRevision: config.revision,
-        diagnosticsRelativePath: "books/1/previews/1/diagnostics.json",
-        nowMs: 6,
-        previewRelativePath: "books/1/previews/1",
       });
 
       expect(sources.requireSnapshot(source.id)).toEqual(source);
       expect(sources.requireOriginal(original.id)).toEqual(original);
       expect(drafts.requireConfig(book.id, 1)).toEqual(config);
-      expect(preview).toMatchObject({ completedAtMs: 6, state: "ready" });
+      expect(candidateRecord).toMatchObject({ state: "building" });
       expect(drafts.requireBook(book.id)).toMatchObject({
+        currentCandidateId: candidateRecord.attemptId,
         draftConfigRevision: 1,
         draftSourceId: source.id,
-        readyPreviewRevision: 1,
         title: "Ready book",
       });
       expect(() =>

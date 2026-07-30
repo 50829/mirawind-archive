@@ -3,7 +3,6 @@ import { resolve } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 import {
   PublishedBookService,
   resetPublishedManifestCacheForTests,
@@ -11,10 +10,10 @@ import {
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
-  publicationTestLeaseOwner,
+  publishReadyCandidateForTest,
   publicationTestVersionId,
   setupPublicationFixture,
-} from "../publication/stale-build.test.js";
+} from "../../helpers/publication.js";
 
 const anonymous = {
   allowed: false,
@@ -45,9 +44,9 @@ function manifest(bookId: number): Readonly<Record<string, unknown>> {
     book_id: bookId,
     compiler: {
       name: "mirawind-book-compiler",
-      renderer_version: "semantic-html-v4-katex-0.18.1",
+      renderer_version: "semantic-html-v5-katex-0.18.1",
       text_normalization_version: 1,
-      version: "compiler-v4",
+      version: "compiler-v5",
     },
     config_revision: 1,
     created_at: "2026-07-24T00:00:00.000Z",
@@ -90,13 +89,10 @@ describe("immutable published manifest cache", () => {
   it("reuses a validated immutable manifest and misses when its database hash changes", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const fixture = setupPublicationFixture(database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       const versionDirectory = resolve(
         dataRoot.layout.root,

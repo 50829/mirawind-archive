@@ -44,11 +44,10 @@ export const GET: APIRoute = ({ locals, params }) => {
         ? publishing.findBook(imported.bookId)
         : null;
       const revision = book?.draftConfigRevision ?? null;
-      const preview =
-        book && revision ? publishing.findPreview(book.id, revision) : null;
+      const candidate = book ? publishing.findCurrentCandidate(book.id) : null;
       const previewReady =
-        preview?.state === "ready" &&
-        book?.readyPreviewRevision === revision &&
+        candidate?.state === "ready" &&
+        candidate.configRevision === revision &&
         revision !== null;
       return {
         book_id: imported.bookId,
@@ -70,7 +69,8 @@ export const GET: APIRoute = ({ locals, params }) => {
         preview: {
           revision,
           state:
-            preview?.state ?? (revision === null ? "unavailable" : "building"),
+            candidate?.state ??
+            (revision === null ? "unavailable" : "building"),
           url:
             previewReady && imported.bookId
               ? `/manage/books/${imported.bookId}/preview`

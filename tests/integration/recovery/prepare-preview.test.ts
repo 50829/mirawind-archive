@@ -13,8 +13,6 @@ import {
 import { readPdfContentsEvidence } from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
-import { buildPreview } from "@/modules/publishing/adapters/worker/build-preview";
-import { finalizeBuiltPreview } from "@/modules/publishing/adapters/worker/preview-finalization";
 import { finalizePreparedDraft } from "@/modules/publishing/adapters/worker/finalize-prepared-draft";
 import { prepareDraft } from "@/modules/publishing/adapters/worker/prepare-draft";
 import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
@@ -40,7 +38,7 @@ function candidate(): MarkdownCandidate {
   });
 }
 
-describe("prepare_draft and build_preview handlers", () => {
+describe("prepare_draft candidate handoff", () => {
   it("persists normalized Markdown and a bounded high-confidence printed-contents proposal", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const source = await readFile(printedTocFixturePath, "utf8");
@@ -468,97 +466,15 @@ describe("prepare_draft and build_preview handlers", () => {
         bookId: book.id,
         state: "draft_ready",
       });
-      expect(finalized.previewJob).toMatchObject({
-        capturedConfigRevision: 1,
-        capturedSourceId: finalized.snapshot.source.id,
-        kind: "build_preview",
-        state: "queued",
-      });
-      expect(drafts.requirePreview(book.id, 1).state).toBe("building");
-
-      const previewStaging = resolve(
-        dataRoot.path,
-        "staging/job_preview_abcdefghijklmnop",
-      );
-      const previewArtifact = await buildPreview({
-        analysisPath: resolve(
-          dataRoot.layout.bookDirectory,
-          String(book.id),
-          "draft",
-          "analyses",
-          finalized.snapshot.source.id,
-          "1.json",
-        ),
-        bookId: book.id,
+      expect(finalized.candidate).toMatchObject({
         configRevision: 1,
-        configYamlPath: configPath,
-        sourceRoot: resolve(
-          dataRoot.layout.root,
-          finalized.snapshot.source.sourceRootRelativePath,
-        ),
         sourceId: finalized.snapshot.source.id,
-        stagingDirectory: previewStaging,
+        state: "building",
       });
-      await finalizeBuiltPreview({
-        artifact: previewArtifact,
-        bookId: book.id,
-        configRevision: 1,
-        database,
-        layout: dataRoot.layout,
-        nowMs: 6,
-        stagingDirectory: previewStaging,
-      });
-      const ready = drafts.requirePreview(book.id, 1);
-      const previewRoot = resolve(
-        dataRoot.layout.root,
-        ready.previewRelativePath ?? "",
-      );
-
-      expect(ready).toMatchObject({ completedAtMs: 6, state: "ready" });
-      const firstPage = await readFile(
-        resolve(previewRoot, "pages/1.html"),
-        "utf8",
-      );
-      expect(firstPage).toMatch(
-        /Prepared Book[\s\S]*class="katex"[\s\S]*\/assets\/res_/u,
-      );
-      expect(firstPage).toContain(
-        'href="/reader-assets/renderers/semantic-html-v4-katex-0.18.1/katex.css"',
-      );
-      expect(firstPage).toContain(
-        'href="/reader-assets/styles/mirawind-reader-v2-tailwind-4.3.3.css"',
-      );
-      expect(
-        JSON.parse(
-          await readFile(resolve(previewRoot, "preview-model.json"), "utf8"),
-        ),
-      ).toMatchObject({
-        config_revision: 1,
-        headings: [
-          { display_level: 1, role: "body", starts_page: true },
-          { display_level: 2, role: "body", starts_page: false },
-        ],
-        pages: [{ page_id: 1 }],
-      });
-      expect(
-        JSON.parse(
-          await readFile(
-            resolve(dataRoot.layout.root, ready.diagnosticsRelativePath ?? ""),
-            "utf8",
-          ),
-        ),
-      ).toMatchObject({
-        diagnostics: [
-          expect.objectContaining({
-            code: "LAYOUT_EVIDENCE_INVALID",
-            recovery: ["reload"],
-          }),
-          expect.objectContaining({
-            code: "PDF_CONTENTS_SOURCE_UNAVAILABLE",
-            phase: "ocr",
-            recovery: ["reload"],
-          }),
-        ],
+      expect(drafts.requireBook(book.id)).toMatchObject({
+        currentCandidateId: finalized.candidate.attemptId,
+        draftConfigRevision: 1,
+        draftSourceId: finalized.snapshot.source.id,
       });
     }));
 

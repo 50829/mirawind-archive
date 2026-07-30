@@ -27,7 +27,7 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
     if (
       Object.keys(body).length === 1 &&
       typeof body.candidate_id === "string" &&
-      isOpaqueId("candidate", body.candidate_id)
+      isOpaqueId("importCandidate", body.candidate_id)
     ) {
       candidateId = body.candidate_id;
     }

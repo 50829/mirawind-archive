@@ -133,6 +133,7 @@ export async function materializeCandidatePages(input: {
   readonly config: Readonly<Record<string, unknown>>;
   readonly configRevision: number;
   readonly originalFiles: readonly Readonly<Record<string, unknown>>[];
+  readonly onPageRendered?: (completed: number, total: number) => void;
   readonly preparationDiagnostics?: readonly SafeDiagnostic[];
   readonly renderPage?: PageRenderer;
   readonly resourceResolution: ResourceResolution;
@@ -259,6 +260,7 @@ export async function materializeCandidatePages(input: {
         search.rows.map((row) => ({ kind: "fts", row })),
       );
       searchFtsRowCount += search.rows.length;
+      input.onPageRendered?.(rendered.ordinal + 1, compiled.pages.length);
     }
     const shortRows = buildSearchShortRows({
       authors,

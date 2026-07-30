@@ -10,8 +10,7 @@ export const jobStates = [
 export const jobKinds = [
   "analyze_import",
   "prepare_draft",
-  "build_preview",
-  "build_publish",
+  "build_candidate",
   "verify_version",
   "reconcile",
   "reclaim",
@@ -47,13 +46,13 @@ export const jobPhases = Object.freeze({
     "organize_structure",
     ...terminalPhases,
   ],
-  build_preview: ["queued", "starting", "render_pages", ...terminalPhases],
-  build_publish: [
+  build_candidate: [
     "queued",
     "starting",
+    "compile_book",
     "render_pages",
     "build_search",
-    "finalize_publication",
+    "finalize_candidate",
     ...terminalPhases,
   ],
   verify_version: ["queued", "starting", "verify_manifest", ...terminalPhases],

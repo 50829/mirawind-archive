@@ -142,10 +142,10 @@ describe("explicit source typography reprocessing", () => {
       expect(await readFile(oldMarkdownPath, "utf8")).toBe(markdown);
       expect(finalized.snapshot.source.id).not.toBe(initial.snapshot.source.id);
       expect(current).toMatchObject({
+        currentCandidateId: finalized.candidate.attemptId,
         currentVersionId: null,
         draftConfigRevision: 2,
         draftSourceId: finalized.snapshot.source.id,
-        readyPreviewRevision: null,
       });
       expect(config).toMatchObject({
         revision: 2,
@@ -159,7 +159,7 @@ describe("explicit source typography reprocessing", () => {
           },
         },
       });
-      expect(drafts.requirePreview(book.id, 2)).toMatchObject({
+      expect(finalized.candidate).toMatchObject({
         sourceId: finalized.snapshot.source.id,
         state: "building",
       });

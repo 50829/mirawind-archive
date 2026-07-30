@@ -2,26 +2,22 @@ import { describe, expect, it } from "vitest";
 
 import { normalizeSearchQuery } from "@/modules/reader/core/search-query";
 import { BookSearchRepository } from "@/modules/reader/adapters/sqlite/book-search";
-import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
-  publicationTestLeaseOwner,
+  publishReadyCandidateForTest,
   publicationTestVersionId,
   setupPublicationFixture,
-} from "../publication/stale-build.test.js";
+} from "../../helpers/publication.js";
 
 describe("current-version public book search", () => {
   it("uses a literal FTS phrase for Chinese, mixed, punctuation and formula text", () =>
     withMigratedTestDatabase(async ({ database }) => {
       const fixture = setupPublicationFixture(database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       database
         .prepare(
@@ -76,13 +72,10 @@ describe("current-version public book search", () => {
   it("limits one or two characters to title, author and heading rows", () =>
     withMigratedTestDatabase(async ({ database }) => {
       const fixture = setupPublicationFixture(database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       expect(
         new BookSearchRepository(database).search({
@@ -106,13 +99,10 @@ describe("current-version public book search", () => {
   it("excludes private books and non-current version rows from anonymous search", () =>
     withMigratedTestDatabase(async ({ database }) => {
       const fixture = setupPublicationFixture(database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       database
         .prepare(

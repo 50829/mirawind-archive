@@ -35,7 +35,7 @@ process.on("message", (message) => {
         total: 1,
         unit: "steps",
       },
-      protocolVersion: 2,
+      protocolVersion: 3,
       type: "progress",
     });
     return;

@@ -1,11 +1,17 @@
+import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { openDatabase } from "@/platform/sqlite/connection";
 import { SafeApplicationError } from "@/domain/errors";
 import { analyzeImport } from "@/modules/publishing/adapters/worker/analyze-import";
-import { buildPreview } from "@/modules/publishing/adapters/worker/build-preview";
-import { buildPublish } from "@/modules/publishing/adapters/worker/build-publish";
+import { buildCandidateVersion } from "@/modules/publishing/adapters/filesystem/build-candidate-version";
+import { handleBuildCandidate } from "@/entrypoints/worker/handlers/build-candidate";
 import { prepareDraft } from "@/modules/publishing/adapters/worker/prepare-draft";
+import {
+  printedContentsDiagnostics,
+  readPinnedAnalysis,
+} from "@/modules/publishing/adapters/worker/preview-diagnostics";
+import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
 import { reclaimRetainedStorage } from "@/modules/publishing/adapters/worker/reclaim";
 import { permanentlyCleanupBook } from "@/modules/catalog/adapters/filesystem/permanent-book-cleanup";
 import { reconcileStorage } from "@/composition/storage-reconciliation";
@@ -113,6 +119,48 @@ async function execute(message: RunJobMessage): Promise<void> {
       jobKind: message.input.kind,
     });
     const root = storageRoot();
+    if (message.input.kind === "build_candidate") {
+      const layout = await createStorageLayout(root);
+      const configPath = await resolveContainedPath(
+        root,
+        message.input.configRelativePath,
+      );
+      const config = parseBookConfigYaml(await readFile(configPath, "utf8"));
+      const source = config.source as Readonly<Record<string, unknown>>;
+      const analysis = await readPinnedAnalysis({
+        analysisPath: await resolveContainedPath(
+          root,
+          `books/${message.input.bookId}/draft/analyses/${message.input.sourceId}/${message.input.configRevision}.json`,
+        ),
+        configRevision: message.input.configRevision,
+        sourceId: message.input.sourceId,
+        sourceSha256: String(source.main_markdown_sha256),
+      });
+      const artifact = await handleBuildCandidate({
+        command: message.input,
+        execute: ({ command, onStage, signal }) =>
+          buildCandidateVersion({
+            command,
+            createdAtMs: Date.now(),
+            layout,
+            onStage,
+            preparationDiagnostics: printedContentsDiagnostics(analysis),
+            ...(signal ? { signal } : {}),
+          }),
+        onProgress(progress) {
+          reportProgress(progress.phase, progress.progress);
+        },
+        signal: controller.signal,
+      });
+      send({
+        jobId: message.input.jobId,
+        ok: true,
+        protocolVersion: jobChildProtocolVersion,
+        result: { ...artifact },
+        type: "result",
+      });
+      return;
+    }
     const stagingDirectory = await resolveContainedPath(
       root,
       message.input.stagingRelativePath,
@@ -298,86 +346,6 @@ async function execute(message: RunJobMessage): Promise<void> {
           preparedDraftRelativePath: relative(root, result.artifactPath)
             .split(sep)
             .join("/"),
-        },
-        type: "result",
-      });
-      return;
-    }
-    if (
-      message.input.kind === "build_preview" &&
-      message.input.bookId &&
-      message.input.capturedConfigRevision &&
-      message.input.capturedSourceId &&
-      message.input.configYamlRelativePath &&
-      message.input.sourceRootRelativePath
-    ) {
-      reportProgress("render_pages", steps(0, 1));
-      await buildPreview({
-        analysisPath: await resolveContainedPath(
-          root,
-          `books/${message.input.bookId}/draft/analyses/${message.input.capturedSourceId}/${message.input.capturedConfigRevision}.json`,
-        ),
-        bookId: message.input.bookId,
-        configRevision: message.input.capturedConfigRevision,
-        configYamlPath: await resolveContainedPath(
-          root,
-          message.input.configYamlRelativePath,
-        ),
-        sourceRoot: await resolveContainedPath(
-          root,
-          message.input.sourceRootRelativePath,
-        ),
-        sourceId: message.input.capturedSourceId,
-        stagingDirectory,
-      });
-      send({
-        jobId: message.input.jobId,
-        ok: true,
-        protocolVersion: jobChildProtocolVersion,
-        result: {
-          previewBuildResultRelativePath: `${message.input.stagingRelativePath}/preview-build-result.json`,
-        },
-        type: "result",
-      });
-      return;
-    }
-    if (
-      message.input.kind === "build_publish" &&
-      message.input.bookId &&
-      message.input.capturedConfigRevision &&
-      message.input.capturedSourceId &&
-      message.input.configYamlRelativePath &&
-      message.input.sourceRootRelativePath
-    ) {
-      reportProgress("render_pages", steps(0, 3));
-      await buildPublish({
-        bookId: message.input.bookId,
-        configRevision: message.input.capturedConfigRevision,
-        configYamlPath: await resolveContainedPath(
-          root,
-          message.input.configYamlRelativePath,
-        ),
-        createdAtMs: message.input.createdAtMs,
-        draftRoot: await resolveContainedPath(
-          root,
-          `books/${message.input.bookId}/draft`,
-        ),
-        jobId: message.input.jobId,
-        predecessorVersionId: message.input.capturedCurrentVersionId,
-        sourceId: message.input.capturedSourceId,
-        sourceRoot: await resolveContainedPath(
-          root,
-          message.input.sourceRootRelativePath,
-        ),
-        stagingDirectory,
-      });
-      reportProgress("build_search", steps(2, 3));
-      send({
-        jobId: message.input.jobId,
-        ok: true,
-        protocolVersion: jobChildProtocolVersion,
-        result: {
-          versionBuildResultRelativePath: `${message.input.stagingRelativePath}/version-build-result.json`,
         },
         type: "result",
       });

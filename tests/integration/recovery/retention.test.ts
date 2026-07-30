@@ -10,16 +10,15 @@ import {
   reclaimRetainedStorage,
   versionRetentionGraceMs,
 } from "@/modules/publishing/adapters/worker/reclaim";
-import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
 import { openMigratedTestDatabase } from "../../helpers/database.js";
 import {
-  publicationTestLeaseOwner,
+  publishReadyCandidateForTest,
   publicationTestVersionId,
   presentationForTest,
   setupPublicationFixture,
-} from "../publication/stale-build.test.js";
+} from "../../helpers/publication.js";
 
 const sourceId = "src_stale_publish_test_0001";
 const previousId = "ver_retention_previous_000001";
@@ -32,20 +31,17 @@ describe("published version and orphan retention", () => {
     const migrated = await openMigratedTestDatabase(root);
     try {
       const fixture = setupPublicationFixture(migrated.database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database: migrated.database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 300,
-        versionId: publicationTestVersionId,
       });
       const jobs = new JobRepository(migrated.database);
       const jobIds = [oldId, previousId, failedCleanupId].map(
         (versionId, index) => {
           const job = jobs.create({
             bookId: fixture.book.id,
-            kind: "build_publish",
+            kind: "verify_version",
             nowMs: 400 + index,
           });
           jobs.fail(job.id, {
@@ -62,10 +58,13 @@ describe("published version and orphan retention", () => {
         `INSERT INTO book_versions (
            id, book_id, source_id, config_revision, predecessor_version_id,
            state, version_rel_path, manifest_schema_version, manifest_sha256,
-           compiler_version, renderer_version, complete_at, published_at,
-           verified_at, created_by_job_id, reclaimed_at
-         ) VALUES (?, ?, ?, 1, ?, 'superseded', ?, 2, ?, 'compiler-v4',
-                   'semantic-html-v4-katex-0.18.1', ?, ?, ?, ?, NULL)`,
+           version_marker_sha256, semantic_digest, compiler_version,
+           renderer_version, preview_version, reader_version,
+           blocking_diagnostic_count, complete_at, published_at, verified_at,
+           created_by_job_id, reclaimed_at
+         ) VALUES (?, ?, ?, 1, ?, 'superseded', ?, 2, ?, ?, ?, 'compiler-v5',
+                   'semantic-html-v5-katex-0.18.1', 'draft-preview-v5',
+                   'mirawind-reader-v2-tailwind-4.3.3', 0, ?, ?, ?, ?, NULL)`,
       );
       insert.run(
         oldId,
@@ -73,6 +72,8 @@ describe("published version and orphan retention", () => {
         sourceId,
         null,
         versionPath(oldId),
+        "b".repeat(64),
+        "b".repeat(64),
         "b".repeat(64),
         50,
         50,
@@ -86,6 +87,8 @@ describe("published version and orphan retention", () => {
         oldId,
         versionPath(previousId),
         "c".repeat(64),
+        "c".repeat(64),
+        "c".repeat(64),
         200,
         200,
         200,
@@ -97,6 +100,8 @@ describe("published version and orphan retention", () => {
         sourceId,
         previousId,
         versionPath(failedCleanupId),
+        "d".repeat(64),
+        "d".repeat(64),
         "d".repeat(64),
         25,
         25,

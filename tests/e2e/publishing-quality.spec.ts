@@ -90,7 +90,7 @@ function expectRendererClosure(
       expect.objectContaining({
         status: 200,
         url: expect.stringContaining(
-          "/reader-assets/renderers/semantic-html-v4-katex-0.18.1/katex.css",
+          "/reader-assets/renderers/semantic-html-v5-katex-0.18.1/katex.css",
         ),
       }),
       expect.objectContaining({
@@ -164,7 +164,7 @@ test("closes typography, formula and printed contents preview-to-publication beh
   );
 
   const rendererStylesheet =
-    "/reader-assets/renderers/semantic-html-v4-katex-0.18.1/katex.css";
+    "/reader-assets/renderers/semantic-html-v5-katex-0.18.1/katex.css";
   const rendererResponse = await page.request.get(rendererStylesheet);
   expect(rendererResponse.headers()["cache-control"]).toBe(
     "public, max-age=31536000, immutable",
@@ -367,25 +367,29 @@ test("closes typography, formula and printed contents preview-to-publication beh
   ).toContainText("中文与 English 排版");
 
   await page.goBack();
+  await page.reload();
   await page.getByRole("button", { name: "发布当前修订" }).click();
-  await expect(page.getByRole("button", { name: /发布中/u })).toBeVisible();
-  await expect(page.getByRole("button", { name: "发布当前修订" })).toBeEnabled({
-    timeout: 60_000,
+  await expect(page.getByRole("link", { name: "开始阅读" })).toBeVisible({
+    timeout: 10_000,
   });
   const republished = new Database(databasePath, { readonly: true });
   try {
     const state = republished
       .prepare(
         `SELECT current_version_id,
-                (SELECT COUNT(*) FROM book_versions WHERE book_id = books.id) AS version_count
+                (SELECT COUNT(*) FROM book_versions WHERE book_id = books.id) AS version_count,
+                (SELECT COUNT(*) FROM audit_events
+                 WHERE book_id = books.id AND action = 'book.published') AS publish_count
          FROM books WHERE id = ?`,
       )
       .get(book.id) as {
       current_version_id: string;
+      publish_count: number;
       version_count: number;
     };
-    expect(state.current_version_id).not.toBe(firstVersionId);
-    expect(state.version_count).toBe(2);
+    expect(state.current_version_id).toBe(firstVersionId);
+    expect(state.version_count).toBe(1);
+    expect(state.publish_count).toBe(1);
   } finally {
     republished.close();
   }

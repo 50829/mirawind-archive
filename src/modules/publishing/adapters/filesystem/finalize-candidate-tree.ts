@@ -14,8 +14,8 @@ import {
 import { dirname, relative, resolve, sep } from "node:path";
 
 import { validateVersionMarker } from "@/modules/publishing/core/publication/document-manifest-schema";
-import type { CrashPointInjector } from "@/modules/publishing/application/crash-points";
-import { injectCrashPoint } from "@/modules/publishing/application/crash-points";
+import type { CandidateTreeCrashPointInjector } from "@/modules/publishing/application/candidate-durability";
+import { injectCandidateTreeCrashPoint } from "@/modules/publishing/application/candidate-durability";
 import {
   resolveContainedPath,
   type StorageLayout,
@@ -101,13 +101,13 @@ async function validateFileClosure(
   }
 }
 
-export async function finalizeImmutableVersion(input: {
+export async function finalizeCandidateTree(input: {
   readonly artifact: {
     readonly bookId: number;
     readonly versionDirectory: "version";
     readonly versionId: string;
   };
-  readonly crashPoint?: CrashPointInjector;
+  readonly crashPoint?: CandidateTreeCrashPointInjector;
   readonly layout: StorageLayout;
   readonly stagingDirectory: string;
 }): Promise<string> {
@@ -145,15 +145,18 @@ export async function finalizeImmutableVersion(input: {
   ) {
     throw new Error("VERSION_DIRECTORY_EXISTS");
   }
-  await injectCrashPoint(input.crashPoint, "before_fsync");
+  await injectCandidateTreeCrashPoint(input.crashPoint, "before_fsync");
   await syncTree(stagedVersion);
-  await injectCrashPoint(input.crashPoint, "after_fsync_before_rename");
+  await injectCandidateTreeCrashPoint(
+    input.crashPoint,
+    "after_fsync_before_rename",
+  );
   await chmod(stagedVersion, 0o700);
   try {
     await rename(stagedVersion, finalDirectory);
     await chmod(finalDirectory, 0o500);
     await syncDirectory(dirname(finalDirectory));
-    await injectCrashPoint(input.crashPoint, "after_rename");
+    await injectCandidateTreeCrashPoint(input.crashPoint, "after_rename");
     await rm(input.stagingDirectory, { force: true, recursive: true });
     return finalDirectory;
   } catch (error) {

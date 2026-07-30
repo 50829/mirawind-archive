@@ -28,6 +28,7 @@ function terminalJob(overrides: Partial<JobRecord> = {}): JobRecord {
     attempt: 1,
     automaticRetryCount: 0,
     bookId: 42,
+    candidateId: null,
     capturedConfigRevision: 3,
     capturedCurrentVersionId: null,
     capturedSourceId: "src_fixture",
@@ -179,7 +180,7 @@ describe("job retry policy", () => {
     },
   );
 
-  it("rejects nonterminal, successful, and ready publication attempts", () => {
+  it("rejects nonterminal, successful, and registered candidate attempts", () => {
     expect(
       evaluateJobRetry(
         terminalJob({
@@ -206,7 +207,7 @@ describe("job retry policy", () => {
         terminalJob({
           errorClass: "infrastructure",
           errorCode: "WORKER_EXIT",
-          kind: "build_publish",
+          kind: "build_candidate",
           versionId: "ver_ready",
         }),
         "manual",

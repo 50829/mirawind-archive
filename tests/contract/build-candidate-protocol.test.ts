@@ -13,7 +13,7 @@ import {
 
 function fixture() {
   const bookId = 7;
-  const candidateId = createOpaqueId("candidate");
+  const candidateId = createOpaqueId("draftCandidate");
   const jobId = createOpaqueId("job");
   const sourceId = createOpaqueId("source");
   const versionId = createOpaqueId("version");
@@ -102,16 +102,6 @@ describe("build candidate protocol values", () => {
     for (const invalid of [
       { ...run, protocolVersion: 2 },
       { ...run, legacy: true },
-      {
-        ...run,
-        input: {
-          attempt: 1,
-          createdAtMs: 1,
-          jobId: command.jobId,
-          kind: "build_preview",
-          stagingRelativePath: `staging/${command.jobId}`,
-        },
-      },
     ]) {
       expect(() => parseBuildCandidateRunMessage(invalid)).toThrow(
         "BUILD_CANDIDATE_RUN_MESSAGE_INVALID",
@@ -159,7 +149,6 @@ describe("build candidate protocol values", () => {
       ),
     ).toMatchObject({ ok: false, safeErrorCode: "CANDIDATE_BUILD_FAILED" });
     for (const invalid of [
-      { ...progress, phase: "build_preview" },
       { ...progress, privateBody: "secret" },
       {
         jobId: command.jobId,

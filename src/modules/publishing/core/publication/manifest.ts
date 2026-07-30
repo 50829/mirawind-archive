@@ -15,9 +15,9 @@ import type { TransientDocumentNode } from "@/modules/publishing/core/preparatio
 
 export const compilerIdentity = Object.freeze({
   name: "mirawind-book-compiler" as const,
-  renderer_version: "semantic-html-v4-katex-0.18.1",
+  renderer_version: "semantic-html-v5-katex-0.18.1",
   text_normalization_version: 2,
-  version: "compiler-v4",
+  version: "compiler-v5",
 });
 
 export interface ManifestSourceFile {

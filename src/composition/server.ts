@@ -7,8 +7,9 @@ import { InstallationRepository } from "@/modules/identity/adapters/sqlite/insta
 import { patchDraftConfig } from "@/modules/publishing/adapters/filesystem/config-revisions";
 import { DraftArtifactReader } from "@/modules/publishing/adapters/filesystem/draft-artifacts";
 import { ImportUploadService } from "@/modules/publishing/adapters/filesystem/import-upload";
-import { assertReadyPreviewIdentity } from "@/modules/publishing/adapters/filesystem/preview-identity";
 import { queueSourceReprocess } from "@/modules/publishing/adapters/filesystem/source-reprocess";
+import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
+import { CandidatePublicationRepository } from "@/modules/publishing/adapters/sqlite/candidate-publication";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { serializeJobStatus } from "@/modules/publishing/adapters/sqlite/job-status";
@@ -16,7 +17,10 @@ import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { makeBookNonPublic } from "@/modules/publishing/adapters/sqlite/publication";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { confirmImportCandidateAndQueuePreparation } from "@/modules/publishing/application/commands/confirm-import-candidate";
-import { queuePublishBuild } from "@/modules/publishing/application/commands/queue-publish-build";
+import {
+  m1PublishPolicy,
+  publishCandidate,
+} from "@/modules/publishing/application/public";
 import type { StorageLayout } from "@/platform/filesystem/layout";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import { PublishedBookService } from "@/modules/reader/adapters/filesystem/published-book";
@@ -24,6 +28,7 @@ import { BookSearchRepository } from "@/modules/reader/adapters/sqlite/book-sear
 
 export function createPublishingServer(database: Database.Database) {
   const drafts = new DraftRepository(database);
+  const candidates = new DraftCandidateRepository(database);
   const imports = new ImportRepository(database);
   const jobs = new JobRepository(database);
   const sources = new SourceRepository(database);
@@ -48,7 +53,7 @@ export function createPublishingServer(database: Database.Database) {
     findBook: drafts.findBook.bind(drafts),
     findImport: imports.find.bind(imports),
     findJobByIdempotency: jobs.findByIdempotency.bind(jobs),
-    findPreview: drafts.findPreview.bind(drafts),
+    findCurrentCandidate: candidates.findCurrent.bind(candidates),
     getJob: jobs.get.bind(jobs),
     importCandidates: imports.candidates.bind(imports),
     latestJobForImport: jobs.latestForImport.bind(jobs),
@@ -57,21 +62,17 @@ export function createPublishingServer(database: Database.Database) {
     requireConfig: drafts.requireConfig.bind(drafts),
     requireImport: imports.require.bind(imports),
     requireSource: sources.requireSnapshot.bind(sources),
-    queuePublishBuild: (input: {
+    publishCandidate: (input: {
+      readonly actorUserId: string | null;
       readonly bookId: number;
-      readonly expectedRevision: number;
-      readonly idempotencyKey: string;
+      readonly expectedConfigRevision: number;
+      readonly expectedVersionId: string;
       readonly nowMs: number;
     }) =>
-      queuePublishBuild({
+      publishCandidate({
         ...input,
-        drafts: {
-          findPreview: drafts.findPreview.bind(drafts),
-          requireBook: drafts.requireBook.bind(drafts),
-        },
-        jobs,
-        runAtomically: (operation) =>
-          withImmediateTransaction(database, operation),
+        policy: m1PublishPolicy,
+        publication: new CandidatePublicationRepository(database),
       }),
     retryJob: jobs.retry.bind(jobs),
     storeImport: (layout: StorageLayout) =>
@@ -122,7 +123,6 @@ export function createIdentityServer(database: Database.Database) {
 }
 
 export const publishingServerActions = Object.freeze({
-  assertReadyPreviewIdentity,
   makeBookNonPublic,
   patchDraftConfig,
   queueSourceReprocess,

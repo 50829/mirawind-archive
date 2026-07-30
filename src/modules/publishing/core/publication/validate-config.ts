@@ -12,8 +12,7 @@ export interface ConfigSemanticDiagnostic {
     | "HEADING_SET_MISMATCH"
     | "HEADING_UNKNOWN"
     | "PAGE_ALIAS_DUPLICATE"
-    | "PAGE_ALIAS_REQUIRES_START"
-    | "ROLE_REQUIRES_TOP_LEVEL";
+    | "PAGE_ALIAS_REQUIRES_START";
   readonly field?: string;
 }
 
@@ -76,6 +75,48 @@ function diagnostic(
   });
 }
 
+function hierarchyDiagnostics(
+  structure: readonly StructureNode[],
+  activeBlockIds?: ReadonlySet<string>,
+): readonly ConfigSemanticDiagnostic[] {
+  const diagnostics: ConfigSemanticDiagnostic[] = [];
+  let activeCount = 0;
+  let previousLevel = 0;
+  for (let index = 0; index < structure.length; index += 1) {
+    const configured = structure[index];
+    if (
+      !configured ||
+      (activeBlockIds && !activeBlockIds.has(configured.block_id))
+    ) {
+      continue;
+    }
+    if (
+      (activeCount === 0 && configured.display_level !== 1) ||
+      (activeCount > 0 && configured.display_level > previousLevel + 1)
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "DISPLAY_LEVEL_SKIPPED",
+          configured.block_id,
+          `structure/${index}/display_level`,
+        ),
+      );
+    }
+    activeCount += 1;
+    previousLevel = configured.display_level;
+  }
+  return Object.freeze(diagnostics);
+}
+
+export function validateConfiguredStructureHierarchy(
+  config: Readonly<Record<string, unknown>>,
+): void {
+  const diagnostics = hierarchyDiagnostics(structureOf(config));
+  if (diagnostics.length > 0) {
+    throw new ConfigSemanticValidationError(diagnostics);
+  }
+}
+
 export function validateDocumentConfig(input: {
   readonly activeDocument?: NormalizedDocument;
   readonly config: unknown;
@@ -104,7 +145,7 @@ export function validateDocumentConfig(input: {
       (heading) => heading.blockId,
     ),
   );
-  let previousLevel = 0;
+  diagnostics.push(...hierarchyDiagnostics(structure, activeHeadingIds));
   let inheritedRole: ContentRole = "body";
 
   for (let index = 0; index < structure.length; index += 1) {
@@ -122,35 +163,10 @@ export function validateDocumentConfig(input: {
       );
     }
     const active = activeHeadingIds.has(configured.block_id);
-    if (
-      active &&
-      ((headings.length === 0 && configured.display_level !== 1) ||
-        (headings.length > 0 && configured.display_level > previousLevel + 1))
-    ) {
-      diagnostics.push(
-        diagnostic(
-          "DISPLAY_LEVEL_SKIPPED",
-          configured.block_id,
-          `structure/${index}/display_level`,
-        ),
-      );
-    }
-    if (active) previousLevel = configured.display_level;
-
     if (active && configured.display_level === 1) {
       inheritedRole = configured.role ?? "body";
-    } else if (
-      active &&
-      configured.display_level !== 1 &&
-      configured.role !== undefined
-    ) {
-      diagnostics.push(
-        diagnostic(
-          "ROLE_REQUIRES_TOP_LEVEL",
-          configured.block_id,
-          `structure/${index}/role`,
-        ),
-      );
+    } else if (active && configured.role !== undefined) {
+      inheritedRole = configured.role;
     }
     if (active && configured.alias) {
       if (!configured.starts_page) {

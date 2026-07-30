@@ -21,11 +21,8 @@ import {
 } from "@/modules/publishing/core/publication/manifest";
 import { inspectRasterImage } from "@/modules/publishing/core/publication/inspect-image";
 import { resolveDocumentResources } from "@/modules/publishing/adapters/filesystem/resolve-document-resources";
-import {
-  buildSearchSpool,
-  writeSearchSpool,
-} from "@/modules/publishing/adapters/filesystem/search-spool";
-import { materializeVersionPages } from "@/modules/publishing/adapters/reader-html/materialize-version-pages";
+import type { CompiledBook } from "@/modules/publishing/core/publication/compiled-book";
+import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
 import { toIsoDateTime } from "@/domain/time";
 import type { SemanticCompilationIdentity } from "@/modules/publishing/core/preparation/document-model";
 import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
@@ -42,14 +39,44 @@ import {
   recordPipelineProfileMetrics,
 } from "@/observability/pipeline-profile";
 
-export const versionBuildArtifactFilename = "version-build-result.json";
-
-export interface VersionBuildArtifact {
+export interface CandidateAssemblyArtifact {
   readonly bookId: number;
   readonly configRevision: number;
   readonly identity: SemanticCompilationIdentity;
   readonly manifestSha256: string;
   readonly versionDirectory: "version";
+  readonly versionId: string;
+}
+
+export interface CandidateAssemblyResult extends CandidateAssemblyArtifact {
+  readonly pageMaterialization: unknown;
+}
+
+export interface CandidatePageMaterializationContext {
+  readonly bookId: number;
+  readonly candidateDirectory: string;
+  readonly compiled: CompiledBook;
+  readonly config: Readonly<Record<string, unknown>>;
+  readonly configRevision: number;
+  readonly originalFiles: readonly Readonly<Record<string, unknown>>[];
+  readonly resourceResolution: ResourceResolution;
+  readonly versionId: string;
+}
+
+export interface AssembleCandidateInput {
+  readonly bookId: number;
+  readonly configRevision: number;
+  readonly configYamlPath: string;
+  readonly createdAtMs: number;
+  readonly draftRoot: string;
+  readonly materializePages: (
+    input: CandidatePageMaterializationContext,
+  ) => Promise<unknown>;
+  readonly predecessorVersionId: string | null;
+  readonly signal?: AbortSignal;
+  readonly sourceId: string;
+  readonly sourceRoot: string;
+  readonly stagingDirectory: string;
   readonly versionId: string;
 }
 
@@ -137,11 +164,13 @@ async function filesUnder(root: string): Promise<readonly string[]> {
 
 async function copyTree(input: {
   readonly destination: string;
+  readonly signal?: AbortSignal;
   readonly source: string;
 }): Promise<readonly ManifestSourceFile[]> {
   const files = await filesUnder(input.source);
   const descriptors: ManifestSourceFile[] = [];
   for (const sourcePath of files) {
+    input.signal?.throwIfAborted();
     const relativeSourcePath = relativePath(input.source, sourcePath);
     const destinationPath = resolve(input.destination, relativeSourcePath);
     await mkdir(dirname(destinationPath), { mode: 0o700, recursive: true });
@@ -181,21 +210,13 @@ async function describeFiles(root: string): Promise<readonly FileDescriptor[]> {
   return Object.freeze(descriptors);
 }
 
-export async function buildImmutableVersion(input: {
-  readonly bookId: number;
-  readonly configRevision: number;
-  readonly configYamlPath: string;
-  readonly createdAtMs: number;
-  readonly draftRoot: string;
-  readonly predecessorVersionId: string | null;
-  readonly sourceId: string;
-  readonly sourceRoot: string;
-  readonly stagingDirectory: string;
-  readonly versionId: string;
-}): Promise<VersionBuildArtifact> {
+export async function assembleCandidate(
+  input: AssembleCandidateInput,
+): Promise<CandidateAssemblyResult> {
   const stagingDirectory = resolve(input.stagingDirectory);
   const versionDirectory = resolve(stagingDirectory, "version");
   try {
+    input.signal?.throwIfAborted();
     await mkdir(dirname(stagingDirectory), { mode: 0o700, recursive: true });
     await mkdir(stagingDirectory, { mode: 0o700, recursive: false });
     await mkdir(versionDirectory, { mode: 0o700, recursive: false });
@@ -237,6 +258,7 @@ export async function buildImmutableVersion(input: {
       };
     });
     recordPipelineProfileMetrics({ markdown_bytes: markdownBytes.byteLength });
+    input.signal?.throwIfAborted();
     const configured = await profilePipelineStage("configured_document", () =>
       compileBook({
         config,
@@ -268,6 +290,7 @@ export async function buildImmutableVersion(input: {
     }
 
     const sourceFiles = await profilePipelineStage("source_copy", async () => {
+      input.signal?.throwIfAborted();
       await atomicWriteFile(
         resolve(versionDirectory, "book.yaml"),
         configYaml,
@@ -275,6 +298,7 @@ export async function buildImmutableVersion(input: {
       );
       return copyTree({
         destination: resolve(versionDirectory, "source"),
+        ...(input.signal ? { signal: input.signal } : {}),
         source: input.sourceRoot,
       });
     });
@@ -283,6 +307,7 @@ export async function buildImmutableVersion(input: {
     >[];
     await profilePipelineStage("original_copy", async () => {
       for (const original of originalFiles) {
+        input.signal?.throwIfAborted();
         const originalPath = await resolveContainedPath(
           input.draftRoot,
           String(original.path),
@@ -313,6 +338,7 @@ export async function buildImmutableVersion(input: {
     let resourceBytes = 0;
     await profilePipelineStage("asset_copy", async () => {
       for (const resource of resourceResolution.resources) {
+        input.signal?.throwIfAborted();
         const bytes = await readFile(resource.absolutePath);
         resourceBytes += bytes.byteLength;
         const inspection = await inspectRasterImage({
@@ -341,15 +367,17 @@ export async function buildImmutableVersion(input: {
       resources: resourceResolution.resources.length,
     });
 
-    await materializeVersionPages({
+    const pageMaterialization = await input.materializePages({
       bookId: input.bookId,
+      candidateDirectory: versionDirectory,
       compiled: configured,
       config,
+      configRevision: input.configRevision,
       originalFiles,
       resourceResolution,
-      versionDirectory,
       versionId: input.versionId,
     });
+    input.signal?.throwIfAborted();
 
     const createdAt = toIsoDateTime(input.createdAtMs);
     const manifestJson = await profilePipelineStage(
@@ -376,32 +404,6 @@ export async function buildImmutableVersion(input: {
         return json;
       },
     );
-    const metadata = config.metadata as
-      Readonly<Record<string, unknown>> | undefined;
-    const authors = Array.isArray(metadata?.authors)
-      ? metadata.authors.filter(
-          (value): value is string => typeof value === "string",
-        )
-      : [];
-    const searchSpool = await profilePipelineStage("search_build", async () => {
-      const spool = buildSearchSpool({
-        authors,
-        book: configured,
-        bookId: input.bookId,
-        title: String(config.title),
-        versionId: input.versionId,
-      });
-      await writeSearchSpool(
-        resolve(versionDirectory, "derived", "search-spool.json"),
-        spool,
-      );
-      return spool;
-    });
-    recordPipelineProfileMetrics({
-      search_fts_rows: searchSpool.ftsRows.length,
-      search_short_rows: searchSpool.shortRows.length,
-    });
-
     const files = await profilePipelineStage("file_inventory_hash", () =>
       describeFiles(versionDirectory),
     );
@@ -430,7 +432,7 @@ export async function buildImmutableVersion(input: {
         canonicalJson(marker),
         { mode: 0o400 },
       );
-      const artifact: VersionBuildArtifact = Object.freeze({
+      const artifact: CandidateAssemblyArtifact = Object.freeze({
         bookId: input.bookId,
         configRevision: input.configRevision,
         identity: configured.identity,
@@ -438,35 +440,13 @@ export async function buildImmutableVersion(input: {
         versionDirectory: "version",
         versionId: input.versionId,
       });
-      await atomicWriteFile(
-        resolve(stagingDirectory, versionBuildArtifactFilename),
-        canonicalJson(artifact),
-        { mode: 0o400 },
-      );
-      return artifact;
+      return Object.freeze({
+        ...artifact,
+        pageMaterialization,
+      });
     });
   } catch (error) {
     await rm(stagingDirectory, { force: true, recursive: true });
     throw error;
   }
-}
-
-export async function readVersionBuildArtifact(
-  stagingDirectory: string,
-): Promise<VersionBuildArtifact> {
-  const bytes = await readFile(
-    resolve(stagingDirectory, versionBuildArtifactFilename),
-  );
-  if (bytes.byteLength > 64 * 1024) {
-    throw new Error("VERSION_BUILD_ARTIFACT_INVALID");
-  }
-  const parsed: unknown = JSON.parse(bytes.toString("utf8"));
-  if (
-    !parsed ||
-    typeof parsed !== "object" ||
-    (parsed as Record<string, unknown>).versionDirectory !== "version"
-  ) {
-    throw new Error("VERSION_BUILD_ARTIFACT_INVALID");
-  }
-  return parsed as VersionBuildArtifact;
 }

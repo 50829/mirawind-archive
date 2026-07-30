@@ -2,14 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
-import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
-  publicationTestLeaseOwner,
+  publishReadyCandidateForTest,
   publicationTestVersionId,
   setupPublicationFixture,
-} from "../publication/stale-build.test.js";
+} from "../../helpers/publication.js";
 
 const anonymous = {
   allowed: false,
@@ -49,13 +48,10 @@ describe("book details service", () => {
           ]),
           publicationTestVersionId,
         );
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       const sourceId = (
         database
@@ -108,13 +104,10 @@ describe("book details service", () => {
   it("hides private details from anonymous visitors but permits the administrator", () =>
     withMigratedTestDatabase(async ({ database }) => {
       const fixture = setupPublicationFixture(database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       database
         .prepare("UPDATE books SET visibility = 'private' WHERE id = ?")
@@ -137,13 +130,10 @@ describe("book details service", () => {
   it("isolates a known public current book with no projection as unavailable", () =>
     withMigratedTestDatabase(async ({ database }) => {
       const fixture = setupPublicationFixture(database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       database
         .prepare("DELETE FROM book_version_presentations WHERE version_id = ?")

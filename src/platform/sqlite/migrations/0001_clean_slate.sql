@@ -1,11 +1,11 @@
 CREATE TABLE database_baseline (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   identity TEXT NOT NULL UNIQUE
-    CHECK (identity = 'mirawind-clean-slate-publishing-v1')
+    CHECK (identity = 'mirawind-clean-slate-candidate-v1')
 ) STRICT;
 
 INSERT INTO database_baseline (id, identity)
-VALUES (1, 'mirawind-clean-slate-publishing-v1');
+VALUES (1, 'mirawind-clean-slate-candidate-v1');
 
 CREATE TABLE installation (
   id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -29,7 +29,7 @@ CREATE TABLE books (
   title_cache TEXT NOT NULL CHECK (length(title_cache) BETWEEN 1 AND 500),
   draft_source_id TEXT,
   draft_config_revision INTEGER,
-  ready_preview_revision INTEGER,
+  current_candidate_id TEXT,
   current_version_id TEXT,
   unavailable_reason TEXT CHECK (
     unavailable_reason IS NULL OR length(unavailable_reason) <= 80
@@ -39,15 +39,11 @@ CREATE TABLE books (
   ),
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  CHECK (
-    (draft_config_revision IS NULL AND ready_preview_revision IS NULL)
-    OR draft_config_revision IS NOT NULL
-  ),
+  CHECK (draft_config_revision IS NOT NULL OR current_candidate_id IS NULL),
   FOREIGN KEY (draft_source_id) REFERENCES source_snapshots(id),
   FOREIGN KEY (id, draft_config_revision)
     REFERENCES config_revisions(book_id, revision),
-  FOREIGN KEY (id, ready_preview_revision)
-    REFERENCES draft_previews(book_id, config_revision),
+  FOREIGN KEY (current_candidate_id) REFERENCES draft_candidates(id),
   FOREIGN KEY (current_version_id) REFERENCES book_versions(id)
 ) STRICT;
 
@@ -112,8 +108,7 @@ CREATE TABLE jobs (
     kind IN (
       'analyze_import',
       'prepare_draft',
-      'build_preview',
-      'build_publish',
+      'build_candidate',
       'verify_version',
       'reconcile',
       'reclaim'
@@ -124,6 +119,7 @@ CREATE TABLE jobs (
   ),
   import_id TEXT REFERENCES imports(id) ON DELETE RESTRICT,
   book_id INTEGER REFERENCES books(id) ON DELETE RESTRICT,
+  candidate_id TEXT,
   version_id TEXT,
   captured_source_id TEXT REFERENCES source_snapshots(id) ON DELETE RESTRICT,
   captured_config_revision INTEGER,
@@ -166,23 +162,9 @@ CREATE TABLE jobs (
   ),
   FOREIGN KEY (book_id, captured_config_revision)
     REFERENCES config_revisions(book_id, revision),
-  FOREIGN KEY (version_id) REFERENCES book_versions(id),
+  FOREIGN KEY (candidate_id) REFERENCES draft_candidates(id),
   FOREIGN KEY (captured_current_version_id) REFERENCES book_versions(id)
 ) STRICT;
-
-CREATE TABLE draft_previews (
-  book_id INTEGER NOT NULL,
-  config_revision INTEGER NOT NULL,
-  source_id TEXT NOT NULL REFERENCES source_snapshots(id) ON DELETE RESTRICT,
-  state TEXT NOT NULL CHECK (state IN ('building', 'ready', 'failed')),
-  preview_rel_path TEXT,
-  diagnostics_rel_path TEXT,
-  created_by_job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE RESTRICT,
-  completed_at INTEGER,
-  PRIMARY KEY (book_id, config_revision),
-  FOREIGN KEY (book_id, config_revision, source_id)
-    REFERENCES config_revisions(book_id, revision, source_id)
-) STRICT, WITHOUT ROWID;
 
 CREATE TABLE original_files (
   id TEXT PRIMARY KEY CHECK (id GLOB 'file_*'),
@@ -221,18 +203,81 @@ CREATE TABLE book_versions (
   config_revision INTEGER NOT NULL,
   predecessor_version_id TEXT REFERENCES book_versions(id) ON DELETE RESTRICT,
   state TEXT NOT NULL CHECK (
-    state IN ('ready', 'published', 'superseded', 'failed', 'corrupt')
+    state IN ('ready', 'published', 'superseded', 'discarded', 'corrupt')
   ),
   version_rel_path TEXT NOT NULL UNIQUE,
   manifest_schema_version INTEGER NOT NULL CHECK (manifest_schema_version = 2),
   manifest_sha256 TEXT NOT NULL CHECK (length(manifest_sha256) = 64),
+  version_marker_sha256 TEXT NOT NULL CHECK (length(version_marker_sha256) = 64),
+  semantic_digest TEXT NOT NULL CHECK (length(semantic_digest) = 64),
   compiler_version TEXT NOT NULL CHECK (length(compiler_version) <= 100),
   renderer_version TEXT NOT NULL CHECK (length(renderer_version) <= 100),
+  preview_version TEXT NOT NULL CHECK (length(preview_version) <= 100),
+  reader_version TEXT NOT NULL CHECK (length(reader_version) <= 100),
+  blocking_diagnostic_count INTEGER NOT NULL CHECK (
+    blocking_diagnostic_count BETWEEN 0 AND 10000
+  ),
   complete_at INTEGER NOT NULL,
   published_at INTEGER,
   verified_at INTEGER,
   reclaimed_at INTEGER CHECK (reclaimed_at IS NULL OR reclaimed_at >= 0),
   created_by_job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE RESTRICT,
+  FOREIGN KEY (book_id, config_revision, source_id)
+    REFERENCES config_revisions(book_id, revision, source_id),
+  UNIQUE (book_id, id)
+) STRICT;
+
+CREATE TABLE draft_candidates (
+  id TEXT PRIMARY KEY CHECK (id GLOB 'candidate_*'),
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  source_id TEXT NOT NULL REFERENCES source_snapshots(id) ON DELETE RESTRICT,
+  config_revision INTEGER NOT NULL,
+  job_id TEXT NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE RESTRICT,
+  version_id TEXT UNIQUE REFERENCES book_versions(id) ON DELETE RESTRICT,
+  state TEXT NOT NULL CHECK (
+    state IN (
+      'building',
+      'ready',
+      'failed',
+      'canceled',
+      'interrupted',
+      'discarded'
+    )
+  ),
+  semantic_digest TEXT CHECK (
+    semantic_digest IS NULL OR length(semantic_digest) = 64
+  ),
+  safe_error_code TEXT CHECK (
+    safe_error_code IS NULL OR (
+      length(safe_error_code) BETWEEN 3 AND 80
+      AND safe_error_code NOT GLOB '*[^A-Z0-9_]*'
+    )
+  ),
+  blocking_diagnostic_count INTEGER CHECK (
+    blocking_diagnostic_count IS NULL
+    OR blocking_diagnostic_count BETWEEN 0 AND 10000
+  ),
+  created_at INTEGER NOT NULL CHECK (created_at >= 0),
+  completed_at INTEGER CHECK (
+    completed_at IS NULL OR completed_at >= created_at
+  ),
+  CHECK (
+    (state = 'ready'
+      AND version_id IS NOT NULL
+      AND semantic_digest IS NOT NULL
+      AND blocking_diagnostic_count IS NOT NULL
+      AND safe_error_code IS NULL
+      AND completed_at IS NOT NULL)
+    OR
+    (state <> 'ready'
+      AND version_id IS NULL
+      AND semantic_digest IS NULL
+      AND blocking_diagnostic_count IS NULL)
+  ),
+  CHECK (
+    (state = 'building' AND safe_error_code IS NULL AND completed_at IS NULL)
+    OR state <> 'building'
+  ),
   FOREIGN KEY (book_id, config_revision, source_id)
     REFERENCES config_revisions(book_id, revision, source_id),
   UNIQUE (book_id, id)
@@ -279,6 +324,11 @@ CREATE VIRTUAL TABLE search_fts USING fts5(
 CREATE UNIQUE INDEX one_published_version_per_book
   ON book_versions(book_id)
   WHERE state = 'published';
+CREATE UNIQUE INDEX one_ready_version_per_book
+  ON book_versions(book_id)
+  WHERE state = 'ready';
+CREATE INDEX draft_candidates_book_revision
+  ON draft_candidates(book_id, config_revision, created_at);
 CREATE INDEX source_snapshots_book ON source_snapshots(book_id, created_at);
 CREATE INDEX config_revisions_source ON config_revisions(source_id);
 CREATE INDEX imports_state_expiry ON imports(state, expires_at);

@@ -21,6 +21,7 @@ interface PresentationRow {
 }
 
 interface CandidateRow {
+  blocking_diagnostic_count: number;
   book_id: number;
   compiler_version: string;
   complete_at: number;
@@ -29,14 +30,18 @@ interface CandidateRow {
   id: string;
   manifest_schema_version: number;
   manifest_sha256: string;
+  preview_version: string;
   predecessor_version_id: string | null;
   published_at: number | null;
   reclaimed_at: number | null;
   renderer_version: string;
+  reader_version: string;
+  semantic_digest: string;
   source_id: string;
   state: BookVersionRecord["state"];
   verified_at: number | null;
   version_rel_path: string;
+  version_marker_sha256: string;
 }
 
 function mapPresentation(row: PresentationRow): BookVersionPresentation {
@@ -64,6 +69,7 @@ function mapPresentation(row: PresentationRow): BookVersionPresentation {
 function mapCandidate(row: CandidateRow): BookVersionRecord {
   return Object.freeze({
     bookId: row.book_id,
+    blockingDiagnosticCount: row.blocking_diagnostic_count,
     compilerVersion: row.compiler_version,
     completeAtMs: row.complete_at,
     configRevision: row.config_revision,
@@ -71,14 +77,18 @@ function mapCandidate(row: CandidateRow): BookVersionRecord {
     id: row.id,
     manifestSchemaVersion: row.manifest_schema_version,
     manifestSha256: row.manifest_sha256,
+    previewVersion: row.preview_version,
     predecessorVersionId: row.predecessor_version_id,
     publishedAtMs: row.published_at,
     reclaimedAtMs: row.reclaimed_at,
     rendererVersion: row.renderer_version,
+    readerVersion: row.reader_version,
+    semanticDigest: row.semantic_digest,
     sourceId: row.source_id,
     state: row.state,
     verifiedAtMs: row.verified_at,
     versionRelativePath: row.version_rel_path,
+    versionMarkerSha256: row.version_marker_sha256,
   });
 }
 

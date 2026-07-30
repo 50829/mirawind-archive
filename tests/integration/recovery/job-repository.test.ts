@@ -51,7 +51,7 @@ describe("durable job repository", () => {
   it("uses a 10-second heartbeat and expires a lease after 60 seconds", async () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);
-    repository.create({ kind: "build_preview" });
+    repository.create({ kind: "reconcile" });
     const claimed = repository.claimNext({
       leaseOwner: "worker-a",
       nowMs: 1_000,
@@ -74,7 +74,7 @@ describe("durable job repository", () => {
   it("creates an immutable retry attempt instead of overwriting history", async () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);
-    const original = repository.create({ kind: "build_publish" });
+    const original = repository.create({ kind: "verify_version" });
     repository.fail(original.id, {
       errorClass: "infrastructure",
       errorCode: "WORKER_EXIT",
@@ -142,7 +142,7 @@ describe("durable job repository", () => {
     });
 
     const running = repository.create({
-      kind: "build_preview",
+      kind: "reconcile",
       nowMs: 3_000,
     });
     repository.claimNext({ leaseOwner: "worker-a", nowMs: 4_000 });
@@ -229,7 +229,7 @@ describe("durable job repository", () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);
     const original = repository.create({
-      kind: "build_publish",
+      kind: "reconcile",
       nowMs: 1_000,
     });
     repository.fail(original.id, {

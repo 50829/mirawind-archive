@@ -159,7 +159,7 @@ describe("book structure semantic validation", () => {
     ]);
   });
 
-  it("rejects skipped display levels and roles assigned below level one", () => {
+  it("rejects skipped display levels", () => {
     const skipped = structure();
     skipped[1] = { ...nodeAt(skipped, 1), display_level: 3 };
     hasDiagnostic(
@@ -169,15 +169,37 @@ describe("book structure semantic validation", () => {
       "DISPLAY_LEVEL_SKIPPED",
       document.headings[1]?.blockId,
     );
+  });
 
+  it("allows nested headings to start an inherited role boundary", () => {
     const nestedRole = structure();
-    nestedRole[2] = { ...nodeAt(nestedRole, 2), role: "backmatter" };
-    hasDiagnostic(
-      semanticDiagnostics(() =>
-        validateDocumentConfig({ config: config(nestedRole), document }),
-      ),
-      "ROLE_REQUIRES_TOP_LEVEL",
-      document.headings[2]?.blockId,
+    nestedRole[1] = {
+      ...nodeAt(nestedRole, 1),
+      display_level: 1,
+      role: "appendix",
+    };
+    nestedRole[2] = {
+      ...nodeAt(nestedRole, 2),
+      display_level: 2,
+      role: "body",
+    };
+    nestedRole[3] = {
+      ...nodeAt(nestedRole, 3),
+      display_level: 3,
+    };
+    delete nestedRole[3].role;
+    nestedRole[4] = {
+      ...nodeAt(nestedRole, 4),
+      display_level: 4,
+    };
+
+    const result = validateDocumentConfig({
+      config: config(nestedRole),
+      document,
+    });
+
+    expect(result.headings.map((heading) => heading.role)).toEqual(
+      ["body", "appendix", "body", "body", "body"],
     );
   });
 

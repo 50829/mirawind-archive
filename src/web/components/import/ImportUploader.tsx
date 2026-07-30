@@ -73,7 +73,7 @@ const workflowStages = [
   ["security_check", "安全检查"],
   ["identify_document", "识别正文"],
   ["organize_structure", "整理结构"],
-  ["build_preview", "构建预览"],
+  ["build_candidate", "构建预览"],
 ] as const;
 
 function workflowStage(
@@ -82,13 +82,13 @@ function workflowStage(
 ): (typeof workflowStages)[number][0] {
   if (uploadState !== "idle" || !imported) return "upload";
   const job = imported.current_job;
-  if (job?.kind === "build_preview") return "build_preview";
+  if (job?.kind === "build_candidate") return "build_candidate";
   if (job?.phase === "organize_structure") return "organize_structure";
   if (job?.phase === "identify_document") return "identify_document";
   if (job?.phase === "security_check" || imported.state === "analyzing") {
     return "security_check";
   }
-  return imported.preview.state === "ready" ? "build_preview" : "upload";
+  return imported.preview.state === "ready" ? "build_candidate" : "upload";
 }
 
 function sendUpload(input: {

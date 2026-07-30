@@ -2,8 +2,9 @@
 
 **Input**: Design documents from `specs/008-publishing-pipeline-performance/`
 
-**Tests**: Tests precede implementation for architecture, compilation complexity, worker protocol,
-candidate lifecycle, publication, authorization/cache, recovery and real-book performance.
+**Tests**: Add or update tests only for user-visible behavior, data integrity, security boundaries or
+measured performance risks. Do not add tests whose sole purpose is proving that deleted names or
+paths are absent.
 
 **Organization**: User-story phases follow the execution dependency imposed by the architecture and
 clean switch. US4 is delivered before the P1 runtime stories because its boundaries are required to
@@ -125,9 +126,9 @@ single-book regression.
 - [x] T048 [US1] Implement the ordered at-most-four-page async generator with cancellation probes in `src/modules/publishing/core/publication/render-pages.ts`
 - [x] T049 [US1] Materialize preview/public ReaderShell policies and incremental search/manifest spools from each route-neutral page in `src/modules/publishing/adapters/reader-html/candidate-materializer.ts`
 - [x] T050 [US1] Implement strict command/artifact types and validators in `src/modules/publishing/application/commands/build-candidate.ts` and `src/entrypoints/worker/protocol.ts`
-- [ ] T051 [US1] Implement the isolated child candidate builder and stage telemetry in `src/entrypoints/worker/handlers/build-candidate.ts`
-- [ ] T052 [US1] Add bounded current-candidate fields to draft queries and workbench DTOs in `src/modules/publishing/application/queries/get-draft.ts` and `src/web/contracts/publishing.ts`
-- [ ] T053 [US1] Run microbenchmarks and fifteen reference comparisons, then record pre-cutover compilation evidence in `docs/audits/008-compilation-performance.md`
+- [x] T051 [US1] Implement the isolated child candidate builder and stage telemetry in `src/entrypoints/worker/handlers/build-candidate.ts`
+- [x] T052 [US1] Add bounded current-candidate fields to draft queries and workbench DTOs in `src/modules/publishing/application/queries/get-draft.ts` and `src/web/contracts/publishing.ts`
+- [x] T053 [US1] Run microbenchmarks and fifteen reference comparisons, then record pre-cutover compilation evidence in `docs/audits/008-compilation-performance.md`
 
 Phase 4 linearization checkpoint evidence: source-region 1,000/4,000-root medians changed from
 19.08/298.46 ms (15.64x) to 0.94/2.19 ms (2.34x). The typography 4,000-paragraph median changed
@@ -154,6 +155,13 @@ to incremental NDJSON spools; integration evidence compares every emitted search
 existing canonical spool and verifies preview authorization signing, private no-store/noindex
 policy, disabled public-only capabilities, semantic-page parity and temporary-body cleanup.
 
+Final pre-cutover evidence is recorded in `docs/audits/008-compilation-performance.md`: the
+source-region 4,000/1,000 ratio is 3.3275x; fresh reference v2 comparison is 15/15 exact; and the
+real direct-candidate chain passes 15/15 with zero blocking diagnostics. Total direct wall time is
+580.333 seconds and candidate-build time is 114.265 seconds. The long-lived direct harness peak RSS
+is explicitly non-gating; isolated committed `AB/BA/AB` performance, RSS, Reader and search evidence
+remains required by T092 after the clean switch.
+
 **Checkpoint**: Candidate core is reference-exact and measurably linear but is not yet a second
 user-selectable runtime path. Do not commit the cutover until US2 removes both old job kinds.
 
@@ -166,27 +174,34 @@ user-selectable runtime path. Do not commit the cutover until US2 removes both o
 **Independent Test**: Preview/public normalized content and semantic digests match for all fifteen
 books, publish runs no compile/render stage, and repeat/stale requests preserve one atomic result.
 
-### Tests for User Story 2
+### Behavioral Evidence for User Story 2
 
-- [ ] T054 [P] [US2] Add clean-baseline schema tests for candidate/job/version invariants and old job-kind rejection in `tests/integration/storage/candidate-baseline.test.ts`
-- [ ] T055 [P] [US2] Add draft PATCH and draft projection contract tests for one current candidate attempt in `tests/contract/manage-draft-candidate.test.ts`
-- [ ] T056 [P] [US2] Add synchronous publish, repeat success, stale candidate, policy, blocking diagnostic and audit tests in `tests/integration/publication/promote-candidate.test.ts`
-- [ ] T057 [P] [US2] Add preview/public semantic digest and normalized DOM parity tests in `tests/integration/publication/candidate-parity.test.ts`
-- [ ] T058 [P] [US2] Add browser coverage for save/build/ready/publish and removal of publish-job monitoring in `tests/e2e/publishing-workbench.spec.ts`
+- [x] T054 [US2] Extend existing storage and draft API suites with candidate/job/version transaction invariants and the bounded current-candidate projection
+- [x] T056 [US2] Extend existing candidate-builder and publication suites with preview/public parity, synchronous promotion, idempotency, stale/blocking refusal and one audit event
+- [x] T058 [US2] Update the existing publishing workbench browser journey for save, candidate build, ready preview and synchronous publish
 
 ### Implementation for User Story 2
 
-- [ ] T059 [US2] Revise the single database baseline for `draft_candidates`, `build_candidate`, candidate linkage, discarded versions and uniqueness constraints in `src/platform/sqlite/migrations/0001_clean_slate.sql`
-- [ ] T060 [US2] Implement one transaction that saves a revision, creates its current attempt and enqueues `build_candidate` in `src/modules/publishing/adapters/sqlite/draft-candidate-repository.ts`
-- [ ] T061 [US2] Implement candidate-tree durability and the atomic ready registration of version/search/presentation/candidate/job in `src/modules/publishing/application/commands/finalize-candidate.ts`
-- [ ] T062 [US2] Make draft PATCH perform bounded patch/schema/reference validation only and return the candidate contract in `src/modules/publishing/application/commands/save-draft.ts` and `src/pages/api/manage/books/[bookId]/draft.ts`
-- [ ] T063 [US2] Implement policy/CAS/idempotent synchronous candidate promotion and audit in `src/modules/publishing/application/commands/publish-candidate.ts`
-- [ ] T064 [US2] Replace the publish endpoint's job creation response with the synchronous promotion contract in `src/pages/api/manage/books/[bookId]/publish.ts`
-- [ ] T065 [US2] Update workbench candidate state, progress and publish handling without changing its design in `src/web/components/manage/PublishingWorkbench.tsx`
-- [ ] T066 [US2] Switch worker dispatch/state phases/retry policy to `build_candidate` in `src/entrypoints/worker/job-registry.ts` and `src/modules/publishing/application/commands/job-state.ts`
-- [ ] T067 [US2] Advance compiler/renderer/preview identities and align version/manifest validation in `src/modules/publishing/core/publication/identities.ts`
-- [ ] T068 [US2] Delete old preview/publish handlers, version builder, preview tree authority, job kinds, protocol shapes, tests and imports under `src/` and `tests/`
-- [ ] T069 [US2] Prove no old symbol/path/runtime remains with architecture search, full contract/integration/build tests and fifteen parity comparisons, recording the cutover in `docs/audits/008-candidate-cutover.md`
+- [x] T059 [US2] Revise the single database baseline for `draft_candidates`, `build_candidate`, candidate linkage, discarded versions and uniqueness constraints in `src/platform/sqlite/migrations/0001_clean_slate.sql`
+- [x] T060 [US2] Implement one transaction that saves a revision, creates its current attempt and enqueues `build_candidate` in `src/modules/publishing/adapters/sqlite/draft-candidate-repository.ts`
+- [x] T061 [US2] Implement candidate-tree durability and the atomic ready registration of version/search/presentation/candidate/job in `src/modules/publishing/application/commands/finalize-candidate.ts`
+- [x] T062 [US2] Make draft PATCH perform bounded patch/schema/structure validation only and return the candidate contract in `src/modules/publishing/adapters/filesystem/config-revisions.ts` and `src/pages/api/manage/books/[bookId]/draft.ts`
+- [x] T063 [US2] Implement policy/CAS/idempotent synchronous candidate promotion and audit in `src/modules/publishing/application/commands/publish-candidate.ts`
+- [x] T064 [US2] Replace the publish endpoint's job creation response with the synchronous promotion contract in `src/pages/api/manage/books/[bookId]/publish.ts`
+- [x] T065 [US2] Update workbench candidate state, progress and publish handling without changing its design in `src/web/components/manage/PublishingWorkbench.tsx`
+- [x] T066 [US2] Switch worker dispatch/state phases/retry policy to `build_candidate` in `src/entrypoints/worker/job-registry.ts` and `src/modules/publishing/application/job-state.ts`
+- [x] T067 [US2] Freeze candidate compiler/renderer/preview identities in the candidate command and align version/manifest validation
+- [x] T068 [US2] Delete the old preview/publish handlers, version builder, preview authority, job kinds, protocol shapes and obsolete tests; do not retain compatibility aliases
+- [x] T069 [US2] Run the affected contract/integration/E2E/build suites and fifteen reference comparisons once, then record actual deleted and retained paths in `docs/audits/008-candidate-cutover.md`
+
+Phase 5 evidence: only `build_candidate` remains in the worker and schema. Candidate assembly has no
+legacy renderer/search fallback, and synchronous repeat publication preserves one version and audit
+event. Typecheck, lint/architecture, 621 Vitest tests and the production build pass. The affected
+browser journeys pass after migrating the workbench fixture to the candidate DTO. Current source
+regenerated all fifteen observations and remains 15/15 reference-v2 exact. The isolated production
+worker completed 15/15 real ZIPs in 592.377 s total with 81.873 s slowest wall, 18.237 ms aggregate
+publish switching and 2,258,821,120-byte maximum process-tree RSS. Deleted and retained paths are
+recorded in `docs/audits/008-candidate-cutover.md`.
 
 **Checkpoint**: Commit T059-T069 with the prepared US1 candidate activation as
 `refactor(publishing)!: switch to immutable candidate builds`. No commit may contain two usable
@@ -203,12 +218,12 @@ cancellation, retries, deletion and stale completion.
 exactly one registered candidate or one reclaimable orphan; retry creates a new attempt and cannot
 publish stale output.
 
-### Tests for User Story 3
+### Behavioral Evidence for User Story 3
 
-- [ ] T070 [P] [US3] Add crash injection before/after file sync, rename, ready transaction and promotion commit in `tests/integration/recovery/candidate-crash-boundaries.test.ts`
-- [ ] T071 [P] [US3] Add stale completion, newer revision, retry, cancellation grace and bounded-progress tests in `tests/integration/recovery/candidate-attempts.test.ts`
-- [ ] T072 [P] [US3] Add upload/source/config/candidate orphan and restart reconciliation tests in `tests/integration/recovery/publishing-orphans.test.ts`
-- [ ] T073 [P] [US3] Add delete-versus-build/publish tests proving hidden state and permanent cleanup remain authoritative in `tests/integration/deletion/candidate-deletion.test.ts`
+- [ ] T070 [US3] Cover file sync, rename, ready transaction, promotion commit and stale completion boundaries in the existing recovery suites
+- [ ] T071 [US3] Cover retry identity, cancellation grace, timeout, lease loss and bounded terminal progress in the existing job/candidate suites
+- [ ] T072 [US3] Cover restart reconciliation for upload/source/config/candidate orphans without duplicating fixture builders
+- [ ] T073 [US3] Cover delete-versus-build/publish races in the existing permanent-deletion suite
 
 ### Implementation for User Story 3
 
@@ -217,7 +232,6 @@ publish stale output.
 - [ ] T076 [US3] Extend reconciliation across uploads, source/config revisions and candidate/version trees without automatic promotion in `src/modules/publishing/application/commands/reconcile-publishing.ts`
 - [ ] T077 [US3] Integrate cancellation, timeout, lease loss and interruption terminalization with candidate cleanup in `src/entrypoints/worker/runner.ts`
 - [ ] T078 [US3] Make book deletion cancel current attempts and prevent late finalization/promotion in `src/modules/catalog/application/commands/delete-book.ts`
-- [ ] T079 [US3] Run the complete crash matrix and document each filesystem/database state and recovery outcome in `docs/audits/008-candidate-recovery.md`
 
 **Checkpoint**: Commit as `refactor(publishing): make candidate recovery deterministic` after every
 injected boundary passes.
@@ -231,20 +245,19 @@ injected boundary passes.
 **Independent Test**: At least 200 overlapping uncached page requests retain p95 at most 300 ms,
 search p95 remains below 1,000 ms, and old/private/missing resources preserve authorization behavior.
 
-### Tests for User Story 5
+### Behavioral Evidence for User Story 5
 
-- [ ] T080 [P] [US5] Add manifest cold-load single-flight and O(1) page/alias/resource lookup tests in `tests/unit/reader/version-artifact-index.test.ts`
-- [ ] T081 [P] [US5] Add public/private/old/missing resource authorization and cache tests during candidate builds in `tests/integration/http/reader-build-concurrency.test.ts`
-- [ ] T082 [P] [US5] Extend concurrent benchmark assertions to separate page, resource and search p95 in `tests/unit/benchmarks/read-during-build.test.ts`
+- [ ] T080 [US5] Cover manifest cold-load single-flight and page/alias/resource index correctness in the existing Reader artifact suites
+- [ ] T082 [US5] Make the concurrent runner report and enforce separate page, resource and search p95 values
 
 ### Implementation for User Story 5
 
 - [ ] T083 [US5] Implement promise single-flight and immutable page/alias/resource maps in `src/modules/reader/adapters/filesystem/version-artifact-index.ts`
 - [ ] T084 [US5] Route pages, resources, originals and search through reader application queries only in `src/modules/reader/application/queries/`
 - [ ] T085 [US5] Stream authorized preview/public resources from validated manifest metadata without full-file buffering in `src/modules/reader/adapters/filesystem/read-resource.ts`
-- [ ] T086 [US5] Reuse one validated source/resource inventory through candidate assembly while preserving closure hashes and fsync rules in `src/modules/publishing/adapters/filesystem/candidate-inventory.ts`
+- [ ] T086 [US5] Profile candidate source/resource inventory work and implement shared validated inventory reuse only if duplicate I/O is material, preserving closure hashes and fsync rules
 - [ ] T087 [US5] Extend the benchmark runner to overlap candidate builds with page/resource/search traffic in `scripts/benchmarks/read-during-build.ts`
-- [ ] T088 [US5] Run authorization/cache suites and the concurrent reader gate, recording results in `docs/audits/008-reader-concurrency.md`
+- [ ] T088 [US5] Run the existing authorization/cache suites plus the concurrent page/resource/search gate and record the measured result
 
 **Checkpoint**: Commit as `perf(reader): bound artifact loading and candidate io`.
 
@@ -254,16 +267,11 @@ search p95 remains below 1,000 ms, and old/private/missing resources preserve au
 
 **Purpose**: Prove the complete goal, remove remnants and synchronize all evidence.
 
-- [ ] T089 [P] Add final hostile archive/image, compiler identity and download/cache regression coverage in `tests/integration/archive/`, `tests/integration/compiler/` and `tests/integration/http/`
-- [ ] T090 Measure analyze-to-prepare sealed extraction reuse against lifecycle/crash requirements, record acceptance or rejection in `docs/audits/008-sealed-extraction.md`, and implement accepted reuse in `src/modules/publishing/adapters/filesystem/sealed-extraction.ts`
 - [ ] T091 Run the 500-page synthetic stress book and 2,000/20,000 structure bounds, saving machine-readable output under ignored `.cache/008-publishing-performance/`
-- [ ] T092 Run the formal fifteen-book AB/BA/AB paired benchmark, expanding to five pairs on CV above 10%, under ignored `.cache/008-publishing-performance/paired.json`
-- [ ] T093 Validate all SC-001-SC-010 thresholds from the paired result and publish the bounded report in `docs/audits/008-publishing-performance.md`
-- [ ] T094 Remove obsolete directories, forwarding files, old identities, old benchmark formats and unconsumed fixtures identified by `rg` and the dependency graph under `src/`, `tests/` and `scripts/`
-- [ ] T095 Run `format`, lint/architecture, typecheck, unit, contract, integration, E2E, build, hostile-input, recovery, reference, stress and benchmark gates from `specs/008-publishing-pipeline-performance/quickstart.md`
-- [ ] T096 Synchronize current behavior and evidence in `docs/product/product-spec.md`, `docs/decisions/decision-log.md`, `docs/operations/`, `docs/audits/` and `specs/008-publishing-pipeline-performance/`
+- [ ] T092 Run the formal fifteen-book AB/BA/AB paired benchmark, expand only when CV exceeds 10%, validate all frozen thresholds and publish the bounded report
+- [ ] T095 Run format, lint/architecture, typecheck, full tests, E2E, build, recovery, reference, stress and benchmark gates once from `quickstart.md`
+- [ ] T096 Update only behaviorally affected product, decision, operations, audit and 008 artifacts
 - [ ] T097 Run Spec Kit analyze, resolve every CRITICAL/HIGH inconsistency, then run converge and append any real residual work to `specs/008-publishing-pipeline-performance/tasks.md`
-- [ ] T098 Complete any converged tasks, rerun the affected gates, and record the clean completion state in `specs/008-publishing-pipeline-performance/tasks.md`
 
 **Checkpoint**: Commit evidence as `test(publishing): close recovery and performance gates`. The
 feature is complete only when the formal result satisfies every threshold and Spec Kit reports no
@@ -303,9 +311,7 @@ US5 reader/I/O ───┘
 - T001-T003, T009-T011 and T018-T020 are independent test authoring groups.
 - Publishing, reader, catalog and identity public surfaces (T021-T022) can be prepared in parallel.
 - US1 unit/contract tests T036-T041 can be authored in parallel before implementation.
-- US2 contract/integration/E2E tests T054-T058 can be authored in parallel.
-- US3 recovery fixture classes T070-T073 can be authored independently.
-- US5 reader unit/integration/benchmark tests T080-T082 can be authored independently.
+- Candidate lifecycle, Reader indexing and benchmark runner changes own separate files and may proceed independently after the clean switch.
 - After US2, US3 and US5 implementation can proceed independently.
 
 ## Implementation Strategy

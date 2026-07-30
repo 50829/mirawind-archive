@@ -8,6 +8,8 @@ import type Database from "better-sqlite3";
 
 import { parseEnvironment } from "@/config/environment";
 import { openDatabase } from "@/platform/sqlite/connection";
+import { CandidateRegistrationAdapter } from "@/modules/publishing/adapters/sqlite/candidate-registration";
+import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import {
@@ -17,13 +19,11 @@ import {
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { isJobPhase } from "@/modules/publishing/application/job-state";
 import { recoverExpiredJobLeases } from "@/modules/publishing/application/recover-expired-jobs";
+import { finalizeCandidate } from "@/modules/publishing/application/public";
 import {
   persistAnalyzeImportArtifact,
   readAnalyzeImportArtifact,
 } from "@/modules/publishing/adapters/worker/analyze-import";
-import { readPreviewBuildArtifact } from "@/modules/publishing/adapters/worker/preview-artifact";
-import { finalizeBuiltPreview } from "@/modules/publishing/adapters/worker/preview-finalization";
-import { finalizeBuiltPublication } from "@/modules/publishing/adapters/worker/build-publish";
 import { finalizePreparedDraft } from "@/modules/publishing/adapters/worker/finalize-prepared-draft";
 import {
   preparedDraftArtifactPath,
@@ -66,6 +66,7 @@ function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
 
 function frozenInput(
   job: JobRecord,
+  candidates: DraftCandidateRepository,
   drafts: DraftRepository,
   imports: ImportRepository,
   sources: SourceRepository,
@@ -156,39 +157,15 @@ function frozenInput(
       ...(typographyProfile ? { typographyProfile } : {}),
     });
   }
-  if (
-    !job.bookId ||
-    !job.capturedConfigRevision ||
-    !job.capturedSourceId ||
-    !config ||
-    !source
-  ) {
-    throw new Error("BUILD_INPUT_INVALID");
+  if (job.kind === "build_candidate") {
+    if (!job.candidateId) throw new Error("BUILD_CANDIDATE_INPUT_INVALID");
+    return candidates.buildCommand(job.candidateId);
   }
-  if (job.kind === "build_preview") {
-    return Object.freeze({
-      ...common,
-      bookId: job.bookId,
-      capturedConfigRevision: job.capturedConfigRevision,
-      capturedSourceId: job.capturedSourceId,
-      configYamlRelativePath: config.yamlRelativePath,
-      kind: job.kind,
-      sourceRootRelativePath: source.sourceRootRelativePath,
-    });
-  }
-  return Object.freeze({
-    ...common,
-    bookId: job.bookId,
-    capturedConfigRevision: job.capturedConfigRevision,
-    capturedCurrentVersionId: job.capturedCurrentVersionId,
-    capturedSourceId: job.capturedSourceId,
-    configYamlRelativePath: config.yamlRelativePath,
-    kind: job.kind,
-    sourceRootRelativePath: source.sourceRootRelativePath,
-  });
+  throw new Error("JOB_INPUT_KIND_INVALID");
 }
 
 async function executeClaimedJob(input: {
+  readonly candidates: DraftCandidateRepository;
   readonly database: Database.Database;
   readonly job: JobRecord;
   readonly drafts: DraftRepository;
@@ -236,8 +213,15 @@ async function executeClaimedJob(input: {
         });
       }
     }
+    const command = frozenInput(
+      input.job,
+      input.candidates,
+      input.drafts,
+      input.imports,
+      input.sources,
+    );
     const execution = await runJobChild(
-      frozenInput(input.job, input.drafts, input.imports, input.sources),
+      command,
       {
         onProgress(progress) {
           try {
@@ -262,6 +246,14 @@ async function executeClaimedJob(input: {
     const latest = input.repository.get(input.job.id);
     if (!latest || latest.state !== "running") return;
     if (latest.cancellationRequestedAtMs !== null) {
+      if (input.job.kind === "build_candidate" && input.job.candidateId) {
+        input.candidates.completeTerminal({
+          candidateId: input.job.candidateId,
+          nowMs: Date.now(),
+          safeErrorCode: "JOB_CANCELED",
+          state: "canceled",
+        });
+      }
       input.repository.completeFailure({
         errorClass: "canceled",
         errorCode: "JOB_CANCELED",
@@ -334,64 +326,15 @@ async function executeClaimedJob(input: {
           ),
         });
       }
-      if (
-        input.job.kind === "build_preview" &&
-        input.job.bookId &&
-        input.job.capturedConfigRevision
-      ) {
-        const expected = `staging/${input.job.id}/preview-build-result.json`;
-        if (
-          execution.result.result?.previewBuildResultRelativePath !== expected
-        ) {
-          throw new Error("PREVIEW_BUILD_RESULT_PATH_INVALID");
-        }
-        const stagingDirectory = await resolveContainedPath(
-          input.layout.root,
-          `staging/${input.job.id}`,
-        );
-        await finalizeBuiltPreview({
-          artifact: await readPreviewBuildArtifact(stagingDirectory),
-          bookId: input.job.bookId,
-          configRevision: input.job.capturedConfigRevision,
-          database: input.database,
-          layout: input.layout,
-          nowMs: Date.now(),
-          stagingDirectory,
-        });
-      }
-      if (
-        input.job.kind === "build_publish" &&
-        input.job.bookId &&
-        input.job.capturedConfigRevision
-      ) {
-        input.repository.heartbeat({
-          jobId: input.job.id,
+      if (input.job.kind === "build_candidate") {
+        await finalizeCandidate({
+          artifact: execution.result.result,
+          command,
           leaseOwner: input.leaseOwner,
           nowMs: Date.now(),
-          phase: "finalize_publication",
-          progress: {
-            completed: 2,
-            processed_bytes: null,
-            total: 3,
-            unit: "steps",
-          },
-        });
-        const expected = `staging/${input.job.id}/version-build-result.json`;
-        if (
-          execution.result.result?.versionBuildResultRelativePath !== expected
-        ) {
-          throw new Error("VERSION_BUILD_RESULT_PATH_INVALID");
-        }
-        await finalizeBuiltPublication({
-          actorUserId: null,
-          database: input.database,
-          jobId: input.job.id,
-          layout: input.layout,
-          leaseOwner: input.leaseOwner,
-          nowMs: Date.now(),
-          stagingDirectory: await resolveContainedPath(
-            input.layout.root,
-            `staging/${input.job.id}`,
+          registration: new CandidateRegistrationAdapter(
+            input.database,
+            input.layout,
           ),
         });
         return;
@@ -418,6 +361,14 @@ async function executeClaimedJob(input: {
         input.imports.reject(input.job.importId, errorCode, Date.now());
       }
     }
+    if (input.job.kind === "build_candidate" && input.job.candidateId) {
+      input.candidates.completeTerminal({
+        candidateId: input.job.candidateId,
+        nowMs: Date.now(),
+        safeErrorCode: errorCode,
+        state: errorClass === "canceled" ? "canceled" : "failed",
+      });
+    }
     input.repository.completeFailure({
       errorClass,
       errorCode,
@@ -428,6 +379,14 @@ async function executeClaimedJob(input: {
   } catch {
     const latest = input.repository.get(input.job.id);
     if (latest?.state === "running") {
+      if (input.job.kind === "build_candidate" && input.job.candidateId) {
+        input.candidates.completeTerminal({
+          candidateId: input.job.candidateId,
+          nowMs: Date.now(),
+          safeErrorCode: "WORKER_JOB_FINALIZATION_FAILED",
+          state: "failed",
+        });
+      }
       input.repository.completeFailure({
         errorClass: "infrastructure",
         errorCode: "WORKER_JOB_FINALIZATION_FAILED",
@@ -443,6 +402,7 @@ async function executeClaimedJob(input: {
 }
 
 export async function runWorkerLoop(input: {
+  readonly candidates: DraftCandidateRepository;
   readonly database: Database.Database;
   readonly drafts: DraftRepository;
   readonly imports: ImportRepository;
@@ -477,6 +437,7 @@ export async function runWorkerLoop(input: {
     operationalMetrics.recordQueueAge(Math.max(0, loopNowMs - job.createdAtMs));
     const startedAtMs = Date.now();
     await executeClaimedJob({
+      candidates: input.candidates,
       job,
       database: input.database,
       drafts: input.drafts,
@@ -594,6 +555,7 @@ async function main(): Promise<void> {
     await atomicWriteFile(pidPath, `${process.pid}\n`, { mode: 0o600 });
     process.stdout.write("Mirawind worker ready\n");
     await runWorkerLoop({
+      candidates: new DraftCandidateRepository(database),
       database,
       drafts: new DraftRepository(database),
       imports: new ImportRepository(database),

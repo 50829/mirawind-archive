@@ -2,15 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { SafeApplicationError } from "@/domain/errors";
 import { authorizeBookResource } from "@/http/authorization/book-guard";
-import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 import { PublishedBookService } from "@/modules/reader/adapters/filesystem/published-book";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
-  publicationTestLeaseOwner,
+  publishReadyCandidateForTest,
   publicationTestVersionId,
   setupPublicationFixture,
-} from "../publication/stale-build.test.js";
+} from "../../helpers/publication.js";
 
 const anonymous = {
   allowed: false,
@@ -56,13 +55,10 @@ describe("public/private current-version resolution matrix", () => {
   it("allows anonymous public and administrator private reads while hiding private existence", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const fixture = setupPublicationFixture(database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       database
         .prepare("UPDATE books SET alias = 'matrix-book' WHERE id = ?")
@@ -101,13 +97,10 @@ describe("public/private current-version resolution matrix", () => {
   it("contains a broken current pointer as book-scoped unavailability", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const fixture = setupPublicationFixture(database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       database
         .prepare("UPDATE book_versions SET state = 'corrupt' WHERE id = ?")

@@ -44,8 +44,12 @@ describe("module application public surfaces", () => {
   it("exposes the stable runtime entrypoints", () => {
     expect(Object.keys(publishing).sort()).toEqual([
       "candidateBuildIdentities",
+      "candidateBuildPhases",
       "canonicalJson",
+      "currentDraftCandidateStates",
       "evaluateJobRetry",
+      "finalizeCandidate",
+      "getCurrentDraftCandidate",
       "importUploadIdempotencyOperation",
       "isKnownJobPhase",
       "jobKinds",
@@ -56,6 +60,7 @@ describe("module application public surfaces", () => {
       "parseBookConfigYaml",
       "parseBuildCandidateCommand",
       "parseCandidateBuildArtifact",
+      "publishCandidate",
       "publishingRendererIdentity",
       "rendererStylesheetUrl",
       "validateBookConfig",
@@ -80,8 +85,7 @@ describe("module application public surfaces", () => {
     expectTypeOf<JobKind>().toEqualTypeOf<
       | "analyze_import"
       | "prepare_draft"
-      | "build_preview"
-      | "build_publish"
+      | "build_candidate"
       | "verify_version"
       | "reconcile"
       | "reclaim"

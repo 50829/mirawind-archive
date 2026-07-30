@@ -27,6 +27,7 @@ interface JobRow {
   attempt: number;
   automatic_retry_count: number;
   book_id: number | null;
+  candidate_id: string | null;
   captured_config_revision: number | null;
   captured_current_version_id: string | null;
   captured_source_id: string | null;
@@ -54,6 +55,7 @@ export interface JobRecord {
   readonly attempt: number;
   readonly automaticRetryCount: number;
   readonly bookId: number | null;
+  readonly candidateId: string | null;
   readonly capturedConfigRevision: number | null;
   readonly capturedCurrentVersionId: string | null;
   readonly capturedSourceId: string | null;
@@ -79,6 +81,7 @@ export interface JobRecord {
 
 export interface CreateJobInput {
   readonly bookId?: number;
+  readonly candidateId?: string;
   readonly capturedConfigRevision?: number;
   readonly capturedCurrentVersionId?: string;
   readonly capturedSourceId?: string;
@@ -118,6 +121,7 @@ function mapJob(row: JobRow): JobRecord {
     attempt: row.attempt,
     automaticRetryCount: row.automatic_retry_count,
     bookId: row.book_id,
+    candidateId: row.candidate_id,
     capturedConfigRevision: row.captured_config_revision,
     capturedCurrentVersionId: row.captured_current_version_id,
     capturedSourceId: row.captured_source_id,
@@ -193,6 +197,7 @@ export function createJobRepositorySchema(database: Database.Database): void {
       state TEXT NOT NULL CHECK(state IN ('queued','running','succeeded','failed','canceled','interrupted')),
       import_id TEXT,
       book_id INTEGER,
+      candidate_id TEXT,
       version_id TEXT,
       captured_source_id TEXT,
       captured_config_revision INTEGER,
@@ -277,12 +282,12 @@ export class JobRepository {
         this.database
           .prepare(
             `INSERT INTO jobs (
-            id, kind, state, import_id, book_id, version_id,
+            id, kind, state, import_id, book_id, candidate_id, version_id,
             captured_source_id, captured_config_revision,
             captured_current_version_id, attempt, automatic_retry_count,
             phase, progress_json, created_at
           ) VALUES (
-            ?, ?, 'queued', ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?
+            ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?
           )`,
           )
           .run(
@@ -290,6 +295,7 @@ export class JobRepository {
             input.kind,
             input.importId ?? null,
             input.bookId ?? null,
+            input.candidateId ?? null,
             input.versionId ?? null,
             input.capturedSourceId ?? null,
             input.capturedConfigRevision ?? null,
@@ -725,12 +731,12 @@ export class JobRepository {
         this.database
           .prepare(
             `INSERT INTO jobs (
-            id, kind, state, import_id, book_id, version_id,
+            id, kind, state, import_id, book_id, candidate_id, version_id,
             captured_source_id, captured_config_revision,
             captured_current_version_id, retry_of_job_id, attempt,
             automatic_retry_count, phase, progress_json, created_at
           ) VALUES (
-            ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', '{}', ?
+            ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', '{}', ?
           )`,
           )
           .run(
@@ -738,6 +744,7 @@ export class JobRepository {
             original.kind,
             original.importId,
             original.bookId,
+            original.candidateId,
             original.versionId,
             original.capturedSourceId,
             original.capturedConfigRevision,

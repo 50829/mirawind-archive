@@ -193,7 +193,7 @@ export class BookDeletionRepository {
           .prepare(
             `UPDATE books
              SET draft_source_id = NULL, draft_config_revision = NULL,
-                 ready_preview_revision = NULL, current_version_id = NULL
+                 current_candidate_id = NULL, current_version_id = NULL
              WHERE id = ? AND deletion_requested_at IS NOT NULL`,
           )
           .run(input.bookId);
@@ -201,13 +201,10 @@ export class BookDeletionRepository {
           .prepare("DELETE FROM book_version_presentations WHERE book_id = ?")
           .run(input.bookId);
         this.database
-          .prepare("DELETE FROM draft_previews WHERE book_id = ?")
-          .run(input.bookId);
-
-        this.database
           .prepare(
             `UPDATE jobs
-             SET import_id = NULL, book_id = NULL, version_id = NULL,
+             SET import_id = NULL, book_id = NULL, candidate_id = NULL,
+                 version_id = NULL,
                  captured_source_id = NULL, captured_config_revision = NULL,
                  captured_current_version_id = NULL,
                  progress_json = '{}', error_detail_json = NULL,
@@ -222,6 +219,9 @@ export class BookDeletionRepository {
             bookId: input.bookId,
             cleanupJobId: input.cleanupJobId,
           });
+        this.database
+          .prepare("DELETE FROM draft_candidates WHERE book_id = ?")
+          .run(input.bookId);
         this.database
           .prepare(
             "UPDATE book_versions SET predecessor_version_id = NULL WHERE book_id = ?",

@@ -246,7 +246,7 @@ export class SourceSnapshotService {
     const stagingRoot = resolve(bookDraftRoot, `.snapshot-${sourceId}.part`);
     const stagedSource = resolve(stagingRoot, "source");
     const stagedOriginal = resolve(stagingRoot, "original.zip");
-    const finalSource = resolve(bookDraftRoot, "source", sourceId);
+    const finalSource = resolve(bookDraftRoot, "sources", sourceId);
     const finalOriginal = resolve(bookDraftRoot, "originals", originalId);
     let sourceRenamed = false;
     let originalRenamed = false;

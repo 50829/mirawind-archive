@@ -64,6 +64,9 @@ describe("immutable accepted source snapshots", () => {
         snapshot.original.storageRelativePath,
       );
 
+      expect(snapshot.source.sourceRootRelativePath).toBe(
+        `books/${book.id}/draft/sources/${snapshot.source.id}`,
+      );
       expect(snapshot.source.mainMarkdownPath).toBe("book.md");
       expect(await readFile(resolve(sourceRoot, "book.md"), "utf8")).toContain(
         "# Book",

@@ -203,7 +203,7 @@ describe("behavior-preserving architecture boundaries", () => {
           },
         },
         "publishing": {
-          "compiler": "compiler-v4",
+          "compiler": "compiler-v5",
           "headings": [
             {
               "level": 1,
@@ -238,7 +238,7 @@ describe("behavior-preserving architecture boundaries", () => {
               "title": "Appendix",
             },
           ],
-          "renderer": "semantic-html-v4-katex-0.18.1",
+          "renderer": "semantic-html-v5-katex-0.18.1",
         },
         "reader": {
           "breadcrumbs": [

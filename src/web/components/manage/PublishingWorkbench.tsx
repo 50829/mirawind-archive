@@ -12,91 +12,19 @@ import {
 } from "@/web/components/ui/manage-classes";
 import { usePolling } from "@/web/components/manage/use-polling";
 
-import {
-  DiagnosticsPanel,
-  type PreviewDiagnostic,
-} from "@/web/components/manage/DiagnosticsPanel";
+import { DiagnosticsPanel } from "@/web/components/manage/DiagnosticsPanel";
 import { PublishPanel } from "@/web/components/manage/PublishPanel";
 import {
   StructureEditor,
   type StructureEditorHandle,
   type StructureEditorState,
 } from "@/web/components/manage/StructureEditor";
-
-interface PreviewHeading {
-  readonly block_id: string;
-  readonly display_level: number;
-  readonly include_in_toc: boolean;
-  readonly page_id: number | null;
-  readonly role: "frontmatter" | "body" | "appendix" | "backmatter";
-  readonly source_level: number;
-  readonly starts_page: boolean;
-  readonly source_title?: string;
-  readonly title: string;
-}
-
-interface PreviewPage {
-  readonly page_id: number;
-  readonly title: string;
-}
-
-interface PreviewRegion {
-  readonly applied: boolean;
-  readonly block_id?: string;
-  readonly end_byte: number;
-  readonly entry_count: number;
-  readonly matched_heading_count: number;
-  readonly region_id: string;
-  readonly start_byte: number;
-}
-
-interface TypographySummary {
-  readonly profile: "verbatim-v1" | "zh-smart-v1";
-  readonly protected_nodes: number;
-  readonly punctuation_converted: number;
-  readonly spaces_normalized: number;
-}
-
-interface DraftView {
-  readonly book_id: number;
-  readonly config_revision: number;
-  readonly diagnostics: readonly PreviewDiagnostic[];
-  readonly regions: readonly {
-    readonly applied: boolean;
-    readonly entry_count: number;
-    readonly region_id: string;
-  }[];
-  readonly preview: {
-    readonly compiler_version: string;
-    readonly config_sha256: string;
-    readonly config_revision: number;
-    readonly headings: readonly PreviewHeading[];
-    readonly is_stale: boolean;
-    readonly pages: readonly PreviewPage[];
-    readonly renderer_version: string;
-    readonly semantic_digest: string;
-    readonly source_regions: readonly PreviewRegion[];
-    readonly source_sha256: string;
-    readonly typography?: TypographySummary;
-  } | null;
-  readonly preview_state: "building" | "failed" | "ready";
-  readonly structure: readonly {
-    readonly block_id: string;
-    readonly display_level: number;
-    readonly display_title?: string;
-    readonly include_in_toc: boolean;
-    readonly role?: "frontmatter" | "body" | "appendix" | "backmatter";
-    readonly starts_page: boolean;
-  }[];
-  readonly title: string;
-}
-
-interface RecoveryJob {
-  readonly error_code: string | null;
-  readonly job_id: string;
-  readonly state:
-    "canceled" | "failed" | "interrupted" | "queued" | "running" | "succeeded";
-}
+import type {
+  DraftView,
+  PreviewDiagnostic,
+  PreviewPage,
+  RecoveryJob,
+} from "@/web/contracts/publishing";
 
 const terminalJobStates = new Set<RecoveryJob["state"]>([
   "canceled",
@@ -209,7 +137,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   }, [refresh]);
 
   usePolling(
-    draft?.preview_state === "building",
+    draft?.candidate?.state === "building",
     async () => {
       await refresh().catch(() => setMessage("预览状态刷新失败。"));
     },
@@ -370,8 +298,9 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   const blockingDiagnostics = draft.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "error",
   );
+  const candidateState = draft.candidate?.state ?? "failed";
   const previewReady =
-    draft.preview_state === "ready" &&
+    candidateState === "ready" &&
     preview?.config_revision === draft.config_revision;
   return (
     <div className="preview-workspace" data-mobile-mode={mobileMode}>
@@ -384,12 +313,12 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         </a>
         <div className="workbench-title min-w-0">
           <h1 className="truncate text-base font-bold">{draft.title}</h1>
-          {draft.preview_state === "building" && (
+          {candidateState === "building" && (
             <p className="text-xs text-amber-800" role="status">
               正在构建预览
             </p>
           )}
-          {draft.preview_state === "failed" && (
+          {["canceled", "failed", "interrupted"].includes(candidateState) && (
             <p className="text-xs text-red-800" role="alert">
               预览构建失败
             </p>
@@ -435,7 +364,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             !editorState.dirty ||
             editorState.saving ||
             editorState.conflict ||
-            draft.preview_state === "building"
+            candidateState === "building"
           }
           onClick={() => editorRef.current?.save()}
           type="button"
@@ -446,6 +375,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         <PublishPanel
           blocked={editorState.dirty || blockingDiagnostics.length > 0}
           bookId={draft.book_id}
+          candidateVersionId={draft.candidate?.version_id ?? null}
           compact
           configRevision={draft.config_revision}
           previewReady={previewReady}
@@ -511,7 +441,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
               }}
               onStateChange={updateEditorState}
               revision={draft.config_revision}
-              saveDisabled={draft.preview_state === "building"}
+              saveDisabled={candidateState === "building"}
               structure={draft.structure}
               typography={preview?.typography}
             />

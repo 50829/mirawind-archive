@@ -2,14 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { renderReaderShell } from "@/web/features/reader/render";
 import { PublishedBookService } from "@/modules/reader/adapters/filesystem/published-book";
-import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
-  publicationTestLeaseOwner,
+  publishReadyCandidateForTest,
   publicationTestVersionId,
   setupPublicationFixture,
-} from "../publication/stale-build.test.js";
+} from "../../helpers/publication.js";
 
 const anonymous = {
   allowed: false,
@@ -27,13 +26,10 @@ describe("reader loop", () => {
            WHERE version_id = ?`,
         )
         .run(publicationTestVersionId);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       database
         .prepare(
@@ -65,13 +61,10 @@ describe("reader loop", () => {
   it("hides the current reader immediately after a public-to-private transition", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const fixture = setupPublicationFixture(database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       database
         .prepare("UPDATE books SET visibility = 'private' WHERE id = ?")

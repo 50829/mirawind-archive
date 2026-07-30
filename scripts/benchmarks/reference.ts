@@ -7,12 +7,18 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 
 import { normalizeSearchQuery } from "../../src/modules/reader/core/search-query.js";
+import { CandidatePublicationRepository } from "../../src/modules/publishing/adapters/sqlite/candidate-publication.js";
+import { DraftCandidateRepository } from "../../src/modules/publishing/adapters/sqlite/draft-candidate-repository.js";
 import { DraftRepository } from "../../src/modules/publishing/adapters/sqlite/drafts.js";
 import {
   JobRepository,
   type JobRecord,
 } from "../../src/modules/publishing/adapters/sqlite/jobs.js";
 import { openDatabase } from "../../src/platform/sqlite/connection.js";
+import {
+  m1PublishPolicy,
+  publishCandidate,
+} from "../../src/modules/publishing/application/public.js";
 import { runBuildBenchmarks } from "./build.js";
 import { captureBenchmarkEnvironment } from "./environment.js";
 import { argumentMap, boundedInteger, requiredArgument } from "./http.js";
@@ -307,7 +313,10 @@ async function waitForWorker(process_: ManagedProcess): Promise<void> {
 }
 
 function queueRebuild(databasePath: string): {
+  readonly bookId: number;
+  readonly configRevision: number;
   readonly jobId: string;
+  readonly versionId: string;
   readonly versionBefore: string;
 } {
   const database = openDatabase(databasePath, { role: "worker" });
@@ -320,21 +329,43 @@ function queueRebuild(databasePath: string): {
     ) {
       throw new Error("REFERENCE_REBUILD_CAPTURE_MISSING");
     }
-    const job = new JobRepository(database).create({
+    const candidate = new DraftCandidateRepository(
+      database,
+    ).createForCurrentRevision({
       bookId: book.id,
-      capturedConfigRevision: book.draftConfigRevision,
-      capturedCurrentVersionId: book.currentVersionId,
-      capturedSourceId: book.draftSourceId,
-      idempotency: {
-        key: `reference-rebuild-${book.currentVersionId}`,
-        operation: "benchmark.reference-rebuild",
-      },
-      kind: "build_publish",
+      configRevision: book.draftConfigRevision,
       nowMs: Date.now(),
+      sourceId: book.draftSourceId,
     });
+    const command = new DraftCandidateRepository(database).buildCommand(
+      candidate.attemptId,
+    );
     return Object.freeze({
-      jobId: job.id,
+      bookId: book.id,
+      configRevision: book.draftConfigRevision,
+      jobId: candidate.jobId,
+      versionId: command.versionId,
       versionBefore: book.currentVersionId,
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function publishRebuild(
+  databasePath: string,
+  rebuild: ReturnType<typeof queueRebuild>,
+): Promise<void> {
+  const database = openDatabase(databasePath, { role: "worker" });
+  try {
+    await publishCandidate({
+      actorUserId: null,
+      bookId: rebuild.bookId,
+      expectedConfigRevision: rebuild.configRevision,
+      expectedVersionId: rebuild.versionId,
+      nowMs: Date.now(),
+      policy: m1PublishPolicy,
+      publication: new CandidatePublicationRepository(database),
     });
   } finally {
     database.close();
@@ -425,6 +456,7 @@ async function benchmarkFixtureHttp(input: {
     const completed = await waitForJob(databasePath, rebuild.jobId, [
       "succeeded",
     ]);
+    await publishRebuild(databasePath, rebuild);
     const after = await fixtureContext(input.dataRoot);
     if (
       completed.state !== "succeeded" ||

@@ -1,14 +1,12 @@
-import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
 import {
   canonicalJson,
-  compilerIdentity,
-} from "@/modules/publishing/core/publication/manifest";
-import { validateDocumentManifest } from "@/modules/publishing/core/publication/document-manifest-schema";
-import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
-import {
   katexCriticalCss,
+  parseBookConfigYaml,
+  publishingRendererIdentity,
   rendererStylesheetUrl,
-} from "@/modules/publishing/core/publication/render-assets";
+  validateBookConfig,
+  validateDocumentManifest,
+} from "@/modules/publishing/application/publication-formats";
 import {
   isKnownJobPhase,
   jobKinds,
@@ -22,27 +20,51 @@ import {
 import { m1PublishPolicy } from "@/modules/publishing/application/publish-policy";
 import {
   candidateBuildIdentities,
+  candidateBuildPhases,
   parseBuildCandidateCommand,
   parseCandidateBuildArtifact,
 } from "@/modules/publishing/application/commands/build-candidate";
+import { finalizeCandidate } from "@/modules/publishing/application/commands/finalize-candidate";
+import { publishCandidate } from "@/modules/publishing/application/commands/publish-candidate";
+import {
+  currentDraftCandidateStates,
+  getCurrentDraftCandidate,
+} from "@/modules/publishing/application/queries/get-draft";
 
-export type { TypographyProfile } from "@/modules/publishing/core/preparation/document-model";
+export type {
+  BookVersionRecord,
+  BookVersionState,
+  TypographyProfile,
+} from "@/modules/publishing/application/publication-formats";
 export type {
   JobKind,
   JobPhase,
 } from "@/modules/publishing/application/job-state";
 export type {
-  BookVersionRecord,
-  BookVersionState,
-} from "@/modules/publishing/application/version-record";
-export type {
   BuildCandidateCommand,
+  CandidateBuildPhase,
+  CandidateBuildStageUpdate,
   CandidateBuildArtifact,
 } from "@/modules/publishing/application/commands/build-candidate";
+export type { CandidateRegistrationPort } from "@/modules/publishing/application/commands/finalize-candidate";
+export type {
+  CandidatePublicationCapture,
+  CandidatePublicationPort,
+  PublishedCandidate,
+} from "@/modules/publishing/application/commands/publish-candidate";
+export type {
+  CurrentDraftCandidateProjection,
+  CurrentDraftCandidateRecord,
+  CurrentDraftCandidateState,
+} from "@/modules/publishing/application/queries/get-draft";
 
 export {
   candidateBuildIdentities,
+  candidateBuildPhases,
+  currentDraftCandidateStates,
   evaluateJobRetry,
+  finalizeCandidate,
+  getCurrentDraftCandidate,
   importUploadIdempotencyOperation,
   isKnownJobPhase,
   jobKinds,
@@ -51,6 +73,8 @@ export {
   maximumUploadBytes,
   parseBuildCandidateCommand,
   parseCandidateBuildArtifact,
+  publishingRendererIdentity,
+  publishCandidate,
   canonicalJson,
   katexCriticalCss,
   parseBookConfigYaml,
@@ -58,5 +82,3 @@ export {
   validateBookConfig,
   validateDocumentManifest,
 };
-
-export const publishingRendererIdentity = compilerIdentity.renderer_version;

@@ -10,6 +10,7 @@ import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin"
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
 import { requireMutationOrigin } from "@/http/origin";
 import { readBoundedJson } from "@/http/json-body";
+import { getCurrentDraftCandidate } from "@/modules/publishing/application/public";
 import {
   getRuntimeEnvironment,
   getRuntimeStorageLayout,
@@ -47,29 +48,25 @@ export const GET: APIRoute = async ({ locals, params }) => {
   const layout = await getRuntimeStorageLayout();
   const artifacts = createPublishingArtifactServer(layout);
   const configValue = await artifacts.readBookConfig(config.yamlRelativePath);
-  const readyRevision = book.readyPreviewRevision;
-  const readyPreview = readyRevision
-    ? publishing.findPreview(bookId, readyRevision)
-    : null;
-  const currentPreview = publishing.findPreview(
+  const candidateRecord = publishing.findCurrentCandidate(bookId);
+  const candidate = getCurrentDraftCandidate({
     bookId,
-    book.draftConfigRevision,
-  );
+    candidate: candidateRecord,
+    configRevision: book.draftConfigRevision,
+  });
   let previewModel: Record<string, unknown> | null = null;
   let diagnostics: readonly SafeDiagnostic[] = [];
   if (
-    readyRevision === book.draftConfigRevision &&
-    readyPreview?.state === "ready" &&
-    readyPreview.previewRelativePath
+    candidate?.state === "ready" &&
+    candidate.version_id !== null
   ) {
+    const previewRelativePath = `books/${bookId}/versions/${candidate.version_id}/preview`;
     previewModel = await artifacts.readPreviewModel(
-      readyPreview.previewRelativePath,
+      previewRelativePath,
     );
-    if (readyPreview.diagnosticsRelativePath) {
-      diagnostics = await artifacts.readDiagnostics(
-        readyPreview.diagnosticsRelativePath,
-      );
-    }
+    diagnostics = await artifacts.readDiagnostics(
+      `${previewRelativePath}/diagnostics.json`,
+    );
   }
   const headers = new Headers({
     ETag: createStrongEtag(config.yamlSha256),
@@ -78,6 +75,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
   return Response.json(
     {
       book_id: book.id,
+      candidate,
       config_revision: config.revision,
       diagnostics,
       regions: (
@@ -106,7 +104,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
               config_sha256: previewModel.config_sha256,
               config_revision: previewModel.config_revision,
               headings: previewModel.headings,
-              is_stale: readyRevision !== book.draftConfigRevision,
+              is_stale: false,
               pages: previewModel.pages,
               renderer_version: previewModel.renderer_version,
               semantic_digest: previewModel.semantic_digest,
@@ -114,9 +112,6 @@ export const GET: APIRoute = async ({ locals, params }) => {
               source_sha256: previewModel.source_sha256,
               typography: previewModel.typography,
             },
-      preview_state:
-        currentPreview?.state ??
-        (book.draftConfigRevision ? "building" : "failed"),
       structure: configValue.structure,
       title: book.title,
     },
@@ -148,9 +143,12 @@ export const PATCH: APIRoute = async ({ locals, params, request }) => {
   return Response.json(
     {
       book_id: bookId,
+      candidate: {
+        attempt_id: result.candidate.attemptId,
+        job_id: result.candidate.jobId,
+        state: result.candidate.state,
+      },
       config_revision: result.revision,
-      job_id: result.jobId,
-      preview_state: "building",
     },
     { headers, status: 202 },
   );

@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
-import { publishReadyVersion } from "@/modules/publishing/adapters/sqlite/publication";
 import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
-  publicationTestLeaseOwner,
+  publishReadyCandidateForTest,
   publicationTestVersionId,
   setupPublicationFixture,
-} from "../publication/stale-build.test.js";
+} from "../../helpers/publication.js";
 
 describe("library service", () => {
   it("lists only public current projections and never leaks draft metadata", () =>
@@ -23,13 +22,10 @@ describe("library service", () => {
            WHERE version_id = ?`,
         )
         .run(publicationTestVersionId);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       database
         .prepare(
@@ -61,13 +57,10 @@ describe("library service", () => {
   it("reports an anonymous partial state when a public current projection is missing", () =>
     withMigratedTestDatabase(async ({ database }) => {
       const fixture = setupPublicationFixture(database);
-      await publishReadyVersion({
-        actorUserId: null,
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
         database,
-        jobId: fixture.publishJob.id,
-        leaseOwner: publicationTestLeaseOwner,
         nowMs: 12,
-        versionId: publicationTestVersionId,
       });
       database
         .prepare("DELETE FROM book_version_presentations WHERE version_id = ?")

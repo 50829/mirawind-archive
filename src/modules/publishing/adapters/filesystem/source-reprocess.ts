@@ -79,7 +79,7 @@ function clonedCandidate(
     diagnostics: source.diagnostics,
     firstHeading:
       typeof evidence.firstHeading === "string" ? evidence.firstHeading : null,
-    id: createOpaqueId("candidate"),
+    id: createOpaqueId("importCandidate"),
     normalizedPath: source.normalizedPath,
     referencedResources,
     score: source.score,

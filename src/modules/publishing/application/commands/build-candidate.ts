@@ -7,6 +7,22 @@ export const candidateBuildIdentities = Object.freeze({
   renderer: "semantic-html-v5-katex-0.18.1",
 } as const);
 
+export const candidateBuildPhases = Object.freeze([
+  "compile_book",
+  "render_pages",
+  "build_search",
+  "finalize_candidate",
+] as const);
+
+export type CandidateBuildPhase = (typeof candidateBuildPhases)[number];
+
+export interface CandidateBuildStageUpdate {
+  readonly completed: number;
+  readonly phase: CandidateBuildPhase;
+  readonly total: number | null;
+  readonly unit: "items" | "pages" | "steps";
+}
+
 export interface BuildCandidateCommand {
   readonly bookId: number;
   readonly candidateId: string;
@@ -109,7 +125,7 @@ export function parseBuildCandidateCommand(
     typeof value.jobId !== "string" ||
     !isOpaqueId("job", value.jobId) ||
     typeof value.candidateId !== "string" ||
-    !isOpaqueId("candidate", value.candidateId) ||
+    !isOpaqueId("draftCandidate", value.candidateId) ||
     typeof sourceId !== "string" ||
     !isOpaqueId("source", sourceId) ||
     typeof value.versionId !== "string" ||

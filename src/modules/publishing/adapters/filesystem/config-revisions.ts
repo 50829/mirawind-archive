@@ -9,9 +9,9 @@ import {
   parsePrintedContentsAnalysisV2,
   type PrintedContentsAnalysisV2,
 } from "@/modules/publishing/core/preparation/printed-contents-analysis";
-import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { SafeApplicationError } from "@/domain/errors";
 import { createStrongEtag } from "@/http/cache/policies";
@@ -19,6 +19,7 @@ import {
   parseBookConfigYaml,
   validateBookConfig,
 } from "@/modules/publishing/core/publication/book-config-schema";
+import { validateConfiguredStructureHierarchy } from "@/modules/publishing/core/publication/validate-config";
 import {
   atomicWriteFile,
   resolveContainedPath,
@@ -28,22 +29,12 @@ import {
 const maximumConfigBytes = 4 * 1024 * 1024;
 const maximumAnalysisBytes = 4 * 1024 * 1024;
 
-interface ConfigStructureNode {
-  readonly block_id: string;
-}
-
 function dataRelativePath(root: string, target: string): string {
   const result = relative(root, target).split(sep).join("/");
   if (!result || result === ".." || result.startsWith("../")) {
     throw new Error("CONFIG_STORAGE_PATH_INVALID");
   }
   return result;
-}
-
-function structures(
-  config: Readonly<Record<string, unknown>>,
-): readonly ConfigStructureNode[] {
-  return config.structure as readonly ConfigStructureNode[];
 }
 
 function sourceConfig(
@@ -111,9 +102,13 @@ async function clonePrintedContentsAnalysis(input: {
 }
 
 export interface ConfigRevisionUpdate {
+  readonly candidate: {
+    readonly attemptId: string;
+    readonly jobId: string;
+    readonly state: "building";
+  };
   readonly config: Readonly<Record<string, unknown>>;
   readonly etag: string;
-  readonly jobId: string;
   readonly revision: number;
 }
 
@@ -331,28 +326,10 @@ export async function replaceDraftConfig(input: {
       409,
     );
   }
+  validateConfiguredStructureHierarchy(next);
   const source = new SourceRepository(input.database).requireSnapshot(
     book.draftSourceId,
   );
-  const sourceRoot = await resolveContainedPath(
-    input.layout.root,
-    source.sourceRootRelativePath,
-  );
-  const markdownPath = await resolveContainedPath(
-    sourceRoot,
-    source.mainMarkdownPath,
-  );
-  const markdownBytes = await readFile(markdownPath);
-  if (
-    createHash("sha256").update(markdownBytes).digest("hex") !==
-    source.mainMarkdownSha256
-  ) {
-    throw new SafeApplicationError(
-      "SOURCE_HASH_MISMATCH",
-      "The accepted source failed integrity validation.",
-      409,
-    );
-  }
   const yaml = stringify(next, { lineWidth: 0 });
   if (Buffer.byteLength(yaml, "utf8") > maximumConfigBytes) {
     throw new SafeApplicationError(
@@ -362,14 +339,6 @@ export async function replaceDraftConfig(input: {
     );
   }
   const yamlSha256 = createHash("sha256").update(yaml).digest("hex");
-  compileBook({
-    config: next,
-    configSha256: yamlSha256,
-    markdownBytes,
-    sourceHeadingBlockIds: structures(currentConfig).map(
-      (heading) => heading.block_id,
-    ),
-  });
   const revisionDirectory = resolve(
     input.layout.bookDirectory,
     String(input.bookId),
@@ -399,8 +368,9 @@ export async function replaceDraftConfig(input: {
       sourceId: book.draftSourceId,
       sourceSha256: source.mainMarkdownSha256,
     });
-    const selected = drafts.replaceConfigAndQueuePreview({
-      alias: typeof next.alias === "string" ? next.alias : null,
+    const selected = new DraftCandidateRepository(
+      input.database,
+    ).replaceConfigAndCreate({
       bookId: input.bookId,
       expectedRevision: current.revision,
       expectedYamlSha256: current.yamlSha256,
@@ -413,10 +383,14 @@ export async function replaceDraftConfig(input: {
       yamlSha256,
     });
     return Object.freeze({
+      candidate: Object.freeze({
+        attemptId: selected.attemptId,
+        jobId: selected.jobId,
+        state: "building" as const,
+      }),
       config: next,
       etag: createStrongEtag(yamlSha256),
-      jobId: selected.jobId,
-      revision: selected.config.revision,
+      revision: selected.configRevision,
     });
   } catch (error) {
     await rm(revisionDirectory, { force: true, recursive: true });

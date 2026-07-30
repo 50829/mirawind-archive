@@ -21,6 +21,8 @@ import type Database from "better-sqlite3";
 import { applyMigrations } from "../../src/platform/sqlite/migrate.js";
 import { loadMigrationManifest } from "../../src/platform/sqlite/migration-manifest.js";
 import { openDatabase } from "../../src/platform/sqlite/connection.js";
+import { CandidatePublicationRepository } from "../../src/modules/publishing/adapters/sqlite/candidate-publication.js";
+import { DraftCandidateRepository } from "../../src/modules/publishing/adapters/sqlite/draft-candidate-repository.js";
 import { DraftRepository } from "../../src/modules/publishing/adapters/sqlite/drafts.js";
 import { ImportRepository } from "../../src/modules/publishing/adapters/sqlite/imports.js";
 import {
@@ -28,7 +30,11 @@ import {
   type JobRecord,
 } from "../../src/modules/publishing/adapters/sqlite/jobs.js";
 import { ImportUploadService } from "../../src/modules/publishing/adapters/filesystem/import-upload.js";
-import { m1ImportExpiryMs } from "../../src/modules/publishing/application/public.js";
+import {
+  m1ImportExpiryMs,
+  m1PublishPolicy,
+  publishCandidate,
+} from "../../src/modules/publishing/application/public.js";
 import { createStorageLayout } from "../../src/platform/filesystem/layout.js";
 import { parsePipelineProfileArtifact } from "../../src/observability/pipeline-profile.js";
 import {
@@ -63,6 +69,12 @@ export interface BuildArguments {
   readonly fixtureIds?: readonly string[];
   readonly includeStress?: boolean;
   readonly output: string | null;
+  readonly onResult?: (input: {
+    readonly completed: number;
+    readonly fixtureId: string;
+    readonly status: string;
+    readonly total: number;
+  }) => void;
   readonly profileDirectory?: string | null;
   readonly realDirectory: string | null;
   readonly realManifest: string | null;
@@ -222,9 +234,35 @@ export function parseBuildArguments(
 }
 
 function safeFailureCode(error: unknown): string {
+  if (error && typeof error === "object") {
+    const code = (error as Readonly<Record<string, unknown>>).code;
+    if (typeof code === "string" && /^[A-Z][A-Z0-9_]{2,79}$/u.test(code)) {
+      return code;
+    }
+  }
+  if (error instanceof RangeError) return "CANDIDATE_RANGE_LIMIT_EXCEEDED";
   const message = error instanceof Error ? error.message : "";
   const match = /\b[A-Z][A-Z0-9_]{2,79}\b/u.exec(message);
   return match?.[0] ?? "BENCHMARK_FIXTURE_FAILED";
+}
+
+function safeFailureEvidence(
+  error: unknown,
+): Readonly<Record<string, unknown>> {
+  if (!error || typeof error !== "object") return Object.freeze({});
+  const diagnostics = (error as Readonly<Record<string, unknown>>).diagnostics;
+  if (!Array.isArray(diagnostics)) return Object.freeze({});
+  const codes = diagnostics.flatMap((diagnostic) => {
+    if (!diagnostic || typeof diagnostic !== "object") return [];
+    const code = (diagnostic as Readonly<Record<string, unknown>>).code;
+    return typeof code === "string" && /^[A-Z][A-Z0-9_]{2,79}$/u.test(code)
+      ? [code]
+      : [];
+  });
+  return Object.freeze({
+    diagnostic_codes: Object.freeze([...new Set(codes)].slice(0, 20)),
+    diagnostic_count: diagnostics.length,
+  });
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -610,50 +648,45 @@ async function benchmarkFixture(
     if (imported.bookId === null) throw new Error("BENCHMARK_BOOK_ID_MISSING");
 
     const drafts = new DraftRepository(database);
-    const book = await waitFor(
+    const candidates = new DraftCandidateRepository(database);
+    const candidate = await waitFor(
       () => {
-        const current = drafts.requireBook(imported.bookId as number);
+        const current = candidates.findCurrent(imported.bookId as number);
+        if (current?.state === "ready" && current.versionId) return current;
         if (
-          current.draftConfigRevision !== null &&
-          current.readyPreviewRevision === current.draftConfigRevision &&
-          drafts.findPreview(current.id, current.draftConfigRevision)?.state ===
-            "ready"
-        ) {
-          return current;
-        }
-        const latest = jobs.latestForImport(imported.id);
+          current &&
+          ["failed", "canceled", "interrupted"].includes(current.state)
+        ) throw new Error(current.safeErrorCode ?? "BENCHMARK_CANDIDATE_FAILED");
+        const candidateJob = current ? jobs.get(current.jobId) : null;
         if (
-          latest &&
-          ["failed", "canceled", "interrupted"].includes(latest.state)
-        ) {
-          throw terminalFailure(latest);
-        }
+          candidateJob &&
+          ["failed", "canceled", "interrupted"].includes(candidateJob.state)
+        ) throw terminalFailure(candidateJob);
         return null;
       },
       deadline,
-      `fixture ${fixture.id} preview`,
+      `fixture ${fixture.id} candidate`,
     );
-    if (!book.draftConfigRevision || !book.draftSourceId) {
+    const book = drafts.requireBook(imported.bookId);
+    if (
+      !book.draftConfigRevision ||
+      !book.draftSourceId ||
+      !candidate.versionId
+    ) {
       throw new Error("BENCHMARK_DRAFT_CAPTURE_MISSING");
     }
     const previewReadyAt = performance.now();
 
     const publishRequestedAt = performance.now();
-    const publish = jobs.create({
+    await publishCandidate({
+      actorUserId: null,
       bookId: book.id,
-      capturedConfigRevision: book.draftConfigRevision,
-      ...(book.currentVersionId
-        ? { capturedCurrentVersionId: book.currentVersionId }
-        : {}),
-      capturedSourceId: book.draftSourceId,
-      idempotency: {
-        key: idempotencyKey("benchmark-publish", fixture),
-        operation: "benchmark.publish",
-      },
-      kind: "build_publish",
+      expectedConfigRevision: book.draftConfigRevision,
+      expectedVersionId: candidate.versionId,
       nowMs: Date.now(),
+      policy: m1PublishPolicy,
+      publication: new CandidatePublicationRepository(database),
     });
-    await waitForJob(jobs, publish.id, deadline);
     const current = drafts.requireBook(book.id);
     if (!current.currentVersionId || current.visibility !== "public") {
       throw new Error("BENCHMARK_PUBLICATION_MISSING");
@@ -759,10 +792,13 @@ async function benchmarkFixture(
   } catch (error) {
     const failedJob = new JobRepository(database)
       .listRecent(100)
-      .find((job) => ["failed", "canceled", "interrupted"].includes(job.state));
+      .find((job) =>
+        ["failed", "canceled", "interrupted"].includes(job.state),
+      );
     return Object.freeze({
       error_class: failedJob?.errorClass ?? null,
       error_code: failedJob?.errorCode ?? safeFailureCode(error),
+      ...(failedJob ? {} : safeFailureEvidence(error)),
       failed_job_kind: failedJob?.kind ?? null,
       failed_job_phase: failedJob?.phase ?? null,
       fixture_id: fixture.id,
@@ -905,22 +941,34 @@ export async function runBuildBenchmarks(
           });
           if (result.status !== "passed") failed = true;
           results.push(result);
+          input.onResult?.({
+            completed: results.length,
+            fixtureId: fixture.id,
+            status: String(result.status),
+            total: selected.length * repetitions,
+          });
         } catch (error) {
           failed = true;
-          results.push(
-            Object.freeze({
-              error_code: safeFailureCode(error),
-              fixture_id: fixture.id,
-              fixture_type: fixture.type,
-              mineru_version: fixture.mineruVersion,
-              repetition,
-              status: "failed",
-            }),
-          );
+          const failure = Object.freeze({
+            error_code: safeFailureCode(error),
+            fixture_id: fixture.id,
+            fixture_type: fixture.type,
+            mineru_version: fixture.mineruVersion,
+            repetition,
+            status: "failed",
+          });
+          results.push(failure);
+          input.onResult?.({
+            completed: results.length,
+            fixtureId: fixture.id,
+            status: failure.status,
+            total: selected.length * repetitions,
+          });
         }
       }
     }
     return Object.freeze({
+      build_mode: "candidate",
       captured_at: new Date().toISOString(),
       real_fixture_gate: input.realDirectory
         ? "required_and_verified"

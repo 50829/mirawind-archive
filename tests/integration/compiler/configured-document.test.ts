@@ -113,9 +113,9 @@ describe("configured document preparation", () => {
     expect(configured.pages).toHaveLength(2);
     expect(configured.identity).toEqual(repeated.identity);
     expect(configured.identity).toMatchObject({
-      compiler_version: "compiler-v4",
+      compiler_version: "compiler-v5",
       config_sha256: configSha256,
-      renderer_version: "semantic-html-v4-katex-0.18.1",
+      renderer_version: "semantic-html-v5-katex-0.18.1",
       semantic_digest: expect.stringMatching(/^[a-f0-9]{64}$/u),
       source_sha256: sourceSha256,
     });

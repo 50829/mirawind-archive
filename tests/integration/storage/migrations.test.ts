@@ -119,7 +119,7 @@ describe("checksummed migrations", () => {
         "books",
         "source_snapshots",
         "config_revisions",
-        "draft_previews",
+        "draft_candidates",
         "original_files",
         "imports",
         "import_candidates",

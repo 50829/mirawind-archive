@@ -7,6 +7,7 @@ import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
 import { printedContentsAnalysisIdentity } from "@/modules/publishing/core/preparation/printed-contents-analysis";
+import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
@@ -294,8 +295,8 @@ describe("atomic draft configuration revisions", () => {
       expect(result.etag).not.toBe(setup.currentEtag);
       const drafts = new DraftRepository(database);
       expect(drafts.requireBook(setup.book.id)).toMatchObject({
+        currentCandidateId: result.candidate.attemptId,
         draftConfigRevision: 2,
-        readyPreviewRevision: null,
         title: "Edited",
       });
       const revision = drafts.requireConfig(setup.book.id, 2);
@@ -324,14 +325,19 @@ describe("atomic draft configuration revisions", () => {
         (await stat(resolve(dataRoot.layout.root, revision.yamlRelativePath)))
           .mode & 0o777,
       ).toBe(0o400);
-      expect(new JobRepository(database).get(result.jobId)).toMatchObject({
+      expect(
+        new JobRepository(database).get(result.candidate.jobId),
+      ).toMatchObject({
         capturedConfigRevision: 2,
         capturedSourceId: drafts.requireBook(setup.book.id).draftSourceId,
-        kind: "build_preview",
+        kind: "build_candidate",
         state: "queued",
       });
-      expect(drafts.requirePreview(setup.book.id, 2)).toMatchObject({
-        createdByJobId: result.jobId,
+      expect(
+        new DraftCandidateRepository(database).findCurrent(setup.book.id),
+      ).toMatchObject({
+        attemptId: result.candidate.attemptId,
+        jobId: result.candidate.jobId,
         state: "building",
       });
       const nextAnalysisPath = resolve(
