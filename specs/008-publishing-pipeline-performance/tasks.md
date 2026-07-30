@@ -317,7 +317,7 @@ margin, and there were no failures or correctness differences, so D-118 triggere
 runs. Raw evidence is under ignored `.cache/008-publishing-performance/current-b-15-fixed/`; the
 method and bounded result are recorded in `docs/audits/008-paired-performance.md`.
 
-- [ ] T095 After the last source change, run the standard format, lint/architecture, typecheck, full
+- [x] T095 After the last source change, run the standard format, lint/architecture, typecheck, full
       Vitest, E2E and build gates once; reuse the T091 stress and T092 anchored-comparison artifacts instead
       of rerunning those workloads
 
@@ -327,8 +327,12 @@ Playwright suite with 16 passing scenarios plus the conditional real-fixture sce
 E2E pass used port 4322 because a local service already owned 4321. It also removed assertions for
 the deleted asynchronous publication-result UI and the obsolete expectation that publishing
 recompiled a corrupted source; recovery and publication transaction suites retain the actual
-old-version and pointer invariants. T098-T115 changed product source after this checkpoint, so the
-gate must run again after the final source change.
+old-version and pointer invariants. After the final source change, format, lint and the 236-file
+architecture graph passed; typecheck reported zero diagnostics; all 116 Vitest files passed with
+641 tests; the production Astro/process build passed; and the complete Playwright suite passed with
+16 scenarios plus the conditional real-fixture scenario skipped. The final E2E pass again used port
+4322 because a local service owned 4321. T091 stress and T092 anchored-comparison artifacts were
+reused as required.
 
 - [x] T096 Update only behaviorally affected product, decision, operations, audit and 008 artifacts
 
@@ -338,14 +342,19 @@ maintenance work instead of a deleted background publication job. D-117 and the 
 already describe synchronous candidate promotion; historical superseded identity decisions remain
 unchanged.
 
-- [ ] T097 Run Spec Kit analyze, resolve every CRITICAL/HIGH inconsistency, then run converge and append any real residual work to `specs/008-publishing-pipeline-performance/tasks.md`
+- [x] T097 Run Spec Kit analyze, resolve every CRITICAL/HIGH inconsistency, then run converge and append any real residual work to `specs/008-publishing-pipeline-performance/tasks.md`
 
 The prior Spec Kit checkpoint covered all requirements, measurable outcomes, acceptance scenarios and current
 tasks with no CRITICAL/HIGH inconsistency or constitution conflict. The only LOW evidence drift was
 the pre-T098 architecture/test count above, which is now synchronized. Convergence found no new
 implementation gap: final frozen-baseline evidence is already represented by T092, so
 no duplicate convergence task was appended. T098-T115 changed product source after that checkpoint;
-analyze and converge must run again after the final source change.
+The final analyze checked 15 functional requirements, 9 non-functional requirements, 10 measurable
+outcomes, 14 acceptance scenarios and 107 tasks with complete coverage and no inconsistency or
+constitution finding at any severity. Final convergence checked the current implementation against
+the same intent plus the six delivery-phase decisions and found zero missing, partial,
+contradictory or unrequested gaps. It left `tasks.md` unchanged apart from completing this existing
+task; no duplicate convergence phase was appended.
 
 **Checkpoint**: Commit evidence as `test(publishing): close recovery and performance gates`. The
 feature is complete only when the formal result satisfies every threshold and Spec Kit reports no
