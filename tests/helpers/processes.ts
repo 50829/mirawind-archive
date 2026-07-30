@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { waitForHttp } from "./http";
 
-export interface ManagedTestProcess {
+interface ManagedTestProcess {
   readonly child: ChildProcess;
   readonly output: () => string;
   readonly stop: () => Promise<void>;
@@ -20,7 +20,7 @@ export interface ManagedTestProcess {
   ) => Promise<string>;
 }
 
-export interface RuntimeProcessOptions {
+interface RuntimeProcessOptions {
   readonly dataRoot: string;
   readonly environment?: Readonly<Record<string, string>>;
   readonly publicOrigin: string;

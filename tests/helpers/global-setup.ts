@@ -262,14 +262,6 @@ async function seedPublishedLibraryBookInIsolatedRuntime(): Promise<void> {
   );
 }
 
-export async function ensureTestDataRoot(
-  relativePath = "test-results/runtime-data",
-): Promise<string> {
-  const dataRoot = resolve(relativePath);
-  await mkdir(dataRoot, { recursive: true, mode: 0o700 });
-  return dataRoot;
-}
-
 async function removeLockedE2eTree(path: string): Promise<void> {
   const expectedParent = resolve(".cache");
   if (dirname(path) !== expectedParent) {

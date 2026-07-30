@@ -1,4 +1,4 @@
-export interface TestHttpRequestOptions extends RequestInit {
+interface TestHttpRequestOptions extends RequestInit {
   readonly timeoutMs?: number;
 }
 
