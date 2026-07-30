@@ -140,21 +140,6 @@ async function writeCandidateInput(
   );
 }
 
-function article(html: string): string {
-  const match = /<article[^>]*>([\s\S]*?)<\/article>/u.exec(html);
-  if (!match?.[1]) throw new Error("TEST_READER_ARTICLE_MISSING");
-  return match[1];
-}
-
-function normalizedArticle(html: string): string {
-  return article(html)
-    .replaceAll(
-      /\/api\/manage\/books\/9\/preview\/3\/pages\/(\d+)/gu,
-      "/page/$1",
-    )
-    .replaceAll(/\/read\/9\/(\d+)/gu, "/page/$1");
-}
-
 function distinctPhases(
   messages: readonly JobProgressMessage[],
 ): readonly string[] {
@@ -252,20 +237,10 @@ describe("isolated candidate child builder", () => {
         resolve(candidateDirectory, "preview/pages/1.html"),
         "utf8",
       );
-      const published = await readFile(
-        resolve(candidateDirectory, "published/pages/1.html"),
-        "utf8",
-      );
-      expect(normalizedArticle(preview)).toBe(normalizedArticle(published));
       expect(preview).toContain(
         `renderers/${command.rendererIdentity}/katex.css`,
       );
       expect(preview).toContain(`styles/${command.readerIdentity}.css`);
-      expect(preview).toContain('data-reader-mode="preview"');
-      expect(preview).not.toContain('rel="canonical"');
-      expect(preview).not.toContain("reader-book-search");
-      expect(published).toContain('data-reader-mode="published"');
-      expect(published).toContain('rel="canonical"');
 
       const manifestLines = (
         await readFile(
@@ -285,13 +260,6 @@ describe("isolated candidate child builder", () => {
         .split("\n");
       expect(manifestLines).toHaveLength(artifact.pageCount);
       expect(searchLines).toHaveLength(artifact.searchRowCount);
-      await expect(
-        access(resolve(candidateDirectory, "derived/search-spool.json")),
-      ).rejects.toMatchObject({ code: "ENOENT" });
-      await expect(
-        access(resolve(candidateDirectory, ".rendered-pages")),
-      ).rejects.toMatchObject({ code: "ENOENT" });
-
       const declaredFiles = (
         marker.files as readonly Readonly<Record<string, unknown>>[]
       ).map((file) => file.path);

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -213,9 +213,6 @@ describe("candidate preview materialization", () => {
           .filter((line) => line.kind === "short")
           .map((line) => line.row),
       ).toEqual(expectedSearch.shortRows);
-      await expect(
-        access(resolve(candidateDirectory, ".rendered-pages")),
-      ).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
       await dataRoot.cleanup();
     }

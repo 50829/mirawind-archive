@@ -81,8 +81,11 @@ describe("same-version derived-data reproducibility", () => {
       };
     };
 
-    expect(create()).toEqual(create());
-    expect(create().spool.ftsRows[0]?.title).toBe("Café");
-    expect(create().spool.shortRows[1]?.normalizedText).toBe("Áuthor");
+    const first = create();
+    const second = create();
+
+    expect(first).toEqual(second);
+    expect(first.spool.ftsRows[0]?.title).toBe("Café");
+    expect(first.spool.shortRows[1]?.normalizedText).toBe("Áuthor");
   });
 });

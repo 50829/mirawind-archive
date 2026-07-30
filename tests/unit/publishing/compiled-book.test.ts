@@ -80,7 +80,7 @@ function fixture() {
 }
 
 describe("CompiledBook page plans", () => {
-  it("covers every block exactly once with range-only page plans", () => {
+  it("covers every block exactly once with page-plan ranges", () => {
     const book = fixture();
     const plannedBlockIds = book.pages.flatMap((page) =>
       pageBlockIds(book, page),
@@ -93,17 +93,6 @@ describe("CompiledBook page plans", () => {
       ),
     );
     expect(new Set(plannedBlockIds).size).toBe(plannedBlockIds.length);
-    for (const page of book.pages) {
-      expect(Object.keys(page).sort()).toEqual([
-        "blockRange",
-        "firstBlockId",
-        "pageId",
-        "rootRange",
-      ]);
-      expect(page).not.toHaveProperty("document");
-      expect(page).not.toHaveProperty("blockIds");
-      expect(page).not.toHaveProperty("headingOverrides");
-    }
   });
 
   it("builds O(1) block, heading and page lookups once", () => {

@@ -10,6 +10,22 @@ let jobId;
 
 function event(name) {
   appendFileSync(eventsPath, `${name}\n`, { encoding: "utf8" });
+  progress();
+}
+
+function progress() {
+  process.send?.({
+    jobId,
+    phase: "reconcile_storage",
+    progress: {
+      completed: 0,
+      processed_bytes: null,
+      total: 1,
+      unit: "steps",
+    },
+    protocolVersion: 3,
+    type: "progress",
+  });
 }
 
 process.on("SIGTERM", () => event("sigterm"));
@@ -26,18 +42,7 @@ process.on("message", (message) => {
       JSON.stringify({ child: process.pid, grandchild: grandchild.pid }),
       { encoding: "utf8" },
     );
-    process.send?.({
-      jobId,
-      phase: "reconcile_storage",
-      progress: {
-        completed: 0,
-        processed_bytes: null,
-        total: 1,
-        unit: "steps",
-      },
-      protocolVersion: 3,
-      type: "progress",
-    });
+    progress();
     return;
   }
   if (message?.type === "cancel" && message.jobId === jobId) {

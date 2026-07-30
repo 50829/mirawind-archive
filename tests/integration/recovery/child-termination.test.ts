@@ -80,11 +80,18 @@ describe("job child termination", () => {
       const readyPromise = new Promise<void>((resolve) => {
         ready = resolve;
       });
+      let terminationHandled!: () => void;
+      const terminationHandledPromise = new Promise<void>((resolve) => {
+        terminationHandled = resolve;
+      });
+      let progressCount = 0;
       let settled = false;
       const executionPromise = runJobChild(input("cancel"), {
         childModulePath: fixturePath,
-        onProgress(progress) {
-          if (progress.phase === "reconcile_storage") ready();
+        onProgress() {
+          progressCount += 1;
+          if (progressCount === 1) ready();
+          if (progressCount === 3) terminationHandled();
         },
         signal: controller.signal,
         storageRoot: root,
@@ -97,6 +104,14 @@ describe("job child termination", () => {
       await readyPromise;
       vi.useFakeTimers();
       controller.abort();
+      await terminationHandledPromise;
+
+      const events = await readFile(
+        join(root, "termination-events.txt"),
+        "utf8",
+      );
+      expect(events).toContain("cancel");
+      expect(events).toContain("sigterm");
 
       await vi.advanceTimersByTimeAsync(79);
       expect(settled).toBe(false);
@@ -105,12 +120,6 @@ describe("job child termination", () => {
 
       const execution = await executionPromise;
       expect(execution.signal).toBe("SIGKILL");
-      const events = await readFile(
-        join(root, "termination-events.txt"),
-        "utf8",
-      );
-      expect(events).toContain("cancel");
-      expect(events).toContain("sigterm");
       const pids = JSON.parse(
         await readFile(join(root, "termination-pids.json"), "utf8"),
       ) as { child: number; grandchild: number };
