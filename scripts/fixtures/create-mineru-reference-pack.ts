@@ -483,7 +483,7 @@ async function main(): Promise<void> {
   );
   const fixture = manifest.fixtures.find((item) => item.id === fixtureId);
   if (!fixture) throw new Error("The fixture is not registered");
-  const verified = await verifyRealMineruFixtures(root);
+  const verified = await verifyRealMineruFixtures(root, undefined, [fixtureId]);
   if (!verified.some((item) => item.id === fixtureId)) {
     throw new Error("The fixture failed verification");
   }

@@ -68,6 +68,7 @@ function positiveInteger(value: unknown, label: string): number {
 }
 
 const maximumSupportedZipBytes = 2 * 1024 * 1024 * 1024;
+const requiredFullFixtureCount = 15;
 
 function parseFixture(value: unknown, index: number): RealFixture {
   const label = `fixtures[${index}]`;
@@ -249,6 +250,15 @@ export async function verifyRealMineruFixtures(
   );
 
   const selectedIds = fixtureIds ? new Set(fixtureIds) : undefined;
+  const usesFullManifest =
+    manifestInput === undefined || manifestInput === "real-fixtures.json";
+  if (
+    !selectedIds &&
+    usesFullManifest &&
+    manifest.fixtures.length !== requiredFullFixtureCount
+  ) {
+    throw new Error("REAL_FIXTURE_SET_MUST_CONTAIN_FIFTEEN_FILES");
+  }
   if (selectedIds && selectedIds.size !== fixtureIds?.length) {
     throw new Error("Selected real fixture IDs must be unique");
   }

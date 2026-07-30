@@ -62,7 +62,13 @@ describe("real MinerU fixture verifier", () => {
       JSON.stringify({ fixtures, schema_version: 1 }),
     );
 
-    await expect(verifyRealMineruFixtures(root)).resolves.toEqual([
+    await expect(
+      verifyRealMineruFixtures(
+        root,
+        undefined,
+        fixtures.map((fixture) => fixture.id),
+      ),
+    ).resolves.toEqual([
       expect.objectContaining({
         fileName: "real-mineru-a7f31c.zip",
         id: "real-mineru-a7f31c",
@@ -71,6 +77,28 @@ describe("real MinerU fixture verifier", () => {
       expect.objectContaining({ id: "real-mineru-b9d204" }),
       expect.objectContaining({ id: "real-mineru-c3e591" }),
     ]);
+  });
+
+  it("requires all fifteen fixtures when no subset is selected", async () => {
+    const root = await mkdtemp(join(tmpdir(), "real-mineru-verifier-"));
+    roots.push(root);
+    const first = fixture("real-mineru-a7f31c", "first");
+    await writeFile(join(root, first.file_name), "first");
+    await writeFile(
+      join(root, "real-fixtures.json"),
+      JSON.stringify({ fixtures: [first], schema_version: 1 }),
+    );
+    await writeFile(
+      join(root, "performance-fixtures.json"),
+      JSON.stringify({ fixtures: [first], schema_version: 1 }),
+    );
+
+    await expect(verifyRealMineruFixtures(root)).rejects.toThrow(
+      "REAL_FIXTURE_SET_MUST_CONTAIN_FIFTEEN_FILES",
+    );
+    await expect(
+      verifyRealMineruFixtures(root, "performance-fixtures.json"),
+    ).resolves.toEqual([expect.objectContaining({ id: first.id })]);
   });
 
   it("verifies only the explicitly selected fixture set", async () => {
@@ -106,15 +134,25 @@ describe("real MinerU fixture verifier", () => {
       join(root, "real-fixtures.json"),
       JSON.stringify({ fixtures: [first, second, third], schema_version: 1 }),
     );
-    await expect(verifyRealMineruFixtures(root)).rejects.toThrow(
-      /SHA-256 does not match/,
-    );
+    await expect(
+      verifyRealMineruFixtures(root, undefined, [
+        first.id,
+        second.id,
+        third.id,
+      ]),
+    ).rejects.toThrow(/SHA-256 does not match/);
 
     await writeFile(join(root, first.file_name), "expected");
     await writeFile(join(root, "outside.zip"), "second");
     await rm(join(root, second.file_name));
     await symlink(join(root, "outside.zip"), join(root, second.file_name));
-    await expect(verifyRealMineruFixtures(root)).rejects.toThrow(/non-symlink/);
+    await expect(
+      verifyRealMineruFixtures(root, undefined, [
+        first.id,
+        second.id,
+        third.id,
+      ]),
+    ).rejects.toThrow(/non-symlink/);
 
     await expect(
       Promise.resolve().then(() =>

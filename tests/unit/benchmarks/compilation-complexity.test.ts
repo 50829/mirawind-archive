@@ -21,11 +21,11 @@ describe("compilation complexity benchmark", () => {
   it("evaluates the fourfold source-region scale gate", () => {
     const measurement = (
       root_count: number,
-      median_ms: number,
+      median_cpu_ms: number,
     ): ComplexityMeasurement => ({
       active_roots: root_count * 0.75,
       excluded_blocks: root_count * 0.25,
-      median_ms,
+      median_cpu_ms,
       repetitions: 5,
       root_count,
     });

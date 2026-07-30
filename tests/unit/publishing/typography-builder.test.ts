@@ -1,5 +1,3 @@
-import { performance } from "node:perf_hooks";
-
 import { describe, expect, it } from "vitest";
 
 import { preprocessMarkdownTypography } from "@/modules/publishing/core/preparation/typography";
@@ -19,9 +17,10 @@ function measureParagraphs(paragraphCount: number): number {
   const durations: number[] = [];
   preprocessMarkdownTypography(source, "zh-smart-v1");
   for (let repetition = 0; repetition < 3; repetition += 1) {
-    const startedAt = performance.now();
+    const startedAt = process.cpuUsage();
     const result = preprocessMarkdownTypography(source, "zh-smart-v1");
-    durations.push(performance.now() - startedAt);
+    const elapsed = process.cpuUsage(startedAt);
+    durations.push((elapsed.system + elapsed.user) / 1_000);
     expect(result.provenance.spaces_normalized).toBe(paragraphCount);
     expect(result.provenance.punctuation_converted).toBe(paragraphCount * 2);
   }

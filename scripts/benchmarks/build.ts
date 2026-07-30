@@ -51,7 +51,7 @@ const workerEntry = join(repositoryRoot, "dist/processes/worker/index.js");
 const pollIntervalMs = 100;
 const perFixtureTimeoutMs = 30 * 60 * 1_000;
 
-interface BenchmarkFixture {
+export interface BenchmarkFixture {
   readonly id: string;
   readonly mineruVersion: "3.4.4" | "synthetic";
   readonly pageCountRange: {
@@ -307,8 +307,18 @@ async function waitFor<T>(
   );
 }
 
-function terminalFailure(job: JobRecord): Error {
-  return new Error(job.errorCode ?? "BENCHMARK_JOB_FAILED");
+class BenchmarkJobFailure extends Error {
+  readonly job: JobRecord;
+
+  constructor(job: JobRecord) {
+    super(job.errorCode ?? "BENCHMARK_JOB_FAILED");
+    this.name = "BenchmarkJobFailure";
+    this.job = job;
+  }
+}
+
+function terminalFailure(job: JobRecord): BenchmarkJobFailure {
+  return new BenchmarkJobFailure(job);
 }
 
 async function waitForJob(
@@ -794,9 +804,8 @@ async function benchmarkFixture(
       version_id: current.currentVersionId,
     });
   } catch (error) {
-    const failedJob = new JobRepository(database)
-      .listRecent(100)
-      .find((job) => ["failed", "canceled", "interrupted"].includes(job.state));
+    const failedJob =
+      error instanceof BenchmarkJobFailure ? error.job : undefined;
     return Object.freeze({
       error_class: failedJob?.errorClass ?? null,
       error_code: failedJob?.errorCode ?? safeFailureCode(error),
@@ -833,26 +842,20 @@ function realFixture(
   });
 }
 
-async function fixtures(
+export async function resolveBenchmarkFixtures(
   input: BuildArguments,
   temporaryDirectory: string,
 ): Promise<readonly BenchmarkFixture[]> {
   const result: BenchmarkFixture[] = [];
   if (input.realDirectory) {
+    const selectedIds = input.fixtureIds ?? [];
     const verified = await verifyRealMineruFixtures(
       input.realDirectory,
       input.realManifest ?? undefined,
+      selectedIds.length > 0 ? selectedIds : undefined,
     );
-    const selectedIds = new Set(input.fixtureIds ?? []);
-    const selectedReal =
-      selectedIds.size === 0
-        ? verified
-        : verified.filter((fixture) => selectedIds.has(fixture.id));
-    if (selectedIds.size > 0 && selectedReal.length !== selectedIds.size) {
-      throw new Error("BENCHMARK_FIXTURE_ID_UNKNOWN");
-    }
     result.push(
-      ...selectedReal.map((fixture) =>
+      ...verified.map((fixture) =>
         realFixture(input.realDirectory as string, fixture),
       ),
     );
@@ -897,7 +900,7 @@ export async function runBuildBenchmarks(
     join(tmpdir(), "mirawind-benchmark-fixtures-"),
   );
   try {
-    const selected = await fixtures(input, temporaryDirectory);
+    const selected = await resolveBenchmarkFixtures(input, temporaryDirectory);
     const results: Readonly<Record<string, unknown>>[] = [];
     let failed = false;
     const repetitions = input.repetitions ?? 1;

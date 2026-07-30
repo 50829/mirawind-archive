@@ -162,6 +162,23 @@ describe("MinerU reference v2 comparator", () => {
     });
   });
 
+  it("reports observed fixture and archive binding mismatches", () => {
+    const expected = reference();
+    const result = compareMineruReferenceV2(expected, {
+      ...observed(expected),
+      archive_sha256: hash("another archive"),
+      fixture_id: "real-mineru-b9d204",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        { code: "FIXTURE_ID_MISMATCH", path: "fixture" },
+        { code: "ARCHIVE_HASH_MISMATCH", path: "archive" },
+      ]),
+    );
+  });
+
   it("reports every structural surface without copying titles into issues", () => {
     const expected = reference();
     const actual = observed(expected);

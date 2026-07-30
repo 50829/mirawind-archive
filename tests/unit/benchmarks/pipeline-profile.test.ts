@@ -1,7 +1,42 @@
-import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { parseBuildArguments } from "../../../scripts/benchmarks/build.js";
+import { afterEach, describe, expect, it } from "vitest";
+
+import {
+  parseBuildArguments,
+  resolveBenchmarkFixtures,
+} from "../../../scripts/benchmarks/build.js";
 import { parsePipelineProfileArguments } from "../../../scripts/benchmarks/pipeline-profile.js";
+
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
+  );
+});
+
+function realFixture(id: string, value: string) {
+  return {
+    file_name: `${id}.zip`,
+    id,
+    mineru_version: "3.4.4",
+    page_count_range: { maximum: 600, minimum: 200 },
+    sha256: createHash("sha256").update(value).digest("hex"),
+    size_bytes: Buffer.byteLength(value),
+    usage_scope: {
+      designated_by: "administrator",
+      local_compatibility_testing: true,
+      local_performance_testing: true,
+      public_ci: false,
+      redistribution: false,
+      repository_storage: false,
+    },
+  } as const;
+}
 
 describe("pipeline profile benchmark arguments", () => {
   it("selects opaque fixtures, repetitions and no stress by default", () => {
@@ -28,6 +63,42 @@ describe("pipeline profile benchmark arguments", () => {
     const parsed = parseBuildArguments([]);
     expect(parsed.includeStress).toBe(true);
     expect(parsed.repetitions).toBe(1);
+  });
+
+  it("resolves a selected profile without hashing unselected archives", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pipeline-profile-fixtures-"));
+    roots.push(root);
+    const temporaryDirectory = join(root, "temporary");
+    const first = realFixture("real-mineru-a7f31c", "selected");
+    const second = realFixture("real-mineru-b9d204", "expected-unselected");
+    await Promise.all([
+      writeFile(join(root, first.file_name), "selected"),
+      writeFile(join(root, second.file_name), "altered-unselected"),
+      writeFile(
+        join(root, "real-fixtures.json"),
+        JSON.stringify({ fixtures: [first, second], schema_version: 1 }),
+      ),
+    ]);
+
+    await expect(
+      resolveBenchmarkFixtures(
+        {
+          fixtureIds: [first.id],
+          includeStress: false,
+          output: null,
+          realDirectory: root,
+          realManifest: null,
+          retainDirectory: null,
+          stress: { blocksPerPage: 1, imageCount: 0, pages: 1 },
+        },
+        temporaryDirectory,
+      ),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: first.id,
+        path: join(root, first.file_name),
+      }),
+    ]);
   });
 
   it("rejects duplicate fixture IDs and missing output roots", () => {

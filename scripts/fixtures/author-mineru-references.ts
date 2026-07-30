@@ -1144,13 +1144,17 @@ export async function createRealMineruTranscriptTemplates(input: {
       await readFile(join(root, "real-fixtures.json"), "utf8"),
     ) as unknown,
   );
-  await verifyRealMineruFixtures(root);
   const registered = new Set(manifest.fixtures.map((fixture) => fixture.id));
   if (
     decisions.fixtures.some((decision) => !registered.has(decision.fixture_id))
   ) {
     throw new Error("VISION_REFERENCE_FIXTURE_NOT_REGISTERED");
   }
+  await verifyRealMineruFixtures(
+    root,
+    undefined,
+    decisions.fixtures.map((decision) => decision.fixture_id),
+  );
   const transcriptDirectory = resolve(input.transcriptDirectory);
   await mkdir(transcriptDirectory, { mode: 0o700, recursive: true });
   const summaries = [];
@@ -1232,7 +1236,6 @@ export async function reauthorRealMineruReferences(input: {
       await readFile(join(root, "real-fixtures.json"), "utf8"),
     ) as unknown,
   );
-  await verifyRealMineruFixtures(root);
   if (manifest.fixtures.length !== 15) {
     throw new Error("VISION_REFERENCE_SET_MUST_CONTAIN_FIFTEEN_FIXTURES");
   }
@@ -1245,6 +1248,11 @@ export async function reauthorRealMineruReferences(input: {
   if (fixtures.length < 1) {
     throw new Error("VISION_REFERENCE_FIXTURE_NOT_REGISTERED");
   }
+  await verifyRealMineruFixtures(
+    root,
+    undefined,
+    fixtures.map((fixture) => fixture.id),
+  );
   for (const fixture of fixtures) {
     const pack = JSON.parse(
       await readFile(

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { MineruReferencePack } from "../../../scripts/fixtures/create-mineru-reference-pack";
 import {
   observeRealMineruFixture,
+  observeRealMineruSet,
   stripPageLabel,
 } from "../../../scripts/fixtures/observe-mineru-references";
 import { buildZip } from "../../../scripts/fixtures/zip-builder";
@@ -87,6 +88,53 @@ function packFor(source: string, archiveSha256: string): MineruReferencePack {
 }
 
 describe("real MinerU production observer", () => {
+  it("rejects a reference pack bound to another archive", async () => {
+    const root = await mkdtemp(join(tmpdir(), "reference-observer-set-test-"));
+    roots.push(root);
+    const fixtureId = "real-mineru-a7f31c";
+    const archive = Buffer.from("fixture archive", "utf8");
+    const archiveSha256 = hash(archive);
+    const fixture = {
+      file_name: `${fixtureId}.zip`,
+      id: fixtureId,
+      mineru_version: "3.4.4",
+      page_count_range: { maximum: 12, minimum: 12 },
+      sha256: archiveSha256,
+      size_bytes: archive.byteLength,
+      usage_scope: {
+        designated_by: "administrator",
+        local_compatibility_testing: true,
+        local_performance_testing: true,
+        public_ci: false,
+        redistribution: false,
+        repository_storage: false,
+      },
+    } as const;
+    await mkdir(join(root, "reference-packs", fixtureId), { recursive: true });
+    await Promise.all([
+      writeFile(join(root, fixture.file_name), archive),
+      writeFile(
+        join(root, "real-fixtures.json"),
+        JSON.stringify({ fixtures: [fixture], schema_version: 1 }),
+      ),
+      writeFile(
+        join(root, "reference-packs", fixtureId, "observations.json"),
+        JSON.stringify({
+          archive_sha256: "0".repeat(64),
+          fixture_id: fixtureId,
+        }),
+      ),
+    ]);
+
+    await expect(
+      observeRealMineruSet({
+        fixtureIds: [fixtureId],
+        outputDirectory: join(root, "observed"),
+        realDirectory: root,
+      }),
+    ).rejects.toThrow("OBSERVED_REFERENCE_PACK_BINDING_MISMATCH");
+  });
+
   it("does not project terminal product versions as printed page labels", () => {
     expect(stripPageLabel("Chapter 21 Windows 10")).toEqual({
       pageLabel: null,

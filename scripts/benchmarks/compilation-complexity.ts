@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
-import { performance } from "node:perf_hooks";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,6 +12,7 @@ import type {
 } from "../../src/modules/publishing/core/preparation/document-model.js";
 
 const rootCounts = [500, 1_000, 2_000, 4_000] as const;
+const measurementBatchSize = 20;
 
 interface SourceRegionFixture {
   readonly document: NormalizedDocument;
@@ -24,7 +24,7 @@ interface SourceRegionFixture {
 export interface ComplexityMeasurement {
   readonly active_roots: number;
   readonly excluded_blocks: number;
-  readonly median_ms: number;
+  readonly median_cpu_ms: number;
   readonly repetitions: number;
   readonly root_count: number;
 }
@@ -115,14 +115,22 @@ export function runSourceRegionCase(
     throw new Error("COMPLEXITY_REPETITIONS_INVALID");
   }
   const fixture = buildSourceRegionFixture(rootCount);
-  applySourceRegions(fixture);
+  for (let warmup = 0; warmup < measurementBatchSize; warmup += 1) {
+    applySourceRegions(fixture);
+  }
   const durations: number[] = [];
   let activeRoots = 0;
   let excludedBlocks = 0;
   for (let repetition = 0; repetition < repetitions; repetition += 1) {
-    const startedAt = performance.now();
-    const result = applySourceRegions(fixture);
-    durations.push(performance.now() - startedAt);
+    const startedAt = process.cpuUsage();
+    let result = applySourceRegions(fixture);
+    for (let iteration = 1; iteration < measurementBatchSize; iteration += 1) {
+      result = applySourceRegions(fixture);
+    }
+    const elapsed = process.cpuUsage(startedAt);
+    durations.push(
+      (elapsed.system + elapsed.user) / 1_000 / measurementBatchSize,
+    );
     activeRoots = result.document.root.children?.length ?? 0;
     excludedBlocks = result.excludedBlockIds.size;
   }
@@ -136,7 +144,7 @@ export function runSourceRegionCase(
   return Object.freeze({
     active_roots: activeRoots,
     excluded_blocks: excludedBlocks,
-    median_ms: median(durations),
+    median_cpu_ms: median(durations),
     repetitions,
     root_count: rootCount,
   });
@@ -147,10 +155,10 @@ export function evaluateSourceRegionScale(
 ): { readonly passed: boolean; readonly ratio_4000_to_1000: number } {
   const oneThousand = measurements.find((item) => item.root_count === 1_000);
   const fourThousand = measurements.find((item) => item.root_count === 4_000);
-  if (!oneThousand || !fourThousand || oneThousand.median_ms <= 0) {
+  if (!oneThousand || !fourThousand || oneThousand.median_cpu_ms <= 0) {
     throw new Error("COMPLEXITY_MEASUREMENTS_INVALID");
   }
-  const ratio = fourThousand.median_ms / oneThousand.median_ms;
+  const ratio = fourThousand.median_cpu_ms / oneThousand.median_cpu_ms;
   return Object.freeze({ passed: ratio < 6, ratio_4000_to_1000: ratio });
 }
 
@@ -197,8 +205,9 @@ async function main(): Promise<void> {
   const report = Object.freeze({
     captured_at: new Date().toISOString(),
     gate,
+    measurement_clock: "process_cpu",
     measurements,
-    schema_version: 1,
+    schema_version: 2,
   });
   const json = `${JSON.stringify(report, null, 2)}\n`;
   if (input.output) {
