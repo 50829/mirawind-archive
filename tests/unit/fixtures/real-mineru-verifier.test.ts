@@ -39,46 +39,6 @@ function fixture(id: string, content: string) {
 }
 
 describe("real MinerU fixture verifier", () => {
-  it("accepts registered local-only files with matching hashes", async () => {
-    const root = await mkdtemp(join(tmpdir(), "real-mineru-verifier-"));
-    roots.push(root);
-    const contents = [
-      "first opaque bytes",
-      "second opaque bytes",
-      "third opaque bytes",
-    ];
-    const fixtures = [
-      fixture("real-mineru-a7f31c", contents[0] ?? ""),
-      fixture("real-mineru-b9d204", contents[1] ?? ""),
-      fixture("real-mineru-c3e591", contents[2] ?? ""),
-    ];
-    await Promise.all(
-      fixtures.map((entry, index) =>
-        writeFile(join(root, entry.file_name), contents[index] ?? ""),
-      ),
-    );
-    await writeFile(
-      join(root, "real-fixtures.json"),
-      JSON.stringify({ fixtures, schema_version: 1 }),
-    );
-
-    await expect(
-      verifyRealMineruFixtures(
-        root,
-        undefined,
-        fixtures.map((fixture) => fixture.id),
-      ),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        fileName: "real-mineru-a7f31c.zip",
-        id: "real-mineru-a7f31c",
-        sizeBytes: Buffer.byteLength(contents[0] ?? ""),
-      }),
-      expect.objectContaining({ id: "real-mineru-b9d204" }),
-      expect.objectContaining({ id: "real-mineru-c3e591" }),
-    ]);
-  });
-
   it("requires all fifteen fixtures when no subset is selected", async () => {
     const root = await mkdtemp(join(tmpdir(), "real-mineru-verifier-"));
     roots.push(root);

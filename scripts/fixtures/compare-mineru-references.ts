@@ -66,39 +66,45 @@ function comparableTitle(value: string): string {
     .toLocaleLowerCase("und");
 }
 
-function titleSimilarity(left: string, right: string): number {
-  if (left === right) return 1;
-  if (left.length < 2 || right.length < 2) return 0;
-  const pairs = (value: string): Map<string, number> => {
-    const output = new Map<string, number>();
-    for (let index = 0; index < value.length - 1; index += 1) {
-      const pair = value.slice(index, index + 2);
-      output.set(pair, (output.get(pair) ?? 0) + 1);
-    }
-    return output;
-  };
-  const leftPairs = pairs(left);
-  const rightPairs = pairs(right);
-  let overlap = 0;
-  for (const [pair, count] of leftPairs) {
-    overlap += Math.min(count, rightPairs.get(pair) ?? 0);
+interface TitleProfile {
+  readonly pairs: ReadonlyMap<string, number>;
+  readonly value: string;
+}
+
+function titleProfile(value: string): TitleProfile {
+  const normalized = comparableTitle(value);
+  const pairs = new Map<string, number>();
+  for (let index = 0; index < normalized.length - 1; index += 1) {
+    const pair = normalized.slice(index, index + 2);
+    pairs.set(pair, (pairs.get(pair) ?? 0) + 1);
   }
-  return (2 * overlap) / (left.length + right.length - 2);
+  return Object.freeze({ pairs, value: normalized });
+}
+
+function titleSimilarity(left: TitleProfile, right: TitleProfile): number {
+  if (left.value === right.value) return 1;
+  if (left.value.length < 2 || right.value.length < 2) return 0;
+  let overlap = 0;
+  for (const [pair, count] of left.pairs) {
+    overlap += Math.min(count, right.pairs.get(pair) ?? 0);
+  }
+  return (2 * overlap) / (left.value.length + right.value.length - 2);
 }
 
 function entryAlignmentScore(
   expected: ReferenceContentsEntry,
   actual: ReferenceContentsEntry,
+  expectedTitle: TitleProfile,
+  actualTitle: TitleProfile,
 ): number | undefined {
   const sameAnchor =
     expected.body_heading_anchor !== null &&
     actual.body_heading_anchor !== null &&
     anchorKey(expected.body_heading_anchor) ===
       anchorKey(actual.body_heading_anchor);
-  const similarity = titleSimilarity(
-    comparableTitle(expected.title),
-    comparableTitle(actual.title),
-  );
+  const similarity = sameAnchor
+    ? 0
+    : titleSimilarity(expectedTitle, actualTitle);
   if (!sameAnchor && similarity < 0.58) return;
   return (
     (sameAnchor ? 20 : similarity * 10) +
@@ -111,6 +117,8 @@ function entryAlignmentScore(
 function alignEntries(
   expected: readonly ReferenceContentsEntry[],
   actual: readonly ReferenceContentsEntry[],
+  expectedTitles: readonly TitleProfile[],
+  actualTitles: readonly TitleProfile[],
 ): {
   readonly pairs: readonly {
     readonly actual: ReferenceContentsEntry;
@@ -151,6 +159,8 @@ function alignEntries(
       const match = entryAlignmentScore(
         expected[expectedIndex - 1] as ReferenceContentsEntry,
         actual[actualIndex - 1] as ReferenceContentsEntry,
+        expectedTitles[expectedIndex - 1] as TitleProfile,
+        actualTitles[actualIndex - 1] as TitleProfile,
       );
       const matched =
         match === undefined
@@ -216,18 +226,32 @@ function compareRegion(
   if (!same(expected.markdown_range, actual.markdown_range)) {
     add("REGION_MARKDOWN_RANGE_MISMATCH", path);
   }
-  const alignment = alignEntries(expected.entries, actual.entries);
+  const expectedTitles = expected.entries.map((entry) =>
+    titleProfile(entry.title),
+  );
+  const actualTitles = actual.entries.map((entry) => titleProfile(entry.title));
+  const alignment = alignEntries(
+    expected.entries,
+    actual.entries,
+    expectedTitles,
+    actualTitles,
+  );
   if (
     alignment.unmatchedExpected.size > 0 ||
     alignment.unmatchedActual.size > 0
   ) {
     add("ENTRY_ORDER_MISMATCH", path);
   }
-  for (const { actual: observed, expected: entry } of alignment.pairs) {
+  for (const {
+    actual: observed,
+    actualIndex,
+    expected: entry,
+    expectedIndex,
+  } of alignment.pairs) {
     const entryPath = `${path}/entries/${entry.entry_key}`;
     const alignedTitleSimilarity = titleSimilarity(
-      comparableTitle(entry.title),
-      comparableTitle(observed.title),
+      expectedTitles[expectedIndex] as TitleProfile,
+      actualTitles[actualIndex] as TitleProfile,
     );
     if (alignedTitleSimilarity < 0.9) {
       add("ENTRY_TITLE_MISMATCH", entryPath);

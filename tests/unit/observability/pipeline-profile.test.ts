@@ -48,9 +48,7 @@ describe("pipeline profile", () => {
     const jobId = "job_profile_test_12345678";
 
     await startPipelineProfile({ jobId, jobKind: "prepare_draft" });
-    await profilePipelineStage("typography", async () => {
-      await new Promise((resolveDelay) => setTimeout(resolveDelay, 2));
-    });
+    await profilePipelineStage("typography", () => undefined);
     recordPipelineProfileMetrics({
       headings: 12,
       markdown_bytes: 4_096,

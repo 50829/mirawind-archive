@@ -779,18 +779,6 @@ export async function observeRealMineruFixture(input: {
       detection = preferNative ? nativeDetection : repairedDetection;
     }
   }
-  process.stderr.write(
-    `${JSON.stringify({
-      candidates: detection.candidates.map((candidate) => ({
-        boundary: candidate.boundaryConfidence,
-        diagnostics: candidate.diagnostics.map((diagnostic) => diagnostic.code),
-        entries: candidate.entryCount,
-        match: candidate.matchConfidence,
-        proposed: candidate.proposedRegion !== undefined,
-      })),
-      fixture_id: input.pack.fixture_id,
-    })}\n`,
-  );
   const projections = projectCandidates({
     candidates: detection.candidates,
     document: originalDocument,

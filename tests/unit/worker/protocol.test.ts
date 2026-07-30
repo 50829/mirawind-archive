@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { createOpaqueId } from "@/domain/ids";
+import {
+  dispatchJobCommand,
+  type JobCommandRegistry,
+} from "@/entrypoints/worker/job-registry";
 import { shouldReportJobProgress } from "@/entrypoints/worker/progress-throttle";
 import {
   isChildToParentMessage,
@@ -56,6 +60,43 @@ describe("job child IPC protocol", () => {
         input: { ...message.input, stagingRelativePath: "../../escape" },
       }),
     ).toBe(false);
+    expect(
+      isRunJobMessage({
+        ...message,
+        input: { ...message.input, unexpected: true },
+      }),
+    ).toBe(false);
+  });
+
+  it("dispatches the closed command union through an exhaustive registry", () => {
+    const handled: string[] = [];
+    const handler = (command: { readonly kind: string }) => {
+      handled.push(command.kind);
+      return command.kind;
+    };
+    const registry = {
+      analyze_import: handler,
+      build_candidate: handler,
+      prepare_draft: handler,
+      reclaim: handler,
+      reconcile: handler,
+      verify_version: handler,
+    } satisfies JobCommandRegistry<string>;
+    const jobId = createOpaqueId("job");
+
+    expect(
+      dispatchJobCommand(
+        {
+          attempt: 1,
+          createdAtMs: 1,
+          jobId,
+          kind: "reconcile",
+          stagingRelativePath: `staging/${jobId}`,
+        },
+        registry,
+      ),
+    ).toBe("reconcile");
+    expect(handled).toEqual(["reconcile"]);
   });
 
   it("binds analyze jobs to the matching durable import upload path", () => {

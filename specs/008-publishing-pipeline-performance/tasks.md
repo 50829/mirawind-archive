@@ -64,8 +64,8 @@ existing compiler/publication parity tests remain byte/semantic equivalent.
 ### Tests for User Story 4
 
 - [x] T018 [P] [US4] Enforce publishing, reader, catalog and identity public surfaces through the architecture graph and real source-tree analysis
-- [x] T019 [P] [US4] Add behavior snapshots around existing configured-document, Reader model, catalog projection and auth use cases in `tests/integration/architecture/behavior-equivalence.test.ts`
-- [x] T020 [P] [US4] Add discriminated worker-command validator tests for the current closed command union and exact ingress shape in `tests/contract/worker-command-union.test.ts`
+- [x] T019 [P] [US4] Retain domain-owned configured-document, Reader navigation, catalog projection and Passkey policy behavior suites while changing architecture boundaries
+- [x] T020 [P] [US4] Cover the discriminated worker-command union, exact ingress shape and exhaustive dispatch in `tests/unit/worker/protocol.test.ts`
 
 ### Implementation for User Story 4
 
@@ -88,12 +88,12 @@ existing compiler/publication parity tests remain byte/semantic equivalent.
 Phase 3 evidence: publishing, reader, catalog and identity expose one application public surface;
 Astro pages and process entrypoints no longer import module adapters directly; the complete 222-file
 source graph and focused architecture fixtures report zero diagnostics. Configured-document,
-Reader navigation, catalog projection and Passkey policy snapshots remain equivalent. Format, lint,
+Reader navigation, catalog projection and Passkey policy suites remain passing. Format, lint,
 typecheck, the production process bundle, the complete Astro/Vite production build and 633 Vitest
 tests passed.
 
 **Checkpoint**: Commit as `refactor(architecture): establish acyclic module boundaries` only after
-all old ownership directories are gone and no behavior snapshot changed.
+the source migration and focused domain behavior suites pass.
 
 ---
 

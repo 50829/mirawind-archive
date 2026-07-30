@@ -7,6 +7,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { watch } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -318,8 +319,18 @@ describe("bounded PDF contents evidence", () => {
   });
 
   it("propagates cancellation and removes temporary rasters", async () => {
-    const value = await fixture({ tesseractBody: "sleep 5" });
+    const value = await fixture({
+      tesseractBody: ': > "$0.started"\nsleep 5',
+    });
     const controller = new AbortController();
+    const started = new Promise<void>((resolveStarted, rejectStarted) => {
+      const watcher = watch(value.root, (_event, fileName) => {
+        if (fileName !== "tesseract.started") return;
+        watcher.close();
+        resolveStarted();
+      });
+      watcher.once("error", rejectStarted);
+    });
     const pending = readPdfContentsEvidence({
       commands: value.commands,
       pageIndices: [0],
@@ -327,7 +338,8 @@ describe("bounded PDF contents evidence", () => {
       signal: controller.signal,
       temporaryRoot: value.work,
     });
-    setTimeout(() => controller.abort(), 20).unref();
+    await started;
+    controller.abort();
 
     await expect(pending).rejects.toThrow();
     expect(await readdir(value.work)).toEqual([]);
