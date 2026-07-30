@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { serializeJobStatus } from "@/modules/publishing/adapters/sqlite/job-status";
 import { SafeApplicationError } from "@/domain/errors";
 import { acceptBookDeletion } from "@/modules/catalog/adapters/sqlite/book-deletion";
 import { createBookDeletionToken } from "@/modules/catalog/core/book-deletion-token";
@@ -37,7 +38,7 @@ describe("permanent book deletion acceptance", () => {
       const current = drafts.requireBook(book.id);
       const competing = new JobRepository(database).create({
         bookId: book.id,
-        kind: "reclaim",
+        kind: "purge_book",
         nowMs: 1_100,
       });
       const result = acceptBookDeletion({
@@ -70,11 +71,16 @@ describe("permanent book deletion acceptance", () => {
       expect(new JobRepository(database).get(competing.id)?.state).toBe(
         "canceled",
       );
-      expect(new JobRepository(database).get(result.jobId)).toMatchObject({
+      const cleanupJob = new JobRepository(database).get(result.jobId);
+      expect(cleanupJob).toMatchObject({
         bookId: book.id,
-        kind: "reclaim",
+        kind: "purge_book",
         state: "queued",
       });
+      if (!cleanupJob) throw new Error("Expected deletion cleanup job");
+      expect(serializeJobStatus(cleanupJob).kind).toBe(
+        "permanent_book_deletion",
+      );
       expect(database.prepare("SELECT * FROM book_deletions").all()).toEqual([
         expect.objectContaining({
           book_id: book.id,

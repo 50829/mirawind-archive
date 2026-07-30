@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { serializeJobStatus } from "@/modules/publishing/adapters/sqlite/job-status";
 import { openDatabase } from "@/platform/sqlite/connection";
 import {
   createTemporaryDataRoot,
@@ -34,9 +35,10 @@ describe("two real worker connections sharing one SQLite queue", () => {
       nowMs: 1_000,
     });
     const secondJob = firstWorker.create({
-      kind: "reclaim",
+      kind: "reclaim_versions",
       nowMs: 2_000,
     });
+    expect(serializeJobStatus(secondJob).kind).toBe("reclaim");
 
     const claimed = firstWorker.claimNext({
       leaseOwner: "worker-a",

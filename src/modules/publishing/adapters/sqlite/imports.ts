@@ -271,16 +271,19 @@ export class ImportRepository {
     readonly importId: string;
     readonly nowMs: number;
   }): ImportRecord {
-    const result = this.database
-      .prepare(
-        `UPDATE imports
-         SET book_id = ?, updated_at = ?
-         WHERE id = ? AND state = 'preparing'
-           AND (book_id IS NULL OR book_id = ?)`,
-      )
-      .run(input.bookId, input.nowMs, input.importId, input.bookId);
-    if (result.changes !== 1) throw new Error("IMPORT_STATE_CONFLICT");
-    return this.require(input.importId);
+    return withImmediateTransaction(this.database, () => {
+      const result = this.database
+        .prepare(
+          `UPDATE imports
+           SET book_id = ?, updated_at = ?
+           WHERE id = ? AND state = 'preparing'
+             AND (book_id IS NULL OR book_id = ?)`,
+        )
+        .run(input.bookId, input.nowMs, input.importId, input.bookId);
+      if (result.changes !== 1) throw new Error("IMPORT_STATE_CONFLICT");
+      this.scopeJobsToBook(input.importId, input.bookId);
+      return this.require(input.importId);
+    });
   }
 
   attachPreparedBook(input: {
@@ -288,15 +291,35 @@ export class ImportRepository {
     readonly importId: string;
     readonly nowMs: number;
   }): ImportRecord {
-    const result = this.database
+    return withImmediateTransaction(this.database, () => {
+      const result = this.database
+        .prepare(
+          `UPDATE imports
+           SET state = 'draft_ready', book_id = ?, updated_at = ?
+           WHERE id = ? AND state = 'preparing'
+             AND (book_id IS NULL OR book_id = ?)`,
+        )
+        .run(input.bookId, input.nowMs, input.importId, input.bookId);
+      if (result.changes !== 1) throw new Error("IMPORT_STATE_CONFLICT");
+      this.scopeJobsToBook(input.importId, input.bookId);
+      return this.require(input.importId);
+    });
+  }
+
+  private scopeJobsToBook(importId: string, bookId: number): void {
+    const conflict = this.database
       .prepare(
-        `UPDATE imports
-         SET state = 'draft_ready', book_id = ?, updated_at = ?
-         WHERE id = ? AND state = 'preparing'`,
+        `SELECT 1 FROM jobs
+         WHERE import_id = ? AND book_id IS NOT NULL AND book_id != ?
+         LIMIT 1`,
       )
-      .run(input.bookId, input.nowMs, input.importId);
-    if (result.changes !== 1) throw new Error("IMPORT_STATE_CONFLICT");
-    return this.require(input.importId);
+      .get(importId, bookId);
+    if (conflict) throw new Error("IMPORT_BOOK_SCOPE_CONFLICT");
+    this.database
+      .prepare(
+        "UPDATE jobs SET book_id = ? WHERE import_id = ? AND book_id IS NULL",
+      )
+      .run(bookId, importId);
   }
 
   reject(importId: string, errorCode: string, nowMs: number): ImportRecord {

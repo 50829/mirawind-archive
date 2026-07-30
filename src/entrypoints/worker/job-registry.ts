@@ -22,8 +22,10 @@ export function dispatchJobCommand<Result>(
       return registry.build_candidate(command);
     case "prepare_draft":
       return registry.prepare_draft(command);
-    case "reclaim":
-      return registry.reclaim(command);
+    case "purge_book":
+      return registry.purge_book(command);
+    case "reclaim_versions":
+      return registry.reclaim_versions(command);
     case "reconcile":
       return registry.reconcile(command);
     case "verify_version":

@@ -4,6 +4,7 @@ import type { MarkdownCandidate } from "@/modules/publishing/adapters/filesystem
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
@@ -29,15 +30,19 @@ describe("M1 import, source and draft repositories", () => {
     withMigratedTestDatabase(({ database }) => {
       const drafts = new DraftRepository(database);
       const imports = new ImportRepository(database);
-      const book = drafts.createBook({ nowMs: 1, title: "Pending import" });
       const created = imports.createUploaded({
-        bookId: book.id,
         expiresAtMs: 10_000,
         id: "imp_abcdefghijklmnop",
         nowMs: 2,
         uploadRelativePath: "imports/imp_abcdefghijklmnop/original.zip",
         uploadSha256: sha256,
         uploadSizeBytes: 42,
+      });
+      const jobs = new JobRepository(database);
+      const analysisJob = jobs.create({
+        importId: created.id,
+        kind: "analyze_import",
+        nowMs: 2,
       });
 
       expect(created.state).toBe("uploaded");
@@ -82,6 +87,13 @@ describe("M1 import, source and draft repositories", () => {
           nowMs: 6,
         }),
       ).toThrow("IMPORT_CONFIRMATION_CONFLICT");
+      const book = drafts.createBook({ nowMs: 7, title: "Pending import" });
+      imports.attachBookForPreparation({
+        bookId: book.id,
+        importId: created.id,
+        nowMs: 8,
+      });
+      expect(jobs.get(analysisJob.id)?.bookId).toBe(book.id);
     }));
 
   it("indexes immutable source, original, config and current candidate records", () =>

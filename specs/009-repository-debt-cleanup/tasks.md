@@ -31,19 +31,19 @@ changing either deletion or status orchestration.
       `tests/integration/recovery/worker-leases.test.ts`.
 - [x] T003 Remove the test-only schema creator, table probes and missing-table branches from
       `src/modules/publishing/adapters/sqlite/jobs.ts` after T002 passes.
-- [ ] T004 Clean-switch the single baseline from `reclaim` to `reclaim_versions | purge_book`, update
+- [x] T004 Clean-switch the single baseline from `reclaim` to `reclaim_versions | purge_book`, update
       its identity/checksum and baseline evidence, and enforce authoritative book scope in
       `src/platform/sqlite/migrations/0001_clean_slate.sql`,
       `src/platform/sqlite/migration-manifest.ts`, `src/modules/publishing/application/job-state.ts` and
       `tests/integration/storage/migrations.test.ts`.
-- [ ] T005 Update the discriminated child protocol and direct external status mapping for the new
+- [x] T005 Update the discriminated child protocol and direct external status mapping for the new
       maintenance identities in `src/entrypoints/worker/protocol.ts`,
       `src/modules/publishing/adapters/sqlite/job-status.ts` and the existing job contract tests under
       `tests/contract/` and `tests/unit/worker/protocol.test.ts`.
-- [ ] T006 Update maintenance dispatch, registry, child execution and scheduled reclamation in
+- [x] T006 Update maintenance dispatch, registry, child execution and scheduled reclamation in
       `src/entrypoints/worker/job-registry.ts`, `src/composition/job-child.ts`,
       `src/composition/worker.ts` and `src/modules/publishing/adapters/worker/reclaim.ts`.
-- [ ] T007 Update book assignment and every current book-bound task creation path to set
+- [x] T007 Update book assignment and every current book-bound task creation path to set
       `jobs.book_id` directly in `src/modules/publishing/adapters/filesystem/import-upload.ts`,
       `src/modules/publishing/adapters/filesystem/source-reprocess.ts`,
       `src/modules/publishing/adapters/worker/finalize-prepared-draft.ts`,

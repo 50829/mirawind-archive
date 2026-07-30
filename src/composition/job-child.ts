@@ -269,9 +269,14 @@ async function execute(message: RunJobMessage): Promise<void> {
       }
       return;
     }
-    if (message.input.kind === "reclaim") {
+    if (
+      message.input.kind === "reclaim_versions" ||
+      message.input.kind === "purge_book"
+    ) {
       reportProgress(
-        message.input.bookId ? "permanent_book_deletion" : "reclaim_storage",
+        message.input.kind === "purge_book"
+          ? "permanent_book_deletion"
+          : "reclaim_storage",
         steps(0, 1),
       );
       const database = openDatabase(join(root, "db", "mirawind.sqlite"), {
@@ -279,15 +284,16 @@ async function execute(message: RunJobMessage): Promise<void> {
       });
       try {
         const layout = await createStorageLayout(root);
-        const deletionOutcome = message.input.bookId
-          ? await permanentlyCleanupBook({
-              bookId: message.input.bookId,
-              database,
-              jobId: message.input.jobId,
-              layout,
-              nowMs: Date.now(),
-            })
-          : null;
+        const deletionOutcome =
+          message.input.kind === "purge_book"
+            ? await permanentlyCleanupBook({
+                bookId: message.input.bookId,
+                database,
+                jobId: message.input.jobId,
+                layout,
+                nowMs: Date.now(),
+              })
+            : null;
         const outcome = deletionOutcome
           ? null
           : await reclaimRetainedStorage({

@@ -1,11 +1,11 @@
 CREATE TABLE database_baseline (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   identity TEXT NOT NULL UNIQUE
-    CHECK (identity = 'mirawind-clean-slate-candidate-v1')
+    CHECK (identity = 'mirawind-clean-slate-maintenance-v1')
 ) STRICT;
 
 INSERT INTO database_baseline (id, identity)
-VALUES (1, 'mirawind-clean-slate-candidate-v1');
+VALUES (1, 'mirawind-clean-slate-maintenance-v1');
 
 CREATE TABLE installation (
   id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -111,7 +111,8 @@ CREATE TABLE jobs (
       'build_candidate',
       'verify_version',
       'reconcile',
-      'reclaim'
+      'reclaim_versions',
+      'purge_book'
     )
   ),
   state TEXT NOT NULL CHECK (

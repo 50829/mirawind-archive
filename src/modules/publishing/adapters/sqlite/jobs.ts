@@ -205,6 +205,20 @@ export class JobRepository {
   }
 
   create(input: CreateJobInput): JobRecord {
+    if (
+      ["build_candidate", "purge_book", "verify_version"].includes(
+        input.kind,
+      ) &&
+      input.bookId === undefined
+    ) {
+      throw new Error("JOB_BOOK_SCOPE_REQUIRED");
+    }
+    if (
+      ["reclaim_versions", "reconcile"].includes(input.kind) &&
+      input.bookId !== undefined
+    ) {
+      throw new Error("JOB_BOOK_SCOPE_FORBIDDEN");
+    }
     const nowMs = input.nowMs ?? Date.now();
     const operation = input.idempotency?.operation;
     const keySha256 = input.idempotency
@@ -511,7 +525,7 @@ export class JobRepository {
     safeErrorCode: string,
     nowMs: number,
   ): void {
-    if (job.kind !== "reclaim" || job.bookId === null) {
+    if (job.kind !== "purge_book" || job.bookId === null) {
       return;
     }
     this.database
@@ -707,7 +721,7 @@ export class JobRepository {
           throw new Error("JOB_SUBJECT_DELETED");
         }
         const currentDeletionCleanup =
-          original.kind === "reclaim" &&
+          original.kind === "purge_book" &&
           this.database
             .prepare(
               `SELECT 1 FROM book_deletions
@@ -898,7 +912,7 @@ export class JobRepository {
               input.nowMs,
             );
         }
-        if (original.kind === "reclaim" && original.bookId !== null) {
+        if (original.kind === "purge_book" && original.bookId !== null) {
           this.database
             .prepare(
               `UPDATE book_deletions

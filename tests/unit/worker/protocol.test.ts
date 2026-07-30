@@ -78,7 +78,8 @@ describe("job child IPC protocol", () => {
       analyze_import: handler,
       build_candidate: handler,
       prepare_draft: handler,
-      reclaim: handler,
+      purge_book: handler,
+      reclaim_versions: handler,
       reconcile: handler,
       verify_version: handler,
     } satisfies JobCommandRegistry<string>;

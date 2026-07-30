@@ -9,7 +9,7 @@ import {
   type TypographyProfile,
 } from "@/modules/publishing/application/public";
 
-export const jobChildProtocolVersion = 3;
+export const jobChildProtocolVersion = 4;
 
 interface FrozenJobCommandBase {
   readonly attempt: number;
@@ -46,16 +46,21 @@ export interface ReconcileCommand extends FrozenJobCommandBase {
   readonly kind: "reconcile";
 }
 
-export interface ReclaimCommand extends FrozenJobCommandBase {
-  readonly bookId: number | null;
-  readonly kind: "reclaim";
+export interface ReclaimVersionsCommand extends FrozenJobCommandBase {
+  readonly kind: "reclaim_versions";
+}
+
+export interface PurgeBookCommand extends FrozenJobCommandBase {
+  readonly bookId: number;
+  readonly kind: "purge_book";
 }
 
 export type FrozenJobInput =
   | AnalyzeImportCommand
   | BuildCandidateCommand
   | PrepareDraftCommand
-  | ReclaimCommand
+  | PurgeBookCommand
+  | ReclaimVersionsCommand
   | ReconcileCommand
   | VerifyVersionCommand;
 
@@ -218,11 +223,14 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
   )) {
     return false;
   }
-  if (input.kind === "reconcile") return exactKeys(input, baseKeys);
-  if (input.kind === "reclaim") {
+  if (input.kind === "reconcile" || input.kind === "reclaim_versions") {
+    return exactKeys(input, baseKeys);
+  }
+  if (input.kind === "purge_book") {
     return (
       exactKeys(input, [...baseKeys, "bookId"]) &&
-      isNullablePositiveInteger(input.bookId)
+      isNullablePositiveInteger(input.bookId) &&
+      input.bookId !== null
     );
   }
   if (input.kind === "verify_version") {

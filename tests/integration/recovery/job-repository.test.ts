@@ -66,7 +66,7 @@ describe("durable job repository", () => {
   it("creates an immutable retry attempt instead of overwriting history", async () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);
-    const original = repository.create({ kind: "verify_version" });
+    const original = repository.create({ kind: "reconcile" });
     repository.fail(original.id, {
       errorClass: "infrastructure",
       errorCode: "WORKER_EXIT",
@@ -160,7 +160,7 @@ describe("durable job repository", () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);
     const job = repository.create({
-      kind: "verify_version",
+      kind: "reconcile",
       nowMs: 1_000,
     });
     repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
@@ -169,7 +169,7 @@ describe("durable job repository", () => {
         jobId: job.id,
         leaseOwner: "worker-a",
         nowMs: 12_000,
-        phase: "verify_manifest",
+        phase: "reconcile_storage",
         progress: {
           completed: 12,
           processed_bytes: null,
@@ -178,7 +178,7 @@ describe("durable job repository", () => {
         },
       }),
     ).toMatchObject({
-      phase: "verify_manifest",
+      phase: "reconcile_storage",
       progress: { completed: 12, total: 20, unit: "items" },
     });
     expect(() =>

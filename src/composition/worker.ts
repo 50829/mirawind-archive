@@ -8,6 +8,7 @@ import type Database from "better-sqlite3";
 
 import { parseEnvironment } from "@/config/environment";
 import { openDatabase } from "@/platform/sqlite/connection";
+import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import { CandidateRegistrationAdapter } from "@/modules/publishing/adapters/sqlite/candidate-registration";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
@@ -115,7 +116,11 @@ function frozenInput(
   if (job.kind === "reconcile") {
     return Object.freeze({ ...common, kind: job.kind });
   }
-  if (job.kind === "reclaim") {
+  if (job.kind === "reclaim_versions") {
+    return Object.freeze({ ...common, kind: job.kind });
+  }
+  if (job.kind === "purge_book") {
+    if (job.bookId === null) throw new Error("PURGE_BOOK_INPUT_INVALID");
     return Object.freeze({ ...common, bookId: job.bookId, kind: job.kind });
   }
   if (job.kind === "verify_version") {
@@ -243,14 +248,17 @@ async function executeClaimedJob(input: {
     if (input.job.kind === "prepare_draft" && input.job.importId) {
       const imported = input.imports.require(input.job.importId);
       if (imported.bookId === null) {
-        const book = input.drafts.createBook({
-          nowMs: Date.now(),
-          title: "Pending import",
-        });
-        input.imports.attachBookForPreparation({
-          bookId: book.id,
-          importId: imported.id,
-          nowMs: Date.now(),
+        withImmediateTransaction(input.database, () => {
+          const nowMs = Date.now();
+          const book = input.drafts.createBook({
+            nowMs,
+            title: "Pending import",
+          });
+          input.imports.attachBookForPreparation({
+            bookId: book.id,
+            importId: imported.id,
+            nowMs,
+          });
         });
       }
     }
@@ -615,7 +623,7 @@ async function main(): Promise<void> {
         key: `${bootId}:storage:reclaim`,
         operation: "storage.reclaim",
       },
-      kind: "reclaim",
+      kind: "reclaim_versions",
       nowMs: Date.now(),
     });
     const scheduler = new WorkerCheckpointScheduler({

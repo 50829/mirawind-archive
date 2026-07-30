@@ -79,7 +79,10 @@ test("shows, cancels, retries and recovers durable work without changing publica
   });
   const jobs = new JobRepository(database);
   const nowMs = Date.now();
-  const expired = jobs.create({ kind: "reclaim", nowMs: nowMs - 80_000 });
+  const expired = jobs.create({
+    kind: "reclaim_versions",
+    nowMs: nowMs - 80_000,
+  });
   jobs.claimNext({
     leaseOwner: "worker:simulated-dead-host",
     nowMs: nowMs - 70_000,

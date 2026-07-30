@@ -77,10 +77,8 @@ export function createPublishingServer(database: Database.Database) {
     retryJob: jobs.retry.bind(jobs),
     storeImport: (layout: StorageLayout) =>
       new ImportUploadService(database, layout),
-    serializeJobStatus: (
-      job: NonNullable<ReturnType<JobRepository["get"]>>,
-      includePublication = false,
-    ) => serializeJobStatus(job, includePublication ? database : undefined),
+    serializeJobStatus: (job: NonNullable<ReturnType<JobRepository["get"]>>) =>
+      serializeJobStatus(job),
   });
 }
 

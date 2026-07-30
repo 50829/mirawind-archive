@@ -237,8 +237,10 @@ export function acceptBookDeletion(input: {
           phase, progress_json, error_code, error_class, error_detail_json,
           cancellation_requested_at, created_at, started_at, finished_at
         ) VALUES (
-          ?, 'reclaim', 'queued', NULL, ?, NULL, NULL, NULL, NULL, NULL, 1,
-          0, NULL, NULL, NULL, 'deletion_pending', '{}', NULL, NULL, NULL,
+          ?, 'purge_book', 'queued', NULL, ?, NULL, NULL, NULL, NULL, NULL, 1,
+          0, NULL, NULL, NULL, 'queued',
+          '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}',
+          NULL, NULL, NULL,
           NULL, ?, NULL, NULL
         )`,
       )

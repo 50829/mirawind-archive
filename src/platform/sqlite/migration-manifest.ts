@@ -8,11 +8,11 @@ import {
 
 const migrationDefinitions = [
   {
-    baselineIdentity: "mirawind-clean-slate-candidate-v1",
+    baselineIdentity: "mirawind-clean-slate-maintenance-v1",
     checksum:
-      "cd11599d898638b9727d9c0ab4863362707effc8675f808faceca286ca604967",
+      "787819cd9b312af5376b5bc8cabf2757db2655ac3059322b916730b9cc163413",
     file: "0001_clean_slate.sql",
-    name: "clean_slate_candidate",
+    name: "clean_slate_maintenance",
     version: 1,
   },
 ] as const;

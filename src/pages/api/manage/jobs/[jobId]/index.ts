@@ -31,5 +31,5 @@ export const GET: APIRoute = ({ locals, params }) => {
   }
   const headers = new Headers();
   applyResponsePolicy(headers, "private-api");
-  return Response.json(publishing.serializeJobStatus(job, true), { headers });
+  return Response.json(publishing.serializeJobStatus(job), { headers });
 };

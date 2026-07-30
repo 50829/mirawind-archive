@@ -13,7 +13,8 @@ export const jobKinds = [
   "build_candidate",
   "verify_version",
   "reconcile",
-  "reclaim",
+  "reclaim_versions",
+  "purge_book",
 ] as const;
 
 export type JobKind = (typeof jobKinds)[number];
@@ -57,10 +58,15 @@ export const jobPhases = Object.freeze({
   ],
   verify_version: ["queued", "starting", "verify_manifest", ...terminalPhases],
   reconcile: ["queued", "starting", "reconcile_storage", ...terminalPhases],
-  reclaim: [
+  reclaim_versions: [
     "queued",
     "starting",
     "reclaim_storage",
+    ...terminalPhases,
+  ],
+  purge_book: [
+    "queued",
+    "starting",
     "permanent_book_deletion",
     ...terminalPhases,
   ],
