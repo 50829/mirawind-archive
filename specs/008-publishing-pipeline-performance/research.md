@@ -106,14 +106,17 @@ raise RSS and reader latency; weakening security/hash/fsync checks is prohibited
 
 ## Decision 8: Use Paired, Reference-Exact Performance Evidence
 
-**Decision**: compare baseline `c176fdd` and candidate on one host in AB/BA/AB order, expanding to
-five pairs when coefficient of variation exceeds 10%. Bind commits, dirty state, lockfile, fixture
-hashes, environment, order, per-stage time and process-tree RSS. Run fifteen reference comparisons in
-every round and overlap at least 200 reader requests.
+**Decision**: compare baseline `6be12808` and candidate on one host in AB/BA/AB order, expanding to
+five pairs when coefficient of variation exceeds 10%. The baseline is `c176fdd` plus the one-line
+nested body-role correctness backport needed for 15/15 reference exactness; it contains no performance
+optimization. Bind commits, dirty state, lockfile, fixture hashes, environment, order, per-stage time
+and process-tree RSS. Run fifteen reference comparisons in every round and overlap at least 200 reader
+requests.
 
-**Rationale**: the current 901.234-second result is one diagnostic run with uncontrolled OS cache. It
-locates hotspots but cannot by itself prove improvement. Paired runs reduce time/order noise and
-prevent faster but incorrect candidates from passing.
+**Rationale**: the 901.234-second `c176fdd` result is one diagnostic run with uncontrolled OS cache
+and does not match one current reference role. It locates hotspots but cannot by itself prove
+improvement. Paired runs against the corrected baseline reduce time/order noise and prevent faster
+but incorrect candidates from passing.
 
 **Alternatives considered**: a single before/after run is too noisy; aggregate-only gates hide
 single-book regressions; synthetic-only benchmarks do not represent real MinerU structures.

@@ -16,7 +16,8 @@ block, range and page indexes remain implementation details. Linearize the measu
 typography and pagination hotspots, then cleanly replace `build_preview` and `build_publish` with
 one `build_candidate` job whose ready immutable output is synchronously promoted. Prove the
 change with architecture fixtures, crash boundaries, fifteen reference-exact books and paired
-performance runs against `c176fdd`.
+performance runs against `6be12808`, the pre-optimization baseline with the nested-role correctness
+fix backported onto `c176fdd`.
 
 ## Technical Context
 

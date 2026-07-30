@@ -5,7 +5,7 @@
 - Node.js 24.x and pnpm 11.9.0
 - local fifteen-book manifest, ZIPs and reference v2 files under the ignored real-fixture directory
 - enough free disk for isolated baseline/candidate data roots
-- baseline commit `c176fddfd1e103e7c14d38b823ee2a000f6345fd`
+- reference-exact baseline commit `6be12808bc822807c70e8eb6ae9b71047a327901`
 
 Verify the local fixtures before any timed work:
 
@@ -57,11 +57,9 @@ Run only from committed baseline and candidate states:
 
 ```sh
 pnpm benchmark:pipeline-paired \
-  --baseline-ref c176fddfd1e103e7c14d38b823ee2a000f6345fd \
+  --baseline-ref 6be12808bc822807c70e8eb6ae9b71047a327901 \
   --candidate-ref HEAD \
   --real-dir "$PWD/tests/fixtures/mineru/real" \
-  --order AB-BA-AB \
-  --reader-requests 200 \
   --output "$PWD/.cache/008-publishing-performance/paired.json"
 ```
 
