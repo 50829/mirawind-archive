@@ -1,6 +1,5 @@
-import { chmod, lstat, rm } from "node:fs/promises";
-
 import { resolveContainedPath } from "@/platform/filesystem/layout";
+import { removeExactContainedTree } from "@/platform/filesystem/permanent-removal";
 import type {
   ExpiredJobLeaseRepository,
   RecoverableJob,
@@ -17,21 +16,7 @@ async function removeJobStaging(
   jobId: string,
 ): Promise<void> {
   const path = await resolveContainedPath(storageRoot, `staging/${jobId}`);
-  const metadata = await lstat(path).catch((error: unknown) => {
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
-      return null;
-    }
-    throw error;
-  });
-  if (metadata?.isDirectory() && !metadata.isSymbolicLink()) {
-    await chmod(path, 0o700);
-  }
-  await rm(path, { force: true, recursive: true });
+  await removeExactContainedTree({ root: storageRoot, target: path });
 }
 
 export async function recoverExpiredJobLeases<
@@ -41,11 +26,17 @@ export async function recoverExpiredJobLeases<
   readonly repository: ExpiredJobLeaseRepository<Job>;
   readonly storageRoot: string;
 }): Promise<readonly InterruptedJobRecovery<Job>[]> {
-  const interrupted = input.repository.interruptExpired({
+  const newlyInterrupted = input.repository.interruptExpired({
     nowMs: input.nowMs,
   });
+  const interrupted = new Map(
+    newlyInterrupted.map((job) => [job.id, job] as const),
+  );
+  for (const job of input.repository.listPendingAutomaticRetries()) {
+    interrupted.set(job.id, job);
+  }
   const recovered: InterruptedJobRecovery<Job>[] = [];
-  for (const job of interrupted) {
+  for (const job of interrupted.values()) {
     await removeJobStaging(input.storageRoot, job.id);
     const decision = evaluateJobRetry(job, "automatic");
     recovered.push(

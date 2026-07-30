@@ -43,8 +43,8 @@ results match their correctness fixtures.
 ## Candidate and Recovery Gates
 
 ```sh
-pnpm test:integration -- tests/integration/publication tests/integration/recovery
-pnpm test:e2e -- tests/e2e/publishing-workbench.spec.ts tests/e2e/reader.spec.ts
+pnpm test:integration tests/integration/publication tests/integration/recovery
+pnpm test:e2e tests/e2e/publishing-workbench.spec.ts tests/e2e/reader.spec.ts
 ```
 
 Expected: one `build_candidate` produces preview/public semantic parity, publish performs zero
@@ -78,6 +78,10 @@ The runner expands to five pairs when CV exceeds 10%. Expected machine-readable 
 
 ## Final Gate
 
+Run the standard repository gates once after the last source change. `pnpm test` already includes
+unit, contract, integration and architecture projects, so do not repeat the four project commands in
+the same final pass.
+
 ```sh
 pnpm format
 pnpm lint
@@ -87,6 +91,6 @@ pnpm test:e2e
 pnpm build
 ```
 
-Then run Spec Kit analyze and converge. Completion requires no unmitigated CRITICAL finding and no
-remaining old `build_preview`, `build_publish`, compiler directory, forwarding export or alternate
-publication path.
+Reuse the successful stress and paired-benchmark artifacts produced by T091 and T092; the final
+static/test/build pass does not rerun those workloads. Then run Spec Kit analyze and converge.
+Completion requires no unmitigated CRITICAL finding and no alternate publication path.

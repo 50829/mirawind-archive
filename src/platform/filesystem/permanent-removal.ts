@@ -1,4 +1,4 @@
-import { lstat, rm } from "node:fs/promises";
+import { chmod, lstat, readdir, rm } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 export class UnsafePermanentRemovalTargetError extends Error {
@@ -21,6 +21,16 @@ function contained(root: string, target: string): boolean {
     relation !== ".." &&
     !relation.startsWith(`..${sep}`) &&
     !isAbsolute(relation)
+  );
+}
+
+async function unlockDirectories(path: string): Promise<void> {
+  const metadata = await lstat(path);
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) return;
+  await chmod(path, 0o700);
+  const entries = await readdir(path);
+  await Promise.all(
+    entries.map((entry) => unlockDirectories(resolve(path, entry))),
   );
 }
 
@@ -54,6 +64,7 @@ export async function removeExactContainedTree(input: {
       "A cleanup target cannot be a symbolic link.",
     );
   }
+  await unlockDirectories(target);
   await rm(target, { force: true, recursive: true });
   const remaining = await lstat(target).catch((error: unknown) => {
     if (

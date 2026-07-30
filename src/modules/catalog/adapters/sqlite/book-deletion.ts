@@ -108,11 +108,21 @@ function cancelRelatedJobs(
     )`;
   database
     .prepare(
+      `UPDATE draft_candidates
+       SET state = 'canceled', safe_error_code = 'JOB_CANCELED',
+           completed_at = @nowMs
+       WHERE state = 'building' AND job_id IN (
+         SELECT id FROM jobs WHERE state = 'queued' AND ${relationship}
+       )`,
+    )
+    .run({ bookId, cleanupJobId, nowMs });
+  database
+    .prepare(
       `UPDATE jobs
        SET state = 'canceled', cancellation_requested_at = @nowMs,
            finished_at = @nowMs, error_class = 'canceled',
            error_code = 'JOB_CANCELED', phase = 'canceled',
-           progress_json = '{}', error_detail_json = NULL
+           error_detail_json = NULL
        WHERE state = 'queued' AND ${relationship}`,
     )
     .run({ bookId, cleanupJobId, nowMs });

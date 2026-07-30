@@ -254,6 +254,7 @@ async function execute(message: RunJobMessage): Promise<void> {
             corrupt_versions: outcome.corruptDatabaseVersions.length,
             quarantined: outcome.quarantinedDirectories.length,
             recovered_current: outcome.recoveredCurrentVersions.length,
+            removed_orphans: outcome.removedOrphanPaths.length,
             removed_staging: outcome.removedStagingDirectories.length,
           },
           type: "result",

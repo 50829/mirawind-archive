@@ -220,18 +220,28 @@ publish stale output.
 
 ### Behavioral Evidence for User Story 3
 
-- [ ] T070 [US3] Cover file sync, rename, ready transaction, promotion commit and stale completion boundaries in the existing recovery suites
-- [ ] T071 [US3] Cover retry identity, cancellation grace, timeout, lease loss and bounded terminal progress in the existing job/candidate suites
-- [ ] T072 [US3] Cover restart reconciliation for upload/source/config/candidate orphans without duplicating fixture builders
-- [ ] T073 [US3] Cover delete-versus-build/publish races in the existing permanent-deletion suite
+- [x] T070 [US3] Cover file sync, rename, ready transaction, promotion commit and stale completion boundaries in the existing recovery suites
+- [x] T071 [US3] Cover retry identity, cancellation grace, timeout, lease loss and bounded terminal progress in the existing job/candidate suites
+- [x] T072 [US3] Cover restart reconciliation for upload/source/config/candidate orphans without duplicating fixture builders
+- [x] T073 [US3] Cover delete-versus-build/publish races in the existing permanent-deletion suite
 
 ### Implementation for User Story 3
 
-- [ ] T074 [US3] Enforce current-attempt compare-and-set and deterministic stale discard in `src/modules/publishing/application/commands/finalize-candidate.ts`
-- [ ] T075 [US3] Implement retry as a new candidate/job identity with preserved safe terminal evidence in `src/modules/publishing/application/commands/retry-candidate.ts`
-- [ ] T076 [US3] Extend reconciliation across uploads, source/config revisions and candidate/version trees without automatic promotion in `src/modules/publishing/application/commands/reconcile-publishing.ts`
-- [ ] T077 [US3] Integrate cancellation, timeout, lease loss and interruption terminalization with candidate cleanup in `src/entrypoints/worker/runner.ts`
-- [ ] T078 [US3] Make book deletion cancel current attempts and prevent late finalization/promotion in `src/modules/catalog/application/commands/delete-book.ts`
+- [x] T074 [US3] Enforce current-attempt compare-and-set, idempotent ready registration and deterministic stale discard in `src/modules/publishing/adapters/sqlite/candidate-registration.ts` and `src/modules/publishing/adapters/sqlite/draft-candidate-repository.ts`
+- [x] T075 [US3] Implement retry as one new candidate/job/version identity transaction with preserved terminal evidence in `src/modules/publishing/adapters/sqlite/jobs.ts`
+- [x] T076 [US3] Reconcile aged upload/source/original/config/analysis orphans and candidate/version trees without automatic promotion in `src/modules/publishing/adapters/filesystem/storage-reconciliation.ts` and `src/composition/storage-reconciliation.ts`
+- [x] T077 [US3] Integrate cancellation, timeout, lease loss and interruption terminalization with candidate state in `src/composition/worker.ts` and `src/modules/publishing/adapters/sqlite/jobs.ts`
+- [x] T078 [US3] Make book deletion cancel current attempts and prevent late finalization/promotion in `src/modules/catalog/adapters/sqlite/book-deletion.ts`
+
+Phase 6 evidence: candidate trees are fault-injected before fsync, after fsync, after rename, within
+ready registration, after ready commit and at each publication transaction boundary. Pre-commit
+faults roll back version/search/presentation/candidate/job state; lost responses return the one
+committed result; a superseded or deleted attempt cannot register or publish. Retry atomically
+creates new job, candidate and version IDs while preserving the original terminal error and bounded
+progress. Startup recovery completes interrupted retries once and removes only unregistered storage
+older than the one-hour Web-write grace. The test-only candidate IPC parser and the discarded-to-
+interrupted compatibility mapping were deleted. Format, lint/architecture, typecheck, all 118 Vitest
+files with 635 tests, the production build and the focused worker-recovery browser journey pass.
 
 **Checkpoint**: Commit as `refactor(publishing): make candidate recovery deterministic` after every
 injected boundary passes.
@@ -269,7 +279,9 @@ search p95 remains below 1,000 ms, and old/private/missing resources preserve au
 
 - [ ] T091 Run the 500-page synthetic stress book and 2,000/20,000 structure bounds, saving machine-readable output under ignored `.cache/008-publishing-performance/`
 - [ ] T092 Run the formal fifteen-book AB/BA/AB paired benchmark, expand only when CV exceeds 10%, validate all frozen thresholds and publish the bounded report
-- [ ] T095 Run format, lint/architecture, typecheck, full tests, E2E, build, recovery, reference, stress and benchmark gates once from `quickstart.md`
+- [ ] T095 After the last source change, run the standard format, lint/architecture, typecheck, full
+      Vitest, E2E and build gates once; reuse the T091 stress and T092 paired-benchmark artifacts instead
+      of rerunning those workloads
 - [ ] T096 Update only behaviorally affected product, decision, operations, audit and 008 artifacts
 - [ ] T097 Run Spec Kit analyze, resolve every CRITICAL/HIGH inconsistency, then run converge and append any real residual work to `specs/008-publishing-pipeline-performance/tasks.md`
 

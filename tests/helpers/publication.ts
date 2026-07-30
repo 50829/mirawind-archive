@@ -158,7 +158,8 @@ export function setupPublicationFixture(
            WHERE id = ? AND state = 'building' AND version_id IS NULL`,
         )
         .run(publicationTestVersionId, hash, candidate.attemptId);
-      if (ready.changes !== 1) throw new Error("CANDIDATE_READY_FIXTURE_FAILED");
+      if (ready.changes !== 1)
+        throw new Error("CANDIDATE_READY_FIXTURE_FAILED");
       jobs.completeSuccess({
         jobId: candidate.jobId,
         leaseOwner: publicationTestLeaseOwner,

@@ -198,9 +198,13 @@ describe("book structure semantic validation", () => {
       document,
     });
 
-    expect(result.headings.map((heading) => heading.role)).toEqual(
-      ["body", "appendix", "body", "body", "body"],
-    );
+    expect(result.headings.map((heading) => heading.role)).toEqual([
+      "body",
+      "appendix",
+      "body",
+      "body",
+      "body",
+    ]);
   });
 
   it("rejects heading reorder, non-heading page starts and missing heading entries", () => {

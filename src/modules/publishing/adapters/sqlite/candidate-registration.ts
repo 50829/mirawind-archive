@@ -30,12 +30,20 @@ export interface RegisteredCandidate {
   readonly versionId: string;
 }
 
-export class CandidateRegistrationAdapter
-  implements CandidateRegistrationPort<RegisteredCandidate>
-{
+export type CandidateRegistrationCrashPoint =
+  | "after_version_before_candidate"
+  | "after_candidate_before_job"
+  | "after_commit";
+
+export type CandidateRegistrationCrashPointInjector = (
+  point: CandidateRegistrationCrashPoint,
+) => void;
+
+export class CandidateRegistrationAdapter implements CandidateRegistrationPort<RegisteredCandidate> {
   constructor(
     private readonly database: Database.Database,
     private readonly layout: StorageLayout,
+    private readonly crashPoint?: CandidateRegistrationCrashPointInjector,
   ) {}
 
   async register(input: {
@@ -67,19 +75,21 @@ export class CandidateRegistrationAdapter
     const manifest = validateDocumentManifest(
       JSON.parse(manifestBytes.toString("utf8")),
     );
-    const marker = validateVersionMarker(JSON.parse(markerBytes.toString("utf8")));
+    const marker = validateVersionMarker(
+      JSON.parse(markerBytes.toString("utf8")),
+    );
     const compiler = marker.compiler as Readonly<Record<string, unknown>>;
     if (
       marker.version_id !== input.command.versionId ||
       marker.book_id !== input.command.bookId ||
       marker.source_id !== input.command.sourceId ||
       marker.config_revision !== input.command.configRevision ||
-      marker.predecessor_version_id !== input.command.capturedCurrentVersionId ||
+      marker.predecessor_version_id !==
+        input.command.capturedCurrentVersionId ||
       compiler.version !== input.command.compilerIdentity ||
       compiler.renderer_version !== input.command.rendererIdentity ||
       manifest.version_id !== input.command.versionId ||
-      (manifest.pages as readonly unknown[]).length !==
-        input.artifact.pageCount
+      (manifest.pages as readonly unknown[]).length !== input.artifact.pageCount
     ) {
       throw new Error("CANDIDATE_ARTIFACT_IDENTITY_MISMATCH");
     }
@@ -92,12 +102,15 @@ export class CandidateRegistrationAdapter
       Record<string, Readonly<Record<string, unknown>>>
     >;
 
-    return withImmediateTransaction(this.database, () => {
+    const registered = withImmediateTransaction(this.database, () => {
       const capture = this.database
         .prepare(
           `SELECT candidate.state AS candidate_state,
                   candidate.book_id, candidate.source_id,
                   candidate.config_revision, candidate.job_id,
+                  candidate.version_id AS candidate_version_id,
+                  candidate.semantic_digest AS candidate_semantic_digest,
+                  candidate.blocking_diagnostic_count,
                   jobs.state AS job_state, jobs.lease_owner,
                   jobs.version_id AS job_version_id,
                   jobs.captured_current_version_id,
@@ -112,7 +125,10 @@ export class CandidateRegistrationAdapter
         .get(input.command.candidateId) as
         | {
             book_id: number;
+            blocking_diagnostic_count: number | null;
             candidate_state: string;
+            candidate_semantic_digest: string | null;
+            candidate_version_id: string | null;
             captured_current_version_id: string | null;
             config_revision: number;
             current_candidate_id: string | null;
@@ -126,11 +142,8 @@ export class CandidateRegistrationAdapter
             source_id: string;
           }
         | undefined;
-      if (
-        !capture ||
-        capture.candidate_state !== "building" ||
-        capture.job_state !== "running" ||
-        capture.lease_owner !== input.leaseOwner ||
+      if (!capture) throw new Error("CANDIDATE_FINALIZATION_STALE");
+      const captureMismatch =
         capture.job_id !== input.command.jobId ||
         capture.job_version_id !== input.command.versionId ||
         capture.book_id !== input.command.bookId ||
@@ -141,7 +154,29 @@ export class CandidateRegistrationAdapter
         capture.current_candidate_id !== input.command.candidateId ||
         capture.current_version_id !== input.command.capturedCurrentVersionId ||
         capture.draft_source_id !== input.command.sourceId ||
-        capture.draft_config_revision !== input.command.configRevision
+        capture.draft_config_revision !== input.command.configRevision;
+      if (captureMismatch) {
+        throw new Error("CANDIDATE_FINALIZATION_STALE");
+      }
+      if (
+        capture.candidate_state === "ready" &&
+        capture.job_state === "succeeded" &&
+        capture.candidate_version_id === input.command.versionId &&
+        capture.candidate_semantic_digest === input.artifact.semanticDigest &&
+        capture.blocking_diagnostic_count ===
+          input.artifact.blockingDiagnosticCount
+      ) {
+        return Object.freeze({
+          candidateId: input.command.candidateId,
+          semanticDigest: input.artifact.semanticDigest,
+          versionId: input.command.versionId,
+        });
+      }
+      if (
+        capture.candidate_state !== "building" ||
+        capture.candidate_version_id !== null ||
+        capture.job_state !== "running" ||
+        capture.lease_owner !== input.leaseOwner
       ) {
         throw new Error("CANDIDATE_FINALIZATION_STALE");
       }
@@ -169,6 +204,7 @@ export class CandidateRegistrationAdapter
         versionMarkerSha256: input.artifact.versionMarkerSha256,
         versionRelativePath: input.artifact.artifactRootRelativePath,
       });
+      this.crashPoint?.("after_version_before_candidate");
       const candidate = this.database
         .prepare(
           `UPDATE draft_candidates
@@ -183,6 +219,7 @@ export class CandidateRegistrationAdapter
           input.nowMs,
           input.command.candidateId,
         );
+      this.crashPoint?.("after_candidate_before_job");
       const job = this.database
         .prepare(
           `UPDATE jobs
@@ -213,5 +250,7 @@ export class CandidateRegistrationAdapter
         versionId: input.command.versionId,
       });
     });
+    this.crashPoint?.("after_commit");
+    return registered;
   }
 }

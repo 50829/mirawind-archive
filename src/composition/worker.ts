@@ -19,7 +19,10 @@ import {
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { isJobPhase } from "@/modules/publishing/application/job-state";
 import { recoverExpiredJobLeases } from "@/modules/publishing/application/recover-expired-jobs";
-import { finalizeCandidate } from "@/modules/publishing/application/public";
+import {
+  evaluateJobRetry,
+  finalizeCandidate,
+} from "@/modules/publishing/application/public";
 import {
   persistAnalyzeImportArtifact,
   readAnalyzeImportArtifact,
@@ -220,40 +223,29 @@ async function executeClaimedJob(input: {
       input.imports,
       input.sources,
     );
-    const execution = await runJobChild(
-      command,
-      {
-        onProgress(progress) {
-          try {
-            if (!isJobPhase(input.job.kind, progress.phase)) {
-              throw new Error("JOB_PHASE_INVALID");
-            }
-            input.repository.heartbeat({
-              jobId: input.job.id,
-              leaseOwner: input.leaseOwner,
-              nowMs: Date.now(),
-              phase: progress.phase,
-              progress: progress.progress,
-            });
-          } catch {
-            childController.abort("progress-lease-lost");
+    const execution = await runJobChild(command, {
+      onProgress(progress) {
+        try {
+          if (!isJobPhase(input.job.kind, progress.phase)) {
+            throw new Error("JOB_PHASE_INVALID");
           }
-        },
-        signal: childController.signal,
-        storageRoot: input.layout.root,
+          input.repository.heartbeat({
+            jobId: input.job.id,
+            leaseOwner: input.leaseOwner,
+            nowMs: Date.now(),
+            phase: progress.phase,
+            progress: progress.progress,
+          });
+        } catch {
+          childController.abort("progress-lease-lost");
+        }
       },
-    );
+      signal: childController.signal,
+      storageRoot: input.layout.root,
+    });
     const latest = input.repository.get(input.job.id);
     if (!latest || latest.state !== "running") return;
     if (latest.cancellationRequestedAtMs !== null) {
-      if (input.job.kind === "build_candidate" && input.job.candidateId) {
-        input.candidates.completeTerminal({
-          candidateId: input.job.candidateId,
-          nowMs: Date.now(),
-          safeErrorCode: "JOB_CANCELED",
-          state: "canceled",
-        });
-      }
       input.repository.completeFailure({
         errorClass: "canceled",
         errorCode: "JOB_CANCELED",
@@ -261,6 +253,21 @@ async function executeClaimedJob(input: {
         leaseOwner: input.leaseOwner,
         nowMs: Date.now(),
       });
+      return;
+    }
+    if (input.shutdownSignal.aborted) {
+      const interrupted = input.repository.completeInterruption({
+        errorCode: "WORKER_SHUTDOWN",
+        jobId: input.job.id,
+        leaseOwner: input.leaseOwner,
+        nowMs: Date.now(),
+      });
+      if (evaluateJobRetry(interrupted, "automatic").allowed) {
+        input.repository.retry(interrupted.id, {
+          automatic: true,
+          nowMs: Date.now(),
+        });
+      }
       return;
     }
 
@@ -327,6 +334,9 @@ async function executeClaimedJob(input: {
         });
       }
       if (input.job.kind === "build_candidate") {
+        if (command.kind !== "build_candidate") {
+          throw new Error("BUILD_CANDIDATE_INPUT_INVALID");
+        }
         await finalizeCandidate({
           artifact: execution.result.result,
           command,
@@ -361,14 +371,6 @@ async function executeClaimedJob(input: {
         input.imports.reject(input.job.importId, errorCode, Date.now());
       }
     }
-    if (input.job.kind === "build_candidate" && input.job.candidateId) {
-      input.candidates.completeTerminal({
-        candidateId: input.job.candidateId,
-        nowMs: Date.now(),
-        safeErrorCode: errorCode,
-        state: errorClass === "canceled" ? "canceled" : "failed",
-      });
-    }
     input.repository.completeFailure({
       errorClass,
       errorCode,
@@ -376,20 +378,16 @@ async function executeClaimedJob(input: {
       leaseOwner: input.leaseOwner,
       nowMs: Date.now(),
     });
-  } catch {
+  } catch (error) {
     const latest = input.repository.get(input.job.id);
     if (latest?.state === "running") {
-      if (input.job.kind === "build_candidate" && input.job.candidateId) {
-        input.candidates.completeTerminal({
-          candidateId: input.job.candidateId,
-          nowMs: Date.now(),
-          safeErrorCode: "WORKER_JOB_FINALIZATION_FAILED",
-          state: "failed",
-        });
-      }
+      const errorCode =
+        error instanceof Error && /^[A-Z][A-Z0-9_]{2,79}$/u.test(error.message)
+          ? error.message
+          : "WORKER_JOB_FINALIZATION_FAILED";
       input.repository.completeFailure({
         errorClass: "infrastructure",
-        errorCode: "WORKER_JOB_FINALIZATION_FAILED",
+        errorCode,
         jobId: input.job.id,
         leaseOwner: input.leaseOwner,
         nowMs: Date.now(),
@@ -502,6 +500,7 @@ async function main(): Promise<void> {
       reconciliation.corruptDatabaseVersions.length > 0 ||
       reconciliation.quarantinedDirectories.length > 0 ||
       reconciliation.recoveredCurrentVersions.length > 0 ||
+      reconciliation.removedOrphanPaths.length > 0 ||
       reconciliation.removedStagingDirectories.length > 0
     ) {
       operationalMetrics.recordTransition("recovery.startup_changed");

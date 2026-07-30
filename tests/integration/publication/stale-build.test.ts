@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
+import {
+  CandidatePublicationRepository,
+  type CandidatePromotionCrashPoint,
+} from "@/modules/publishing/adapters/sqlite/candidate-publication";
+import {
+  m1PublishPolicy,
+  publishCandidate,
+} from "@/modules/publishing/application/public";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
@@ -103,6 +111,83 @@ describe("guarded candidate publication compare-and-swap", () => {
       expect(
         new VersionRepository(database).require(publicationTestVersionId).state,
       ).toBe("ready");
-      expect(fixture.jobs.get(fixture.candidateJob.id)?.state).toBe("succeeded");
+      expect(fixture.jobs.get(fixture.candidateJob.id)?.state).toBe(
+        "succeeded",
+      );
+    }));
+
+  it.each(["after_version_before_book", "after_book_before_audit"] as const)(
+    "rolls back publication interrupted at %s",
+    async (point) => {
+      await withMigratedTestDatabase(async ({ database }) => {
+        const fixture = setupPublicationFixture(database);
+        await expect(
+          publishCandidate({
+            actorUserId: null,
+            bookId: fixture.book.id,
+            expectedConfigRevision: 1,
+            expectedVersionId: publicationTestVersionId,
+            nowMs: 12,
+            policy: m1PublishPolicy,
+            publication: new CandidatePublicationRepository(
+              database,
+              (crashPoint: CandidatePromotionCrashPoint) => {
+                if (crashPoint === point) throw new Error(`CRASH_${point}`);
+              },
+            ),
+          }),
+        ).rejects.toThrow(`CRASH_${point}`);
+        expect(fixture.drafts.requireBook(fixture.book.id)).toMatchObject({
+          currentVersionId: null,
+          visibility: "draft",
+        });
+        expect(
+          new VersionRepository(database).require(publicationTestVersionId)
+            .state,
+        ).toBe("ready");
+        expect(
+          database
+            .prepare(
+              "SELECT COUNT(*) AS count FROM audit_events WHERE action = 'book.published'",
+            )
+            .get(),
+        ).toEqual({ count: 0 });
+      });
+    },
+  );
+
+  it("returns the committed publication after the first response is lost", () =>
+    withMigratedTestDatabase(async ({ database }) => {
+      const fixture = setupPublicationFixture(database);
+      await expect(
+        publishCandidate({
+          actorUserId: null,
+          bookId: fixture.book.id,
+          expectedConfigRevision: 1,
+          expectedVersionId: publicationTestVersionId,
+          nowMs: 12,
+          policy: m1PublishPolicy,
+          publication: new CandidatePublicationRepository(database, (point) => {
+            if (point === "after_commit") throw new Error("RESPONSE_LOST");
+          }),
+        }),
+      ).rejects.toThrow("RESPONSE_LOST");
+
+      const repeated = await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
+        database,
+        nowMs: 13,
+      });
+      expect(repeated).toMatchObject({
+        publishedAtMs: 12,
+        versionId: publicationTestVersionId,
+      });
+      expect(
+        database
+          .prepare(
+            "SELECT COUNT(*) AS count FROM audit_events WHERE action = 'book.published'",
+          )
+          .get(),
+      ).toEqual({ count: 1 });
     }));
 });

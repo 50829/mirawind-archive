@@ -184,14 +184,7 @@ function seedBooks(database: Database.Database, count: number): void {
         sha,
         jobId,
       );
-      insertCandidate.run(
-        candidateId,
-        id,
-        sourceId,
-        jobId,
-        versionId,
-        sha,
-      );
+      insertCandidate.run(candidateId, id, sourceId, jobId, versionId, sha);
       database
         .prepare("UPDATE jobs SET candidate_id = ? WHERE id = ?")
         .run(candidateId, jobId);

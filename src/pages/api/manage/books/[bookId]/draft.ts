@@ -56,14 +56,9 @@ export const GET: APIRoute = async ({ locals, params }) => {
   });
   let previewModel: Record<string, unknown> | null = null;
   let diagnostics: readonly SafeDiagnostic[] = [];
-  if (
-    candidate?.state === "ready" &&
-    candidate.version_id !== null
-  ) {
+  if (candidate?.state === "ready" && candidate.version_id !== null) {
     const previewRelativePath = `books/${bookId}/versions/${candidate.version_id}/preview`;
-    previewModel = await artifacts.readPreviewModel(
-      previewRelativePath,
-    );
+    previewModel = await artifacts.readPreviewModel(previewRelativePath);
     diagnostics = await artifacts.readDiagnostics(
       `${previewRelativePath}/diagnostics.json`,
     );

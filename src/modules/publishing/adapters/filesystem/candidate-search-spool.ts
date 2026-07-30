@@ -51,8 +51,6 @@ export async function readCandidateSearchSpool(
   });
   return Object.freeze({
     ...payload,
-    digest: createHash("sha256")
-      .update(canonicalJson(payload))
-      .digest("hex"),
+    digest: createHash("sha256").update(canonicalJson(payload)).digest("hex"),
   });
 }

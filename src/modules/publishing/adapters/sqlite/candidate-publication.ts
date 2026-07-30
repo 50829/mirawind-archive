@@ -29,6 +29,13 @@ interface PublicationRow {
   version_state: string;
 }
 
+export type CandidatePromotionCrashPoint =
+  "after_version_before_book" | "after_book_before_audit" | "after_commit";
+
+export type CandidatePromotionCrashPointInjector = (
+  point: CandidatePromotionCrashPoint,
+) => void;
+
 function stale(): never {
   throw new SafeApplicationError(
     "PUBLICATION_STALE",
@@ -37,10 +44,11 @@ function stale(): never {
   );
 }
 
-export class CandidatePublicationRepository
-  implements CandidatePublicationPort
-{
-  constructor(private readonly database: Database.Database) {}
+export class CandidatePublicationRepository implements CandidatePublicationPort {
+  constructor(
+    private readonly database: Database.Database,
+    private readonly crashPoint?: CandidatePromotionCrashPointInjector,
+  ) {}
 
   private row(bookId: number, versionId: string): PublicationRow | null {
     return (this.database
@@ -132,14 +140,15 @@ export class CandidatePublicationRepository
     readonly expectedVersionId: string;
     readonly nowMs: number;
   }): PublishedCandidate {
-    return withImmediateTransaction(this.database, () => {
+    const published = withImmediateTransaction(this.database, () => {
       const row = this.validate(
         this.row(input.bookId, input.expectedVersionId),
         input.expectedConfigRevision,
         input.expectedVersionId,
       );
       if (row.version_state === "published") {
-        if (row.published_at === null) throw new Error("PUBLICATION_TIMESTAMP_MISSING");
+        if (row.published_at === null)
+          throw new Error("PUBLICATION_TIMESTAMP_MISSING");
         return Object.freeze({
           publishedAtMs: row.published_at,
           state: "published" as const,
@@ -153,7 +162,8 @@ export class CandidatePublicationRepository
              WHERE id = ? AND book_id = ? AND state = 'published'`,
           )
           .run(row.current_version_id, row.book_id);
-        if (previous.changes !== 1) throw new Error("PUBLICATION_OLD_STATE_INVALID");
+        if (previous.changes !== 1)
+          throw new Error("PUBLICATION_OLD_STATE_INVALID");
       }
       const promoted = this.database
         .prepare(
@@ -162,7 +172,9 @@ export class CandidatePublicationRepository
            WHERE id = ? AND book_id = ? AND state = 'ready'`,
         )
         .run(input.nowMs, input.nowMs, row.version_id, row.book_id);
-      if (promoted.changes !== 1) throw new Error("PUBLICATION_READY_STATE_INVALID");
+      if (promoted.changes !== 1)
+        throw new Error("PUBLICATION_READY_STATE_INVALID");
+      this.crashPoint?.("after_version_before_book");
       const book = this.database
         .prepare(
           `UPDATE books
@@ -184,6 +196,7 @@ export class CandidatePublicationRepository
           row.current_version_id,
         );
       if (book.changes !== 1) throw new Error("PUBLICATION_BOOK_CAS_FAILED");
+      this.crashPoint?.("after_book_before_audit");
       this.database
         .prepare(
           `INSERT INTO audit_events (
@@ -205,5 +218,7 @@ export class CandidatePublicationRepository
         versionId: row.version_id,
       });
     });
+    this.crashPoint?.("after_commit");
+    return published;
   }
 }

@@ -9,7 +9,6 @@ import {
   realpath,
   rename,
   rmdir,
-  rm,
   type FileHandle,
 } from "node:fs/promises";
 import {
@@ -35,6 +34,7 @@ import {
   openExclusiveFile,
   resolveContainedPath,
 } from "@/platform/filesystem/layout";
+import { removeExactContainedTree } from "@/platform/filesystem/permanent-removal";
 
 export interface SourceSnapshotResult {
   readonly original: OriginalFileRecord;
@@ -67,17 +67,6 @@ async function syncDirectory(path: string): Promise<void> {
   } finally {
     await handle.close();
   }
-}
-
-async function removeTree(path: string): Promise<void> {
-  const metadata = await lstat(path).catch(() => undefined);
-  if (!metadata) return;
-  if (metadata.isDirectory() && !metadata.isSymbolicLink()) {
-    await chmod(path, 0o700);
-    const entries = await readdir(path);
-    await Promise.all(entries.map((entry) => removeTree(resolve(path, entry))));
-  }
-  await rm(path, { force: true, recursive: true });
 }
 
 async function writeAll(
@@ -303,13 +292,33 @@ export class SourceSnapshotService {
         });
         return Object.freeze({ original, source });
       });
-      await removeTree(stagingRoot);
+      await removeExactContainedTree({
+        root: this.layout.root,
+        target: stagingRoot,
+      });
       return result;
     } catch (error) {
       await Promise.all([
-        removeTree(stagingRoot),
-        ...(sourceRenamed ? [removeTree(finalSource)] : []),
-        ...(originalRenamed ? [removeTree(finalOriginal)] : []),
+        removeExactContainedTree({
+          root: this.layout.root,
+          target: stagingRoot,
+        }),
+        ...(sourceRenamed
+          ? [
+              removeExactContainedTree({
+                root: this.layout.root,
+                target: finalSource,
+              }),
+            ]
+          : []),
+        ...(originalRenamed
+          ? [
+              removeExactContainedTree({
+                root: this.layout.root,
+                target: finalOriginal,
+              }),
+            ]
+          : []),
       ]);
       await rmdir(dirname(finalSource)).catch(() => undefined);
       await rmdir(dirname(finalOriginal)).catch(() => undefined);

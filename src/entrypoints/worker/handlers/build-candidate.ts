@@ -1,13 +1,11 @@
 import {
-  parseBuildCandidateCommand,
-  parseCandidateBuildArtifact,
   type BuildCandidateCommand,
   type CandidateBuildArtifact,
   type CandidateBuildStageUpdate,
 } from "@/modules/publishing/application/public";
 import {
-  candidateJobChildProtocolVersion,
-  type BuildCandidateProgressMessage,
+  jobChildProtocolVersion,
+  type JobProgressMessage,
 } from "@/entrypoints/worker/protocol";
 
 export interface CandidateBuildExecutor {
@@ -19,12 +17,12 @@ export interface CandidateBuildExecutor {
 }
 
 export async function handleBuildCandidate(input: {
-  readonly command: unknown;
+  readonly command: BuildCandidateCommand;
   readonly execute: CandidateBuildExecutor;
-  readonly onProgress?: (message: BuildCandidateProgressMessage) => void;
+  readonly onProgress?: (message: JobProgressMessage) => void;
   readonly signal?: AbortSignal;
 }): Promise<CandidateBuildArtifact> {
-  const command = parseBuildCandidateCommand(input.command);
+  const { command } = input;
   const artifact = await input.execute({
     command,
     onStage(update) {
@@ -38,12 +36,12 @@ export async function handleBuildCandidate(input: {
             total: update.total,
             unit: update.unit,
           }),
-          protocolVersion: candidateJobChildProtocolVersion,
+          protocolVersion: jobChildProtocolVersion,
           type: "progress",
         }),
       );
     },
     ...(input.signal ? { signal: input.signal } : {}),
   });
-  return parseCandidateBuildArtifact(artifact, command);
+  return artifact;
 }

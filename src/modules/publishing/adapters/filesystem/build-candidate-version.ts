@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 
 import type { SafeDiagnostic } from "@/domain/errors";
+import type { CandidateTreeCrashPointInjector } from "@/modules/publishing/application/candidate-durability";
 import type {
   ConfirmedSourceRegion,
   TypographyProvenance,
@@ -17,7 +18,6 @@ import {
   type CandidateMaterializationResult,
 } from "@/modules/publishing/adapters/reader-html/candidate-materializer";
 import {
-  parseCandidateBuildArtifact,
   type BuildCandidateCommand,
   type CandidateBuildArtifact,
   type CandidateBuildStageUpdate,
@@ -78,6 +78,7 @@ function report(
 
 export async function buildCandidateVersion(input: {
   readonly command: BuildCandidateCommand;
+  readonly crashPoint?: CandidateTreeCrashPointInjector;
   readonly createdAtMs: number;
   readonly layout: StorageLayout;
   readonly onStage?: (update: CandidateBuildStageUpdate) => void;
@@ -252,6 +253,7 @@ export async function buildCandidateVersion(input: {
   });
   const finalDirectory = await finalizeCandidateTree({
     artifact: result,
+    ...(input.crashPoint ? { crashPoint: input.crashPoint } : {}),
     layout: input.layout,
     stagingDirectory,
   });
@@ -284,7 +286,7 @@ export async function buildCandidateVersion(input: {
   ) {
     throw new Error("CANDIDATE_IDENTITY_MISMATCH");
   }
-  const artifact = {
+  const artifact = Object.freeze({
     artifactRootRelativePath: relative(input.layout.root, finalDirectory)
       .split(sep)
       .join("/"),
@@ -308,12 +310,12 @@ export async function buildCandidateVersion(input: {
     semanticDigest: result.identity.semantic_digest,
     versionId: command.versionId,
     versionMarkerSha256: sha256(markerBytes),
-  } as const;
+  } satisfies CandidateBuildArtifact);
   report(input.onStage, {
     completed: 1,
     phase: "finalize_candidate",
     total: 1,
     unit: "steps",
   });
-  return parseCandidateBuildArtifact(artifact, command);
+  return artifact;
 }

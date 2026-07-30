@@ -1,22 +1,15 @@
 import type Database from "better-sqlite3";
 
 import { createOpaqueId } from "@/domain/ids";
-import type { CurrentDraftCandidateRecord } from "@/modules/publishing/application/public";
+import type {
+  CurrentDraftCandidateRecord,
+  CurrentDraftCandidateState,
+} from "@/modules/publishing/application/public";
 import { candidateBuildIdentities } from "@/modules/publishing/application/public";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 export type DraftCandidateState =
-  | "building"
-  | "ready"
-  | "failed"
-  | "canceled"
-  | "interrupted"
-  | "discarded";
-
-type DraftCandidateTerminalState = Exclude<
-  DraftCandidateState,
-  "building" | "ready"
->;
+  "building" | "ready" | "failed" | "canceled" | "interrupted" | "discarded";
 
 interface CandidateRow {
   blocking_diagnostic_count: number | null;
@@ -33,14 +26,22 @@ interface CandidateRow {
   version_id: string | null;
 }
 
-export interface DraftCandidateRecord extends CurrentDraftCandidateRecord {
+export interface DraftCandidateRecord extends Omit<
+  CurrentDraftCandidateRecord,
+  "state"
+> {
   readonly blockingDiagnosticCount: number | null;
   readonly bookId: number;
   readonly completedAtMs: number | null;
   readonly createdAtMs: number;
   readonly jobId: string;
   readonly sourceId: string;
+  readonly state: DraftCandidateState;
 }
+
+export type CurrentCandidateRecord = Omit<DraftCandidateRecord, "state"> & {
+  readonly state: CurrentDraftCandidateState;
+};
 
 function previewUrl(row: CandidateRow): string | null {
   return row.state === "ready"
@@ -61,7 +62,7 @@ function mapCandidate(row: CandidateRow): DraftCandidateRecord {
     safeErrorCode: row.safe_error_code,
     semanticDigest: row.semantic_digest,
     sourceId: row.source_id,
-    state: row.state === "discarded" ? "interrupted" : row.state,
+    state: row.state,
     versionId: row.version_id,
   });
 }
@@ -108,6 +109,26 @@ export class DraftCandidateRepository {
            ) AND state = 'ready'`,
         )
         .run(current.current_candidate_id);
+      this.database
+        .prepare(
+          `UPDATE jobs
+           SET state = 'canceled', cancellation_requested_at = ?,
+               finished_at = ?, error_class = 'canceled',
+               error_code = 'CANDIDATE_SUPERSEDED', phase = 'canceled'
+           WHERE id = (
+             SELECT job_id FROM draft_candidates WHERE id = ?
+           ) AND state = 'queued'`,
+        )
+        .run(input.nowMs, input.nowMs, current.current_candidate_id);
+      this.database
+        .prepare(
+          `UPDATE jobs
+           SET cancellation_requested_at = COALESCE(cancellation_requested_at, ?)
+           WHERE id = (
+             SELECT job_id FROM draft_candidates WHERE id = ?
+           ) AND state = 'running'`,
+        )
+        .run(input.nowMs, current.current_candidate_id);
     }
 
     const candidateId = createOpaqueId("draftCandidate");
@@ -187,7 +208,7 @@ export class DraftCandidateRepository {
     return row ? mapCandidate(row) : null;
   }
 
-  findCurrent(bookId: number): DraftCandidateRecord | null {
+  findCurrent(bookId: number): CurrentCandidateRecord | null {
     const row = this.database
       .prepare(
         `SELECT candidate.* FROM books
@@ -196,10 +217,11 @@ export class DraftCandidateRepository {
           AND candidate.book_id = books.id
           AND candidate.config_revision = books.draft_config_revision
           AND candidate.source_id = books.draft_source_id
+          AND candidate.state <> 'discarded'
          WHERE books.id = ? AND books.deletion_requested_at IS NULL`,
       )
       .get(bookId) as CandidateRow | undefined;
-    return row ? mapCandidate(row) : null;
+    return row ? (mapCandidate(row) as CurrentCandidateRecord) : null;
   }
 
   createForCurrentRevision(input: {
@@ -212,33 +234,6 @@ export class DraftCandidateRepository {
     return withImmediateTransaction(this.database, () =>
       this.createForCurrentRevisionInTransaction(input),
     );
-  }
-
-  completeTerminal(input: {
-    readonly candidateId: string;
-    readonly nowMs: number;
-    readonly safeErrorCode: string;
-    readonly state: DraftCandidateTerminalState;
-  }): DraftCandidateRecord {
-    if (!/^[A-Z][A-Z0-9_]{2,79}$/u.test(input.safeErrorCode)) {
-      throw new Error("CANDIDATE_ERROR_CODE_INVALID");
-    }
-    const changed = this.database
-      .prepare(
-        `UPDATE draft_candidates
-         SET state = ?, safe_error_code = ?, completed_at = ?
-         WHERE id = ? AND state = 'building'`,
-      )
-      .run(
-        input.state,
-        input.safeErrorCode,
-        input.nowMs,
-        input.candidateId,
-      );
-    if (changed.changes > 1) {
-      throw new Error("DRAFT_CANDIDATE_TERMINAL_UPDATE_INVALID");
-    }
-    return this.require(input.candidateId);
   }
 
   replaceConfigAndCreate(input: {
@@ -337,7 +332,10 @@ export class DraftCandidateRepository {
            WHERE id = ? AND deletion_requested_at IS NULL`,
         )
         .get(input.bookId) as
-        | { draft_config_revision: number | null; draft_source_id: string | null }
+        | {
+            draft_config_revision: number | null;
+            draft_source_id: string | null;
+          }
         | undefined;
       if (
         !current ||
@@ -495,12 +493,12 @@ export class DraftCandidateRepository {
          WHERE candidate.id = ? AND candidate.state = 'building'`,
       )
       .get(candidateId) as
-      | CandidateRow & {
+      | (CandidateRow & {
           captured_current_version_id: string | null;
           source_root_rel_path: string;
           version_id: string;
           yaml_rel_path: string;
-        }
+        })
       | undefined;
     if (!row?.version_id) throw new Error("BUILD_CANDIDATE_INPUT_INVALID");
     return Object.freeze({

@@ -1,56 +1,15 @@
 import { isOpaqueId } from "@/domain/ids";
 import {
-  candidateBuildPhases,
   isKnownJobPhase,
   jobKinds,
   parseBuildCandidateCommand,
-  parseCandidateBuildArtifact,
   type BuildCandidateCommand,
-  type CandidateBuildPhase,
-  type CandidateBuildArtifact,
   type JobKind,
   type JobPhase,
   type TypographyProfile,
 } from "@/modules/publishing/application/public";
 
 export const jobChildProtocolVersion = 3;
-export const candidateJobChildProtocolVersion = jobChildProtocolVersion;
-
-export interface BuildCandidateRunMessage {
-  readonly input: BuildCandidateCommand;
-  readonly protocolVersion: typeof candidateJobChildProtocolVersion;
-  readonly type: "run";
-}
-
-export interface BuildCandidateProgressMessage {
-  readonly jobId: string;
-  readonly phase: CandidateBuildPhase;
-  readonly progress: JobProgress;
-  readonly protocolVersion: typeof candidateJobChildProtocolVersion;
-  readonly type: "progress";
-}
-
-export interface BuildCandidateSuccessMessage {
-  readonly jobId: string;
-  readonly ok: true;
-  readonly protocolVersion: typeof candidateJobChildProtocolVersion;
-  readonly result: CandidateBuildArtifact;
-  readonly type: "result";
-}
-
-export interface BuildCandidateFailureMessage {
-  readonly jobId: string;
-  readonly ok: false;
-  readonly protocolVersion: typeof candidateJobChildProtocolVersion;
-  readonly safeErrorClass: NonNullable<JobResultMessage["safeErrorClass"]>;
-  readonly safeErrorCode: string;
-  readonly type: "result";
-}
-
-export type BuildCandidateChildMessage =
-  | BuildCandidateFailureMessage
-  | BuildCandidateProgressMessage
-  | BuildCandidateSuccessMessage;
 
 interface FrozenJobCommandBase {
   readonly attempt: number;
@@ -226,116 +185,6 @@ export function isJobProgress(value: unknown): value is JobProgress {
         processedBytes >= 0)) &&
     ["bytes", "items", "pages", "steps"].includes(String(value.unit))
   );
-}
-
-const candidateBuildPhaseSet = new Set<CandidateBuildPhase>(
-  candidateBuildPhases,
-);
-
-const safeErrorClasses = new Set<
-  NonNullable<JobResultMessage["safeErrorClass"]>
->([
-  "infrastructure",
-  "content",
-  "validation",
-  "security_limit",
-  "timeout",
-  "canceled",
-]);
-
-function isSafeErrorCode(value: unknown): value is string {
-  return typeof value === "string" && /^[A-Z][A-Z0-9_]{2,79}$/u.test(value);
-}
-
-export function parseBuildCandidateRunMessage(
-  value: unknown,
-): BuildCandidateRunMessage {
-  if (
-    !isRecord(value) ||
-    !exactKeys(value, ["input", "protocolVersion", "type"]) ||
-    value.type !== "run" ||
-    value.protocolVersion !== candidateJobChildProtocolVersion
-  ) {
-    throw new TypeError("BUILD_CANDIDATE_RUN_MESSAGE_INVALID");
-  }
-  try {
-    return Object.freeze({
-      input: parseBuildCandidateCommand(value.input),
-      protocolVersion: candidateJobChildProtocolVersion,
-      type: "run",
-    });
-  } catch {
-    throw new TypeError("BUILD_CANDIDATE_RUN_MESSAGE_INVALID");
-  }
-}
-
-export function parseBuildCandidateChildMessage(
-  value: unknown,
-  command: BuildCandidateCommand,
-): BuildCandidateChildMessage {
-  if (
-    !isRecord(value) ||
-    value.protocolVersion !== candidateJobChildProtocolVersion ||
-    value.jobId !== command.jobId
-  ) {
-    throw new TypeError("BUILD_CANDIDATE_CHILD_MESSAGE_INVALID");
-  }
-  if (value.type === "progress") {
-    if (
-      !exactKeys(value, [
-        "jobId",
-        "phase",
-        "progress",
-        "protocolVersion",
-        "type",
-      ]) ||
-      typeof value.phase !== "string" ||
-      !candidateBuildPhaseSet.has(value.phase as CandidateBuildPhase) ||
-      !isJobProgress(value.progress)
-    ) {
-      throw new TypeError("BUILD_CANDIDATE_CHILD_MESSAGE_INVALID");
-    }
-    return Object.freeze(value as unknown as BuildCandidateProgressMessage);
-  }
-  if (value.type !== "result" || typeof value.ok !== "boolean") {
-    throw new TypeError("BUILD_CANDIDATE_CHILD_MESSAGE_INVALID");
-  }
-  if (value.ok) {
-    if (
-      !exactKeys(value, ["jobId", "ok", "protocolVersion", "result", "type"])
-    ) {
-      throw new TypeError("BUILD_CANDIDATE_CHILD_MESSAGE_INVALID");
-    }
-    try {
-      return Object.freeze({
-        jobId: command.jobId,
-        ok: true,
-        protocolVersion: candidateJobChildProtocolVersion,
-        result: parseCandidateBuildArtifact(value.result, command),
-        type: "result",
-      });
-    } catch {
-      throw new TypeError("BUILD_CANDIDATE_CHILD_MESSAGE_INVALID");
-    }
-  }
-  if (
-    !exactKeys(value, [
-      "jobId",
-      "ok",
-      "protocolVersion",
-      "safeErrorClass",
-      "safeErrorCode",
-      "type",
-    ]) ||
-    typeof value.safeErrorClass !== "string" ||
-    !safeErrorClasses.has(
-      value.safeErrorClass as NonNullable<JobResultMessage["safeErrorClass"]>,
-    ) ||
-    !isSafeErrorCode(value.safeErrorCode)
-  ) {
-    throw new TypeError("BUILD_CANDIDATE_CHILD_MESSAGE_INVALID");
-  }
-  return Object.freeze(value as unknown as BuildCandidateFailureMessage);
 }
 
 export function isRunJobMessage(value: unknown): value is RunJobMessage {

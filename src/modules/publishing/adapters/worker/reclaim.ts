@@ -1,10 +1,11 @@
-import { chmod, lstat, readdir, rm } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import type { StorageLayout } from "@/platform/filesystem/layout";
+import { removeExactContainedTree } from "@/platform/filesystem/permanent-removal";
 
 export const versionRetentionGraceMs = 24 * 60 * 60 * 1_000;
 
@@ -15,24 +16,6 @@ export interface ReclamationResult {
 }
 
 type RemovePath = (path: string) => Promise<void>;
-
-async function removeTree(path: string): Promise<void> {
-  const metadata = await lstat(path).catch((error: unknown) => {
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
-      return null;
-    }
-    throw error;
-  });
-  if (metadata?.isDirectory() && !metadata.isSymbolicLink()) {
-    await chmod(path, 0o700);
-  }
-  await rm(path, { force: true, recursive: true });
-}
 
 async function reclaimQuarantine(input: {
   readonly cutoffMs: number;
@@ -100,7 +83,10 @@ export async function reclaimRetainedStorage(input: {
   readonly nowMs: number;
   readonly removePath?: RemovePath;
 }): Promise<ReclamationResult> {
-  const removePath = input.removePath ?? removeTree;
+  const removePath =
+    input.removePath ??
+    ((target: string) =>
+      removeExactContainedTree({ root: input.layout.root, target }));
   const cutoffMs = input.nowMs - versionRetentionGraceMs;
   const candidates = input.database
     .prepare(

@@ -8,6 +8,10 @@ import { createBookDeletionToken } from "@/modules/catalog/core/book-deletion-to
 import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
 
 import { withMigratedTestDatabase } from "../../helpers/database";
+import {
+  publishReadyCandidateForTest,
+  setupPublicationFixture,
+} from "../../helpers/publication";
 
 function token(book: ReturnType<DraftRepository["createBook"]>): string {
   return createBookDeletionToken({
@@ -230,6 +234,74 @@ describe("permanent book deletion acceptance", () => {
       expect(
         jobs.claimNext({ leaseOwner: "another-worker", nowMs: 2_100 }),
       ).toBeNull();
+    });
+  });
+
+  it("terminalizes a running candidate as canceled after the deletion barrier", async () => {
+    await withMigratedTestDatabase(({ database }) => {
+      const fixture = setupPublicationFixture(database, {
+        registerReady: false,
+      });
+      const current = fixture.drafts.requireBook(fixture.book.id);
+      acceptBookDeletion({
+        actorUserId: "admin",
+        bookId: current.id,
+        confirmationTitle: current.title,
+        database,
+        idempotencyKey: "delete-running-candidate-0001",
+        mutationToken: token(current),
+        nowMs: 20,
+      });
+
+      expect(fixture.jobs.get(fixture.candidateJob.id)).toMatchObject({
+        cancellationRequestedAtMs: 20,
+        state: "running",
+      });
+      fixture.jobs.completeFailure({
+        errorClass: "canceled",
+        errorCode: "JOB_CANCELED",
+        jobId: fixture.candidateJob.id,
+        leaseOwner: "worker:test",
+        nowMs: 21,
+      });
+      expect(
+        fixture.candidates.require(fixture.candidate.attemptId),
+      ).toMatchObject({
+        safeErrorCode: "JOB_CANCELED",
+        state: "canceled",
+      });
+    });
+  });
+
+  it("prevents a ready candidate from publishing after deletion starts", async () => {
+    await withMigratedTestDatabase(async ({ database }) => {
+      const fixture = setupPublicationFixture(database);
+      const current = fixture.drafts.requireBook(fixture.book.id);
+      acceptBookDeletion({
+        actorUserId: "admin",
+        bookId: current.id,
+        confirmationTitle: current.title,
+        database,
+        idempotencyKey: "delete-ready-candidate-0001",
+        mutationToken: token(current),
+        nowMs: 20,
+      });
+
+      await expect(
+        publishReadyCandidateForTest({
+          bookId: current.id,
+          database,
+          nowMs: 21,
+        }),
+      ).rejects.toMatchObject({ code: "PUBLICATION_STALE" });
+      expect(
+        database
+          .prepare(
+            `SELECT current_version_id, deletion_requested_at
+             FROM books WHERE id = ?`,
+          )
+          .get(current.id),
+      ).toEqual({ current_version_id: null, deletion_requested_at: 20 });
     });
   });
 });

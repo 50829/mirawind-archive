@@ -277,6 +277,14 @@ describe("atomic draft configuration revisions", () => {
   it("writes a read-only immutable revision and atomically queues its preview", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const setup = await fixture(database, dataRoot.layout);
+      const previousCandidate = new DraftCandidateRepository(
+        database,
+      ).createForCurrentRevision({
+        bookId: setup.book.id,
+        configRevision: 1,
+        nowMs: 5,
+        sourceId: "src_config_revision_test_0001",
+      });
       const next = config({
         revision: 2,
         sourceHash: setup.markdownHash,
@@ -339,6 +347,20 @@ describe("atomic draft configuration revisions", () => {
         attemptId: result.candidate.attemptId,
         jobId: result.candidate.jobId,
         state: "building",
+      });
+      expect(
+        new DraftCandidateRepository(database).require(
+          previousCandidate.attemptId,
+        ),
+      ).toMatchObject({
+        safeErrorCode: "CANDIDATE_SUPERSEDED",
+        state: "discarded",
+      });
+      expect(
+        new JobRepository(database).get(previousCandidate.jobId),
+      ).toMatchObject({
+        errorCode: "CANDIDATE_SUPERSEDED",
+        state: "canceled",
       });
       const nextAnalysisPath = resolve(
         dataRoot.layout.bookDirectory,

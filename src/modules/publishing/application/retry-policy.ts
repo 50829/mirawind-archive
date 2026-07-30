@@ -6,11 +6,11 @@ import {
 
 export interface RetryableJob {
   readonly automaticRetryCount: number;
+  readonly cancellationRequestedAtMs: number | null;
   readonly errorClass: string | null;
   readonly errorCode: string | null;
   readonly kind: JobKind;
   readonly state: JobState;
-  readonly versionId: string | null;
 }
 
 export type JobRetryMode = "automatic" | "manual";
@@ -22,8 +22,7 @@ export type JobRetryDecision =
       reason:
         | "AUTOMATIC_RETRY_NOT_INFRASTRUCTURE_INTERRUPTION"
         | "AUTOMATIC_RETRY_LIMIT_REACHED"
-        | "JOB_NOT_RETRYABLE"
-        | "READY_PUBLICATION_REQUIRES_PUBLISH_ACTION";
+        | "JOB_NOT_RETRYABLE";
     }>;
 
 const manualRetryClasses = new Set([
@@ -43,13 +42,6 @@ export function evaluateJobRetry(
     return { allowed: false, reason: "JOB_NOT_RETRYABLE" };
   }
 
-  if (job.kind === "build_candidate" && job.versionId !== null) {
-    return {
-      allowed: false,
-      reason: "READY_PUBLICATION_REQUIRES_PUBLISH_ACTION",
-    };
-  }
-
   if (mode === "automatic") {
     if (job.automaticRetryCount >= 1) {
       return {
@@ -58,9 +50,10 @@ export function evaluateJobRetry(
       };
     }
     if (
+      job.cancellationRequestedAtMs !== null ||
       job.state !== "interrupted" ||
       job.errorClass !== "infrastructure" ||
-      job.errorCode !== "JOB_LEASE_EXPIRED"
+      !["JOB_LEASE_EXPIRED", "WORKER_SHUTDOWN"].includes(job.errorCode ?? "")
     ) {
       return {
         allowed: false,

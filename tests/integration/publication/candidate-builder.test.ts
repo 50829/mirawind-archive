@@ -9,14 +9,23 @@ import {
 } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import type Database from "better-sqlite3";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
+import { reconcileStorage } from "@/composition/storage-reconciliation";
 import { handleBuildCandidate } from "@/entrypoints/worker/handlers/build-candidate";
-import type { BuildCandidateProgressMessage } from "@/entrypoints/worker/protocol";
+import type { JobProgressMessage } from "@/entrypoints/worker/protocol";
 import { buildCandidateVersion } from "@/modules/publishing/adapters/filesystem/build-candidate-version";
 import {
+  CandidateRegistrationAdapter,
+  type CandidateRegistrationCrashPoint,
+} from "@/modules/publishing/adapters/sqlite/candidate-registration";
+import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
+import type { CandidateTreeCrashPoint } from "@/modules/publishing/application/candidate-durability";
+import {
   candidateBuildIdentities,
+  finalizeCandidate,
   parseBuildCandidateCommand,
   type BuildCandidateCommand,
 } from "@/modules/publishing/application/public";
@@ -29,6 +38,11 @@ import {
   createTemporaryDataRoot,
   type TemporaryDataRoot,
 } from "../../helpers/data-root.js";
+import { openMigratedTestDatabase } from "../../helpers/database.js";
+import {
+  publicationTestLeaseOwner,
+  setupPublicationFixture,
+} from "../../helpers/publication.js";
 
 const bookId = 9;
 const configRevision = 3;
@@ -87,13 +101,13 @@ async function writeCandidateInput(
     configPath,
     stringify(
       {
-        book_id: bookId,
+        book_id: command.bookId,
         metadata: { authors: ["Fixture Author"], language: "en" },
         publishing: {
           code: { line_numbers: false },
           numbering: { mode: "normalized" },
         },
-        revision: configRevision,
+        revision: command.configRevision,
         schema_version: 3,
         source: {
           main_markdown: "book.md",
@@ -142,11 +156,27 @@ function normalizedArticle(html: string): string {
 }
 
 function distinctPhases(
-  messages: readonly BuildCandidateProgressMessage[],
+  messages: readonly JobProgressMessage[],
 ): readonly string[] {
   return messages
     .map((message) => message.phase)
     .filter((phase, index, phases) => phase !== phases[index - 1]);
+}
+
+async function registrationFixture(
+  database: Database.Database,
+  dataRoot: TemporaryDataRoot,
+) {
+  const fixture = setupPublicationFixture(database, { registerReady: false });
+  const command = fixture.candidates.buildCommand(fixture.candidate.attemptId);
+  await writeCandidateInput(dataRoot, command);
+  const artifact = await buildCandidateVersion({
+    command,
+    createdAtMs,
+    layout: dataRoot.layout,
+    preparationDiagnostics: [],
+  });
+  return { artifact, command, fixture };
 }
 
 describe("isolated candidate child builder", () => {
@@ -155,7 +185,7 @@ describe("isolated candidate child builder", () => {
     try {
       const command = commandFor("success_0001");
       await writeCandidateInput(dataRoot, command);
-      const progress: BuildCandidateProgressMessage[] = [];
+      const progress: JobProgressMessage[] = [];
       const artifact = await handleBuildCandidate({
         command,
         execute: ({ command: parsed, onStage, signal }) =>
@@ -363,6 +393,240 @@ describe("isolated candidate child builder", () => {
         ).catch(() => []),
       ).toEqual([]);
     } finally {
+      await dataRoot.cleanup();
+    }
+  });
+
+  it.each([
+    "before_fsync",
+    "after_fsync_before_rename",
+    "after_rename",
+  ] as const)(
+    "leaves only recoverable output when interrupted at %s",
+    async (point) => {
+      const dataRoot = await createTemporaryDataRoot(
+        `candidate-crash-${point}`,
+      );
+      try {
+        const command = commandFor(`crash_${point}`);
+        await writeCandidateInput(dataRoot, command);
+        await expect(
+          handleBuildCandidate({
+            command,
+            execute: ({ command: parsed, onStage, signal }) =>
+              buildCandidateVersion({
+                command: parsed,
+                crashPoint(crashPoint: CandidateTreeCrashPoint) {
+                  if (crashPoint === point) throw new Error(`CRASH_${point}`);
+                },
+                createdAtMs,
+                layout: dataRoot.layout,
+                onStage,
+                preparationDiagnostics: [],
+                ...(signal ? { signal } : {}),
+              }),
+          }),
+        ).rejects.toThrow(`CRASH_${point}`);
+
+        const finalDirectory = resolve(
+          dataRoot.layout.bookDirectory,
+          String(bookId),
+          "versions",
+          command.versionId,
+        );
+        if (point === "after_rename") {
+          await access(finalDirectory);
+        } else {
+          await expect(access(finalDirectory)).rejects.toMatchObject({
+            code: "ENOENT",
+          });
+        }
+        await access(resolve(dataRoot.layout.root, "staging", command.jobId));
+        const migrated = await openMigratedTestDatabase(dataRoot);
+        try {
+          const reconciliation = await reconcileStorage({
+            database: migrated.database,
+            layout: dataRoot.layout,
+            nowMs: createdAtMs + 1,
+          });
+          expect(reconciliation.removedStagingDirectories).toContain(
+            command.jobId,
+          );
+          if (point === "after_rename") {
+            expect(reconciliation.quarantinedDirectories).toEqual([
+              `books/${bookId}/quarantine/${command.versionId}.${createdAtMs + 1}`,
+            ]);
+          } else {
+            expect(reconciliation.quarantinedDirectories).toEqual([]);
+          }
+        } finally {
+          migrated.close();
+        }
+        await expect(access(finalDirectory)).rejects.toMatchObject({
+          code: "ENOENT",
+        });
+      } finally {
+        await dataRoot.cleanup();
+      }
+    },
+  );
+
+  it.each([
+    "after_version_before_candidate",
+    "after_candidate_before_job",
+  ] as const)(
+    "rolls back ready registration interrupted at %s",
+    async (point) => {
+      const dataRoot = await createTemporaryDataRoot(`registration-${point}`);
+      const migrated = await openMigratedTestDatabase(dataRoot);
+      try {
+        const { artifact, command, fixture } = await registrationFixture(
+          migrated.database,
+          dataRoot,
+        );
+        await expect(
+          finalizeCandidate({
+            artifact,
+            command,
+            leaseOwner: publicationTestLeaseOwner,
+            nowMs: createdAtMs + 1,
+            registration: new CandidateRegistrationAdapter(
+              migrated.database,
+              dataRoot.layout,
+              (crashPoint: CandidateRegistrationCrashPoint) => {
+                if (crashPoint === point) throw new Error(`CRASH_${point}`);
+              },
+            ),
+          }),
+        ).rejects.toThrow(`CRASH_${point}`);
+
+        expect(
+          new VersionRepository(migrated.database).find(command.versionId),
+        ).toBeNull();
+        expect(fixture.candidates.require(command.candidateId)).toMatchObject({
+          state: "building",
+          versionId: null,
+        });
+        expect(fixture.jobs.get(command.jobId)).toMatchObject({
+          state: "running",
+        });
+        for (const table of [
+          "book_version_presentations",
+          "search_fts",
+          "search_short_fields",
+        ]) {
+          expect(
+            migrated.database
+              .prepare(`SELECT COUNT(*) AS count FROM ${table}`)
+              .get(),
+          ).toEqual({ count: 0 });
+        }
+      } finally {
+        migrated.close();
+        await dataRoot.cleanup();
+      }
+    },
+  );
+
+  it("returns an already committed ready registration after its response is lost", async () => {
+    const dataRoot = await createTemporaryDataRoot("registration-after-commit");
+    const migrated = await openMigratedTestDatabase(dataRoot);
+    try {
+      const { artifact, command, fixture } = await registrationFixture(
+        migrated.database,
+        dataRoot,
+      );
+      await expect(
+        finalizeCandidate({
+          artifact,
+          command,
+          leaseOwner: publicationTestLeaseOwner,
+          nowMs: createdAtMs + 1,
+          registration: new CandidateRegistrationAdapter(
+            migrated.database,
+            dataRoot.layout,
+            (point) => {
+              if (point === "after_commit") throw new Error("RESPONSE_LOST");
+            },
+          ),
+        }),
+      ).rejects.toThrow("RESPONSE_LOST");
+
+      await expect(
+        finalizeCandidate({
+          artifact,
+          command,
+          leaseOwner: publicationTestLeaseOwner,
+          nowMs: createdAtMs + 2,
+          registration: new CandidateRegistrationAdapter(
+            migrated.database,
+            dataRoot.layout,
+          ),
+        }),
+      ).resolves.toEqual({
+        candidateId: command.candidateId,
+        semanticDigest: artifact.semanticDigest,
+        versionId: command.versionId,
+      });
+      expect(
+        new VersionRepository(migrated.database).require(command.versionId)
+          .state,
+      ).toBe("ready");
+      expect(fixture.candidates.require(command.candidateId).state).toBe(
+        "ready",
+      );
+      expect(fixture.jobs.get(command.jobId)?.state).toBe("succeeded");
+      expect(
+        migrated.database
+          .prepare("SELECT COUNT(*) AS count FROM book_version_presentations")
+          .get(),
+      ).toEqual({ count: 1 });
+    } finally {
+      migrated.close();
+      await dataRoot.cleanup();
+    }
+  });
+
+  it("rejects a completed tree after a newer candidate becomes current", async () => {
+    const dataRoot = await createTemporaryDataRoot(
+      "registration-stale-attempt",
+    );
+    const migrated = await openMigratedTestDatabase(dataRoot);
+    try {
+      const { artifact, command, fixture } = await registrationFixture(
+        migrated.database,
+        dataRoot,
+      );
+      const newer = fixture.candidates.createForCurrentRevision({
+        bookId: command.bookId,
+        configRevision: command.configRevision,
+        nowMs: createdAtMs + 1,
+        sourceId: command.sourceId,
+      });
+
+      await expect(
+        finalizeCandidate({
+          artifact,
+          command,
+          leaseOwner: publicationTestLeaseOwner,
+          nowMs: createdAtMs + 2,
+          registration: new CandidateRegistrationAdapter(
+            migrated.database,
+            dataRoot.layout,
+          ),
+        }),
+      ).rejects.toThrow("CANDIDATE_FINALIZATION_STALE");
+      expect(
+        new VersionRepository(migrated.database).find(command.versionId),
+      ).toBeNull();
+      expect(fixture.candidates.require(command.candidateId).state).toBe(
+        "discarded",
+      );
+      expect(fixture.candidates.findCurrent(command.bookId)?.attemptId).toBe(
+        newer.attemptId,
+      );
+    } finally {
+      migrated.close();
       await dataRoot.cleanup();
     }
   });

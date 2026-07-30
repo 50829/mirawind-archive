@@ -2,11 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { createOpaqueId } from "@/domain/ids";
 import {
-  candidateJobChildProtocolVersion,
-  parseBuildCandidateChildMessage,
-  parseBuildCandidateRunMessage,
-} from "@/entrypoints/worker/protocol";
-import {
   parseBuildCandidateCommand,
   parseCandidateBuildArtifact,
 } from "@/modules/publishing/application/commands/build-candidate";
@@ -87,80 +82,6 @@ describe("build candidate protocol values", () => {
     ]) {
       expect(() => parseCandidateBuildArtifact(invalid, parsedCommand)).toThrow(
         "CANDIDATE_BUILD_ARTIFACT_INVALID",
-      );
-    }
-  });
-
-  it("accepts only protocol v3 candidate run and bounded child messages", () => {
-    const { artifact, command } = fixture();
-    const run = {
-      input: command,
-      protocolVersion: candidateJobChildProtocolVersion,
-      type: "run",
-    } as const;
-    expect(parseBuildCandidateRunMessage(run)).toEqual(run);
-    for (const invalid of [
-      { ...run, protocolVersion: 2 },
-      { ...run, legacy: true },
-    ]) {
-      expect(() => parseBuildCandidateRunMessage(invalid)).toThrow(
-        "BUILD_CANDIDATE_RUN_MESSAGE_INVALID",
-      );
-    }
-
-    const progress = {
-      jobId: command.jobId,
-      phase: "render_pages",
-      progress: {
-        completed: 20,
-        processed_bytes: null,
-        total: 500,
-        unit: "pages",
-      },
-      protocolVersion: candidateJobChildProtocolVersion,
-      type: "progress",
-    } as const;
-    expect(parseBuildCandidateChildMessage(progress, command)).toEqual(
-      progress,
-    );
-    expect(
-      parseBuildCandidateChildMessage(
-        {
-          jobId: command.jobId,
-          ok: true,
-          protocolVersion: candidateJobChildProtocolVersion,
-          result: artifact,
-          type: "result",
-        },
-        command,
-      ),
-    ).toMatchObject({ ok: true, result: artifact });
-    expect(
-      parseBuildCandidateChildMessage(
-        {
-          jobId: command.jobId,
-          ok: false,
-          protocolVersion: candidateJobChildProtocolVersion,
-          safeErrorClass: "content",
-          safeErrorCode: "CANDIDATE_BUILD_FAILED",
-          type: "result",
-        },
-        command,
-      ),
-    ).toMatchObject({ ok: false, safeErrorCode: "CANDIDATE_BUILD_FAILED" });
-    for (const invalid of [
-      { ...progress, privateBody: "secret" },
-      {
-        jobId: command.jobId,
-        ok: false,
-        protocolVersion: candidateJobChildProtocolVersion,
-        safeErrorClass: "content",
-        safeErrorCode: "contains private detail",
-        type: "result",
-      },
-    ]) {
-      expect(() => parseBuildCandidateChildMessage(invalid, command)).toThrow(
-        "BUILD_CANDIDATE_CHILD_MESSAGE_INVALID",
       );
     }
   });

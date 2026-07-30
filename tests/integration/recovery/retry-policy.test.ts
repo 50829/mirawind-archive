@@ -12,6 +12,8 @@ import {
 } from "@/modules/publishing/adapters/sqlite/jobs";
 import { recoverExpiredJobLeases } from "@/modules/publishing/application/recover-expired-jobs";
 import { evaluateJobRetry } from "@/modules/publishing/application/retry-policy";
+import { withMigratedTestDatabase } from "../../helpers/database";
+import { setupPublicationFixture } from "../../helpers/publication";
 
 const temporaryRoots: string[] = [];
 
@@ -107,6 +109,7 @@ describe("job retry policy", () => {
     repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
     await mkdir(join(root, "staging", original.id), { recursive: true });
 
+    expect(repository.interruptExpired({ nowMs: 62_001 })).toHaveLength(1);
     const firstRecovery = await recoverExpiredJobLeases({
       nowMs: 62_001,
       repository,
@@ -180,7 +183,7 @@ describe("job retry policy", () => {
     },
   );
 
-  it("rejects nonterminal, successful, and registered candidate attempts", () => {
+  it("rejects nonterminal and successful attempts", () => {
     expect(
       evaluateJobRetry(
         terminalJob({
@@ -202,19 +205,146 @@ describe("job retry policy", () => {
         "manual",
       ),
     ).toMatchObject({ allowed: false });
-    expect(
-      evaluateJobRetry(
-        terminalJob({
-          errorClass: "infrastructure",
-          errorCode: "WORKER_EXIT",
-          kind: "build_candidate",
-          versionId: "ver_ready",
-        }),
-        "manual",
-      ),
-    ).toMatchObject({
-      allowed: false,
-      reason: "READY_PUBLICATION_REQUIRES_PUBLISH_ACTION",
+  });
+
+  it("retries a failed candidate with new job, candidate, and version identities", () =>
+    withMigratedTestDatabase(({ database }) => {
+      const fixture = setupPublicationFixture(database, {
+        registerReady: false,
+      });
+      fixture.jobs.heartbeat({
+        jobId: fixture.candidateJob.id,
+        leaseOwner: "worker:test",
+        nowMs: 7,
+        phase: "render_pages",
+        progress: {
+          completed: 12,
+          processed_bytes: 4_096,
+          total: 30,
+          unit: "pages",
+        },
+      });
+      const failed = fixture.jobs.completeFailure({
+        errorClass: "timeout",
+        errorCode: "JOB_TIMEOUT",
+        jobId: fixture.candidateJob.id,
+        leaseOwner: "worker:test",
+        nowMs: 8,
+      });
+      const originalCandidate = fixture.candidates.require(
+        fixture.candidate.attemptId,
+      );
+
+      const retry = fixture.jobs.retry(failed.id, {
+        automatic: false,
+        nowMs: 9,
+      });
+      if (!retry.candidateId || !retry.versionId) {
+        throw new Error("CANDIDATE_RETRY_IDENTITIES_MISSING");
+      }
+      const retryCandidate = fixture.candidates.require(retry.candidateId);
+
+      expect(failed).toMatchObject({
+        progress: {
+          completed: 12,
+          processed_bytes: 4_096,
+          total: 30,
+          unit: "pages",
+        },
+        state: "failed",
+        versionId: fixture.candidateJob.versionId,
+      });
+      expect(originalCandidate).toMatchObject({
+        attemptId: fixture.candidate.attemptId,
+        safeErrorCode: "JOB_TIMEOUT",
+        state: "failed",
+        versionId: null,
+      });
+      expect(retry).toMatchObject({
+        attempt: 2,
+        candidateId: retryCandidate.attemptId,
+        retryOfJobId: failed.id,
+        state: "queued",
+      });
+      expect(retry.id).not.toBe(failed.id);
+      expect(retry.candidateId).not.toBe(failed.candidateId);
+      expect(retry.versionId).not.toBe(failed.versionId);
+      expect(retryCandidate).toMatchObject({
+        jobId: retry.id,
+        state: "building",
+        versionId: null,
+      });
+      expect(
+        fixture.drafts.requireBook(fixture.book.id).currentCandidateId,
+      ).toBe(retry.candidateId);
+      expect(fixture.candidates.buildCommand(retry.candidateId)).toMatchObject({
+        candidateId: retry.candidateId,
+        jobId: retry.id,
+        versionId: retry.versionId,
+      });
+      expect(fixture.jobs.requestCancellation(retry.id, 10)).toMatchObject({
+        cancellationRequestedAtMs: 10,
+        errorCode: "JOB_CANCELED",
+        state: "canceled",
+      });
+      expect(fixture.candidates.require(retry.candidateId)).toMatchObject({
+        safeErrorCode: "JOB_CANCELED",
+        state: "canceled",
+      });
+    }));
+
+  it("terminalizes an expired candidate before creating its one automatic retry", async () => {
+    await withMigratedTestDatabase(async ({ database }) => {
+      const fixture = setupPublicationFixture(database, {
+        registerReady: false,
+      });
+      const root = await mkdtemp(
+        join(tmpdir(), "mirawind-candidate-recovery-"),
+      );
+      temporaryRoots.push(root);
+      fixture.jobs.heartbeat({
+        jobId: fixture.candidateJob.id,
+        leaseOwner: "worker:test",
+        nowMs: 10,
+        phase: "render_pages",
+        progress: {
+          completed: 4,
+          processed_bytes: null,
+          total: 20,
+          unit: "pages",
+        },
+      });
+
+      const recovered = await recoverExpiredJobLeases({
+        nowMs: 60_011,
+        repository: fixture.jobs,
+        storageRoot: root,
+      });
+      const retry = recovered[0]?.retry;
+      if (!retry?.candidateId) throw new Error("CANDIDATE_RETRY_MISSING");
+
+      expect(recovered[0]?.interrupted).toMatchObject({
+        errorCode: "JOB_LEASE_EXPIRED",
+        progress: { completed: 4, total: 20, unit: "pages" },
+        state: "interrupted",
+      });
+      expect(
+        fixture.candidates.require(fixture.candidate.attemptId),
+      ).toMatchObject({
+        safeErrorCode: "JOB_LEASE_EXPIRED",
+        state: "interrupted",
+      });
+      expect(retry).toMatchObject({
+        attempt: 2,
+        automaticRetryCount: 1,
+        retryOfJobId: fixture.candidateJob.id,
+        state: "queued",
+      });
+      expect(retry.candidateId).not.toBe(fixture.candidate.attemptId);
+      expect(fixture.candidates.require(retry.candidateId)).toMatchObject({
+        jobId: retry.id,
+        state: "building",
+      });
     });
   });
 });

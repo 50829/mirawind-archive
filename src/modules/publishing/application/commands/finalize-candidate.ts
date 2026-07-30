@@ -1,5 +1,4 @@
 import {
-  parseBuildCandidateCommand,
   parseCandidateBuildArtifact,
   type BuildCandidateCommand,
   type CandidateBuildArtifact,
@@ -16,16 +15,15 @@ export interface CandidateRegistrationPort<Result> {
 
 export async function finalizeCandidate<Result>(input: {
   readonly artifact: unknown;
-  readonly command: unknown;
+  readonly command: BuildCandidateCommand;
   readonly leaseOwner: string;
   readonly nowMs: number;
   readonly registration: CandidateRegistrationPort<Result>;
 }): Promise<Result> {
-  const command = parseBuildCandidateCommand(input.command);
-  const artifact = parseCandidateBuildArtifact(input.artifact, command);
+  const artifact = parseCandidateBuildArtifact(input.artifact, input.command);
   return input.registration.register({
     artifact,
-    command,
+    command: input.command,
     leaseOwner: input.leaseOwner,
     nowMs: input.nowMs,
   });

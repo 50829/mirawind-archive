@@ -656,12 +656,16 @@ async function benchmarkFixture(
         if (
           current &&
           ["failed", "canceled", "interrupted"].includes(current.state)
-        ) throw new Error(current.safeErrorCode ?? "BENCHMARK_CANDIDATE_FAILED");
+        )
+          throw new Error(
+            current.safeErrorCode ?? "BENCHMARK_CANDIDATE_FAILED",
+          );
         const candidateJob = current ? jobs.get(current.jobId) : null;
         if (
           candidateJob &&
           ["failed", "canceled", "interrupted"].includes(candidateJob.state)
-        ) throw terminalFailure(candidateJob);
+        )
+          throw terminalFailure(candidateJob);
         return null;
       },
       deadline,
@@ -792,9 +796,7 @@ async function benchmarkFixture(
   } catch (error) {
     const failedJob = new JobRepository(database)
       .listRecent(100)
-      .find((job) =>
-        ["failed", "canceled", "interrupted"].includes(job.state),
-      );
+      .find((job) => ["failed", "canceled", "interrupted"].includes(job.state));
     return Object.freeze({
       error_class: failedJob?.errorClass ?? null,
       error_code: failedJob?.errorCode ?? safeFailureCode(error),
