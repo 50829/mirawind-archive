@@ -40,6 +40,7 @@ export const importedHtmlSanitizationSchema: SanitizationSchema = Object.freeze(
           "math-display",
           "math-fallback",
         ],
+        "dataMirawindMath",
       ],
       div: [
         ...(defaultSchema.attributes?.div ?? []),

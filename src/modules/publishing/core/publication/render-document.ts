@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
@@ -86,6 +88,9 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
     ]),
   );
   const resourceUrls = new Map<string, string>();
+  const mathSourceByMarker = new Map<string, MathSource>();
+  const mathMarkerPrefix = randomBytes(16).toString("base64url");
+  let mathSourceIndex = 0;
   for (const resource of options.resourceResolution.resources) {
     const url = options.publishedResourceUrl(resource.id);
     assertSafePublishedUrl(url);
@@ -140,15 +145,34 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
         ];
       }
     } else if (node.type === "inlineMath" && node.value !== undefined) {
+      const marker = `${mathMarkerPrefix}_${mathSourceIndex++}`;
+      mathSourceByMarker.set(
+        marker,
+        Object.freeze({
+          ...(node.blockId ? { blockId: node.blockId } : {}),
+          displayMode: false,
+          source: node.value,
+        }),
+      );
       output.data = {
         hName: "code",
         hProperties: {
           className: ["language-math", "math-inline"],
+          dataMirawindMath: marker,
         },
       };
       output.children = [{ type: "text", value: node.value }];
       delete output.value;
     } else if (node.type === "math" && node.value !== undefined) {
+      const marker = `${mathMarkerPrefix}_${mathSourceIndex++}`;
+      mathSourceByMarker.set(
+        marker,
+        Object.freeze({
+          ...(node.blockId ? { blockId: node.blockId } : {}),
+          displayMode: true,
+          source: node.value,
+        }),
+      );
       output.data = {
         hName: "div",
         hProperties: {
@@ -165,6 +189,7 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
                 hName: "code",
                 hProperties: {
                   className: ["language-math", "math-display"],
+                  dataMirawindMath: marker,
                 },
               },
               type: "mirawindMathCode",
@@ -257,25 +282,11 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
     enumerable: false,
     value: resourceUrls,
   });
+  Object.defineProperty(root, "_mathSourceByMarker", {
+    enumerable: false,
+    value: mathSourceByMarker,
+  });
   return root;
-}
-
-function mathSources(root: TransientDocumentNode): readonly MathSource[] {
-  const sources: MathSource[] = [];
-  const visit = (node: TransientDocumentNode): void => {
-    if (node.type === "inlineMath" || node.type === "math") {
-      sources.push(
-        Object.freeze({
-          ...(node.blockId ? { blockId: node.blockId } : {}),
-          displayMode: node.type === "math",
-          source: node.value ?? "",
-        }),
-      );
-    }
-    for (const child of node.children ?? []) visit(child);
-  };
-  visit(root);
-  return Object.freeze(sources);
 }
 
 function textContent(node: TreeNode): string {
@@ -291,25 +302,21 @@ function classNames(node: TreeNode): readonly unknown[] {
 
 function renderMathNodes(
   tree: TreeNode,
-  sources: readonly MathSource[],
+  sourceByMarker: ReadonlyMap<string, MathSource>,
   diagnostics: SafeDiagnostic[],
 ): void {
-  let sourceIndex = 0;
-  const trackedSource = (
-    scope: TreeNode,
-    displayMode: boolean,
-    tracked: boolean,
-  ): MathSource | undefined => {
-    const candidate = tracked ? sources[sourceIndex] : undefined;
-    if (
-      !candidate ||
-      candidate.displayMode !== displayMode ||
-      candidate.source !== textContent(scope)
-    ) {
-      return undefined;
+  const consumedMarkers = new Set<string>();
+  const trackedSource = (node: TreeNode): MathSource | undefined => {
+    const marker = node.properties?.dataMirawindMath;
+    if (typeof marker !== "string") return;
+    delete node.properties?.dataMirawindMath;
+    const source = sourceByMarker.get(marker);
+    if (!source) return;
+    if (consumedMarkers.has(marker)) {
+      throw new Error("MATH_SOURCE_ALIGNMENT_INVALID");
     }
-    sourceIndex += 1;
-    return candidate;
+    consumedMarkers.add(marker);
+    return source;
   };
   const render = (
     parent: TreeNode,
@@ -366,9 +373,7 @@ function renderMathNodes(
           code.tagName === "code" &&
           classes.includes("language-math")
         ) {
-          const tracked =
-            classes.includes("math-display") || classes.includes("math-inline");
-          const source = trackedSource(child, true, tracked);
+          const source = trackedSource(code);
           render(parent, index, child, code, true, source);
           continue;
         }
@@ -380,9 +385,7 @@ function renderMathNodes(
         classes.includes("math-inline")
       ) {
         const displayMode = classes.includes("math-display");
-        const tracked =
-          classes.includes("math-display") || classes.includes("math-inline");
-        const source = trackedSource(child, displayMode, tracked);
+        const source = trackedSource(child);
         render(parent, index, child, child, displayMode, source);
         continue;
       }
@@ -390,9 +393,11 @@ function renderMathNodes(
     }
   };
   visit(tree);
-  if (sourceIndex !== sources.length) {
-    throw new Error("MATH_SOURCE_ALIGNMENT_INVALID");
-  }
+  const stripMarkers = (node: TreeNode): void => {
+    delete node.properties?.dataMirawindMath;
+    for (const child of node.children ?? []) stripMarkers(child);
+  };
+  stripMarkers(tree);
 }
 
 async function highlightCodeBlocks(
@@ -591,18 +596,19 @@ export async function renderSemanticDocument(
     ...options.resourceResolution.diagnostics,
   ];
   const tree = rendererTree(options);
-  const resourceUrls = (
-    tree as TreeNode & {
-      _resourceUrls: ReadonlyMap<string, string>;
-    }
-  )._resourceUrls;
+  const rendererState = tree as TreeNode & {
+    _mathSourceByMarker: ReadonlyMap<string, MathSource>;
+    _resourceUrls: ReadonlyMap<string, string>;
+  };
   const processor = unified()
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
-    .use(rehypeRestrictResources, { allowedResourceUrls: resourceUrls })
+    .use(rehypeRestrictResources, {
+      allowedResourceUrls: rendererState._resourceUrls,
+    })
     .use(rehypeSanitize, importedHtmlSanitizationSchema);
   const transformed = (await processor.run(tree as never)) as TreeNode;
-  renderMathNodes(transformed, mathSources(options.document.root), diagnostics);
+  renderMathNodes(transformed, rendererState._mathSourceByMarker, diagnostics);
   restoreStableHeadingIds(transformed);
   repairFootnoteLinks(
     transformed,

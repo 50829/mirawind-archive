@@ -121,6 +121,7 @@ describe("published semantic document rendering", () => {
     expect(rendered.html).toContain("math-fallback");
     expect(rendered.html).toContain("\\notacommand{");
     expect(rendered.html).not.toContain('href="javascript:');
+    expect(rendered.html).not.toContain("data-mirawind-math");
     expect(rendered.diagnostics).toEqual([
       expect.objectContaining({ code: "MATH_RENDER_FAILED" }),
     ]);
