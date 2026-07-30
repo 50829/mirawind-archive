@@ -73,6 +73,26 @@ describe("real MinerU fixture verifier", () => {
     ]);
   });
 
+  it("verifies only the explicitly selected fixture set", async () => {
+    const root = await mkdtemp(join(tmpdir(), "real-mineru-verifier-"));
+    roots.push(root);
+    const first = fixture("real-mineru-a7f31c", "first");
+    const second = fixture("real-mineru-b9d204", "second");
+    await writeFile(join(root, first.file_name), "first");
+    await writeFile(join(root, second.file_name), "altered");
+    await writeFile(
+      join(root, "real-fixtures.json"),
+      JSON.stringify({ fixtures: [first, second], schema_version: 1 }),
+    );
+
+    await expect(
+      verifyRealMineruFixtures(root, undefined, [first.id]),
+    ).resolves.toEqual([expect.objectContaining({ id: first.id })]);
+    await expect(
+      verifyRealMineruFixtures(root, undefined, ["real-mineru-c3e591"]),
+    ).rejects.toThrow(/not registered/);
+  });
+
   it("rejects altered bytes, symlinks and expanded usage scope", async () => {
     const root = await mkdtemp(join(tmpdir(), "real-mineru-verifier-"));
     roots.push(root);

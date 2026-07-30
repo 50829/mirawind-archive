@@ -60,6 +60,27 @@ map evidence. Production proposals run after the reference is saved and never fi
 fields. Compare all fifteen with `pnpm fixtures:compare-references` after observed outcomes
 have been built.
 
+During focused algorithm work, select the same 3-5 opaque fixture IDs in both commands. Repeated
+`--fixture` options keep ZIP hash verification, observation and strict reference comparison scoped
+to those books instead of reading the complete fifteen-book set:
+
+```bash
+pnpm fixtures:observe-references \
+  --real-dir "$PWD/tests/fixtures/mineru/real" \
+  --output "$PWD/.cache/focused-observed-v2" \
+  --fixture real-mineru-a1b2c3 \
+  --fixture real-mineru-d4e5f6 \
+  --fixture real-mineru-123abc
+pnpm fixtures:compare-references \
+  --reference-dir "$PWD/tests/fixtures/mineru/real/references-v2" \
+  --observed-dir "$PWD/.cache/focused-observed-v2" \
+  --fixture real-mineru-a1b2c3 \
+  --fixture real-mineru-d4e5f6 \
+  --fixture real-mineru-123abc
+```
+
+Omitting `--fixture` remains the complete release gate and requires all fifteen references.
+
 The verifier rejects other MinerU versions, symlinks, unsafe paths, unexpected fields,
 duplicate IDs, wrong usage scope, sizes or hashes. A missing manifest or reference is an
 explicit missing-fixture condition, not a passing test.

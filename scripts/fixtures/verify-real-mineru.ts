@@ -211,6 +211,7 @@ async function sha256(path: string): Promise<string> {
 export async function verifyRealMineruFixtures(
   directoryInput: string,
   manifestInput?: string,
+  fixtureIds?: readonly string[],
 ): Promise<readonly VerifiedRealFixture[]> {
   if (!isAbsolute(directoryInput)) {
     throw new Error("Real fixture directory must be absolute");
@@ -247,8 +248,27 @@ export async function verifyRealMineruFixtures(
     JSON.parse(await readFile(manifestPath, "utf8")) as unknown,
   );
 
+  const selectedIds = fixtureIds ? new Set(fixtureIds) : undefined;
+  if (selectedIds && selectedIds.size !== fixtureIds?.length) {
+    throw new Error("Selected real fixture IDs must be unique");
+  }
+  if (selectedIds?.size === 0) {
+    throw new Error("At least one real fixture must be selected");
+  }
+  if (selectedIds) {
+    const registeredIds = new Set(
+      manifest.fixtures.map((fixture) => fixture.id),
+    );
+    for (const id of selectedIds) {
+      if (!registeredIds.has(id)) {
+        throw new Error(`${id} is not registered in the real fixture manifest`);
+      }
+    }
+  }
+
   const verified: VerifiedRealFixture[] = [];
   for (const fixture of manifest.fixtures) {
+    if (selectedIds && !selectedIds.has(fixture.id)) continue;
     const path = join(directory, fixture.file_name);
     const link = await lstat(path);
     if (!link.isFile() || link.isSymbolicLink()) {

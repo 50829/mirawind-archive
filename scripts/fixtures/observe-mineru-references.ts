@@ -43,10 +43,7 @@ import type {
   ReferenceHeadingAccounting,
   ReferenceSemanticKind,
 } from "./mineru-reference-v2.js";
-import {
-  parseRealFixtureManifest,
-  verifyRealMineruFixtures,
-} from "./verify-real-mineru.js";
+import { verifyRealMineruFixtures } from "./verify-real-mineru.js";
 
 interface RootRange {
   readonly end: number;
@@ -841,27 +838,21 @@ export async function observeRealMineruFixture(input: {
 }
 
 export async function observeRealMineruSet(input: {
-  readonly fixtureId?: string;
+  readonly fixtureIds?: readonly string[];
   readonly outputDirectory: string;
   readonly realDirectory: string;
 }): Promise<
   readonly { readonly fixture_id: string; readonly regions: number }[]
 > {
   const root = resolve(input.realDirectory);
-  const manifest = parseRealFixtureManifest(
-    JSON.parse(
-      await readFile(join(root, "real-fixtures.json"), "utf8"),
-    ) as unknown,
+  const fixtures = await verifyRealMineruFixtures(
+    root,
+    undefined,
+    input.fixtureIds,
   );
-  await verifyRealMineruFixtures(root);
   const outputDirectory = resolve(input.outputDirectory);
   await mkdir(outputDirectory, { mode: 0o700, recursive: true });
   const summaries = [];
-  const fixtures = input.fixtureId
-    ? manifest.fixtures.filter((fixture) => fixture.id === input.fixtureId)
-    : manifest.fixtures;
-  if (fixtures.length < 1)
-    throw new Error("OBSERVED_REFERENCE_FIXTURE_NOT_REGISTERED");
   for (const fixture of fixtures) {
     const pack = JSON.parse(
       await readFile(
@@ -869,12 +860,18 @@ export async function observeRealMineruSet(input: {
         "utf8",
       ),
     ) as MineruReferencePack;
+    if (
+      pack.fixture_id !== fixture.id ||
+      pack.archive_sha256 !== fixture.sha256
+    ) {
+      throw new Error("OBSERVED_REFERENCE_PACK_BINDING_MISMATCH");
+    }
     const stagingDirectory = await mkdtemp(
       join(tmpdir(), "mirawind-observed-reference-"),
     );
     try {
       const observed = await observeRealMineruFixture({
-        archivePath: join(root, fixture.file_name),
+        archivePath: join(root, fixture.fileName),
         pack,
         stagingDirectory,
       });
@@ -899,9 +896,14 @@ export async function observeRealMineruSet(input: {
   return Object.freeze(summaries);
 }
 
-function argumentsMap(arguments_: readonly string[]): Map<string, string> {
+function parseArguments(arguments_: readonly string[]): {
+  readonly fixtureIds: readonly string[];
+  readonly outputDirectory: string;
+  readonly realDirectory: string;
+} {
   const normalized = arguments_[0] === "--" ? arguments_.slice(1) : arguments_;
   const values = new Map<string, string>();
+  const fixtureIds: string[] = [];
   for (let index = 0; index < normalized.length; index += 2) {
     const name = normalized[index];
     const value = normalized[index + 1];
@@ -909,27 +911,33 @@ function argumentsMap(arguments_: readonly string[]): Map<string, string> {
       !name ||
       !value ||
       !["--fixture", "--output", "--real-dir"].includes(name) ||
-      values.has(name)
+      (name !== "--fixture" && values.has(name))
     ) {
-      throw new Error("Arguments must be unique --name value pairs");
+      throw new Error("Arguments must be --name value pairs");
     }
-    values.set(name, value);
+    if (name === "--fixture") fixtureIds.push(value);
+    else values.set(name, value);
   }
-  return values;
-}
-
-async function main(): Promise<void> {
-  const values = argumentsMap(process.argv.slice(2));
   const outputDirectory = values.get("--output");
   const realDirectory = values.get("--real-dir");
   if (!outputDirectory || !realDirectory) {
     throw new Error("Required: --real-dir --output");
   }
-  const fixtureId = values.get("--fixture");
-  const fixtures = await observeRealMineruSet({
-    ...(fixtureId ? { fixtureId } : {}),
+  return Object.freeze({
+    fixtureIds: Object.freeze(fixtureIds),
     outputDirectory,
     realDirectory,
+  });
+}
+
+async function main(): Promise<void> {
+  const arguments_ = parseArguments(process.argv.slice(2));
+  const fixtures = await observeRealMineruSet({
+    ...(arguments_.fixtureIds.length > 0
+      ? { fixtureIds: arguments_.fixtureIds }
+      : {}),
+    outputDirectory: arguments_.outputDirectory,
+    realDirectory: arguments_.realDirectory,
   });
   process.stdout.write(`${JSON.stringify({ fixtures, ok: true })}\n`);
 }

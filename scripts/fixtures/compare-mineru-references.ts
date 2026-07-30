@@ -39,6 +39,12 @@ export interface ReferenceComparison {
   readonly ok: boolean;
 }
 
+export interface ReferenceComparisonReport {
+  readonly comparisons: readonly ReferenceComparison[];
+  readonly ok: boolean;
+  readonly schema_version: 1;
+}
+
 function anchorKey(anchor: ReferenceAnchor): string {
   return `${anchor.root_index}:${anchor.sha256}`;
 }
@@ -450,58 +456,112 @@ export function compareMineruReferenceV2(
   });
 }
 
-function argumentsMap(arguments_: readonly string[]): Map<string, string> {
+const fixtureIdPattern = /^real-mineru-[a-z0-9]{6,32}$/u;
+
+function selectedFixtureIds(fixtureIds: readonly string[]): readonly string[] {
+  if (fixtureIds.length < 1) throw new Error("REFERENCE_V2_SUBSET_EMPTY");
+  if (
+    fixtureIds.some((fixtureId) => !fixtureIdPattern.test(fixtureId)) ||
+    new Set(fixtureIds).size !== fixtureIds.length
+  ) {
+    throw new Error("REFERENCE_V2_SUBSET_INVALID");
+  }
+  return Object.freeze(
+    fixtureIds.toSorted((left, right) => left.localeCompare(right, "en")),
+  );
+}
+
+export async function compareMineruReferenceSet(input: {
+  readonly fixtureIds?: readonly string[];
+  readonly observedDirectory: string;
+  readonly referenceDirectory: string;
+}): Promise<ReferenceComparisonReport> {
+  const references = resolve(input.referenceDirectory);
+  const observed = resolve(input.observedDirectory);
+  const files = input.fixtureIds
+    ? selectedFixtureIds(input.fixtureIds).map(
+        (fixtureId) => `${fixtureId}.json`,
+      )
+    : (await readdir(references))
+        .filter((name) => name.endsWith(".json") && basename(name) === name)
+        .sort((left, right) => left.localeCompare(right, "en"));
+  if (!input.fixtureIds && files.length !== 15) {
+    throw new Error("REFERENCE_V2_SET_MUST_CONTAIN_FIFTEEN_FILES");
+  }
+  const comparisons: ReferenceComparison[] = [];
+  for (const file of files) {
+    const expected = await readMineruReferenceV2(join(references, file));
+    if (`${expected.fixture_id}.json` !== file) {
+      throw new Error("REFERENCE_V2_FILENAME_BINDING_MISMATCH");
+    }
+    const actual = JSON.parse(
+      await readFile(join(observed, file), "utf8"),
+    ) as ObservedMineruOutcome;
+    comparisons.push(compareMineruReferenceV2(expected, actual));
+  }
+  return Object.freeze({
+    comparisons: Object.freeze(comparisons),
+    ok: comparisons.every((comparison) => comparison.ok),
+    schema_version: 1 as const,
+  });
+}
+
+function parseArguments(arguments_: readonly string[]): {
+  readonly fixtureIds: readonly string[];
+  readonly observedDirectory: string;
+  readonly output?: string;
+  readonly referenceDirectory: string;
+} {
   const normalized = arguments_[0] === "--" ? arguments_.slice(1) : arguments_;
   const values = new Map<string, string>();
+  const fixtureIds: string[] = [];
   for (let index = 0; index < normalized.length; index += 2) {
     const name = normalized[index];
     const value = normalized[index + 1];
     if (
       !name ||
-      !["--observed-dir", "--output", "--reference-dir"].includes(name) ||
+      !["--fixture", "--observed-dir", "--output", "--reference-dir"].includes(
+        name,
+      ) ||
       !value ||
-      values.has(name)
+      (name !== "--fixture" && values.has(name))
     ) {
-      throw new Error("Arguments must be unique --name value pairs");
+      throw new Error("Arguments must be --name value pairs");
     }
-    values.set(name, value);
+    if (name === "--fixture") fixtureIds.push(value);
+    else values.set(name, value);
   }
-  return values;
-}
-
-async function main(): Promise<void> {
-  const values = argumentsMap(process.argv.slice(2));
   const observedDirectory = values.get("--observed-dir");
   const output = values.get("--output");
   const referenceDirectory = values.get("--reference-dir");
   if (!observedDirectory || !referenceDirectory) {
     throw new Error("Required: --reference-dir --observed-dir");
   }
-  const references = resolve(referenceDirectory);
-  const observed = resolve(observedDirectory);
-  const files = (await readdir(references))
-    .filter((name) => name.endsWith(".json") && basename(name) === name)
-    .sort((left, right) => left.localeCompare(right, "en"));
-  if (files.length !== 15) {
-    throw new Error("REFERENCE_V2_SET_MUST_CONTAIN_FIFTEEN_FILES");
-  }
-  const comparisons: ReferenceComparison[] = [];
-  for (const file of files) {
-    const expected = await readMineruReferenceV2(join(references, file));
-    const actual = JSON.parse(
-      await readFile(join(observed, file), "utf8"),
-    ) as ObservedMineruOutcome;
-    comparisons.push(compareMineruReferenceV2(expected, actual));
-  }
-  const report = Object.freeze({
-    comparisons: Object.freeze(comparisons),
-    ok: comparisons.every((comparison) => comparison.ok),
-    schema_version: 1,
+  return Object.freeze({
+    fixtureIds: Object.freeze(fixtureIds),
+    observedDirectory,
+    ...(output ? { output } : {}),
+    referenceDirectory,
   });
-  if (output) {
-    await writeFile(resolve(output), `${JSON.stringify(report, null, 2)}\n`, {
-      mode: 0o600,
-    });
+}
+
+async function main(): Promise<void> {
+  const arguments_ = parseArguments(process.argv.slice(2));
+  const report = await compareMineruReferenceSet({
+    ...(arguments_.fixtureIds.length > 0
+      ? { fixtureIds: arguments_.fixtureIds }
+      : {}),
+    observedDirectory: arguments_.observedDirectory,
+    referenceDirectory: arguments_.referenceDirectory,
+  });
+  if (arguments_.output) {
+    await writeFile(
+      resolve(arguments_.output),
+      `${JSON.stringify(report, null, 2)}\n`,
+      {
+        mode: 0o600,
+      },
+    );
   }
   process.stdout.write(`${JSON.stringify(report)}\n`);
   if (!report.ok) process.exitCode = 1;

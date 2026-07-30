@@ -1,8 +1,14 @@
 import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { compareMineruReferenceV2 } from "../../../scripts/fixtures/compare-mineru-references";
+import {
+  compareMineruReferenceSet,
+  compareMineruReferenceV2,
+} from "../../../scripts/fixtures/compare-mineru-references";
 import {
   parseMineruReferenceV2,
   type MineruReferenceV2,
@@ -13,6 +19,13 @@ const hash = (value: string) =>
 const anchor = (root_index: number, value: string) => ({
   root_index,
   sha256: hash(value),
+});
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
+  );
 });
 
 function reference(): MineruReferenceV2 {
@@ -100,6 +113,47 @@ function observed(expected = reference()) {
 }
 
 describe("MinerU reference v2 comparator", () => {
+  it("compares only an explicitly selected reference subset", async () => {
+    const root = await mkdtemp(join(tmpdir(), "reference-subset-"));
+    roots.push(root);
+    const referenceDirectory = join(root, "references");
+    const observedDirectory = join(root, "observed");
+    await Promise.all([mkdir(referenceDirectory), mkdir(observedDirectory)]);
+    const expected = reference();
+    const selectedFile = `${expected.fixture_id}.json`;
+    await Promise.all([
+      writeFile(
+        join(referenceDirectory, selectedFile),
+        JSON.stringify(expected),
+      ),
+      writeFile(
+        join(observedDirectory, selectedFile),
+        JSON.stringify(observed(expected)),
+      ),
+      writeFile(join(referenceDirectory, "unselected-invalid.json"), "invalid"),
+      writeFile(join(observedDirectory, "unselected-invalid.json"), "invalid"),
+    ]);
+
+    await expect(
+      compareMineruReferenceSet({
+        fixtureIds: [expected.fixture_id],
+        observedDirectory,
+        referenceDirectory,
+      }),
+    ).resolves.toMatchObject({
+      comparisons: [{ fixture_id: expected.fixture_id, issues: [], ok: true }],
+      ok: true,
+      schema_version: 1,
+    });
+    await expect(
+      compareMineruReferenceSet({
+        fixtureIds: [expected.fixture_id, expected.fixture_id],
+        observedDirectory,
+        referenceDirectory,
+      }),
+    ).rejects.toThrow(/REFERENCE_V2_SUBSET_INVALID/);
+  });
+
   it("accepts an exact complete outcome", () => {
     expect(compareMineruReferenceV2(reference(), observed())).toEqual({
       fixture_id: "real-mineru-a7f31c",
