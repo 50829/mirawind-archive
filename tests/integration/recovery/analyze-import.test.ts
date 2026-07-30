@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -17,27 +17,41 @@ const sha256 = "a".repeat(64);
 async function runAnalysis(
   dataRoot: { readonly path: string },
   entries: readonly { readonly data: string; readonly name: string }[],
+  importId: string,
 ) {
   await mkdir(dataRoot.path, { recursive: true });
   const archivePath = resolve(dataRoot.path, "input.zip");
   await writeFile(archivePath, buildZip({ entries }));
-  return analyzeImport({
+  const sealedExtractionDirectory = resolve(
+    dataRoot.path,
+    "tmp/uploads",
+    importId,
+    "sealed-extraction",
+  );
+  const result = await analyzeImport({
     archivePath,
+    importId,
+    sealedExtractionDirectory,
     stagingDirectory: resolve(dataRoot.path, "staging/job_abcdefghijklmnop"),
   });
+  return { result, sealedExtractionDirectory };
 }
 
 describe("analyze_import handler", () => {
   it("extracts a high-confidence bundle and durably selects it for preparation", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
-      const result = await runAnalysis(dataRoot, [
-        {
-          data: "# Book\n\n![image](images/a.png)",
-          name: "wrapper/full.md",
-        },
-        { data: "{}", name: "wrapper/layout.json" },
-        { data: "image", name: "wrapper/images/a.png" },
-      ]);
+      const { result, sealedExtractionDirectory } = await runAnalysis(
+        dataRoot,
+        [
+          {
+            data: "# Book\n\n![image](images/a.png)",
+            name: "wrapper/full.md",
+          },
+          { data: "{}", name: "wrapper/layout.json" },
+          { data: "image", name: "wrapper/images/a.png" },
+        ],
+        "imp_abcdefghijklmnop",
+      );
       const artifact = await readAnalyzeImportArtifact(result.artifactPath);
       const artifactText = await readFile(result.artifactPath, "utf8");
 
@@ -48,6 +62,9 @@ describe("analyze_import handler", () => {
       });
       expect(artifact.candidates[0]?.normalizedPath).toBe("wrapper/full.md");
       expect(artifactText).not.toContain(dataRoot.path);
+      await expect(
+        access(resolve(sealedExtractionDirectory, "tree/wrapper/full.md")),
+      ).resolves.toBeUndefined();
 
       const imports = new ImportRepository(database);
       const imported = imports.createUploaded({
@@ -76,9 +93,12 @@ describe("analyze_import handler", () => {
   it("pauses generic input for confirmation and rejects missing Markdown with a safe code", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const imports = new ImportRepository(database);
-      const generic = await runAnalysis(dataRoot, [
-        { data: "# Notes", name: "notes.md" },
-      ]);
+      const genericRun = await runAnalysis(
+        dataRoot,
+        [{ data: "# Notes", name: "notes.md" }],
+        "imp_abcdefghijklmnop",
+      );
+      const generic = genericRun.result;
       const first = imports.createUploaded({
         expiresAtMs: 10_000,
         id: "imp_abcdefghijklmnop",
@@ -99,13 +119,19 @@ describe("analyze_import handler", () => {
         selectedCandidateId: null,
         state: "needs_main_confirmation",
       });
+      await expect(
+        access(resolve(genericRun.sealedExtractionDirectory, "tree/notes.md")),
+      ).resolves.toBeUndefined();
 
       const secondRoot = {
         path: resolve(dataRoot.path, "second"),
       };
-      const rejected = await runAnalysis(secondRoot, [
-        { data: "not markdown", name: "readme.txt" },
-      ]);
+      const rejectedRun = await runAnalysis(
+        secondRoot,
+        [{ data: "not markdown", name: "readme.txt" }],
+        "imp_qrstuvwxyzabcdef",
+      );
+      const rejected = rejectedRun.result;
       const second = imports.createUploaded({
         expiresAtMs: 10_000,
         id: "imp_qrstuvwxyzabcdef",
@@ -126,5 +152,13 @@ describe("analyze_import handler", () => {
         safeErrorCode: "IMPORT_MAIN_MARKDOWN_MISSING",
         state: "rejected",
       });
+      await expect(
+        access(rejectedRun.sealedExtractionDirectory),
+      ).rejects.toThrow();
+      await expect(
+        access(
+          resolve(secondRoot.path, "staging/job_abcdefghijklmnop/extracted"),
+        ),
+      ).rejects.toThrow();
     }));
 });

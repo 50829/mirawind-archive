@@ -26,19 +26,19 @@ The only whole-book in-memory build model:
 - parsed normalized document tree and ordered root blocks;
 - configured heading tree and stable block identities;
 - `PagePlan[]` with page ID, ordinal, start/end block indexes and navigation identities;
-- logical resource descriptors, not copied resource bytes;
-- semantic/compiler/renderer identities;
-- deterministic book-level diagnostics and digests.
+- reusable block, heading and page lookup maps;
+- semantic/compiler/renderer identity and digest.
 
 `CompiledBook` is immutable by convention and never persisted. It does not contain preview/public
-URLs, database repositories, filesystem handles, Astro/React values or one document copy per page.
+URLs, resolved filesystem resources, database repositories, filesystem handles, Astro/React values
+or one document copy per page. The candidate adapter resolves resources against the compiled
+document and supplies that bounded result to page rendering.
 
 ### RenderedPage
 
-One route-neutral page result with page identity/ordinal, typed Reader page model, logical-resource
-HTML, TOC/breadcrumb/outline/navigation, renderer asset requirements, search rows and ordered
-diagnostics. It is consumed once and released after its preview/public materializations and
-manifest/search entries are written.
+One route-neutral page result with its `PagePlan`, ordinal, logical-resource HTML, renderer CSS and
+ordered diagnostics. It is consumed once and released after the candidate adapter writes the body,
+manifest and search spool entries and materializes the preview/public ReaderShell documents.
 
 ### CandidateBuildArtifact
 
@@ -46,6 +46,16 @@ Strict child-to-parent result containing only opaque IDs, version-relative artif
 digest, manifest/version-marker hashes, page/resource/search/diagnostic counts, blocking count and
 compiler/renderer/preview/reader identities. Strings and collections have explicit size/count limits.
 It never contains full HTML, Markdown, titles, raw archive paths or resource bytes.
+
+### Sealed Extraction
+
+A derived, one-use directory owned by an import between successful analysis and draft preparation.
+Its strict marker binds schema version, import ID, entry/file counts and extracted bytes. Analysis
+publishes the complete marker plus tree by same-filesystem rename; preparation atomically claims and
+then mutates the tree in job staging. A missing, mismatched or malformed marker is discarded and the
+original ZIP is safely re-extracted. Cancellation and terminal reconciliation remove this derived
+directory without deleting the registered original ZIP. It is not authoritative content and has no
+database identity or worker-protocol variant.
 
 ## Persistent Entities
 
@@ -115,3 +125,5 @@ BookVersion ──1:n──> Search rows and immutable files
    event. Any mismatch leaves `current_version_id` unchanged.
 5. Reconciliation never infers publication. It removes unregistered staging/version trees, marks lost
    attempts terminal, verifies registered candidates, and queues only authorized cleanup/verification.
+6. A sealed extraction remains only while its import can still enter preparation. Claiming transfers
+   cleanup ownership to job staging; a retry after loss or cancellation re-extracts from the original.

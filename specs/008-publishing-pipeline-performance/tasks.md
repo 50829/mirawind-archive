@@ -327,11 +327,33 @@ also exposed and fixed an incorrect whole-tree formula/HAST cardinality assumpti
 visible generated formulas with per-render markers rather than traversal order.
 T092 remains open because these focused results are not an `AB/BA/AB` completion claim.
 
-- [ ] T095 After the last source change, run the standard format, lint/architecture, typecheck, full
+- [x] T095 After the last source change, run the standard format, lint/architecture, typecheck, full
       Vitest, E2E and build gates once; reuse the T091 stress and T092 paired-benchmark artifacts instead
       of rerunning those workloads
-- [ ] T096 Update only behaviorally affected product, decision, operations, audit and 008 artifacts
-- [ ] T097 Run Spec Kit analyze, resolve every CRITICAL/HIGH inconsistency, then run converge and append any real residual work to `specs/008-publishing-pipeline-performance/tasks.md`
+
+Final validation passed on the current source: format, lint and the 235-file architecture graph,
+typecheck, all 118 Vitest files with 640 tests, the production Astro/process build and the complete
+Playwright suite with 16 passing scenarios plus the conditional real-fixture scenario skipped. The
+E2E pass used port 4322 because a local service already owned 4321. It also removed assertions for
+the deleted asynchronous publication-result UI and the obsolete expectation that publishing
+recompiled a corrupted source; recovery and publication transaction suites retain the actual
+old-version and pointer invariants.
+
+- [x] T096 Update only behaviorally affected product, decision, operations, audit and 008 artifacts
+
+Product and operations text was scanned against the active `build_candidate` protocol and v5
+identities. The permanent-deletion summary now names draft preparation, candidate builds and
+maintenance work instead of a deleted background publication job. D-117 and the 008 artifacts
+already describe synchronous candidate promotion; historical superseded identity decisions remain
+unchanged.
+
+- [x] T097 Run Spec Kit analyze, resolve every CRITICAL/HIGH inconsistency, then run converge and append any real residual work to `specs/008-publishing-pipeline-performance/tasks.md`
+
+Spec Kit analysis covered all requirements, measurable outcomes, acceptance scenarios and current
+tasks with no CRITICAL/HIGH inconsistency or constitution conflict. The only LOW evidence drift was
+the pre-T098 architecture/test count above, which is now synchronized. Convergence found no new
+implementation gap: the owner-deferred formal paired benchmark is already represented by T092, so
+no duplicate convergence task was appended.
 
 **Checkpoint**: Commit evidence as `test(publishing): close recovery and performance gates`. The
 feature is complete only when the formal result satisfies every threshold and Spec Kit reports no
@@ -384,3 +406,24 @@ US5 reader/I/O ───┘
 6. Run formal paired performance only on committed states; never optimize against a dirty one-off run.
 7. Mark tasks complete incrementally and create Conventional Commits only at the documented logical
    checkpoints after their gates pass.
+
+## Phase 9: Convergence
+
+- [x] T098 Implement an import-owned sealed extraction with validated atomic handoff into
+      `prepare_draft`, fallback re-extraction after a missing or invalid handoff, terminal cleanup,
+      recovery/cancellation coverage and focused timing evidence per the Sealed Extraction entity
+      and plan Phase E (partial)
+
+T098 keeps the existing archive validator and worker protocol. Successful non-rejected analysis
+atomically moves its extracted tree under the registered import with a strict import/count/byte
+marker. Preparation claims it once; missing or mismatched markers use the existing extractor.
+Cancellation, retry and reconciliation tests prove staging cleanup, fallback re-extraction, manual
+confirmation retention and terminal derived-tree removal while preserving the original ZIP.
+
+On the 97-page focused fixture, the previous production bundle spent 73.498 ms in the second
+`prepare_draft/archive_extract`. The rebuilt bundle reported `archive_reused=1` and no preparation
+archive-extract stage. Prepare child duration was 1,057.729 ms versus 1,052.277 ms; whole-run wall
+was noisy because PDF evidence and candidate work varied, so this is evidence of eliminated duplicate
+work rather than a new aggregate speed claim. The earlier fifteen-book profiles attribute about
+53.2 seconds to the now-removed second extraction. Raw focused results remain under ignored
+`.cache/008-publishing-performance/sealed-extraction-current*/`.

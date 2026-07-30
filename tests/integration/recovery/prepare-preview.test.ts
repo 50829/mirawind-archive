@@ -1,4 +1,4 @@
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,6 +13,7 @@ import {
 import { readPdfContentsEvidence } from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { analyzeImport } from "@/modules/publishing/adapters/worker/analyze-import";
 import { finalizePreparedDraft } from "@/modules/publishing/adapters/worker/finalize-prepared-draft";
 import { prepareDraft } from "@/modules/publishing/adapters/worker/prepare-draft";
 import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
@@ -39,6 +40,120 @@ function candidate(): MarkdownCandidate {
 }
 
 describe("prepare_draft candidate handoff", () => {
+  it("claims the validated analysis extraction without reopening the archive", async () => {
+    const dataRoot = await import("../../helpers/data-root.js").then(
+      ({ createTemporaryDataRoot }) =>
+        createTemporaryDataRoot("prepare-sealed-extraction"),
+    );
+    try {
+      const importId = "imp_sealed_extract_0001";
+      const archivePath = resolve(dataRoot.path, "input.zip");
+      const sealedExtractionDirectory = resolve(
+        dataRoot.layout.uploadDirectory,
+        importId,
+        "sealed-extraction",
+      );
+      await writeFile(
+        archivePath,
+        buildZip({
+          entries: [{ data: "# Book\n\nBody.\n", name: "wrapper/full.md" }],
+        }),
+      );
+      await analyzeImport({
+        archivePath,
+        importId,
+        sealedExtractionDirectory,
+        stagingDirectory: resolve(
+          dataRoot.path,
+          "staging/job_analyze_sealed_0001",
+        ),
+      });
+      await rm(archivePath);
+
+      const prepared = await prepareDraft({
+        archivePath,
+        importId,
+        sealedExtractionDirectory,
+        selectedCandidatePath: "wrapper/full.md",
+        stagingDirectory: resolve(
+          dataRoot.path,
+          "staging/job_prepare_sealed_0001",
+        ),
+      });
+
+      expect(prepared.extractionSource).toBe("sealed");
+      await expect(access(sealedExtractionDirectory)).rejects.toThrow();
+      await expect(
+        access(resolve(prepared.extractedRoot, "wrapper/full.md")),
+      ).resolves.toBeUndefined();
+    } finally {
+      await dataRoot.cleanup();
+    }
+  });
+
+  it("discards an invalid sealed marker and falls back to safe extraction", async () => {
+    const dataRoot = await import("../../helpers/data-root.js").then(
+      ({ createTemporaryDataRoot }) =>
+        createTemporaryDataRoot("prepare-invalid-sealed-extraction"),
+    );
+    try {
+      const importId = "imp_invalid_sealed_0001";
+      const archivePath = resolve(dataRoot.path, "input.zip");
+      const sealedExtractionDirectory = resolve(
+        dataRoot.layout.uploadDirectory,
+        importId,
+        "sealed-extraction",
+      );
+      await writeFile(
+        archivePath,
+        buildZip({
+          entries: [
+            { data: "# Archive Book\n\nBody.\n", name: "wrapper/full.md" },
+          ],
+        }),
+      );
+      await mkdir(resolve(sealedExtractionDirectory, "tree/wrapper"), {
+        recursive: true,
+      });
+      await writeFile(
+        resolve(sealedExtractionDirectory, "marker.json"),
+        `${JSON.stringify({
+          entries: 1,
+          files: 1,
+          import_id: "imp_wrong_binding_0001",
+          schema_version: 1,
+          totalUncompressedBytes: 13,
+        })}\n`,
+      );
+      await writeFile(
+        resolve(sealedExtractionDirectory, "tree/wrapper/full.md"),
+        "# Wrong Book\n",
+      );
+
+      const prepared = await prepareDraft({
+        archivePath,
+        importId,
+        sealedExtractionDirectory,
+        selectedCandidatePath: "wrapper/full.md",
+        stagingDirectory: resolve(
+          dataRoot.path,
+          "staging/job_prepare_invalid_0001",
+        ),
+      });
+
+      expect(prepared.extractionSource).toBe("archive");
+      expect(
+        await readFile(
+          resolve(prepared.extractedRoot, "wrapper/full.md"),
+          "utf8",
+        ),
+      ).toContain("Archive Book");
+      await expect(access(sealedExtractionDirectory)).rejects.toThrow();
+    } finally {
+      await dataRoot.cleanup();
+    }
+  });
+
   it("persists normalized Markdown and a bounded high-confidence printed-contents proposal", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const source = await readFile(printedTocFixturePath, "utf8");
@@ -478,19 +593,34 @@ describe("prepare_draft candidate handoff", () => {
       });
     }));
 
-  it("cleans staging when preparation is canceled", async () => {
+  it("cleans a claimed extraction when canceled and re-extracts on retry", async () => {
     const dataRoot = await import("../../helpers/data-root.js").then(
       ({ createTemporaryDataRoot }) =>
         createTemporaryDataRoot("prepare-canceled"),
     );
     try {
       const archivePath = resolve(dataRoot.path, "canceled.zip");
+      const importId = "imp_prepare_canceled_0001";
+      const sealedExtractionDirectory = resolve(
+        dataRoot.layout.uploadDirectory,
+        importId,
+        "sealed-extraction",
+      );
       await writeFile(
         archivePath,
         buildZip({
           entries: [{ data: "# Book\n\nBody.\n", name: "wrapper/full.md" }],
         }),
       );
+      await analyzeImport({
+        archivePath,
+        importId,
+        sealedExtractionDirectory,
+        stagingDirectory: resolve(
+          dataRoot.path,
+          "staging/job_analyze_canceled_0001",
+        ),
+      });
       const stagingDirectory = resolve(
         dataRoot.path,
         "staging/job_prepare_canceled_0001",
@@ -501,12 +631,27 @@ describe("prepare_draft candidate handoff", () => {
       await expect(
         prepareDraft({
           archivePath,
+          importId,
+          sealedExtractionDirectory,
           selectedCandidatePath: "wrapper/full.md",
           signal: controller.signal,
           stagingDirectory,
         }),
       ).rejects.toThrow();
       await expect(access(stagingDirectory)).rejects.toThrow();
+      await expect(access(sealedExtractionDirectory)).rejects.toThrow();
+
+      const retry = await prepareDraft({
+        archivePath,
+        importId,
+        sealedExtractionDirectory,
+        selectedCandidatePath: "wrapper/full.md",
+        stagingDirectory: resolve(
+          dataRoot.path,
+          "staging/job_prepare_canceled_retry_0001",
+        ),
+      });
+      expect(retry.extractionSource).toBe("archive");
     } finally {
       await dataRoot.cleanup();
     }

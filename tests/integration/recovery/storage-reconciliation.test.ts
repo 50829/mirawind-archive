@@ -47,6 +47,9 @@ describe("publishing storage reconciliation", () => {
       const knownOriginal = `books/${book.id}/draft/originals/${originalId}`;
       const knownConfig = `books/${book.id}/draft/configs/1/book.yaml`;
       const knownAnalysis = `books/${book.id}/draft/analyses/${sourceId}/1.json`;
+      const canceledImportId = "imp_reconcile_canceled_0001";
+      const canceledUpload = `tmp/uploads/${canceledImportId}/original.zip`;
+      const canceledSealedExtraction = `tmp/uploads/${canceledImportId}/sealed-extraction`;
 
       imports.createUploaded({
         bookId: book.id,
@@ -57,6 +60,16 @@ describe("publishing storage reconciliation", () => {
         uploadSha256: hash,
         uploadSizeBytes: 1,
       });
+      imports.createUploaded({
+        expiresAtMs: nowMs + 10_000,
+        id: canceledImportId,
+        nowMs: 2,
+        uploadRelativePath: canceledUpload,
+        uploadSha256: hash,
+        uploadSizeBytes: 1,
+      });
+      imports.startAnalysis(canceledImportId, 3);
+      imports.cancel(canceledImportId, 4);
       sources.createSnapshot({
         analysisVersion: "test-v1",
         bookId: book.id,
@@ -96,6 +109,9 @@ describe("publishing storage reconciliation", () => {
           knownOriginal,
           knownConfig,
           knownAnalysis,
+          canceledUpload,
+          `${canceledSealedExtraction}/tree/book.md`,
+          `${canceledSealedExtraction}/marker.json`,
         ].map((path) => write(resolve(dataRoot.path, path))),
       );
 
@@ -149,6 +165,7 @@ describe("publishing storage reconciliation", () => {
           snapshot,
           orphanAnalysis,
           orphanUpload,
+          canceledSealedExtraction,
         ].sort(),
       );
       for (const path of result.removedOrphanPaths) {
@@ -160,6 +177,7 @@ describe("publishing storage reconciliation", () => {
         knownOriginal,
         knownConfig,
         knownAnalysis,
+        canceledUpload,
         freshUpload,
         freshConfig,
       ]) {

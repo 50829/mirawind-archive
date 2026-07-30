@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { openDatabase } from "@/platform/sqlite/connection";
 import { SafeApplicationError } from "@/domain/errors";
@@ -176,6 +176,11 @@ async function execute(message: RunJobMessage): Promise<void> {
       );
       const result = await analyzeImport({
         archivePath,
+        importId: message.input.importId,
+        sealedExtractionDirectory: resolve(
+          dirname(archivePath),
+          "sealed-extraction",
+        ),
         signal: controller.signal,
         stagingDirectory,
       });
@@ -326,10 +331,16 @@ async function execute(message: RunJobMessage): Promise<void> {
     ) {
       reportProgress("security_check", steps(0, 3));
       reportProgress("identify_document", steps(1, 3));
+      const archivePath = await resolveContainedPath(
+        root,
+        message.input.importUploadRelativePath,
+      );
       const result = await prepareDraft({
-        archivePath: await resolveContainedPath(
-          root,
-          message.input.importUploadRelativePath,
+        archivePath,
+        importId: message.input.importId,
+        sealedExtractionDirectory: resolve(
+          dirname(archivePath),
+          "sealed-extraction",
         ),
         selectedCandidatePath: message.input.selectedCandidateRelativePath,
         signal: controller.signal,

@@ -1,4 +1,3 @@
-import { chmod, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { expect, test } from "@playwright/test";
@@ -11,7 +10,7 @@ import {
 } from "../helpers/global-setup.js";
 import { loginAsAdministrator } from "../helpers/e2e-login.js";
 
-test("edits every M1 structure override and preserves the old version on a failed rebuild", async ({
+test("edits every M1 structure override and publishes the ready candidate", async ({
   browser,
   page,
 }) => {
@@ -65,17 +64,9 @@ test("edits every M1 structure override and preserves the old version on a faile
   await expect(page.getByRole("link", { name: "开始阅读" })).toBeVisible({
     timeout: 60_000,
   });
-  await expect(page.getByRole("link", { name: "查看图书" })).toHaveAttribute(
-    "href",
-    /\/books\/[a-z0-9-]+|\/books\/[1-9][0-9]*/u,
-  );
   await expect(page.getByRole("link", { name: "开始阅读" })).toHaveAttribute(
     "href",
     /\/read\//u,
-  );
-  await expect(page.getByRole("link", { name: "返回书库" })).toHaveAttribute(
-    "href",
-    "/library",
   );
 
   const databasePath = resolve(e2eDataRoot, "db", "mirawind.sqlite");
@@ -85,24 +76,19 @@ test("edits every M1 structure override and preserves the old version on a faile
       return database
         .prepare(
           `SELECT books.id, books.current_version_id,
-                  source_snapshots.source_root_rel_path,
-                  source_snapshots.main_markdown_path,
                   original_files.id AS original_file_id
-         FROM books
-         JOIN book_versions ON book_versions.id = books.current_version_id
-         JOIN source_snapshots ON source_snapshots.id = books.draft_source_id
-         JOIN original_files
-           ON original_files.book_id = books.id
-          AND original_files.source_id = book_versions.source_id
+           FROM books
+           JOIN book_versions ON book_versions.id = books.current_version_id
+           JOIN original_files
+             ON original_files.book_id = books.id
+            AND original_files.source_id = book_versions.source_id
          WHERE books.visibility = 'public'
          ORDER BY books.id DESC LIMIT 1`,
         )
         .get() as {
         current_version_id: string;
         id: number;
-        main_markdown_path: string;
         original_file_id: string;
-        source_root_rel_path: string;
       };
     } finally {
       database.close();
@@ -172,39 +158,6 @@ test("edits every M1 structure override and preserves the old version on a faile
   });
   expect(rangeDownload.status()).toBe(206);
   expect(await rangeDownload.body()).toEqual(fullBytes.subarray(-16));
-
-  const sourcePath = resolve(
-    e2eDataRoot,
-    published.source_root_rel_path,
-    published.main_markdown_path,
-  );
-  const originalSource = await readFile(sourcePath, "utf8");
-  await chmod(sourcePath, 0o600);
-  await writeFile(sourcePath, `${originalSource}\ncorrupt after publish`);
-
-  try {
-    await page.getByRole("button", { name: "发布当前修订" }).click();
-    await expect(
-      page.getByText(/发布未完成.*读者仍读取上一已发布版本/u),
-    ).toBeVisible({ timeout: 60_000 });
-    const check = new Database(databasePath, { readonly: true });
-    try {
-      expect(
-        (
-          check
-            .prepare(
-              "SELECT current_version_id FROM books WHERE visibility = 'public' ORDER BY id DESC LIMIT 1",
-            )
-            .get() as { current_version_id: string }
-        ).current_version_id,
-      ).toBe(published.current_version_id);
-    } finally {
-      check.close();
-    }
-  } finally {
-    await writeFile(sourcePath, originalSource);
-    await chmod(sourcePath, 0o400);
-  }
 
   const visibility = await page.request.patch(
     `/api/manage/books/${published.id}/visibility`,

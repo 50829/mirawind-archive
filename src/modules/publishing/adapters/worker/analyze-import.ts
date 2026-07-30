@@ -10,6 +10,7 @@ import {
   type CandidateDiscovery,
   type MarkdownCandidate,
 } from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
+import { sealExtractedDirectory } from "@/modules/publishing/adapters/filesystem/sealed-extraction";
 import {
   ImportRepository,
   type ImportRecord,
@@ -57,9 +58,14 @@ function rejectionCode(reason: CandidateDiscovery["reason"]): string {
 export async function analyzeImport(input: {
   readonly archivePath: string;
   readonly extractionLimits?: Partial<ArchiveExtractionLimits>;
+  readonly importId?: string;
+  readonly sealedExtractionDirectory?: string;
   readonly signal?: AbortSignal;
   readonly stagingDirectory: string;
 }): Promise<AnalyzeImportResult> {
+  if (Boolean(input.importId) !== Boolean(input.sealedExtractionDirectory)) {
+    throw new Error("SEALED_EXTRACTION_INPUT_INVALID");
+  }
   const stagingDirectory = resolve(input.stagingDirectory);
   const extractedDirectory = resolve(stagingDirectory, "extracted");
   const artifactPath = resolve(stagingDirectory, analysisArtifactFilename);
@@ -97,6 +103,16 @@ export async function analyzeImport(input: {
         mode: 0o600,
       }),
     );
+    if (artifact.decision === "reject") {
+      await rm(extractedDirectory, { force: true, recursive: true });
+    } else if (input.importId && input.sealedExtractionDirectory) {
+      await sealExtractedDirectory({
+        extractedRoot: extractedDirectory,
+        extraction: extracted,
+        importId: input.importId,
+        sealedDirectory: input.sealedExtractionDirectory,
+      });
+    }
     return Object.freeze({
       artifact,
       artifactPath,

@@ -166,3 +166,22 @@ the ignored `.cache/008-publishing-performance/focused-before/`,
 `.cache/008-publishing-performance/memory-after-weighted/`,
 `.cache/008-publishing-performance/memory-after-raw-math/` and
 `.cache/008-publishing-performance/focused-after-raw-math/` directories.
+
+## Sealed extraction handoff
+
+Analysis and preparation previously ran the complete hostile-ZIP extractor independently. The
+successful analysis tree is now sealed under its registered import and claimed once by preparation;
+missing or invalid markers fall back to normal extraction. Rejected imports do not retain a tree,
+and cancellation/reconciliation remove derived trees without deleting the original ZIP.
+
+The same 97-page fixture was run through the complete production worker before and after rebuilding
+the process bundle. The old prepare child spent 73.498 ms in `archive_extract`. The new prepare
+profile has `archive_reused=1` and no `archive_extract` stage; child duration changed from 1,057.729
+to 1,052.277 ms and peak process-tree RSS from 346.751 MB to 306.385 MB. Whole-run wall changed from
+3,055.565 to 3,160.015 ms because unrelated PDF evidence and candidate stages varied, so this run
+proves removal of the duplicate extraction but is not used as a formal aggregate speed claim. Prior
+fifteen-book profiles measured about 53.2 seconds in the removed second extraction.
+
+Raw results are retained under ignored
+`.cache/008-publishing-performance/sealed-extraction-current*/` directories. T092 remains open; this
+focused evidence does not replace the owner-deferred remaining paired rounds.

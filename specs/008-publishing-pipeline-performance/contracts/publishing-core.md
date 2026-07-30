@@ -20,49 +20,44 @@ interface BuildCandidateCommand {
 }
 
 interface PagePlan {
-  readonly id: number;
-  readonly ordinal: number;
-  readonly startBlockIndex: number;
-  readonly endBlockIndexExclusive: number;
+  readonly blockRange: { readonly start: number; readonly end: number };
+  readonly firstBlockId: string;
+  readonly pageId: number;
+  readonly rootRange: { readonly start: number; readonly end: number };
 }
 
 interface CompiledBook {
   readonly pages: readonly PagePlan[];
-  // Document, configured headings, resources, identities and diagnostics are
-  // immutable whole-book values; adapters and route policy are forbidden.
-}
-
-interface RouteNeutralReaderPageModel {
-  readonly pageId: number;
-  readonly title: string;
-  readonly toc: readonly NavigationNode[];
-  readonly breadcrumbs: readonly NavigationNode[];
-  readonly outline: readonly NavigationNode[];
-  readonly articleHtml: string;
-  readonly logicalResourceIds: readonly string[];
-  readonly previousPageId: number | null;
-  readonly nextPageId: number | null;
+  // The parsed document, configured headings, lookup maps and semantic identity
+  // are immutable whole-book values. Adapters and route policy are forbidden.
 }
 
 interface RenderedPage {
-  readonly pageId: number;
-  readonly ordinal: number;
-  readonly model: RouteNeutralReaderPageModel;
-  readonly requiredRendererAssetIds: readonly string[];
+  readonly css: string;
   readonly diagnostics: readonly PublishingDiagnostic[];
-  readonly searchRows: readonly SearchRow[];
+  readonly html: string;
+  readonly ordinal: number;
+  readonly page: PagePlan;
 }
 
-declare function compileBook(
-  input: BuildCandidateCommand,
-): Promise<CompiledBook>;
-declare function renderPages(book: CompiledBook): AsyncIterable<RenderedPage>;
+interface CompileBookInput {
+  readonly config: Readonly<Record<string, unknown>>;
+  readonly configSha256: string;
+  readonly markdownBytes: Uint8Array;
+}
+
+declare function compileBook(input: CompileBookInput): CompiledBook;
+declare function renderPages(input: {
+  readonly book: CompiledBook;
+  readonly resourceResolution: ResourceResolution;
+  readonly signal?: AbortSignal;
+}): AsyncIterable<RenderedPage>;
 ```
 
-`NavigationNode`, `PublishingDiagnostic` and `SearchRow` reuse the existing strict shared DTOs. The
-`articleHtml` uses validated logical resource tokens rather than preview/public URLs. The model stays
-serializable into both ReaderShell materializers and does not expose intermediate
-analysis/layout/output types.
+`BuildCandidateCommand` is the application/worker boundary. Its adapter validates and loads the
+authoritative bytes before calling the pure `compileBook()` function, then consumes `renderPages()`
+and returns `CandidateBuildArtifact`. Rendered HTML uses validated logical heading/resource tokens
+rather than preview/public URLs and does not expose intermediate analysis/layout/output types.
 
 ## Execution Invariants
 
@@ -71,7 +66,8 @@ analysis/layout/output types.
 - `renderPages` yields strict ordinal order with at most four render operations in flight.
 - Cancellation prevents new scheduling and discards buffered pages after the current safe boundary.
 - Diagnostics are deterministic independent of completion timing.
-- Preview/public materialization cannot mutate `CompiledBook` or `RenderedPage`.
+- Preview/public materialization and search/manifest spooling cannot mutate `CompiledBook` or
+  `RenderedPage`.
 - No core module imports React, Astro, SQLite, filesystem, process, HTTP or module adapters.
 
 ## Child Result

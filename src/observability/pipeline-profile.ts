@@ -42,6 +42,7 @@ export type PipelineProfileStageName =
 export const pipelineProfileMetricNames = [
   "archive_entries",
   "archive_files",
+  "archive_reused",
   "archive_uncompressed_bytes",
   "markdown_candidates",
   "markdown_bytes",

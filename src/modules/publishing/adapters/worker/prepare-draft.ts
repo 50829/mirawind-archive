@@ -14,6 +14,7 @@ import {
 } from "@/modules/publishing/core/preparation/typography";
 import { inspectRasterImage } from "@/modules/publishing/core/publication/inspect-image";
 import { resolveDocumentResources } from "@/modules/publishing/adapters/filesystem/resolve-document-resources";
+import { claimSealedExtraction } from "@/modules/publishing/adapters/filesystem/sealed-extraction";
 import { analyzeDraftContents } from "@/modules/publishing/adapters/worker/draft-contents-analysis";
 import {
   draftPreparationVersion,
@@ -32,35 +33,54 @@ import {
 export interface PrepareDraftResult {
   readonly artifact: PreparedDraftArtifact;
   readonly artifactPath: string;
+  readonly extractionSource: "archive" | "sealed";
   readonly extractedRoot: string;
 }
 
 export async function prepareDraft(input: {
   readonly archivePath: string;
   readonly extractionLimits?: Partial<ArchiveExtractionLimits>;
+  readonly importId?: string;
   readonly selectedCandidatePath: string;
+  readonly sealedExtractionDirectory?: string;
   readonly signal?: AbortSignal;
   readonly stagingDirectory: string;
   readonly typographyProfile?: TypographyProvenance["profile"];
   readonly pdfEvidenceReader?: typeof readPdfContentsEvidence;
 }): Promise<PrepareDraftResult> {
+  if (Boolean(input.importId) !== Boolean(input.sealedExtractionDirectory)) {
+    throw new Error("SEALED_EXTRACTION_INPUT_INVALID");
+  }
   const stagingDirectory = resolve(input.stagingDirectory);
   const extractedRoot = resolve(stagingDirectory, "extracted");
   const artifactPath = resolve(stagingDirectory, preparationArtifactFilename);
   try {
     await mkdir(dirname(stagingDirectory), { mode: 0o700, recursive: true });
     await mkdir(stagingDirectory, { mode: 0o700, recursive: false });
-    const extracted = await profilePipelineStage("archive_extract", () =>
-      extractZipFile({
-        archivePath: input.archivePath,
-        destination: extractedRoot,
-        ...(input.extractionLimits ? { limits: input.extractionLimits } : {}),
-        ...(input.signal ? { signal: input.signal } : {}),
-      }),
-    );
+    const claimed =
+      input.importId && input.sealedExtractionDirectory
+        ? await claimSealedExtraction({
+            expectedImportId: input.importId,
+            sealedDirectory: input.sealedExtractionDirectory,
+            stagingDirectory,
+          })
+        : null;
+    if (input.signal?.aborted) throw new Error("ARCHIVE_CANCELED");
+    const extractionSource = claimed ? "sealed" : "archive";
+    const extracted =
+      claimed ??
+      (await profilePipelineStage("archive_extract", () =>
+        extractZipFile({
+          archivePath: input.archivePath,
+          destination: extractedRoot,
+          ...(input.extractionLimits ? { limits: input.extractionLimits } : {}),
+          ...(input.signal ? { signal: input.signal } : {}),
+        }),
+      ));
     recordPipelineProfileMetrics({
       archive_entries: extracted.entries,
       archive_files: extracted.files,
+      archive_reused: extractionSource === "sealed" ? 1 : 0,
       archive_uncompressed_bytes: extracted.totalUncompressedBytes,
     });
     if (extracted.files < 1) throw new Error("IMPORT_ARCHIVE_EMPTY");
@@ -146,7 +166,12 @@ export async function prepareDraft(input: {
         mode: 0o600,
       }),
     );
-    return Object.freeze({ artifact, artifactPath, extractedRoot });
+    return Object.freeze({
+      artifact,
+      artifactPath,
+      extractedRoot,
+      extractionSource,
+    });
   } catch (error) {
     await rm(stagingDirectory, { force: true, recursive: true });
     throw error;

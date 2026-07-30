@@ -208,8 +208,9 @@ version builder and forwarding exports in the same cutover.
 
 Use one resource inventory through candidate assembly, retain durability validation, add immutable
 manifest single-flight plus O(1) page/resource lookup, and stream preview resources from validated
-metadata. Evaluate sealed extraction reuse only after its ownership, restart and cancellation cleanup
-are proven; do not weaken archive validation to gain time.
+metadata. A successful import analysis atomically seals its validated extraction under that import;
+draft preparation claims it once, while missing/invalid handoffs re-extract normally and terminal
+cleanup removes only the derived tree. Archive validation is unchanged.
 
 ### Phase F - Evidence and Convergence
 

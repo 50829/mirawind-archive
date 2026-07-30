@@ -95,7 +95,8 @@ filesystem current pointer would split authority.
 
 **Decision**: first linearize source-region/byte-offset work and related typography/page indexes,
 then remove duplicate preview/publish compilation, then bound page rendering and optimize reader/I/O.
-Repeat archive extraction reuse is conditional on a proven sealed-extraction lifecycle.
+The validated analysis extraction is handed to preparation through an import-owned, one-use sealed
+directory. Missing or invalid handoffs fall back to the unchanged safe extractor.
 
 **Rationale**: the fifteen-book profile measured 116.988 seconds in source regions, 259.021 seconds in
 duplicate configured-document compilation, 93.12 seconds in duplicate page rendering and 2.16 GiB

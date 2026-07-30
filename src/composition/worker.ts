@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { hostname } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type Database from "better-sqlite3";
@@ -167,6 +167,42 @@ function frozenInput(
   throw new Error("JOB_INPUT_KIND_INVALID");
 }
 
+async function cancelImportJob(input: {
+  readonly imports: ImportRepository;
+  readonly job: JobRecord;
+  readonly layout: StorageLayout;
+  readonly nowMs: number;
+}): Promise<void> {
+  if (
+    !input.job.importId ||
+    (input.job.kind !== "analyze_import" && input.job.kind !== "prepare_draft")
+  ) {
+    return;
+  }
+  const imported = input.imports.require(input.job.importId);
+  if (
+    ["uploaded", "analyzing", "needs_main_confirmation", "preparing"].includes(
+      imported.state,
+    )
+  ) {
+    input.imports.cancel(imported.id, input.nowMs);
+  }
+  await rm(resolve(input.layout.root, "staging", input.job.id), {
+    force: true,
+    recursive: true,
+  });
+  if (input.job.kind === "analyze_import") {
+    const archivePath = await resolveContainedPath(
+      input.layout.root,
+      imported.uploadRelativePath,
+    );
+    await rm(resolve(dirname(archivePath), "sealed-extraction"), {
+      force: true,
+      recursive: true,
+    });
+  }
+}
+
 async function executeClaimedJob(input: {
   readonly candidates: DraftCandidateRepository;
   readonly database: Database.Database;
@@ -246,6 +282,12 @@ async function executeClaimedJob(input: {
     const latest = input.repository.get(input.job.id);
     if (!latest || latest.state !== "running") return;
     if (latest.cancellationRequestedAtMs !== null) {
+      await cancelImportJob({
+        imports: input.imports,
+        job: input.job,
+        layout: input.layout,
+        nowMs: Date.now(),
+      });
       input.repository.completeFailure({
         errorClass: "canceled",
         errorCode: "JOB_CANCELED",
@@ -306,6 +348,13 @@ async function executeClaimedJob(input: {
             nowMs: Date.now(),
           });
         }
+        await rm(
+          await resolveContainedPath(
+            input.layout.root,
+            `staging/${input.job.id}`,
+          ),
+          { force: true, recursive: true },
+        );
       }
       if (input.job.kind === "prepare_draft" && input.job.importId) {
         const expected = `staging/${input.job.id}/prepared-draft.json`;
@@ -332,6 +381,7 @@ async function executeClaimedJob(input: {
             imported.uploadRelativePath,
           ),
         });
+        await rm(stagingDirectory, { force: true, recursive: true });
       }
       if (input.job.kind === "build_candidate") {
         if (command.kind !== "build_candidate") {
@@ -364,10 +414,22 @@ async function executeClaimedJob(input: {
       latest.cancellationRequestedAtMs !== null
         ? "JOB_CANCELED"
         : (execution.result.safeErrorCode ?? "JOB_CHILD_FAILED");
-    if (input.job.kind === "analyze_import" && input.job.importId) {
+    if (
+      (input.job.kind === "analyze_import" ||
+        input.job.kind === "prepare_draft") &&
+      input.job.importId
+    ) {
       if (errorClass === "canceled") {
-        input.imports.cancel(input.job.importId, Date.now());
-      } else if (errorClass !== "infrastructure") {
+        await cancelImportJob({
+          imports: input.imports,
+          job: input.job,
+          layout: input.layout,
+          nowMs: Date.now(),
+        });
+      } else if (
+        input.job.kind === "analyze_import" &&
+        errorClass !== "infrastructure"
+      ) {
         input.imports.reject(input.job.importId, errorCode, Date.now());
       }
     }

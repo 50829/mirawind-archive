@@ -194,13 +194,40 @@ async function reconcileUploadOrphans(input: {
   readonly layout: StorageLayout;
   readonly removed: string[];
 }): Promise<void> {
+  const imports = input.database
+    .prepare("SELECT id, state, upload_rel_path FROM imports")
+    .all() as {
+    id: string;
+    state: string;
+    upload_rel_path: string;
+  }[];
   const known = new Set(
-    (
-      input.database.prepare("SELECT upload_rel_path FROM imports").all() as {
-        upload_rel_path: string;
-      }[]
-    ).map((row) => posix.dirname(row.upload_rel_path)),
+    imports.map((row) => posix.dirname(row.upload_rel_path)),
   );
+  for (const imported of imports) {
+    if (
+      !["canceled", "draft_ready", "expired", "rejected"].includes(
+        imported.state,
+      ) ||
+      !isOpaqueId("import", imported.id) ||
+      imported.upload_rel_path !== `tmp/uploads/${imported.id}/original.zip`
+    ) {
+      continue;
+    }
+    const sealedExtraction = resolve(
+      input.layout.uploadDirectory,
+      imported.id,
+      "sealed-extraction",
+    );
+    if (!(await metadata(sealedExtraction))) continue;
+    await removeExactContainedTree({
+      root: input.layout.root,
+      target: sealedExtraction,
+    });
+    input.removed.push(
+      storageRelativePath(input.layout.root, sealedExtraction),
+    );
+  }
   const entries = await readdir(input.layout.uploadDirectory, {
     withFileTypes: true,
   });
