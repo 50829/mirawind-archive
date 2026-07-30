@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { serializeJobStatus } from "@/modules/publishing/adapters/sqlite/job-status";
+import { terminalizeCandidateBuild } from "@/modules/publishing/application/commands/maintain-candidate-build";
 import { SafeApplicationError } from "@/domain/errors";
 import { acceptBookDeletion as acceptBookDeletionWithPorts } from "@/modules/catalog/adapters/sqlite/book-deletion";
 import { SqliteBookPublishingCleanup } from "@/modules/publishing/adapters/sqlite/book-cleanup";
@@ -12,6 +13,7 @@ import {
   completeBookDeletionInterruption,
   markBookDeletionPurging,
 } from "@/composition/book-deletion";
+import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 import { withMigratedTestDatabase } from "../../helpers/database";
 import {
@@ -283,12 +285,21 @@ describe("permanent book deletion acceptance", () => {
         cancellationRequestedAtMs: 20,
         state: "running",
       });
-      fixture.jobs.completeFailure({
-        errorClass: "canceled",
-        errorCode: "JOB_CANCELED",
-        jobId: fixture.candidateJob.id,
-        leaseOwner: "worker:test",
-        nowMs: 21,
+      withImmediateTransaction(database, () => {
+        const completed = fixture.jobs.completeFailure({
+          errorClass: "canceled",
+          errorCode: "JOB_CANCELED",
+          jobId: fixture.candidateJob.id,
+          leaseOwner: "worker:test",
+          nowMs: 21,
+        });
+        terminalizeCandidateBuild({
+          candidates: fixture.candidates,
+          job: completed,
+          nowMs: 21,
+          safeErrorCode: "JOB_CANCELED",
+          state: "canceled",
+        });
       });
       expect(
         fixture.candidates.require(fixture.candidate.attemptId),

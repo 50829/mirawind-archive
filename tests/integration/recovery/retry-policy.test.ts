@@ -7,8 +7,13 @@ import {
   JobRepository,
   type JobRecord,
 } from "@/modules/publishing/adapters/sqlite/jobs";
+import {
+  retryCandidateBuild,
+  terminalizeCandidateBuild,
+} from "@/modules/publishing/application/commands/maintain-candidate-build";
 import { recoverExpiredJobLeases } from "@/modules/publishing/application/recover-expired-jobs";
 import { evaluateJobRetry } from "@/modules/publishing/application/retry-policy";
+import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import { withMigratedTestDatabase } from "../../helpers/database";
 import { setupPublicationFixture } from "../../helpers/publication";
 
@@ -99,6 +104,8 @@ describe("job retry policy", () => {
       const firstRecovery = await recoverExpiredJobLeases({
         nowMs: 62_001,
         repository,
+        retryJob: (job, nowMs) =>
+          repository.retry(job.id, { automatic: true, nowMs }),
         storageRoot: dataRoot.path,
       });
       expect(firstRecovery).toEqual([
@@ -129,6 +136,8 @@ describe("job retry policy", () => {
       const secondRecovery = await recoverExpiredJobLeases({
         nowMs: 123_001,
         repository,
+        retryJob: (job, nowMs) =>
+          repository.retry(job.id, { automatic: true, nowMs }),
         storageRoot: dataRoot.path,
       });
       expect(secondRecovery).toEqual([
@@ -212,20 +221,35 @@ describe("job retry policy", () => {
           unit: "pages",
         },
       });
-      const failed = fixture.jobs.completeFailure({
-        errorClass: "timeout",
-        errorCode: "JOB_TIMEOUT",
-        jobId: fixture.candidateJob.id,
-        leaseOwner: "worker:test",
-        nowMs: 8,
+      const failed = withImmediateTransaction(database, () => {
+        const completed = fixture.jobs.completeFailure({
+          errorClass: "timeout",
+          errorCode: "JOB_TIMEOUT",
+          jobId: fixture.candidateJob.id,
+          leaseOwner: "worker:test",
+          nowMs: 8,
+        });
+        terminalizeCandidateBuild({
+          candidates: fixture.candidates,
+          job: completed,
+          nowMs: 8,
+          safeErrorCode: "JOB_TIMEOUT",
+          state: "failed",
+        });
+        return completed;
       });
       const originalCandidate = fixture.candidates.require(
         fixture.candidate.attemptId,
       );
 
-      const retry = fixture.jobs.retry(failed.id, {
+      const retry = retryCandidateBuild({
         automatic: false,
+        candidates: fixture.candidates,
+        job: failed,
+        jobs: fixture.jobs,
         nowMs: 9,
+        runAtomically: (operation) =>
+          withImmediateTransaction(database, operation),
       });
       if (!retry.candidateId || !retry.versionId) {
         throw new Error("CANDIDATE_RETRY_IDENTITIES_MISSING");
@@ -270,7 +294,18 @@ describe("job retry policy", () => {
         jobId: retry.id,
         versionId: retry.versionId,
       });
-      expect(fixture.jobs.requestCancellation(retry.id, 10)).toMatchObject({
+      const canceled = withImmediateTransaction(database, () => {
+        const completed = fixture.jobs.requestCancellation(retry.id, 10);
+        terminalizeCandidateBuild({
+          candidates: fixture.candidates,
+          job: completed,
+          nowMs: 10,
+          safeErrorCode: "JOB_CANCELED",
+          state: "canceled",
+        });
+        return completed;
+      });
+      expect(canceled).toMatchObject({
         cancellationRequestedAtMs: 10,
         errorCode: "JOB_CANCELED",
         state: "canceled",
@@ -301,7 +336,25 @@ describe("job retry policy", () => {
 
       const recovered = await recoverExpiredJobLeases({
         nowMs: 60_011,
+        onInterrupted: (job) =>
+          terminalizeCandidateBuild({
+            candidates: fixture.candidates,
+            job,
+            nowMs: 60_011,
+            safeErrorCode: "JOB_LEASE_EXPIRED",
+            state: "interrupted",
+          }),
         repository: fixture.jobs,
+        retryJob: (job, nowMs) =>
+          retryCandidateBuild({
+            automatic: true,
+            candidates: fixture.candidates,
+            job,
+            jobs: fixture.jobs,
+            nowMs,
+            runAtomically: (operation) =>
+              withImmediateTransaction(database, operation),
+          }),
         storageRoot: dataRoot.path,
       });
       const retry = recovered[0]?.retry;

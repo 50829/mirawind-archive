@@ -12,11 +12,4 @@ export interface ExpiredJobLeaseRepository<
     readonly onInterrupted?: (job: Job) => void;
   }): readonly Job[];
   listPendingAutomaticRetries(): readonly Job[];
-  retry(
-    id: string,
-    input: {
-      readonly automatic: boolean;
-      readonly nowMs: number;
-    },
-  ): Job;
 }

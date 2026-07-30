@@ -24,6 +24,10 @@ import { makeBookNonPublic } from "@/modules/publishing/adapters/sqlite/publicat
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { confirmImportCandidateAndQueuePreparation } from "@/modules/publishing/application/commands/confirm-import-candidate";
 import {
+  retryCandidateBuild,
+  terminalizeCandidateBuild,
+} from "@/modules/publishing/application/commands/maintain-candidate-build";
+import {
   m1PublishPolicy,
   publishCandidate,
 } from "@/modules/publishing/application/public";
@@ -44,7 +48,22 @@ export function createPublishingServer(database: Database.Database) {
       if (job?.kind === "purge_book") {
         return cancelBookDeletion(database, job, nowMs);
       }
-      return jobs.requestCancellation(jobId, nowMs);
+      if (job?.kind !== "build_candidate") {
+        return jobs.requestCancellation(jobId, nowMs);
+      }
+      return withImmediateTransaction(database, () => {
+        const canceled = jobs.requestCancellation(jobId, nowMs);
+        if (canceled.state === "canceled") {
+          terminalizeCandidateBuild({
+            candidates,
+            job: canceled,
+            nowMs,
+            safeErrorCode: "JOB_CANCELED",
+            state: "canceled",
+          });
+        }
+        return canceled;
+      });
     },
     confirmImportCandidateAndQueuePreparation: (input: {
       readonly candidateId: string;
@@ -86,13 +105,33 @@ export function createPublishingServer(database: Database.Database) {
         policy: m1PublishPolicy,
         publication: new CandidatePublicationRepository(database),
       }),
-    retryJob: (jobId: string, input: Parameters<JobRepository["retry"]>[1]) => {
+    retryJob: (
+      jobId: string,
+      input: {
+        readonly automatic: boolean;
+        readonly idempotency?: {
+          readonly key: string;
+          readonly operation: string;
+        };
+        readonly nowMs: number;
+      },
+    ) => {
       const job = jobs.get(jobId);
       if (job?.kind === "purge_book") {
         return retryBookDeletion({
           ...input,
           database,
           jobId,
+        });
+      }
+      if (job?.kind === "build_candidate") {
+        return retryCandidateBuild({
+          ...input,
+          candidates,
+          job,
+          jobs,
+          runAtomically: (operation) =>
+            withImmediateTransaction(database, operation),
         });
       }
       return jobs.retry(jobId, input);

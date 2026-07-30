@@ -320,27 +320,6 @@ export class JobRepository {
     return job;
   }
 
-  private terminalizeDraftCandidate(
-    job: JobRecord,
-    state: "canceled" | "failed" | "interrupted",
-    safeErrorCode: string,
-    nowMs: number,
-  ): void {
-    if (job.kind !== "build_candidate" || job.candidateId === null) {
-      return;
-    }
-    const result = this.database
-      .prepare(
-        `UPDATE draft_candidates
-         SET state = ?, safe_error_code = ?, completed_at = ?
-         WHERE id = ? AND job_id = ? AND state = 'building'`,
-      )
-      .run(state, safeErrorCode, nowMs, job.candidateId, job.id);
-    if (result.changes > 1) {
-      throw new Error("DRAFT_CANDIDATE_TERMINAL_UPDATE_INVALID");
-    }
-  }
-
   claimNext(input: {
     readonly leaseOwner: string;
     readonly nowMs: number;
@@ -428,12 +407,6 @@ export class JobRepository {
              WHERE id = ? AND state = 'queued'`,
             )
             .run(nowMs, nowMs, id);
-          this.terminalizeDraftCandidate(
-            current,
-            "canceled",
-            "JOB_CANCELED",
-            nowMs,
-          );
         } else {
           this.database
             .prepare(
@@ -544,18 +517,6 @@ export class JobRepository {
             input.leaseOwner,
           );
         if (result.changes !== 1) throw new Error("JOB_LEASE_NOT_OWNED");
-        if (input.nextState !== "succeeded") {
-          this.terminalizeDraftCandidate(
-            current,
-            input.nextState === "canceled"
-              ? "canceled"
-              : input.nextState === "interrupted"
-                ? "interrupted"
-                : "failed",
-            input.errorCode ?? "JOB_FAILED",
-            input.nowMs,
-          );
-        }
         return this.getRequired(input.jobId);
       })
       .immediate();
@@ -584,12 +545,6 @@ export class JobRepository {
         for (const row of rows) {
           if (update.run(input.nowMs, row.id, input.nowMs).changes === 1) {
             const job = this.getRequired(row.id);
-            this.terminalizeDraftCandidate(
-              job,
-              "interrupted",
-              "JOB_LEASE_EXPIRED",
-              input.nowMs,
-            );
             input.onInterrupted?.(job);
             interrupted.push(job);
           }
@@ -639,12 +594,6 @@ export class JobRepository {
             )
             .run(input.errorClass, input.errorCode, input.nowMs, id);
           if (result.changes !== 1) throw new Error("JOB_TRANSITION_RACE");
-          this.terminalizeDraftCandidate(
-            current,
-            "failed",
-            input.errorCode,
-            input.nowMs,
-          );
           return this.getRequired(id);
         })
         .immediate();
@@ -666,6 +615,11 @@ export class JobRepository {
         readonly operation: string;
       };
       readonly nowMs: number;
+      readonly nextAttempt?: {
+        readonly candidateId: null;
+        readonly capturedCurrentVersionId: string | null;
+        readonly versionId: string;
+      };
     },
   ): JobRecord {
     return this.database
@@ -703,136 +657,45 @@ export class JobRepository {
         }
 
         const retryId = createOpaqueId("job");
-        if (original.kind === "build_candidate") {
-          if (
-            original.bookId === null ||
-            original.candidateId === null ||
-            original.capturedSourceId === null ||
-            original.capturedConfigRevision === null
-          ) {
-            throw new Error("CANDIDATE_RETRY_INPUT_INVALID");
-          }
-          const capture = this.database
-            .prepare(
-              `SELECT candidate.state, books.current_candidate_id,
-                      books.current_version_id, books.draft_source_id,
-                      books.draft_config_revision
-               FROM draft_candidates AS candidate
-               JOIN books ON books.id = candidate.book_id
-               WHERE candidate.id = ? AND candidate.job_id = ?
-                 AND candidate.book_id = ?
-                 AND books.deletion_requested_at IS NULL`,
-            )
-            .get(original.candidateId, original.id, original.bookId) as
-            | {
-                current_candidate_id: string | null;
-                current_version_id: string | null;
-                draft_config_revision: number | null;
-                draft_source_id: string | null;
-                state: string;
-              }
-            | undefined;
-          if (
-            !capture ||
-            !["failed", "canceled", "interrupted"].includes(capture.state) ||
-            capture.current_candidate_id !== original.candidateId ||
-            capture.draft_source_id !== original.capturedSourceId ||
-            capture.draft_config_revision !== original.capturedConfigRevision
-          ) {
-            throw new Error("CANDIDATE_RETRY_STALE");
-          }
-          const candidateId = createOpaqueId("draftCandidate");
-          const versionId = createOpaqueId("version");
-          this.database
-            .prepare(
-              `INSERT INTO jobs (
-                id, kind, state, import_id, book_id, candidate_id, version_id,
-                captured_source_id, captured_config_revision,
-                captured_current_version_id, retry_of_job_id, attempt,
-                automatic_retry_count, phase, progress_json, created_at
-              ) VALUES (
-                ?, 'build_candidate', 'queued', ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?,
-                'queued', ?, ?
-              )`,
-            )
-            .run(
-              retryId,
-              original.importId,
-              original.bookId,
-              versionId,
-              original.capturedSourceId,
-              original.capturedConfigRevision,
-              capture.current_version_id,
-              original.id,
-              original.attempt + 1,
-              automaticRetryCount,
-              progressJson(initialProgress),
-              input.nowMs,
-            );
-          this.database
-            .prepare(
-              `INSERT INTO draft_candidates (
-                id, book_id, source_id, config_revision, job_id, version_id,
-                state, semantic_digest, safe_error_code,
-                blocking_diagnostic_count, created_at, completed_at
-              ) VALUES (?, ?, ?, ?, ?, NULL, 'building', NULL, NULL, NULL, ?, NULL)`,
-            )
-            .run(
-              candidateId,
-              original.bookId,
-              original.capturedSourceId,
-              original.capturedConfigRevision,
-              retryId,
-              input.nowMs,
-            );
-          this.database
-            .prepare("UPDATE jobs SET candidate_id = ? WHERE id = ?")
-            .run(candidateId, retryId);
-          const current = this.database
-            .prepare(
-              `UPDATE books SET current_candidate_id = ?, updated_at = ?
-               WHERE id = ? AND current_candidate_id = ?
-                 AND draft_source_id = ? AND draft_config_revision = ?
-                 AND deletion_requested_at IS NULL`,
-            )
-            .run(
-              candidateId,
-              input.nowMs,
-              original.bookId,
-              original.candidateId,
-              original.capturedSourceId,
-              original.capturedConfigRevision,
-            );
-          if (current.changes !== 1) throw new Error("CANDIDATE_RETRY_STALE");
-        } else {
-          this.database
-            .prepare(
-              `INSERT INTO jobs (
-                id, kind, state, import_id, book_id, candidate_id, version_id,
-                captured_source_id, captured_config_revision,
-                captured_current_version_id, retry_of_job_id, attempt,
-                automatic_retry_count, phase, progress_json, created_at
-              ) VALUES (
-                ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?
-              )`,
-            )
-            .run(
-              retryId,
-              original.kind,
-              original.importId,
-              original.bookId,
-              original.candidateId,
-              original.versionId,
-              original.capturedSourceId,
-              original.capturedConfigRevision,
-              original.capturedCurrentVersionId,
-              original.id,
-              original.attempt + 1,
-              automaticRetryCount,
-              progressJson(initialProgress),
-              input.nowMs,
-            );
+        if (original.kind === "build_candidate" && !input.nextAttempt) {
+          throw new Error("CANDIDATE_RETRY_REQUIRES_OWNER");
         }
+        if (original.kind !== "build_candidate" && input.nextAttempt) {
+          throw new Error("JOB_RETRY_CAPTURE_FORBIDDEN");
+        }
+        this.database
+          .prepare(
+            `INSERT INTO jobs (
+              id, kind, state, import_id, book_id, candidate_id, version_id,
+              captured_source_id, captured_config_revision,
+              captured_current_version_id, retry_of_job_id, attempt,
+              automatic_retry_count, phase, progress_json, created_at
+            ) VALUES (
+              ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?
+            )`,
+          )
+          .run(
+            retryId,
+            original.kind,
+            original.importId,
+            original.bookId,
+            input.nextAttempt
+              ? input.nextAttempt.candidateId
+              : original.candidateId,
+            input.nextAttempt
+              ? input.nextAttempt.versionId
+              : original.versionId,
+            original.capturedSourceId,
+            original.capturedConfigRevision,
+            input.nextAttempt
+              ? input.nextAttempt.capturedCurrentVersionId
+              : original.capturedCurrentVersionId,
+            original.id,
+            original.attempt + 1,
+            automaticRetryCount,
+            progressJson(initialProgress),
+            input.nowMs,
+          );
         if (operation && keySha256) {
           this.database
             .prepare(
@@ -845,5 +708,19 @@ export class JobRepository {
         return this.getRequired(retryId);
       })
       .immediate();
+  }
+
+  attachCandidate(id: string, candidateId: string): JobRecord {
+    const result = this.database
+      .prepare(
+        `UPDATE jobs SET candidate_id = ?
+         WHERE id = ? AND kind = 'build_candidate'
+           AND state = 'queued' AND candidate_id IS NULL`,
+      )
+      .run(candidateId, id);
+    if (result.changes !== 1) {
+      throw new Error("CANDIDATE_JOB_ATTACHMENT_INVALID");
+    }
+    return this.getRequired(id);
   }
 }

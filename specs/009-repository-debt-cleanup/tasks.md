@@ -106,7 +106,7 @@ contract/integration/E2E coverage and observe unchanged external status values.
 
 ### Implementation and Evidence for User Story 2
 
-- [ ] T015 [US2] Restrict generic retry and lease recovery to task-row mechanics and explicit kind
+- [x] T015 [US2] Restrict generic retry and lease recovery to task-row mechanics and explicit kind
       dispatch in `src/modules/publishing/adapters/sqlite/jobs.ts`,
       `src/modules/publishing/application/recover-expired-jobs.ts` and
       `src/modules/publishing/application/retry-policy.ts`.
@@ -132,7 +132,7 @@ tests; presentation data and task/candidate terminal states remain consistent at
 
 ### Implementation and Evidence for User Story 3
 
-- [ ] T018 [US3] Move candidate terminalization and candidate retry identity creation from
+- [x] T018 [US3] Move candidate terminalization and candidate retry identity creation from
       `src/modules/publishing/adapters/sqlite/jobs.ts` into
       `src/modules/publishing/adapters/sqlite/draft-candidate-repository.ts` and the candidate application
       commands under `src/modules/publishing/application/commands/`.

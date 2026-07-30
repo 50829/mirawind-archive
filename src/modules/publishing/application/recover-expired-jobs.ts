@@ -25,7 +25,7 @@ export async function recoverExpiredJobLeases<
   readonly nowMs: number;
   readonly onInterrupted?: (job: Job) => void;
   readonly repository: ExpiredJobLeaseRepository<Job>;
-  readonly retryJob?: (job: Job, nowMs: number) => Job;
+  readonly retryJob: (job: Job, nowMs: number) => Job;
   readonly storageRoot: string;
 }): Promise<readonly InterruptedJobRecovery<Job>[]> {
   const newlyInterrupted = input.repository.interruptExpired({
@@ -45,14 +45,7 @@ export async function recoverExpiredJobLeases<
     recovered.push(
       Object.freeze({
         interrupted: job,
-        retry: decision.allowed
-          ? input.retryJob
-            ? input.retryJob(job, input.nowMs)
-            : input.repository.retry(job.id, {
-                automatic: true,
-                nowMs: input.nowMs,
-              })
-          : null,
+        retry: decision.allowed ? input.retryJob(job, input.nowMs) : null,
       }),
     );
   }

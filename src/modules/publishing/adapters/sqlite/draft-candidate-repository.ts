@@ -2,6 +2,10 @@ import type Database from "better-sqlite3";
 
 import { createOpaqueId } from "@/domain/ids";
 import type {
+  CandidateBuildAttempt,
+  CandidateBuildRetryCapture,
+} from "@/modules/publishing/application/commands/maintain-candidate-build";
+import type {
   CurrentDraftCandidateRecord,
   CurrentDraftCandidateState,
 } from "@/modules/publishing/application/public";
@@ -475,6 +479,113 @@ export class DraftCandidateRepository {
     const candidate = this.find(candidateId);
     if (!candidate) throw new Error("DRAFT_CANDIDATE_NOT_FOUND");
     return candidate;
+  }
+
+  captureRetry(job: CandidateBuildAttempt): CandidateBuildRetryCapture {
+    const capture = this.database
+      .prepare(
+        `SELECT candidate.state, books.current_candidate_id,
+                books.current_version_id, books.draft_source_id,
+                books.draft_config_revision
+         FROM draft_candidates AS candidate
+         JOIN books ON books.id = candidate.book_id
+         WHERE candidate.id = ? AND candidate.job_id = ?
+           AND candidate.book_id = ?
+           AND books.deletion_requested_at IS NULL`,
+      )
+      .get(job.candidateId, job.id, job.bookId) as
+      | {
+          current_candidate_id: string | null;
+          current_version_id: string | null;
+          draft_config_revision: number | null;
+          draft_source_id: string | null;
+          state: string;
+        }
+      | undefined;
+    if (
+      !capture ||
+      !["failed", "canceled", "interrupted"].includes(capture.state) ||
+      capture.current_candidate_id !== job.candidateId ||
+      capture.draft_source_id !== job.capturedSourceId ||
+      capture.draft_config_revision !== job.capturedConfigRevision
+    ) {
+      throw new Error("CANDIDATE_RETRY_STALE");
+    }
+    return Object.freeze({ currentVersionId: capture.current_version_id });
+  }
+
+  createRetry(input: {
+    readonly candidateId: string;
+    readonly jobId: string;
+    readonly nowMs: number;
+    readonly original: CandidateBuildAttempt;
+  }): void {
+    const { original } = input;
+    if (
+      original.bookId === null ||
+      original.candidateId === null ||
+      original.capturedSourceId === null ||
+      original.capturedConfigRevision === null
+    ) {
+      throw new Error("CANDIDATE_RETRY_INPUT_INVALID");
+    }
+    this.database
+      .prepare(
+        `INSERT INTO draft_candidates (
+          id, book_id, source_id, config_revision, job_id, version_id,
+          state, semantic_digest, safe_error_code,
+          blocking_diagnostic_count, created_at, completed_at
+        ) VALUES (?, ?, ?, ?, ?, NULL, 'building', NULL, NULL, NULL, ?, NULL)`,
+      )
+      .run(
+        input.candidateId,
+        original.bookId,
+        original.capturedSourceId,
+        original.capturedConfigRevision,
+        input.jobId,
+        input.nowMs,
+      );
+    const current = this.database
+      .prepare(
+        `UPDATE books SET current_candidate_id = ?, updated_at = ?
+         WHERE id = ? AND current_candidate_id = ?
+           AND draft_source_id = ? AND draft_config_revision = ?
+           AND deletion_requested_at IS NULL`,
+      )
+      .run(
+        input.candidateId,
+        input.nowMs,
+        original.bookId,
+        original.candidateId,
+        original.capturedSourceId,
+        original.capturedConfigRevision,
+      );
+    if (current.changes !== 1) throw new Error("CANDIDATE_RETRY_STALE");
+  }
+
+  terminalize(input: {
+    readonly candidateId: string;
+    readonly jobId: string;
+    readonly nowMs: number;
+    readonly safeErrorCode: string;
+    readonly state: "canceled" | "failed" | "interrupted";
+  }): void {
+    const result = this.database
+      .prepare(
+        `UPDATE draft_candidates
+         SET state = ?, safe_error_code = ?, completed_at = ?
+         WHERE id = ? AND job_id = ? AND state = 'building'`,
+      )
+      .run(
+        input.state,
+        input.safeErrorCode,
+        input.nowMs,
+        input.candidateId,
+        input.jobId,
+      );
+    if (result.changes > 1) {
+      throw new Error("DRAFT_CANDIDATE_TERMINAL_UPDATE_INVALID");
+    }
   }
 
   buildCommand(candidateId: string) {
