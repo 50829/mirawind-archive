@@ -102,6 +102,12 @@ interface HeadingMatchFacts {
   readonly titleLength: number;
 }
 
+interface TextSimilarityIndex {
+  readonly bigramsByValue: Map<string, ReadonlyMap<string, number>>;
+  readonly characterCountsByValue: Map<string, ReadonlyMap<string, number>>;
+  readonly characterLengthsByValue: Map<string, number>;
+}
+
 export interface PrintedContentsDocumentIndex {
   readonly document: NormalizedDocument;
   readonly headingFactsByBlockId: ReadonlyMap<string, HeadingMatchFacts>;
@@ -915,19 +921,38 @@ function requiresPdfLineRepair(
     });
 }
 
-function similarity(left: string, right: string): number {
+function createTextSimilarityIndex(): TextSimilarityIndex {
+  return {
+    bigramsByValue: new Map(),
+    characterCountsByValue: new Map(),
+    characterLengthsByValue: new Map(),
+  };
+}
+
+function bigrams(
+  value: string,
+  index: TextSimilarityIndex,
+): ReadonlyMap<string, number> {
+  const cached = index.bigramsByValue.get(value);
+  if (cached) return cached;
+  const output = new Map<string, number>();
+  for (let offset = 0; offset < value.length - 1; offset += 1) {
+    const key = value.slice(offset, offset + 2);
+    output.set(key, (output.get(key) ?? 0) + 1);
+  }
+  index.bigramsByValue.set(value, output);
+  return output;
+}
+
+function similarity(
+  left: string,
+  right: string,
+  index: TextSimilarityIndex,
+): number {
   if (left === right) return 1;
   if (!left || !right || Math.min(left.length, right.length) < 3) return 0;
-  const bigrams = (value: string): Map<string, number> => {
-    const output = new Map<string, number>();
-    for (let index = 0; index < value.length - 1; index += 1) {
-      const key = value.slice(index, index + 2);
-      output.set(key, (output.get(key) ?? 0) + 1);
-    }
-    return output;
-  };
-  const leftPairs = bigrams(left);
-  const rightPairs = bigrams(right);
+  const leftPairs = bigrams(left, index);
+  const rightPairs = bigrams(right, index);
   let overlap = 0;
   for (const [key, count] of leftPairs) {
     overlap += Math.min(count, rightPairs.get(key) ?? 0);
@@ -935,23 +960,41 @@ function similarity(left: string, right: string): number {
   return (2 * overlap) / (left.length + right.length - 2);
 }
 
-function characterSimilarity(left: string, right: string): number {
+function characterCounts(
+  value: string,
+  index: TextSimilarityIndex,
+): ReadonlyMap<string, number> {
+  const cached = index.characterCountsByValue.get(value);
+  if (cached) return cached;
+  const result = new Map<string, number>();
+  let length = 0;
+  for (const character of value) {
+    result.set(character, (result.get(character) ?? 0) + 1);
+    length += 1;
+  }
+  index.characterCountsByValue.set(value, result);
+  index.characterLengthsByValue.set(value, length);
+  return result;
+}
+
+function characterSimilarity(
+  left: string,
+  right: string,
+  index: TextSimilarityIndex,
+): number {
   if (left === right) return 1;
   if (!left || !right) return 0;
-  const counts = (value: string): Map<string, number> => {
-    const result = new Map<string, number>();
-    for (const character of value) {
-      result.set(character, (result.get(character) ?? 0) + 1);
-    }
-    return result;
-  };
-  const leftCounts = counts(left);
-  const rightCounts = counts(right);
+  const leftCounts = characterCounts(left, index);
+  const rightCounts = characterCounts(right, index);
   let overlap = 0;
   for (const [character, count] of leftCounts) {
     overlap += Math.min(count, rightCounts.get(character) ?? 0);
   }
-  return (2 * overlap) / ([...left].length + [...right].length);
+  return (
+    (2 * overlap) /
+    ((index.characterLengthsByValue.get(left) ?? 0) +
+      (index.characterLengthsByValue.get(right) ?? 0))
+  );
 }
 
 function repairableDecimalPrefix(
@@ -1035,6 +1078,7 @@ function matchScore(
   entry: ExtractedEntry,
   heading: NormalizedHeading,
   headingFacts: HeadingMatchFacts,
+  similarityIndex: TextSimilarityIndex,
   allowNumberOnly = false,
   allowMajorSectionFallback = false,
 ): number {
@@ -1053,9 +1097,9 @@ function matchScore(
     "",
   );
   const titleScore = Math.max(
-    similarity(entry.normalizedTitle, headingTitle),
+    similarity(entry.normalizedTitle, headingTitle, similarityIndex),
     supplementalPartToAppendix
-      ? similarity(supplementalTitle, headingTitle)
+      ? similarity(supplementalTitle, headingTitle, similarityIndex)
       : 0,
   );
   const majorSectionFallback =
@@ -1077,6 +1121,7 @@ function matchScore(
         similarity(
           entry.normalizedTitle,
           normalizedTitle(repairedHeadingNumber.title, false),
+          similarityIndex,
         ) >= 0.9));
   const incompatibleMathRepresentations =
     /[\u2070-\u209f]/u.test(entry.sourceTitle) &&
@@ -1118,7 +1163,11 @@ function matchScore(
     ? Math.max(
         titleScore,
         canUseCharacterRepair
-          ? characterSimilarity(entry.normalizedTitle, headingTitle)
+          ? characterSimilarity(
+              entry.normalizedTitle,
+              headingTitle,
+              similarityIndex,
+            )
           : 0,
       )
     : titleScore;
@@ -1147,6 +1196,7 @@ function recoveredMatchedSourceTitle(
   entry: ExtractedEntry,
   headingFacts: HeadingMatchFacts,
   recoverOmittedDecimalNumber: boolean,
+  similarityIndex: TextSimilarityIndex,
 ): string {
   const sourceTitle = plainTitle(entry.sourceTitle);
   const bodyTitle = headingFacts.plainTitle;
@@ -1163,7 +1213,7 @@ function recoveredMatchedSourceTitle(
     headingNumber?.kind === "decimal" &&
     numericMajorOrdinal(entry.numbering, entry.sourceTitle) ===
       headingFacts.majorOrdinal &&
-    similarity(entry.normalizedTitle, headingTitle) >= 0.7;
+    similarity(entry.normalizedTitle, headingTitle, similarityIndex) >= 0.7;
   const printed = printedPageEvidence(sourceTitle);
   const bodyTitleWithPage = (): string => {
     if (!printed) return bodyTitle;
@@ -1235,7 +1285,7 @@ function recoveredMatchedSourceTitle(
     recoverOmittedDecimalNumber &&
     entry.numbering === undefined &&
     headingNumber?.kind === "decimal" &&
-    similarity(entry.normalizedTitle, headingTitle) >= 0.9
+    similarity(entry.normalizedTitle, headingTitle, similarityIndex) >= 0.9
   ) {
     return bodyTitleWithPage();
   }
@@ -1262,7 +1312,7 @@ function recoveredMatchedSourceTitle(
       });
     }
   }
-  if (similarity(entry.normalizedTitle, headingTitle) >= 0.9) {
+  if (similarity(entry.normalizedTitle, headingTitle, similarityIndex) >= 0.9) {
     return sourceTitle;
   }
   const entryLength = [...entry.normalizedTitle].length;
@@ -1275,7 +1325,8 @@ function recoveredMatchedSourceTitle(
   if (
     entryLength >= 3 &&
     !knownOcrPhraseCorruption &&
-    characterSimilarity(entry.normalizedTitle, headingTitle) < 0.4
+    characterSimilarity(entry.normalizedTitle, headingTitle, similarityIndex) <
+      0.4
   ) {
     return sourceTitle;
   }
@@ -1333,6 +1384,7 @@ function monotonicMatches(
   entries: readonly ExtractedEntry[],
   headings: readonly NormalizedHeading[],
   headingFacts: readonly HeadingMatchFacts[],
+  similarityIndex: TextSimilarityIndex,
   options: {
     readonly allowMajorSectionFallback?: boolean;
     readonly allowNumberOnly?: boolean;
@@ -1389,7 +1441,8 @@ function monotonicMatches(
           createHeadingMatchFacts(heading).normalizedTitle;
         if (
           headingTitle.slice(0, 4) === entry.normalizedTitle.slice(0, 4) ||
-          similarity(entry.normalizedTitle, headingTitle) >= 0.62
+          similarity(entry.normalizedTitle, headingTitle, similarityIndex) >=
+            0.62
         ) {
           indexes.add(headingIndex);
         }
@@ -1412,6 +1465,7 @@ function monotonicMatches(
         entry,
         heading,
         facts,
+        similarityIndex,
         options.allowNumberOnly,
         options.allowMajorSectionFallback,
       );
@@ -1988,6 +2042,7 @@ function reorderMajorBeforeSamePageDescendants(
 function reorderFromReliableLayout(
   entries: readonly ExtractedEntry[],
   layoutEntries: readonly Omit<ExtractedEntry, "range">[],
+  similarityIndex: TextSimilarityIndex = createTextSimilarityIndex(),
 ): readonly ExtractedEntry[] {
   if (entries.length < 3 || layoutEntries.length < 3) return entries;
   const layoutByNumber = new Map<string, number[]>();
@@ -2038,6 +2093,7 @@ function reorderFromReliableLayout(
                 heading,
                 layoutHeadingFacts[layoutIndex] ??
                   createHeadingMatchFacts(heading),
+                similarityIndex,
                 true,
               )
             : 0,
@@ -2267,6 +2323,7 @@ export function shouldUseNativePdfDetection(input: {
 function recoverLayoutLogicalEntries(
   sourceEntries: readonly ExtractedEntry[],
   evidence: LayoutEvidence | undefined,
+  similarityIndex: TextSimilarityIndex,
 ): readonly ExtractedEntry[] {
   const layoutEntries = layoutLogicalEntries(evidence);
   if (sourceEntries.length < 2 || layoutEntries.length < 3)
@@ -2289,8 +2346,11 @@ function recoverLayoutLogicalEntries(
       if (
         layoutEntry.numbering &&
         sourceEntry.numbering?.key === layoutEntry.numbering.key &&
-        similarity(sourceEntry.normalizedTitle, layoutEntry.normalizedTitle) >=
-          0.55
+        similarity(
+          sourceEntry.normalizedTitle,
+          layoutEntry.normalizedTitle,
+          similarityIndex,
+        ) >= 0.55
       ) {
         return true;
       }
@@ -2332,6 +2392,7 @@ function recoverLayoutLogicalEntries(
     sourceEntries,
     layoutHeadings,
     layoutHeadingFacts,
+    similarityIndex,
     {
       allowNumberOnly: true,
       requireNumberingForNumberedEntries: true,
@@ -2639,6 +2700,7 @@ function recoverLayoutLogicalEntries(
           similarity(
             sourceEntry.normalizedTitle,
             normalizedTitle(layoutPrinted.title),
+            similarityIndex,
           ) >= 0.9));
     recovered.push(
       sourceAnchorDamaged ||
@@ -2665,7 +2727,7 @@ function recoverLayoutLogicalEntries(
   }
   recovered.push(...sourceEntries.slice(sourceCursor));
   const reordered = reorderFromMonotonicPageLabels(
-    reorderFromReliableLayout(recovered, layoutEntries),
+    reorderFromReliableLayout(recovered, layoutEntries, similarityIndex),
   );
   const semanticallyOrdered = reorderMajorBeforeSamePageDescendants(reordered);
   if (evidence?.source !== "native-pdf") return semanticallyOrdered;
@@ -2702,6 +2764,7 @@ export function detectPrintedContents(input: {
   const sourceBytes = documentIndex.sourceBytes;
   const sourceIndex = documentIndex.sourceIndex;
   const contextualTitles = repairableContextualTitles(input.layoutEvidence);
+  const similarityIndex = createTextSimilarityIndex();
   const roots = input.document.root.children ?? [];
   const titleOf = (node: TransientDocumentNode): string =>
     documentIndex.rootTitleByNode.get(node) ?? rootTitle(node);
@@ -2975,6 +3038,7 @@ export function detectPrintedContents(input: {
         recoverLayoutLogicalEntries(
           mergeDetachedSourceEntries(sourceEntries, sourceBytes),
           input.layoutEvidence,
+          similarityIndex,
         ),
         input.layoutEvidence,
       ),
@@ -3072,6 +3136,7 @@ export function detectPrintedContents(input: {
       entries,
       bodyHeadings,
       bodyHeadingFacts,
+      similarityIndex,
       {
         allowMajorSectionFallback: summaryCandidate,
         allowNumberOnly: false,
@@ -3125,6 +3190,7 @@ export function detectPrintedContents(input: {
                 entry,
                 heading,
                 headingFacts,
+                similarityIndex,
                 entry.normalizedTitle.length < 2,
               )
             : 0;
@@ -3139,6 +3205,7 @@ export function detectPrintedContents(input: {
                 : characterSimilarity(
                     entry.normalizedTitle,
                     headingFacts.normalizedTitle,
+                    similarityIndex,
                   ) * 10
               : 0;
           return {
@@ -3223,6 +3290,7 @@ export function detectPrintedContents(input: {
             printedPageEvidence(entry.sourceTitle)?.title ??
               plainTitle(entry.sourceTitle),
           ),
+        similarityIndex,
       );
       if (sourceTitle !== entry.sourceTitle) {
         recoveredTitleEntryIndexes.add(logicalEntryIndex);
@@ -3342,6 +3410,7 @@ export function detectPrintedContents(input: {
             entry,
             heading,
             laterHeadingFacts[headingIndex] ?? createHeadingMatchFacts(heading),
+            similarityIndex,
           ) > 0,
       ),
     ).length;

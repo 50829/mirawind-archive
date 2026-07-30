@@ -185,3 +185,25 @@ fifteen-book profiles measured about 53.2 seconds in the removed second extracti
 Raw results are retained under ignored
 `.cache/008-publishing-performance/sealed-extraction-current*/` directories. T092 remains open; this
 focused evidence does not replace the owner-deferred remaining paired rounds.
+
+## Detection-scoped title similarity profiles
+
+The retained CPU profile for `real-mineru-81d6969edaf0` showed that printed-contents alignment
+rebuilt the same bigram and character-frequency maps across repeated TOC/body title comparisons.
+Detection now owns one explicitly passed similarity index. It caches only normalized-text features
+for that detection call; matching thresholds, scores, output contracts and process lifetime are
+unchanged, and no global cache was introduced.
+
+Two before and two after runs on the same 1,278-page fixture produced these median changes:
+
+| Measurement               | Before median | After median |       Change |
+| ------------------------- | ------------: | -----------: | -----------: |
+| Repaired printed contents |       4.700 s |      4.015 s | 14.6% faster |
+| Draft preparation         |      11.249 s |     10.355 s |  8.0% faster |
+| Total wall                |      23.988 s |     23.108 s |  3.7% faster |
+
+Peak process-tree RSS was 812.4/815.3 MB before and 835.9/774.0 MB after, with no median
+regression. The current source regenerated every observed-v2 artifact and compared `15/15` exact
+against `references-v2`. Raw focused and comparison evidence remains under the ignored
+`.cache/008-publishing-performance/after-similarity-index*` paths. This focused result does not
+replace or complete the owner-deferred T092 paired rounds.

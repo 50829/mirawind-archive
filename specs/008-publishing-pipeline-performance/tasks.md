@@ -427,3 +427,14 @@ was noisy because PDF evidence and candidate work varied, so this is evidence of
 work rather than a new aggregate speed claim. The earlier fifteen-book profiles attribute about
 53.2 seconds to the now-removed second extraction. Raw focused results remain under ignored
 `.cache/008-publishing-performance/sealed-extraction-current*/`.
+
+- [x] T099 Reuse normalized title bigram and character-frequency profiles within one printed-contents
+      detection, retain existing matching behavior, and verify the result against all fifteen
+      `references-v2` fixtures (partial)
+
+The largest retained CPU profile identified repeated similarity-profile construction as the next
+printed-contents hotspot. One detection-scoped index now reuses those immutable profiles without a
+global cache or contract change. On the 1,278-page focused fixture, repaired printed-contents time
+improved by 14.6%, draft preparation by 8.0% and total wall by 3.7% by median across two before and
+two after runs. Peak RSS showed no median regression, and a fresh all-book comparison remained
+`15/15` reference exact. This focused evidence does not complete owner-deferred T092.
