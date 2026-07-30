@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { openDatabase } from "@/platform/sqlite/connection";
 import { SafeApplicationError } from "@/domain/errors";
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 import { analyzeImport } from "@/modules/publishing/adapters/worker/analyze-import";
 import { buildCandidateVersion } from "@/modules/publishing/adapters/filesystem/build-candidate-version";
 import { handleBuildCandidate } from "@/entrypoints/worker/handlers/build-candidate";
@@ -299,6 +300,7 @@ async function execute(message: RunJobMessage): Promise<void> {
               database,
               layout,
               nowMs: Date.now(),
+              presentationRemover: new BookPresentationRepository(database),
             });
         send({
           jobId: message.input.jobId,

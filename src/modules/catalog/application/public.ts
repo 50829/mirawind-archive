@@ -1,5 +1,6 @@
 export type {
   BookVersionPresentation,
+  BookVersionPresentationRemover,
   BookVersionPresentationWriter,
 } from "@/modules/catalog/application/book-version-presentation";
 export type {

@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 
 import type {
   BookVersionPresentation,
+  BookVersionPresentationRemover,
   BookVersionPresentationWriter,
 } from "@/modules/catalog/application/public";
 import type { BookVersionRecord } from "@/modules/publishing/application/public";
@@ -95,7 +96,9 @@ function mapCandidate(row: CandidateRow): BookVersionRecord {
   });
 }
 
-export class BookPresentationRepository implements BookVersionPresentationWriter {
+export class BookPresentationRepository
+  implements BookVersionPresentationRemover, BookVersionPresentationWriter
+{
   constructor(private readonly database: Database.Database) {}
 
   insert(presentation: BookVersionPresentation): BookVersionPresentation {

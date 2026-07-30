@@ -18,3 +18,7 @@ export interface BookVersionPresentation {
 export interface BookVersionPresentationWriter {
   insert(presentation: BookVersionPresentation): BookVersionPresentation;
 }
+
+export interface BookVersionPresentationRemover {
+  delete(versionId: string): boolean;
+}

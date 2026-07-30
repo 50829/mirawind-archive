@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
+import type { BookVersionPresentationRemover } from "@/modules/catalog/application/public";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import type { StorageLayout } from "@/platform/filesystem/layout";
 import { removeExactContainedTree } from "@/platform/filesystem/permanent-removal";
@@ -81,6 +82,7 @@ export async function reclaimRetainedStorage(input: {
   readonly database: Database.Database;
   readonly layout: StorageLayout;
   readonly nowMs: number;
+  readonly presentationRemover: BookVersionPresentationRemover;
   readonly removePath?: RemovePath;
 }): Promise<ReclamationResult> {
   const removePath =
@@ -133,9 +135,7 @@ export async function reclaimRetainedStorage(input: {
     input.database
       .prepare("DELETE FROM search_fts WHERE version_id = ?")
       .run(versionId);
-    input.database
-      .prepare("DELETE FROM book_version_presentations WHERE version_id = ?")
-      .run(versionId);
+    input.presentationRemover.delete(versionId);
     input.database
       .prepare(
         `INSERT INTO audit_events (

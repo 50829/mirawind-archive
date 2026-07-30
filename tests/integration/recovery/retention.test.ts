@@ -154,6 +154,7 @@ describe("published version and orphan retention", () => {
         database: migrated.database,
         layout: root.layout,
         nowMs,
+        presentationRemover: presentations,
         async removePath(path) {
           if (path.endsWith(failedCleanupId)) {
             throw new Error("SIMULATED_CLEANUP_FAILURE");
@@ -196,6 +197,7 @@ describe("published version and orphan retention", () => {
         database: migrated.database,
         layout: root.layout,
         nowMs: nowMs + 1,
+        presentationRemover: presentations,
       });
       expect(retry.failedPaths).toEqual([]);
       expect(retry.reclaimedVersionIds).toEqual([]);
