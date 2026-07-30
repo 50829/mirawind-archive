@@ -1,10 +1,10 @@
 # M1 architecture: MinerU public publishing
 
-- Status: Implemented and verified for M1; M2a library/reading loop implemented
-- Date: 2026-07-25
+- Status: Implemented; publishing candidate and maintenance ownership updated through 009
+- Date: 2026-07-31
 - Scope: M0 foundations required by the first MinerU vertical slice, plus M1 import,
   preview, compile, search, publish, read, and original ZIP download
-- Governing decisions: D-019～D-025, D-042～D-100
+- Governing decisions: D-019～D-025, D-042～D-119
 
 ## 1. System boundary
 
@@ -67,7 +67,6 @@ data/
 │       │   ├── source/<source_id>/
 │       │   ├── originals/<file_id>
 │       │   ├── configs/<revision>/book.yaml
-│       │   └── previews/<revision>/{pages,assets,diagnostics}/
 │       ├── quarantine/
 │       │   └── <version_id>/
 │       └── versions/
@@ -103,8 +102,10 @@ The concrete schema belongs in the M1 data model, but it must represent:
 - books and the sole `current_version_id`;
 - immutable book versions with `ready`, `published`, `superseded`, `failed`, and `corrupt`
   lifecycle states; active builds exist only as jobs plus staging directories;
-- durable jobs, leases, heartbeat, attempt count, error category, and captured base/config
-  revision;
+- immutable job attempts with a closed operation identity, authoritative `book_id` once
+  assigned, leases, heartbeat, bounded progress, captured inputs and terminal outcome;
+- draft candidate attempts that bind one source/config revision, build job and prospective
+  immutable version;
 - FTS5 trigram rows scoped by book, version, page, and block;
 - a small normalized title/author/heading table for one- and two-character fallback;
 - one bounded `book_version_presentations` row per immutable version, derived from its
@@ -187,43 +188,44 @@ A unique error-free high-confidence candidate proceeds automatically. A generic 
 Markdown requires administrator confirmation. Multiple book roots or ambiguous high-value
 candidates stop before preview. The chosen Markdown's directory is the resource base.
 
-## 8. Compile and preview pipeline
+## 8. Prepare and candidate pipeline
 
-The per-job child process performs:
+The bounded worker chain performs:
 
 1. safe extraction and candidate discovery;
 2. Markdown parsing and sanitized raw-HTML handling;
 3. transient AST and normalized block tree creation;
 4. stable block ID assignment or reliable inheritance;
 5. automatic TOC and page-boundary suggestions;
-6. administrator preview of TOC inclusion, display titles, display levels, roles, and
-   title-boundary page splits;
-7. atomic `book.yaml` revision creation;
-8. semantic HTML, KaTeX, code highlighting, resource variants, manifest, and search records;
-9. schema, link, hierarchy, page, resource, checksum, and search consistency validation.
+6. an atomic draft source plus `book.yaml` revision;
+7. one `build_candidate` compilation into a single `CompiledBook` and ordered streamed pages;
+8. preview and public ReaderShell variants, KaTeX, code highlighting, resource variants,
+   manifest, search spool and bounded presentation projection from that same compilation;
+9. schema, link, hierarchy, page, resource, checksum, search and file-closure validation;
+10. durable immutable version rename followed by atomic candidate/version/search/presentation
+    registration.
 
 Raw HTML is not trusted. A maintained sanitizer must use an explicit allowlist for semantic
 elements and safe attributes, remove scripts/event handlers, reject unsafe URL protocols,
 and route accepted local resources through the versioned resource map.
 
+The preview reads the ready candidate version; publishing does not compile or render it again.
 The administrator cannot reorder body content in M1. TOC inclusion changes navigation only.
 `display_title`, `display_level`, `role`, and `starts_page` never rewrite the imported
 Markdown.
 
 ## 9. Atomic publication
 
-The exact cutover is:
+Candidate creation and publication use two explicit transactions:
 
-1. capture the base `current_version_id` and config revision when the job begins;
-2. fully build and validate staging;
-3. write and sync files, then atomically rename staging to `versions/<version_id>`;
-4. sync the versions parent directory;
-5. in one SQLite transaction, create the `ready` version, its bounded presentation
-   projection and all version-scoped FTS rows;
-6. validate FTS counts and identifiers; rollback on any failure;
-7. in a short `BEGIN IMMEDIATE` transaction, compare the captured base/config revision,
-   confirm `ready` and projection identity, update `current_version_id` plus the frozen
-   current alias, transition version states, and complete the job.
+1. `build_candidate` captures the base `current_version_id`, source and config revision;
+2. it fully builds and validates staging, syncs files, atomically renames to
+   `versions/<version_id>` and syncs the parent;
+3. one immediate transaction creates the `ready` version, candidate result, bounded
+   presentation and version-scoped FTS rows, validates their identities and completes the job;
+4. a later publish request performs no document processing; one short immediate transaction
+   checks the captured source/config/base version and ready projection, changes only version
+   states plus `books.current_version_id` and the frozen current alias, and records publication.
 
 There is no filesystem current pointer. Public version-specific routes must not expose a
 `ready` version merely because its directory exists.
@@ -244,6 +246,20 @@ On restart:
 - an infrastructure-interrupted job may restart from the preserved ZIP once;
 - validation, limit, content, and second-interruption failures require manual retry;
 - `ready` versions remain unpublished until an administrator repeats the publish action.
+
+`reclaim_versions` owns global retained-version and quarantine maintenance. `purge_book`
+owns one permanent deletion. Once a task belongs to a book, `jobs.book_id` is its only
+ownership scope; status and retry do not infer meaning through import/source/version joins.
+The generic job repository changes only task rows. Candidate terminalization/retry belongs to
+the Publishing candidate use case, and deletion terminalization/retry belongs to Catalog;
+composition coordinates each subject row and task row in one immediate transaction.
+
+Catalog owns the book visibility barrier, ordinary book row and retained deletion tombstone.
+Publishing owns jobs, candidates, imports, sources, configs, originals, versions and search
+rows. Catalog requests Publishing cleanup through a narrow application port rather than
+writing those tables. `book_version_presentations` likewise has one Catalog SQLite insert and
+version-scoped mutation path used by candidate registration, reconciliation and retained-version
+cleanup; Catalog deletion owns bulk removal for a deleted book.
 
 Startup reconciliation inventories staging, version directories, version rows, and current
 pointers. Unreferenced completed directories move to quarantine and are deleted after 24

@@ -171,13 +171,13 @@ untracked files remain present and unchanged.
 - [x] T024 [US4] Make directly evidenced internal-only symbols private and remove obsolete forwarding
       exports in `src/modules/publishing/`, `src/modules/catalog/` and their `application/public.ts`
       surfaces, retaining framework exports and used runtime reset hooks.
-- [ ] T025 [US4] Run formatting, lint, typecheck, complete automated tests, production build and the
+- [x] T025 [US4] Run formatting, lint, typecheck, complete automated tests, production build and the
       existing architecture checks; record commands and results in
       `specs/009-repository-debt-cleanup/evidence.md`.
-- [ ] T026 [US4] Run the existing fifteen-book reference-v2 comparator and three representative
+- [x] T026 [US4] Run the existing fifteen-book reference-v2 comparator and three representative
       B-only production builds, then record opaque fixture IDs, exactness and stage-duration comparison
       in `specs/009-repository-debt-cleanup/evidence.md`.
-- [ ] T027 [US4] Remove only ignored reproducible `.cache/`, `test-results/` and generated build/report
+- [x] T027 [US4] Remove only ignored reproducible `.cache/`, `test-results/` and generated build/report
       outputs listed in `specs/009-repository-debt-cleanup/research.md`, then verify protected `.env`,
       private fixtures and the three pre-existing untracked `docs/research/` files remain untouched.
 
@@ -190,10 +190,10 @@ gone.
 
 **Purpose**: Synchronize implementation evidence and close the feature without adding another gate.
 
-- [ ] T028 Update `specs/009-repository-debt-cleanup/tasks.md`,
+- [x] T028 Update `specs/009-repository-debt-cleanup/tasks.md`,
       `specs/009-repository-debt-cleanup/quickstart.md`, relevant runtime architecture documentation and
       `docs/decisions/decision-log.md` to match the implemented ownership model.
-- [ ] T029 Run Spec Kit converge, resolve every unmitigated CRITICAL finding in
+- [x] T029 Run Spec Kit converge, resolve every unmitigated CRITICAL finding in
       `specs/009-repository-debt-cleanup/`, and leave only the protected pre-existing untracked research
       documents in `git status --short`.
 
@@ -235,3 +235,8 @@ gone.
 - Every user-story task carries exactly one `[USn]` label.
 - `[P]` appears only where file ownership is independent at that point in the sequence.
 - Every implementation and evidence task names an exact file or bounded directory.
+
+## Phase 8: Convergence
+
+- [x] T030 Route retained-version presentation removal through the Catalog presentation repository
+      instead of issuing Catalog-owned projection SQL from Publishing per FR-006 (partial).

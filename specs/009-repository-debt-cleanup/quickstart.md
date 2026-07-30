@@ -71,6 +71,9 @@ Expected:
 
 Record only opaque fixture IDs, stage durations and comparison results in the tracked 009 evidence.
 
+The accepted 009 run is recorded in `evidence.md`: `15/15 exact`, three representative B-only builds
+passed within tolerance, and no historical A or soak was run.
+
 ## Local artifact cleanup
 
 After all evidence needed for 009 is tracked, remove ignored reproducible `.cache`, `test-results`,
