@@ -165,10 +165,10 @@ untracked files remain present and unchanged.
 
 ### Implementation for User Story 4
 
-- [ ] T023 [P] [US4] Delete the unreferenced production files
+- [x] T023 [P] [US4] Delete the unreferenced production files
       `src/modules/publishing/adapters/sqlite/audit-events.ts` and
       `src/platform/sqlite/capabilities.ts`.
-- [ ] T024 [US4] Make directly evidenced internal-only symbols private and remove obsolete forwarding
+- [x] T024 [US4] Make directly evidenced internal-only symbols private and remove obsolete forwarding
       exports in `src/modules/publishing/`, `src/modules/catalog/` and their `application/public.ts`
       surfaces, retaining framework exports and used runtime reset hooks.
 - [ ] T025 [US4] Run formatting, lint, typecheck, complete automated tests, production build and the

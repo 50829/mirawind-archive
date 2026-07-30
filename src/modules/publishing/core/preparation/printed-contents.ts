@@ -2233,7 +2233,7 @@ export function hasReliableLayoutOrderInversion(
   return reordered.some((entry, index) => entry !== sourceEntries[index]);
 }
 
-export function shouldPreferNativePdfLayout(
+function shouldPreferNativePdfLayout(
   sourceEvidence: LayoutEvidence,
   nativePdfEvidence: LayoutEvidence,
 ): boolean {

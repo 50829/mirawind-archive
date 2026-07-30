@@ -21,8 +21,8 @@ import {
   recordPipelineProfileMetrics,
 } from "@/observability/pipeline-profile";
 
-export const importAnalysisVersion = "mineru-candidate-v1";
-export const analysisArtifactFilename = "analysis-result.json";
+const importAnalysisVersion = "mineru-candidate-v1";
+const analysisArtifactFilename = "analysis-result.json";
 
 export interface AnalyzeImportArtifact {
   readonly candidates: readonly MarkdownCandidate[];

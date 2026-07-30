@@ -14,7 +14,7 @@ interface SchemaDiagnostic {
   readonly keyword: string;
 }
 
-export class PublicationSchemaValidationError extends SafeApplicationError {
+class PublicationSchemaValidationError extends SafeApplicationError {
   readonly diagnostics: readonly SchemaDiagnostic[];
 
   constructor(
@@ -35,7 +35,7 @@ export class PublicationSchemaValidationError extends SafeApplicationError {
   }
 }
 
-export class PublicationSemanticValidationError extends SafeApplicationError {
+class PublicationSemanticValidationError extends SafeApplicationError {
   readonly diagnostics: readonly string[];
 
   constructor(

@@ -1,6 +1,6 @@
 import { SafeApplicationError } from "@/domain/errors";
 
-export const archivePathLimits = Object.freeze({
+const archivePathLimits = Object.freeze({
   componentBytes: 255,
   directoryDepth: 20,
   pathBytes: 2_048,
@@ -26,7 +26,7 @@ type ArchivePathErrorCode =
   | "ARCHIVE_PATH_PREFIX_CONFLICT"
   | "ARCHIVE_PATH_TRAVERSAL";
 
-export class ArchivePathError extends SafeApplicationError {
+class ArchivePathError extends SafeApplicationError {
   constructor(code: ArchivePathErrorCode, message: string) {
     super(code, message, 400);
     this.name = "ArchivePathError";

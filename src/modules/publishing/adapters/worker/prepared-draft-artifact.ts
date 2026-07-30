@@ -3,10 +3,10 @@ import { resolve } from "node:path";
 
 import type { LayoutEvidenceDiagnostic } from "@/modules/publishing/core/preparation/layout-evidence";
 import type { PdfContentsEvidenceDiagnostic } from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
-import type { PdfSourceDiagnostic } from "@/modules/publishing/adapters/filesystem/find-original-pdf";
 import type { PrintedContentsCandidate } from "@/modules/publishing/core/preparation/printed-contents";
 import type { ProposedStructureNode } from "@/modules/publishing/core/preparation/structure-proposal";
 import type { ConfirmedSourceRegion } from "@/modules/publishing/core/preparation/document-model";
+import type { PdfSourceDiagnostic } from "@/modules/publishing/core/preparation/pdf-evidence-model";
 import type {
   TypographyProvenance,
   TypographyRiskSummary,

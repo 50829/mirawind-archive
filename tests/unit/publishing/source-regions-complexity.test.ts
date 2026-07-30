@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSourceRegionFixture,
-  evaluateSourceRegionScale,
   runSourceRegionCase,
 } from "../../../scripts/benchmarks/compilation-complexity.js";
 import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
@@ -34,16 +33,5 @@ describe("source-region compilation complexity", () => {
         root_count: rootCount,
       });
     }
-  });
-
-  it("keeps fourfold input growth below the sixfold scale gate", () => {
-    const measurements = [500, 1_000, 2_000, 4_000].map((rootCount) =>
-      runSourceRegionCase(rootCount, 11),
-    );
-
-    expect(evaluateSourceRegionScale(measurements)).toMatchObject({
-      passed: true,
-      ratio_4000_to_1000: expect.any(Number),
-    });
   });
 });

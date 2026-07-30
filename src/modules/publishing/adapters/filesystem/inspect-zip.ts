@@ -27,7 +27,7 @@ type ArchiveFormatErrorCode =
   | "ARCHIVE_SIZE_MISMATCH"
   | "ARCHIVE_SPECIAL_FILE";
 
-export class ArchiveFormatError extends SafeApplicationError {
+class ArchiveFormatError extends SafeApplicationError {
   constructor(code: ArchiveFormatErrorCode, message: string, cause?: unknown) {
     super(code, message, 400, { cause });
     this.name = "ArchiveFormatError";

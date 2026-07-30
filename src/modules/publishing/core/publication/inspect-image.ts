@@ -27,7 +27,7 @@ type ImageErrorCode =
   | "IMAGE_SIDE_LIMIT"
   | "IMAGE_VECTOR_UNSUPPORTED";
 
-export class ImageSecurityError extends SafeApplicationError {
+class ImageSecurityError extends SafeApplicationError {
   constructor(code: ImageErrorCode, message: string, cause?: unknown) {
     super(code, message, 400, { cause });
     this.name = "ImageSecurityError";

@@ -1,12 +1,3 @@
-export const jobStates = [
-  "queued",
-  "running",
-  "succeeded",
-  "failed",
-  "canceled",
-  "interrupted",
-] as const;
-
 export const jobKinds = [
   "analyze_import",
   "prepare_draft",
@@ -18,7 +9,8 @@ export const jobKinds = [
 ] as const;
 
 export type JobKind = (typeof jobKinds)[number];
-export type JobState = (typeof jobStates)[number];
+export type JobState =
+  "queued" | "running" | "succeeded" | "failed" | "canceled" | "interrupted";
 export type TerminalJobState = Extract<
   JobState,
   "succeeded" | "failed" | "canceled" | "interrupted"
@@ -31,7 +23,7 @@ const terminalPhases = [
   "interrupted",
 ] as const;
 
-export const jobPhases = Object.freeze({
+const jobPhases = Object.freeze({
   analyze_import: [
     "queued",
     "starting",
@@ -99,7 +91,7 @@ const transitions: Readonly<Record<JobState, readonly JobState[]>> = {
   succeeded: [],
 };
 
-export function canTransitionJob(current: JobState, next: JobState): boolean {
+function canTransitionJob(current: JobState, next: JobState): boolean {
   return transitions[current].includes(next);
 }
 

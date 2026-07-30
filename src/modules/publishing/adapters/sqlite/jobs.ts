@@ -7,14 +7,12 @@ import {
   assertJobTransition,
   assertJobPhase,
   isTerminalJobState,
-  jobKinds,
   type JobKind,
   type JobState,
   type TerminalJobState,
 } from "@/modules/publishing/application/job-state";
 import { isJobProgress, type JobProgress } from "@/entrypoints/worker/protocol";
 
-export { jobKinds, type JobKind };
 export type JobErrorClass =
   | "infrastructure"
   | "content"

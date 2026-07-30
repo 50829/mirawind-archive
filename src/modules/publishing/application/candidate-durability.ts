@@ -1,10 +1,5 @@
-export const candidateTreeCrashPoints = [
-  "before_fsync",
-  "after_fsync_before_rename",
-  "after_rename",
-] as const;
-
-export type CandidateTreeCrashPoint = (typeof candidateTreeCrashPoints)[number];
+export type CandidateTreeCrashPoint =
+  "before_fsync" | "after_fsync_before_rename" | "after_rename";
 
 export type CandidateTreeCrashPointInjector = (
   point: CandidateTreeCrashPoint,

@@ -3,8 +3,6 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import type { PdfSourceDiagnostic } from "@/modules/publishing/core/preparation/pdf-evidence-model";
 
-export type { PdfSourceDiagnostic } from "@/modules/publishing/core/preparation/pdf-evidence-model";
-
 export type OriginalPdfDiscovery =
   { readonly pdfPath: string } | { readonly diagnostic: PdfSourceDiagnostic };
 

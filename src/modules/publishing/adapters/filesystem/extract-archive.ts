@@ -45,7 +45,7 @@ type ExtractionErrorCode =
   | "ARCHIVE_TIMEOUT"
   | "ARCHIVE_TOTAL_SIZE_LIMIT";
 
-export class ArchiveExtractionError extends SafeApplicationError {
+class ArchiveExtractionError extends SafeApplicationError {
   constructor(code: ExtractionErrorCode, message: string, cause?: unknown) {
     super(code, message, 400, { cause });
     this.name = "ArchiveExtractionError";

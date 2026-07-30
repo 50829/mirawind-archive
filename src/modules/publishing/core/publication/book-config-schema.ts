@@ -10,7 +10,7 @@ export interface BookConfigDiagnostic {
   readonly keyword: string;
 }
 
-export class BookConfigValidationError extends SafeApplicationError {
+class BookConfigValidationError extends SafeApplicationError {
   readonly diagnostics: readonly BookConfigDiagnostic[];
 
   constructor(

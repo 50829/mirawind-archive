@@ -1,12 +1,6 @@
 import { SafeApplicationError } from "@/domain/errors";
 
-export const supportedBookSchemaVersions = Object.freeze([3] as const);
-export const supportedDocumentManifestSchemaVersions = Object.freeze([
-  2,
-] as const);
-export const supportedVersionMarkerSchemaVersions = Object.freeze([2] as const);
-export type SupportedBookSchemaVersion =
-  (typeof supportedBookSchemaVersions)[number];
+type SupportedBookSchemaVersion = 3;
 
 export function requireSupportedBookSchemaVersion(
   value: unknown,
