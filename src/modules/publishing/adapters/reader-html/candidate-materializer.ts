@@ -119,7 +119,6 @@ function assertNonBlockingDiagnostics(
 export interface CandidateMaterializationResult {
   readonly diagnostics: readonly SafeDiagnostic[];
   readonly manifestPageCount: number;
-  readonly outputBytes: number;
   readonly pageByHeading: ReadonlyMap<string, number>;
   readonly pageCount: number;
   readonly searchFtsRowCount: number;
@@ -276,7 +275,6 @@ export async function materializeCandidatePages(input: {
     await searchSpool.close();
 
     const css = [...styles].sort().join("");
-    let outputBytes = Buffer.byteLength(css);
     await atomicWriteFile(
       resolve(publishedDirectory, "styles/document.css"),
       css,
@@ -380,8 +378,6 @@ export async function materializeCandidatePages(input: {
         language,
         title: pageMetadata(compiled, page).title,
       });
-      outputBytes +=
-        Buffer.byteLength(previewHtml) + Buffer.byteLength(publicHtml);
       await Promise.all([
         atomicWriteFile(
           resolve(previewDirectory, `pages/${page.pageId}.html`),
@@ -398,7 +394,6 @@ export async function materializeCandidatePages(input: {
     return Object.freeze({
       diagnostics: Object.freeze(diagnostics),
       manifestPageCount: compiled.pages.length,
-      outputBytes,
       pageByHeading,
       pageCount: compiled.pages.length,
       searchFtsRowCount,

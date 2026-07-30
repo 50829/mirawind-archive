@@ -467,3 +467,13 @@ for three and increased by only 1.6% (about 16 MiB) for the fourth. The independ
 observations stayed `4/4` reference-v2 exact. Raw stage evidence is under ignored
 `.cache/008-publishing-performance/after-route-variants-*`. This focused evidence does not complete
 owner-deferred T092.
+
+- [x] T103 Delete the unused candidate HTML byte-count result and its full preview/public rescans;
+      retain no compatibility field or absence-only test (partial)
+
+Candidate materialization improved by `2.1%`, `6.9%`, `-0.6%` and `8.1%`, a median `4.5%`, across
+the same four books; all four complete candidate jobs improved. The sole materialization regression
+was 13 ms and within run noise. This deletion cannot alter generated content, and the existing
+candidate preview integration test, both TypeScript builds and production build passed. Raw evidence
+is under ignored `.cache/008-publishing-performance/after-output-byte-removal-*`. This focused
+evidence does not complete owner-deferred T092.

@@ -274,3 +274,20 @@ Raw machine-readable results are under ignored
 `.cache/008-publishing-performance/after-route-variants-*` and
 `.cache/008-publishing-performance/after-route-variants-observed-v2/`. These focused runs do not
 replace or complete the owner-deferred T092 paired rounds.
+
+## Removed unused output-byte rescans
+
+The post-change CPU profile exposed an additional full scan of both generated Reader documents:
+`CandidateMaterializationResult.outputBytes` called `Buffer.byteLength()` for every preview and
+public HTML string, but no production or test consumer read the result. The field and scans were
+deleted directly without a compatibility alias or an absence-only test.
+
+Across the same four fixtures, candidate materialization changed by `2.1%`, `6.9%`, `-0.6%` and
+`8.1%` faster, a median `4.5%`. The 13 ms regression was within single-run noise, while all four
+complete candidate jobs improved. RSS decreased for three fixtures and rose by about 11 MB, or
+1.3%, for one. The deletion does not participate in content generation; the candidate preview
+integration test, both TypeScript configurations and production build passed.
+
+Raw evidence is under ignored
+`.cache/008-publishing-performance/after-output-byte-removal-*`. This focused run does not replace
+or complete the owner-deferred T092 paired rounds.
