@@ -89,6 +89,29 @@ interface MatchCandidate {
   readonly score: number;
 }
 
+interface HeadingMatchFacts {
+  readonly latinCount: number;
+  readonly majorOrdinal?: string;
+  readonly normalizedTitle: string;
+  readonly numbering?: PrintedHeadingEvidence;
+  readonly plainTitle: string;
+  readonly repairedNumber?: {
+    readonly compact: string;
+    readonly title: string;
+  };
+  readonly titleLength: number;
+}
+
+export interface PrintedContentsDocumentIndex {
+  readonly document: NormalizedDocument;
+  readonly headingFactsByBlockId: ReadonlyMap<string, HeadingMatchFacts>;
+  readonly rootTitleByNode: ReadonlyMap<TransientDocumentNode, string>;
+  readonly sourceBytes: Buffer;
+  readonly sourceIndex: SourceTextIndex;
+  readonly sourceSha256: string;
+  readonly sourceRegionHeadingIndexes: ReadonlyMap<string, number>;
+}
+
 interface AlignmentNode extends MatchCandidate {
   readonly id: number;
   readonly total: number;
@@ -145,24 +168,33 @@ const printedNumberingPrefix = new RegExp(
   `^(?:\\\\?\\*\\s*)?(?:第\\s*[0-9零〇一二三四五六七八九十百千]+\\s*(?:章|篇|部分|部)|(?:chapter|chap\\.?)\\s*(?:[0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})|part\\s*(?:[0-9ivxlcdm]+|${englishOrdinalWord})|附录\\s*[A-Za-z0-9一二三四五六七八九十]*(?:\\s*\\.\\s*\\d+){0,3}|[A-Z]\\s*\\.\\s*\\d+(?:\\s*\\.\\s*\\d+){0,2}|\\d+[A-Z](?:\\s*\\.\\s*\\d+){0,2}|\\d+\\s+\\d+(?:\\s*[ .]\\s*\\d+){1,2}|\\d+(?:\\s*\\.\\s*\\d+){1,3}|\\d{1,3}(?=\\s+[\\p{L}“”'"（(]))`,
   "iu",
 );
+const namedHeading = new RegExp(
+  `^(?:第\\s*([0-9零〇一二三四五六七八九十百千]+)\\s*(章|篇|部分|部)|(?:chapter|chap\\.?)\\s*([0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})(?=\\s|$|[—–:：.-])|part\\s*([0-9ivxlcdm]+|${englishOrdinalWord})(?=\\s|$|[—–:：.-]))`,
+  "iu",
+);
 
 function hash(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
 function withoutControlCharacters(value: string): string {
-  return [...value]
-    .map((character) => {
-      const codePoint = character.codePointAt(0) ?? 0;
-      return codePoint <= 8 ||
-        codePoint === 11 ||
-        codePoint === 12 ||
-        (codePoint >= 14 && codePoint <= 31) ||
-        codePoint === 127
-        ? " "
-        : character;
-    })
-    .join("");
+  let output = "";
+  let retainedStart = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (
+      code > 8 &&
+      code !== 11 &&
+      code !== 12 &&
+      (code < 14 || code > 31) &&
+      code !== 127
+    ) {
+      continue;
+    }
+    output += `${value.slice(retainedStart, index)} `;
+    retainedStart = index + 1;
+  }
+  return retainedStart === 0 ? value : output + value.slice(retainedStart);
 }
 
 function plainTitle(value: string): string {
@@ -205,10 +237,7 @@ export function inferPrintedHeadingEvidence(
       level: number.includes(".") ? Math.min(4, number.split(".").length) : 1,
     });
   }
-  const named = new RegExp(
-    `^(?:第\\s*([0-9零〇一二三四五六七八九十百千]+)\\s*(章|篇|部分|部)|(?:chapter|chap\\.?)\\s*([0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})(?=\\s|$|[—–:：.-])|part\\s*([0-9ivxlcdm]+|${englishOrdinalWord})(?=\\s|$|[—–:：.-]))`,
-    "iu",
-  ).exec(plain);
+  const named = namedHeading.exec(plain);
   if (named) {
     const chineseKind = named[2];
     const kind =
@@ -953,18 +982,68 @@ function numericMajorOrdinal(
   return /\d+/u.exec(plainTitle(value))?.[0];
 }
 
+function createHeadingMatchFacts(
+  heading: NormalizedHeading,
+): HeadingMatchFacts {
+  const plain = plainTitle(heading.sourceTitle);
+  const numbering = inferPrintedHeadingEvidence(plain);
+  const normalized = normalizedTitle(plain, false);
+  const majorOrdinal = numbering
+    ? numbering.kind === "decimal"
+      ? numbering.key.split(".")[0]
+      : numbering.kind === "chapter"
+        ? /\d+/u.exec(plain)?.[0]
+        : undefined
+    : undefined;
+  const repairedNumber = repairableDecimalPrefix(plain);
+  return Object.freeze({
+    latinCount: normalized.match(/[a-z]/giu)?.length ?? 0,
+    ...(majorOrdinal ? { majorOrdinal } : {}),
+    normalizedTitle: normalized,
+    ...(numbering ? { numbering } : {}),
+    plainTitle: plain,
+    ...(repairedNumber ? { repairedNumber } : {}),
+    titleLength: [...normalized].length,
+  });
+}
+
+export function createPrintedContentsDocumentIndex(
+  document: NormalizedDocument,
+): PrintedContentsDocumentIndex {
+  const sourceBytes = Buffer.from(document.source, "utf8");
+  return Object.freeze({
+    document,
+    headingFactsByBlockId: new Map(
+      document.headings.map((heading) => [
+        heading.blockId,
+        createHeadingMatchFacts(heading),
+      ]),
+    ),
+    rootTitleByNode: new Map(
+      (document.root.children ?? []).map((node) => [node, rootTitle(node)]),
+    ),
+    sourceBytes,
+    sourceIndex: new SourceTextIndex(document.source),
+    sourceRegionHeadingIndexes: new Map(
+      document.headings.map((heading, index) => [heading.blockId, index]),
+    ),
+    sourceSha256: hash(sourceBytes),
+  });
+}
+
 function matchScore(
   entry: ExtractedEntry,
   heading: NormalizedHeading,
+  headingFacts: HeadingMatchFacts,
   allowNumberOnly = false,
   allowMajorSectionFallback = false,
 ): number {
   if (entry.sourceTitle.includes("�") || heading.sourceTitle.includes("�")) {
     return 0;
   }
-  const headingTitle = normalizedTitle(heading.sourceTitle, false);
-  const headingNumber = inferPrintedHeadingEvidence(heading.sourceTitle);
-  const repairedHeadingNumber = repairableDecimalPrefix(heading.sourceTitle);
+  const headingTitle = headingFacts.normalizedTitle;
+  const headingNumber = headingFacts.numbering;
+  const repairedHeadingNumber = headingFacts.repairedNumber;
   const supplementalPartToAppendix =
     entry.numbering?.kind === "part" &&
     headingNumber?.kind === "appendix" &&
@@ -984,7 +1063,7 @@ function matchScore(
     entry.numbering?.kind === "chapter" &&
     headingNumber?.kind === "decimal" &&
     numericMajorOrdinal(entry.numbering, entry.sourceTitle) ===
-      numericMajorOrdinal(headingNumber, heading.sourceTitle) &&
+      headingFacts.majorOrdinal &&
     titleScore >= 0.7;
   const decimalNumberingEquivalent =
     entry.numbering?.kind === "decimal" &&
@@ -1026,13 +1105,13 @@ function matchScore(
     entry.numbering?.kind === "appendix" && entry.numbering.key === "appendix";
   const acceptsNumberOnly = allowNumberOnly || entry.normalizedTitle.length < 2;
   const entryTitleLength = [...entry.normalizedTitle].length;
-  const headingTitleLength = [...headingTitle].length;
+  const headingTitleLength = headingFacts.titleLength;
   const titleLengthRatio =
     Math.min(entryTitleLength, headingTitleLength) /
     Math.max(1, entryTitleLength, headingTitleLength);
   const bilingualExpansion =
     headingTitle.includes(entry.normalizedTitle) &&
-    (headingTitle.match(/[a-z]/giu)?.length ?? 0) >= 4 &&
+    headingFacts.latinCount >= 4 &&
     (entry.normalizedTitle.match(/[a-z]/giu)?.length ?? 0) < 4;
   const canUseCharacterRepair = titleLengthRatio >= 0.25 && !bilingualExpansion;
   const effectiveTitleScore = numberEqual
@@ -1066,24 +1145,24 @@ function matchScore(
 
 function recoveredMatchedSourceTitle(
   entry: ExtractedEntry,
-  heading: NormalizedHeading,
+  headingFacts: HeadingMatchFacts,
   recoverOmittedDecimalNumber: boolean,
 ): string {
   const sourceTitle = plainTitle(entry.sourceTitle);
-  const bodyTitle = plainTitle(heading.sourceTitle);
-  const headingNumber = inferPrintedHeadingEvidence(heading.sourceTitle);
+  const bodyTitle = headingFacts.plainTitle;
+  const headingNumber = headingFacts.numbering;
   const matchedNumberEqual =
     entry.numbering !== undefined &&
     headingNumber !== undefined &&
     entry.numbering.kind === headingNumber.kind &&
     entry.numbering.key === headingNumber.key;
-  const headingTitle = normalizedTitle(heading.sourceTitle, false);
-  const repairedHeadingNumber = repairableDecimalPrefix(heading.sourceTitle);
+  const headingTitle = headingFacts.normalizedTitle;
+  const repairedHeadingNumber = headingFacts.repairedNumber;
   const majorSectionFallback =
     entry.numbering?.kind === "chapter" &&
     headingNumber?.kind === "decimal" &&
     numericMajorOrdinal(entry.numbering, entry.sourceTitle) ===
-      numericMajorOrdinal(headingNumber, heading.sourceTitle) &&
+      headingFacts.majorOrdinal &&
     similarity(entry.normalizedTitle, headingTitle) >= 0.7;
   const printed = printedPageEvidence(sourceTitle);
   const bodyTitleWithPage = (): string => {
@@ -1207,11 +1286,11 @@ function recoveredMatchedSourceTitle(
 function hasSupportedOmittedDecimalNumber(
   entries: readonly ExtractedEntry[],
   entryIndex: number,
-  heading: NormalizedHeading,
+  headingFacts: HeadingMatchFacts,
 ): boolean {
   const previous = entries[entryIndex - 1]?.numbering;
   const next = entries[entryIndex + 1]?.numbering;
-  const headingNumber = inferPrintedHeadingEvidence(heading.sourceTitle);
+  const headingNumber = headingFacts.numbering;
   if (
     previous?.kind !== "decimal" ||
     next?.kind !== "decimal" ||
@@ -1253,6 +1332,7 @@ function hasSupportedOmittedDecimalNumber(
 function monotonicMatches(
   entries: readonly ExtractedEntry[],
   headings: readonly NormalizedHeading[],
+  headingFacts: readonly HeadingMatchFacts[],
   options: {
     readonly allowMajorSectionFallback?: boolean;
     readonly allowNumberOnly?: boolean;
@@ -1270,16 +1350,17 @@ function monotonicMatches(
   const numberedHeadings = new Map<string, number[]>();
   const repairedNumberedHeadings = new Map<string, number[]>();
   for (const [index, heading] of headings.entries()) {
-    const title = normalizedTitle(heading.sourceTitle, false);
+    const facts = headingFacts[index] ?? createHeadingMatchFacts(heading);
+    const title = facts.normalizedTitle;
     exactHeadings.set(title, [...(exactHeadings.get(title) ?? []), index]);
-    const number = inferPrintedHeadingEvidence(heading.sourceTitle);
+    const number = facts.numbering;
     if (number) {
       numberedHeadings.set(number.key, [
         ...(numberedHeadings.get(number.key) ?? []),
         index,
       ]);
     }
-    const repairedNumber = repairableDecimalPrefix(heading.sourceTitle);
+    const repairedNumber = facts.repairedNumber;
     if (repairedNumber) {
       repairedNumberedHeadings.set(repairedNumber.compact, [
         ...(repairedNumberedHeadings.get(repairedNumber.compact) ?? []),
@@ -1303,7 +1384,9 @@ function monotonicMatches(
     }
     if (indexes.size === 0) {
       for (const [headingIndex, heading] of headings.entries()) {
-        const headingTitle = normalizedTitle(heading.sourceTitle, false);
+        const headingTitle =
+          headingFacts[headingIndex]?.normalizedTitle ??
+          createHeadingMatchFacts(heading).normalizedTitle;
         if (
           headingTitle.slice(0, 4) === entry.normalizedTitle.slice(0, 4) ||
           similarity(entry.normalizedTitle, headingTitle) >= 0.62
@@ -1316,16 +1399,19 @@ function monotonicMatches(
     for (const headingIndex of indexes) {
       const heading = headings[headingIndex];
       if (!heading) continue;
+      const facts =
+        headingFacts[headingIndex] ?? createHeadingMatchFacts(heading);
       if (
         options.requireNumberingForNumberedEntries &&
         entry.numbering &&
-        !inferPrintedHeadingEvidence(heading.sourceTitle)
+        !facts.numbering
       ) {
         continue;
       }
       const score = matchScore(
         entry,
         heading,
+        facts,
         options.allowNumberOnly,
         options.allowMajorSectionFallback,
       );
@@ -1932,6 +2018,7 @@ function reorderFromReliableLayout(
         textFingerprint: "",
       }),
   );
+  const layoutHeadingFacts = layoutHeadings.map(createHeadingMatchFacts);
   const proposals = entries.flatMap((entry, sourceIndex) => {
     const candidates = new Set(
       entry.numbering ? (layoutByNumber.get(entry.numbering.key) ?? []) : [],
@@ -1945,7 +2032,15 @@ function reorderFromReliableLayout(
         const heading = layoutHeadings[layoutIndex];
         return {
           layoutIndex,
-          score: heading ? matchScore(entry, heading, true) : 0,
+          score: heading
+            ? matchScore(
+                entry,
+                heading,
+                layoutHeadingFacts[layoutIndex] ??
+                  createHeadingMatchFacts(heading),
+                true,
+              )
+            : 0,
           sourceIndex,
         };
       })
@@ -2185,6 +2280,7 @@ function recoverLayoutLogicalEntries(
         textFingerprint: "",
       }),
   );
+  const layoutHeadingFacts = layoutHeadings.map(createHeadingMatchFacts);
   const sourceContainsLayoutEntry = (
     layoutEntry: Omit<ExtractedEntry, "range">,
   ): boolean => {
@@ -2232,10 +2328,15 @@ function recoverLayoutLogicalEntries(
       explicitMajorEntryPrefix.test(title)
     );
   };
-  const alignment = monotonicMatches(sourceEntries, layoutHeadings, {
-    allowNumberOnly: true,
-    requireNumberingForNumberedEntries: true,
-  });
+  const alignment = monotonicMatches(
+    sourceEntries,
+    layoutHeadings,
+    layoutHeadingFacts,
+    {
+      allowNumberOnly: true,
+      requireNumberingForNumberedEntries: true,
+    },
+  );
   const anchors = [...alignment.matches]
     .map(([sourceIndex, layoutIndex]) => ({ layoutIndex, sourceIndex }))
     .sort(
@@ -2584,18 +2685,29 @@ function recoverLayoutLogicalEntries(
 
 export function detectPrintedContents(input: {
   readonly document: NormalizedDocument;
+  readonly documentIndex?: PrintedContentsDocumentIndex;
   readonly idFactory?: () => string;
   readonly layoutEvidence?: LayoutEvidence;
   readonly sourcePath: string;
   readonly sourceSha256: string;
 }): PrintedContentsDetection {
-  const sourceBytes = Buffer.from(input.document.source, "utf8");
-  if (hash(sourceBytes) !== input.sourceSha256) {
+  const documentIndex =
+    input.documentIndex ?? createPrintedContentsDocumentIndex(input.document);
+  if (
+    documentIndex.document !== input.document ||
+    documentIndex.sourceSha256 !== input.sourceSha256
+  ) {
     throw new Error("PRINTED_TOC_SOURCE_HASH_MISMATCH");
   }
-  const sourceIndex = new SourceTextIndex(input.document.source);
+  const sourceBytes = documentIndex.sourceBytes;
+  const sourceIndex = documentIndex.sourceIndex;
   const contextualTitles = repairableContextualTitles(input.layoutEvidence);
   const roots = input.document.root.children ?? [];
+  const titleOf = (node: TransientDocumentNode): string =>
+    documentIndex.rootTitleByNode.get(node) ?? rootTitle(node);
+  const factsFor = (heading: NormalizedHeading): HeadingMatchFacts =>
+    documentIndex.headingFactsByBlockId.get(heading.blockId) ??
+    createHeadingMatchFacts(heading);
   const layoutLevelByTitle = layoutLevels(input.layoutEvidence);
   const layoutOccurrences = new Map<string, number>();
   const ranges: {
@@ -2605,7 +2717,7 @@ export function detectPrintedContents(input: {
     readonly startIndex: number;
   }[] = [];
   const explicitLabels = roots.flatMap((root, index) =>
-    contentsTitle.test(rootTitle(root).normalize("NFKC")) ? [index] : [],
+    contentsTitle.test(titleOf(root).normalize("NFKC")) ? [index] : [],
   );
   for (let labelIndex = 0; labelIndex < explicitLabels.length;) {
     const startIndex = explicitLabels[labelIndex];
@@ -2686,13 +2798,13 @@ export function detectPrintedContents(input: {
       if (!block?.position) continue;
       if (
         index > range.firstEntryIndex &&
-        contentsTitle.test(rootTitle(block).normalize("NFKC"))
+        contentsTitle.test(titleOf(block).normalize("NFKC"))
       ) {
         endIndex = index - 1;
         break;
       }
       const title =
-        block.type === "heading" ? normalizedTitle(rootTitle(block)) : "";
+        block.type === "heading" ? normalizedTitle(titleOf(block)) : "";
       const printedRowsContinue = roots
         .slice(index + 1, index + 5)
         .some((candidate) =>
@@ -2701,7 +2813,7 @@ export function detectPrintedContents(input: {
       if (
         title &&
         seenTitles.has(title) &&
-        printedPageEvidence(rootTitle(block)) === undefined &&
+        printedPageEvidence(titleOf(block)) === undefined &&
         !printedRowsContinue
       ) {
         endIndex = index - 1;
@@ -2744,12 +2856,12 @@ export function detectPrintedContents(input: {
       if (!block?.position) continue;
       if (
         sourceEntries.length > 0 &&
-        supplementalListTitle.test(rootTitle(block).normalize("NFKC"))
+        supplementalListTitle.test(titleOf(block).normalize("NFKC"))
       ) {
         break;
       }
       const possibleBodyTitle =
-        block.type === "heading" ? normalizedTitle(rootTitle(block)) : "";
+        block.type === "heading" ? normalizedTitle(titleOf(block)) : "";
       const printedRowsContinue = roots
         .slice(index + 1, index + 5)
         .some((candidate) =>
@@ -2758,16 +2870,16 @@ export function detectPrintedContents(input: {
       const nextBlock = roots[index + 1];
       const nextBodyTitle =
         nextBlock?.type === "heading"
-          ? normalizedTitle(rootTitle(nextBlock))
+          ? normalizedTitle(titleOf(nextBlock))
           : "";
-      const currentKind = inferPrintedHeadingEvidence(rootTitle(block))?.kind;
-      const currentNumbering = inferPrintedHeadingEvidence(rootTitle(block));
+      const currentNumbering = inferPrintedHeadingEvidence(titleOf(block));
+      const currentKind = currentNumbering?.kind;
       if (
         sourceEntries.length > 0 &&
         !printedRowsContinue &&
         block.type === "heading" &&
         currentNumbering &&
-        printedPageEvidence(rootTitle(block)) === undefined &&
+        printedPageEvidence(titleOf(block)) === undefined &&
         sourceEntries.some(
           (entry) => entry.numbering?.key === currentNumbering.key,
         )
@@ -2779,8 +2891,8 @@ export function detectPrintedContents(input: {
         !printedRowsContinue &&
         block.type === "heading" &&
         (currentKind === "part" || currentKind === "chapter") &&
-        printedPageEvidence(rootTitle(block)) === undefined &&
-        standaloneMajorLabel.test(plainTitle(rootTitle(block))) &&
+        printedPageEvidence(titleOf(block)) === undefined &&
+        standaloneMajorLabel.test(plainTitle(titleOf(block))) &&
         nextBodyTitle &&
         sourceEntries.some((entry) => entry.normalizedTitle === nextBodyTitle)
       ) {
@@ -2792,7 +2904,7 @@ export function detectPrintedContents(input: {
         sourceEntries.some(
           (entry) => entry.normalizedTitle === possibleBodyTitle,
         ) &&
-        printedPageEvidence(rootTitle(block)) === undefined &&
+        printedPageEvidence(titleOf(block)) === undefined &&
         !printedRowsContinue
       ) {
         break;
@@ -2814,10 +2926,10 @@ export function detectPrintedContents(input: {
         currentNumbering === undefined &&
         possibleBodyTitle.length >= 2 &&
         possibleBodyTitle.length <= 80 &&
-        !frontmatterEntryTitle.test(rootTitle(block)) &&
-        !contextualEntryTitle.test(rootTitle(block)) &&
+        !frontmatterEntryTitle.test(titleOf(block)) &&
+        !contextualEntryTitle.test(titleOf(block)) &&
         roots.slice(index + 1, index + 5).some((candidate) => {
-          const candidateTitle = rootTitle(candidate);
+          const candidateTitle = titleOf(candidate);
           const candidateKind =
             inferPrintedHeadingEvidence(candidateTitle)?.kind;
           return (
@@ -2826,9 +2938,7 @@ export function detectPrintedContents(input: {
           );
         });
       if (detachedPartSubtitle && previousEntry && block.position) {
-        const sourceTitle = `${plainTitle(previousEntry.sourceTitle)} ${plainTitle(
-          rootTitle(block),
-        )}`;
+        const sourceTitle = `${plainTitle(previousEntry.sourceTitle)} ${plainTitle(titleOf(block))}`;
         const endByte = sourceIndex.byteOffsetAt(block.position.end.offset);
         sourceEntries[sourceEntries.length - 1] = Object.freeze({
           ...previousEntry,
@@ -2932,6 +3042,7 @@ export function detectPrintedContents(input: {
         (heading.position?.start.offset ?? Number.NEGATIVE_INFINITY) >
           candidateEndOffset && eligibleHeading(heading, true),
     );
+    const laterHeadingFacts = laterHeadings.map(factsFor);
     const bodyHeadings = input.document.headings.filter((heading) => {
       const start = heading.position?.start.offset ?? Number.NEGATIVE_INFINITY;
       const insideOtherPrintedWindow = estimatedPrintedWindows.some(
@@ -2947,6 +3058,7 @@ export function detectPrintedContents(input: {
         eligibleHeading(heading, start > candidateEndOffset)
       );
     });
+    const bodyHeadingFacts = bodyHeadings.map(factsFor);
     const summaryCandidate =
       entries.filter(
         (entry) =>
@@ -2956,10 +3068,15 @@ export function detectPrintedContents(input: {
       entries.filter((entry) => entry.numbering?.kind === "decimal").length /
         Math.max(1, entries.length) <
         0.25;
-    const alignment = monotonicMatches(entries, bodyHeadings, {
-      allowMajorSectionFallback: summaryCandidate,
-      allowNumberOnly: false,
-    });
+    const alignment = monotonicMatches(
+      entries,
+      bodyHeadings,
+      bodyHeadingFacts,
+      {
+        allowMajorSectionFallback: summaryCandidate,
+        allowNumberOnly: false,
+      },
+    );
     const resolvedMatches = new Map(alignment.matches);
     const ambiguousEntries = new Set(alignment.ambiguousEntries);
     const usedHeadingIndexes = new Set(resolvedMatches.values());
@@ -2997,12 +3114,19 @@ export function detectPrintedContents(input: {
       }
       const candidates = bodyHeadings
         .map((heading, headingIndex) => {
+          const headingFacts =
+            bodyHeadingFacts[headingIndex] ?? createHeadingMatchFacts(heading);
           const eligible =
             headingIndex > lowerBound &&
             headingIndex < upperBound &&
             !usedHeadingIndexes.has(headingIndex);
           const exactScore = eligible
-            ? matchScore(entry, heading, entry.normalizedTitle.length < 2)
+            ? matchScore(
+                entry,
+                heading,
+                headingFacts,
+                entry.normalizedTitle.length < 2,
+              )
             : 0;
           const fuzzyScore =
             eligible &&
@@ -3014,7 +3138,7 @@ export function detectPrintedContents(input: {
                 ? 8
                 : characterSimilarity(
                     entry.normalizedTitle,
-                    normalizedTitle(heading.sourceTitle, false),
+                    headingFacts.normalizedTitle,
                   ) * 10
               : 0;
           return {
@@ -3074,6 +3198,8 @@ export function detectPrintedContents(input: {
       const headingIndex = resolvedMatches.get(entryIndex);
       const match =
         headingIndex === undefined ? undefined : bodyHeadings[headingIndex];
+      const matchFacts =
+        headingIndex === undefined ? undefined : bodyHeadingFacts[headingIndex];
       if (!match) {
         const logicalEntryIndex = nextLogicalEntryIndex++;
         diagnostics.push(
@@ -3087,8 +3213,12 @@ export function detectPrintedContents(input: {
       const logicalEntryIndex = nextLogicalEntryIndex++;
       const sourceTitle = recoveredMatchedSourceTitle(
         entry,
-        match,
-        hasSupportedOmittedDecimalNumber(entries, entryIndex, match) ||
+        matchFacts ?? createHeadingMatchFacts(match),
+        hasSupportedOmittedDecimalNumber(
+          entries,
+          entryIndex,
+          matchFacts ?? createHeadingMatchFacts(match),
+        ) ||
           contextualEntryTitle.test(
             printedPageEvidence(entry.sourceTitle)?.title ??
               plainTitle(entry.sourceTitle),
@@ -3206,7 +3336,14 @@ export function detectPrintedContents(input: {
     const startByte = sourceIndex.byteOffsetAt(firstNode.position.start.offset);
     const endByte = sourceIndex.byteOffsetAt(candidateEnd.position.end.offset);
     const recurrenceCount = matchedEntries.filter((entry) =>
-      laterHeadings.some((heading) => matchScore(entry, heading) > 0),
+      laterHeadings.some(
+        (heading, headingIndex) =>
+          matchScore(
+            entry,
+            heading,
+            laterHeadingFacts[headingIndex] ?? createHeadingMatchFacts(heading),
+          ) > 0,
+      ),
     ).length;
     const recurrenceCoverage =
       matchedEntries.length === 0 ? 0 : recurrenceCount / matchedEntries.length;
@@ -3263,9 +3400,7 @@ export function detectPrintedContents(input: {
           left.range.end_byte - right.range.end_byte,
       );
     let previousSourceRegionHeadingIndex = -1;
-    const sourceRegionHeadingIndexes = new Map(
-      input.document.headings.map((heading, index) => [heading.blockId, index]),
-    );
+    const sourceRegionHeadingIndexes = documentIndex.sourceRegionHeadingIndexes;
     const proposedRegion = canApplyBoundary
       ? Object.freeze({
           applied: true,

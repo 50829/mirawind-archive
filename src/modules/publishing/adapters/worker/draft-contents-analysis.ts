@@ -6,6 +6,7 @@ import type { normalizeDocumentBlocks } from "@/modules/publishing/core/preparat
 import { readPdfContentsEvidence } from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
 import { findOriginalPdf } from "@/modules/publishing/adapters/filesystem/find-original-pdf";
 import {
+  createPrintedContentsDocumentIndex,
   detectPrintedContents,
   requiresSupplementalPdfEvidence,
   shouldUseNativePdfDetection,
@@ -49,12 +50,16 @@ export async function analyzeDraftContents(input: {
   recordPipelineProfileMetrics({
     layout_records: layoutEvidence.records.length,
   });
+  const printedContentsDocumentIndex = createPrintedContentsDocumentIndex(
+    input.normalized,
+  );
   let effectiveLayoutEvidence = layoutEvidence;
   let printedContents = await profilePipelineStage(
     "initial_printed_contents",
     () =>
       detectPrintedContents({
         document: input.normalized,
+        documentIndex: printedContentsDocumentIndex,
         layoutEvidence,
         sourcePath: basename(input.selectedCandidatePath),
         sourceSha256: input.sourceSha256,
@@ -118,12 +123,14 @@ export async function analyzeDraftContents(input: {
           );
           const repairedDetection = detectPrintedContents({
             document: input.normalized,
+            documentIndex: printedContentsDocumentIndex,
             layoutEvidence: repairedLayoutEvidence,
             sourcePath: basename(input.selectedCandidatePath),
             sourceSha256: input.sourceSha256,
           });
           const nativeDetection = detectPrintedContents({
             document: input.normalized,
+            documentIndex: printedContentsDocumentIndex,
             layoutEvidence: pdfLayoutEvidence,
             sourcePath: basename(input.selectedCandidatePath),
             sourceSha256: input.sourceSha256,

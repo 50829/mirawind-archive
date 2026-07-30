@@ -317,6 +317,14 @@ The paired runner now reuses one exact correctness receipt per implementation co
 fixture/reference set, reducing a normal three-pair run from six observer passes to two. A focused
 test proves reuse and binding rejection, and both stored pair-01 reports were hash-verified before
 local receipt seeding; no books were reprocessed for this runner-only optimization.
+The next CPU-guided change shares one immutable source/title/heading index across the initial,
+repaired and native printed-contents detections. On the focused regression fixture, draft
+preparation changed from 15.371 seconds to 10.507 seconds, initial printed-contents from 2.143 to
+0.685 seconds and repaired printed-contents from 7.143 to 3.408 seconds. Total wall changed from
+28.481 to 23.650 seconds while peak process-tree RSS remained within the 5% tolerance. A fresh
+current-source observation of all fifteen real fixtures remains 15/15 reference-v2 exact. The run
+also exposed and fixed an incorrect whole-tree formula/HAST cardinality assumption by binding
+visible generated formulas with per-render markers rather than traversal order.
 T092 remains open because these focused results are not an `AB/BA/AB` completion claim.
 
 - [ ] T095 After the last source change, run the standard format, lint/architecture, typecheck, full

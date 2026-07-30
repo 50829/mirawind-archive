@@ -83,6 +83,30 @@ locally as `15/15` exact without processing the books again. A normal `AB/BA/AB`
 two observer passes instead of six. This removes benchmark-only duplicate work and is not counted as
 a product pipeline speedup or a new formal pair.
 
+## Shared printed-contents document index
+
+The next retained CPU profile showed that title cleanup and numbering inference had become the
+dominant draft-preparation cost. The initial, repaired MinerU/PDF and native-PDF detections all
+operate on the same normalized document, but each pass rebuilt source/hash indexes and repeatedly
+derived the same body-heading match features. One immutable document index now owns the UTF-8
+source index, source hash, root titles, heading lookup and normalized heading match facts for all
+three detections. Matching scores, thresholds and alignment rules are unchanged.
+
+The focused `real-mineru-106e479f6de4` before/after run used the same current candidate pipeline:
+
+| Measurement               |   Before |    After |        Change |
+| ------------------------- | -------: | -------: | ------------: |
+| Total wall                | 28.481 s | 23.650 s | 16.97% faster |
+| Accepted to preview       | 28.319 s | 23.499 s | 17.02% faster |
+| Draft preparation         | 15.371 s | 10.507 s | 31.65% faster |
+| Initial printed contents  |  2.143 s |  0.685 s | 68.02% faster |
+| Repaired printed contents |  7.143 s |  3.408 s | 52.28% faster |
+| Peak process-tree RSS     | 929.3 MB | 952.8 MB |  2.53% higher |
+
+The current source then regenerated all fifteen observed-v2 files and remained `15/15`
+reference-exact. The focused result is diagnostic evidence only and does not replace another formal
+pair or complete T092.
+
 ## Focused memory diagnosis
 
 A retained diagnostic run of `real-mineru-a53faf7243d4` measured 43.035 seconds wall time, 2.114 GB
@@ -125,6 +149,14 @@ The memory-heavy book contains 15,911 formulas across nine output pages. Parsing
 versions and serializing each `.katex` subtree produced exact before/after equality on all nine
 pages. Preview and public page byte counts were also unchanged. The current observed-v2 set remains
 15/15 reference exact. These are focused diagnostics, not a replacement for a fresh paired result.
+
+A later clean benchmark exposed that the first single-pass implementation also assumed every math
+node in the source tree survived into HAST in the same order. That is false for non-rendered
+definition/metadata nodes and caused `MATH_SOURCE_ALIGNMENT_INVALID` on a real candidate build.
+Generated formula nodes now carry a per-render opaque marker through sanitization, resolve their
+source without depending on traversal order, and remove the marker before serialization. Visible
+formula source/display-mode checks and duplicate-marker rejection remain; the invalid whole-tree
+cardinality gate was removed. The same real fixture completed after this correction.
 
 Raw machine-readable evidence remains in the ignored
 `.cache/008-publishing-performance/paired.json.runs/` directory. Focused profiler evidence is in
