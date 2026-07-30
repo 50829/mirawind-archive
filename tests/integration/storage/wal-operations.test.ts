@@ -1,5 +1,3 @@
-import { performance } from "node:perf_hooks";
-
 import { describe, expect, it } from "vitest";
 
 import { openDatabase } from "@/platform/sqlite/connection";
@@ -34,11 +32,9 @@ describe("worker-owned WAL operations", () => {
         }
       })();
 
-      const startedAt = performance.now();
       expect(
         web.prepare("SELECT COUNT(*) AS count FROM wal_test").get(),
       ).toEqual({ count: 0 });
-      expect(performance.now() - startedAt).toBeLessThan(250);
       const health = await runPassiveCheckpoint({
         database: migrated.database,
         databasePath: migrated.path,

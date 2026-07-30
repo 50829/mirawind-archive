@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   defaultJobTerminationGraceMs,
@@ -18,6 +18,7 @@ const fixturePath = fileURLToPath(
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(
     temporaryRoots
       .splice(0)
@@ -80,7 +81,6 @@ describe("job child termination", () => {
         ready = resolve;
       });
       let settled = false;
-      const startedAt = performance.now();
       const executionPromise = runJobChild(input("cancel"), {
         childModulePath: fixturePath,
         onProgress(progress) {
@@ -95,12 +95,15 @@ describe("job child termination", () => {
         return execution;
       });
       await readyPromise;
+      vi.useFakeTimers();
       controller.abort();
-      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      await vi.advanceTimersByTimeAsync(79);
       expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      vi.useRealTimers();
 
       const execution = await executionPromise;
-      expect(performance.now() - startedAt).toBeGreaterThanOrEqual(70);
       expect(execution.signal).toBe("SIGKILL");
       const events = await readFile(
         join(root, "termination-events.txt"),

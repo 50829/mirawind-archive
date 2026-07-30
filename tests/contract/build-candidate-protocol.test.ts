@@ -77,7 +77,7 @@ describe("build candidate protocol values", () => {
       { ...artifact, pageCount: Number.POSITIVE_INFINITY },
       { ...artifact, blockingDiagnosticCount: 5 },
       { ...artifact, versionId: createOpaqueId("version") },
-      { ...artifact, compilerIdentity: "compiler-v4" },
+      { ...artifact, compilerIdentity: "compiler-v6" },
       { ...artifact, artifactRootRelativePath: "../../escape" },
     ]) {
       expect(() => parseCandidateBuildArtifact(invalid, parsedCommand)).toThrow(
