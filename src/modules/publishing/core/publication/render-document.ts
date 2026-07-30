@@ -1,4 +1,3 @@
-import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
@@ -38,6 +37,12 @@ interface TreeNode {
   [key: string]: unknown;
 }
 
+interface MathSource {
+  readonly blockId?: string;
+  readonly displayMode: boolean;
+  readonly source: string;
+}
+
 export interface HeadingRenderOverride {
   readonly displayLevel: number;
   readonly displayTitle: string;
@@ -73,10 +78,7 @@ function assertSafePublishedUrl(url: string): void {
   }
 }
 
-function rendererTree(
-  options: RenderSemanticDocumentOptions,
-  diagnostics: SafeDiagnostic[],
-): TreeNode {
+function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
   const resourceIdByOriginalUrl = new Map(
     options.resourceResolution.references.map((reference) => [
       reference.originalUrl,
@@ -137,86 +139,42 @@ function rendererTree(
           { type: "text", value: override.displayTitle },
         ];
       }
-    } else if (
-      (node.type === "inlineMath" || node.type === "math") &&
-      node.value !== undefined
-    ) {
-      const rendered = renderMath({
-        ...(node.blockId ? { blockId: node.blockId } : {}),
-        displayMode: node.type === "math",
-        source: node.value,
-      });
-      if (rendered.diagnostic) {
-        diagnostics.push(rendered.diagnostic);
-        if (node.type === "inlineMath") {
-          output.data = {
-            hName: "code",
-            hProperties: { className: ["math-fallback"] },
-          };
-          output.children = [{ type: "text", value: rendered.source }];
-        } else {
-          output.data = {
-            hName: "div",
-            hProperties: {
-              className: ["math-fallback"],
-              ...(node.blockId ? { dataBlockId: node.blockId } : {}),
-            },
-          };
-          output.children = [
+    } else if (node.type === "inlineMath" && node.value !== undefined) {
+      output.data = {
+        hName: "code",
+        hProperties: {
+          className: ["language-math", "math-inline"],
+        },
+      };
+      output.children = [{ type: "text", value: node.value }];
+      delete output.value;
+    } else if (node.type === "math" && node.value !== undefined) {
+      output.data = {
+        hName: "div",
+        hProperties: {
+          className: ["math-block"],
+          ...(node.blockId ? { dataBlockId: node.blockId } : {}),
+        },
+      };
+      output.children = [
+        {
+          children: [
             {
-              children: [
-                {
-                  children: [{ type: "text", value: rendered.source }],
-                  data: {
-                    hName: "code",
-                    hProperties: { className: ["math-fallback"] },
-                  },
-                  type: "mirawindMathFallbackCode",
+              children: [{ type: "text", value: node.value }],
+              data: {
+                hName: "code",
+                hProperties: {
+                  className: ["language-math", "math-display"],
                 },
-              ],
-              data: { hName: "pre" },
-              type: "mirawindMathFallback",
-            },
-          ];
-        }
-        delete output.value;
-      } else if (node.type === "inlineMath") {
-        output.data = {
-          hName: "code",
-          hProperties: {
-            className: ["language-math", "math-inline"],
-          },
-        };
-        output.children = [{ type: "text", value: node.value }];
-        delete output.value;
-      } else {
-        output.data = {
-          hName: "div",
-          hProperties: {
-            className: ["math-block"],
-            ...(node.blockId ? { dataBlockId: node.blockId } : {}),
-          },
-        };
-        output.children = [
-          {
-            children: [
-              {
-                children: [{ type: "text", value: node.value }],
-                data: {
-                  hName: "code",
-                  hProperties: {
-                    className: ["language-math", "math-display"],
-                  },
-                },
-                type: "mirawindMathCode",
               },
-            ],
-            data: { hName: "pre" },
-            type: "mirawindMathPre",
-          },
-        ];
-        delete output.value;
-      }
+              type: "mirawindMathCode",
+            },
+          ],
+          data: { hName: "pre" },
+          type: "mirawindMathPre",
+        },
+      ];
+      delete output.value;
     } else if (node.type === "semanticContainer" && node.containerKind) {
       output.data = {
         hName: "aside",
@@ -300,6 +258,141 @@ function rendererTree(
     value: resourceUrls,
   });
   return root;
+}
+
+function mathSources(root: TransientDocumentNode): readonly MathSource[] {
+  const sources: MathSource[] = [];
+  const visit = (node: TransientDocumentNode): void => {
+    if (node.type === "inlineMath" || node.type === "math") {
+      sources.push(
+        Object.freeze({
+          ...(node.blockId ? { blockId: node.blockId } : {}),
+          displayMode: node.type === "math",
+          source: node.value ?? "",
+        }),
+      );
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(root);
+  return Object.freeze(sources);
+}
+
+function textContent(node: TreeNode): string {
+  if (node.type === "text") return node.value ?? "";
+  return (node.children ?? []).map(textContent).join("");
+}
+
+function classNames(node: TreeNode): readonly unknown[] {
+  return Array.isArray(node.properties?.className)
+    ? node.properties.className
+    : [];
+}
+
+function renderMathNodes(
+  tree: TreeNode,
+  sources: readonly MathSource[],
+  diagnostics: SafeDiagnostic[],
+): void {
+  let sourceIndex = 0;
+  const trackedSource = (
+    scope: TreeNode,
+    displayMode: boolean,
+    tracked: boolean,
+  ): MathSource | undefined => {
+    const candidate = tracked ? sources[sourceIndex] : undefined;
+    if (
+      !candidate ||
+      candidate.displayMode !== displayMode ||
+      candidate.source !== textContent(scope)
+    ) {
+      return undefined;
+    }
+    sourceIndex += 1;
+    return candidate;
+  };
+  const render = (
+    parent: TreeNode,
+    index: number,
+    scope: TreeNode,
+    code: TreeNode,
+    displayMode: boolean,
+    sourceMetadata: MathSource | undefined,
+  ): void => {
+    const source = textContent(scope);
+    if (
+      sourceMetadata &&
+      (sourceMetadata.displayMode !== displayMode ||
+        sourceMetadata.source !== source)
+    ) {
+      throw new Error("MATH_SOURCE_ALIGNMENT_INVALID");
+    }
+    const rendered = renderMath({
+      ...(sourceMetadata?.blockId ? { blockId: sourceMetadata.blockId } : {}),
+      displayMode,
+      source,
+    });
+    if (!rendered.diagnostic && rendered.markup) {
+      // Imported HTML is already sanitized; raw nodes are reserved for KaTeX
+      // output generated above with trust disabled.
+      parent.children?.splice(index, 1, {
+        type: "raw",
+        value: rendered.markup,
+      });
+      return;
+    }
+    if (rendered.diagnostic) diagnostics.push(rendered.diagnostic);
+    code.properties = { className: ["math-fallback"] };
+    code.children = [{ type: "text", value: rendered.source }];
+    if (displayMode) {
+      const parentClasses = classNames(parent);
+      if (parentClasses.includes("math-block")) {
+        parent.properties = {
+          ...(parent.properties ?? {}),
+          className: ["math-fallback"],
+        };
+      }
+    }
+  };
+  const visit = (parent: TreeNode): void => {
+    for (let index = 0; index < (parent.children?.length ?? 0); index += 1) {
+      const child = parent.children?.[index];
+      if (!child || child.type !== "element") continue;
+      if (child.tagName === "pre") {
+        const code = child.children?.[0];
+        const classes = code ? classNames(code) : [];
+        if (
+          code?.type === "element" &&
+          code.tagName === "code" &&
+          classes.includes("language-math")
+        ) {
+          const tracked =
+            classes.includes("math-display") || classes.includes("math-inline");
+          const source = trackedSource(child, true, tracked);
+          render(parent, index, child, code, true, source);
+          continue;
+        }
+      }
+      const classes = classNames(child);
+      if (
+        classes.includes("language-math") ||
+        classes.includes("math-display") ||
+        classes.includes("math-inline")
+      ) {
+        const displayMode = classes.includes("math-display");
+        const tracked =
+          classes.includes("math-display") || classes.includes("math-inline");
+        const source = trackedSource(child, displayMode, tracked);
+        render(parent, index, child, child, displayMode, source);
+        continue;
+      }
+      visit(child);
+    }
+  };
+  visit(tree);
+  if (sourceIndex !== sources.length) {
+    throw new Error("MATH_SOURCE_ALIGNMENT_INVALID");
+  }
 }
 
 async function highlightCodeBlocks(
@@ -497,7 +590,7 @@ export async function renderSemanticDocument(
   const diagnostics: SafeDiagnostic[] = [
     ...options.resourceResolution.diagnostics,
   ];
-  const tree = rendererTree(options, diagnostics);
+  const tree = rendererTree(options);
   const resourceUrls = (
     tree as TreeNode & {
       _resourceUrls: ReadonlyMap<string, string>;
@@ -507,14 +600,9 @@ export async function renderSemanticDocument(
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
     .use(rehypeRestrictResources, { allowedResourceUrls: resourceUrls })
-    .use(rehypeSanitize, importedHtmlSanitizationSchema)
-    .use(rehypeKatex, {
-      maxExpand: 1_000,
-      maxSize: 50,
-      strict: "error",
-      trust: false,
-    });
+    .use(rehypeSanitize, importedHtmlSanitizationSchema);
   const transformed = (await processor.run(tree as never)) as TreeNode;
+  renderMathNodes(transformed, mathSources(options.document.root), diagnostics);
   restoreStableHeadingIds(transformed);
   repairFootnoteLinks(
     transformed,
@@ -539,7 +627,7 @@ export async function renderSemanticDocument(
   );
   assertPostRenderInvariants(transformed);
   const html = unified()
-    .use(rehypeStringify)
+    .use(rehypeStringify, { allowDangerousHtml: true })
     .stringify(transformed as never);
   return Object.freeze({
     css,

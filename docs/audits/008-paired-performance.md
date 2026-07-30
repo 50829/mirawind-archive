@@ -15,13 +15,13 @@ optimization. It is valid diagnostic evidence, but it does not complete T092 or 
 
 ## First pair
 
-| Gate | Baseline | Candidate | Change | Required | Result |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Total wall | 887.842 s | 623.961 s | 29.72% faster | >=30% | MISS |
-| Slowest five | - | - | 35.72% faster | >=35% | PASS |
-| Accepted to preview | 642.958 s | 620.720 s | 3.46% faster | >=25% | MISS |
-| Publish to public | 241.975 s | 0.020 s | 99.99% faster | >=90% | PASS |
-| Peak process-tree RSS | 2.240 GB | 3.008 GB | 34.27% higher | <=max(5%, 64 MiB) | MISS |
+| Gate                  |  Baseline | Candidate |        Change |          Required | Result |
+| --------------------- | --------: | --------: | ------------: | ----------------: | ------ |
+| Total wall            | 887.842 s | 623.961 s | 29.72% faster |             >=30% | MISS   |
+| Slowest five          |         - |         - | 35.72% faster |             >=35% | PASS   |
+| Accepted to preview   | 642.958 s | 620.720 s |  3.46% faster |             >=25% | MISS   |
+| Publish to public     | 241.975 s |   0.020 s | 99.99% faster |             >=90% | PASS   |
+| Peak process-tree RSS |  2.240 GB |  3.008 GB | 34.27% higher | <=max(5%, 64 MiB) | MISS   |
 
 Fourteen fixtures became faster and eight improved by at least 30%. The only wall-time regression
 was `real-mineru-106e479f6de4`, from 54.106 seconds to 59.943 seconds, a 10.79% increase that exceeds
@@ -32,16 +32,16 @@ to 72.759 seconds, or 52.54%.
 
 Candidate consolidation removed most duplicate preview/publication work:
 
-| Job family | Baseline | Candidate |
-| --- | ---: | ---: |
-| Draft preparation | 389.128 s | 424.181 s |
+| Job family                                       |  Baseline | Candidate |
+| ------------------------------------------------ | --------: | --------: |
+| Draft preparation                                | 389.128 s | 424.181 s |
 | Preview and publication builds / candidate build | 393.041 s | 121.605 s |
 
 The remaining latency is in printed-contents analysis during draft preparation:
 
-| Stage | Baseline | Candidate |
-| --- | ---: | ---: |
-| Initial printed contents | 22.038 s | 97.946 s |
+| Stage                     | Baseline | Candidate |
+| ------------------------- | -------: | --------: |
+| Initial printed contents  | 22.038 s |  97.946 s |
 | Repaired printed contents | 53.602 s | 199.517 s |
 
 For the regressing `real-mineru-106e479f6de4` fixture, preparation increased from 21.542 seconds to
@@ -57,12 +57,12 @@ self CPU in repeated `SourceTextIndex` construction. Printed-directory extractio
 UTF-8 source index for every directory-entry offset. Reusing one index per
 `detectPrintedContents()` call produced this focused before/after result:
 
-| Measurement | Before | After | Change |
-| --- | ---: | ---: | ---: |
-| Wall | 59.694 s | 31.955 s | 46.47% faster |
-| Draft preparation | 43.985 s | 16.361 s | 62.80% faster |
-| Initial printed contents | 10.925 s | 2.186 s | 79.99% faster |
-| Repaired printed contents | 25.659 s | 7.182 s | 72.01% faster |
+| Measurement               |   Before |    After |        Change |
+| ------------------------- | -------: | -------: | ------------: |
+| Wall                      | 59.694 s | 31.955 s | 46.47% faster |
+| Draft preparation         | 43.985 s | 16.361 s | 62.80% faster |
+| Initial printed contents  | 10.925 s |  2.186 s | 79.99% faster |
+| Repaired printed contents | 25.659 s |  7.182 s | 72.01% faster |
 
 The focused after-run remained reference-v2 exact. The printed-contents and source-region suite
 passed 94 tests, followed by the full typecheck. This result fixes the observed per-book regression,
@@ -80,14 +80,42 @@ The immutable output tree was approximately 287 MB, the source tree 146 MB and t
 10.7 MB each. `manifest_build` begins after page materialization, so its high starting heap is
 residual and does not show that the manifest created the peak.
 
-The retained objects instead point to page rendering: `renderPages()` can start four whole-page
-unified/KaTeX renders, begin another page before yielding the current result, and retain completed
-HTML in settled promises until the ordered consumer writes it. The next optimization is therefore
-to keep four as the maximum concurrency while reducing concurrency by page weight/block count for
-oversized pages, then verify bounded retention on this fixture.
+The retained objects initially suggested that overlapping page renders were the main cause. A
+page-block-weighted scheduler was implemented and measured before being removed. It changed peak
+process-tree RSS from 2.114 GB to 2.162 GB and candidate heap from 1.636 GB to 1.704 GB. This
+falsified the concurrency hypothesis: the retained peak is dominated by one formula-heavy page and
+short-lived render allocations rather than multiple oversized pages running together.
+
+## Single-pass KaTeX rendering
+
+Source inspection then found that every valid formula called `katex.renderToString()` once during
+tree cloning and discarded its markup, after which `rehype-katex` rendered it again and parsed the
+result into a large HAST. The replacement renders once after imported HTML sanitization and sends
+only KaTeX's `trust: false` markup to final stringification. Invalid formulas retain the same bounded
+source fallback and localized diagnostic. The unused `rehype-katex` dependency was removed.
+
+Focused results:
+
+| Fixture and measurement         |   Before |    After |        Change |
+| ------------------------------- | -------: | -------: | ------------: |
+| `a53faf7243d4` candidate build  | 19.075 s | 10.554 s | 44.67% faster |
+| `a53faf7243d4` total wall       | 43.035 s | 34.570 s | 19.67% faster |
+| `a53faf7243d4` process-tree RSS | 2.114 GB | 2.099 GB |   0.75% lower |
+| `a53faf7243d4` candidate RSS    | 2.000 GB | 1.985 GB |   0.72% lower |
+| `106e479f6de4` candidate build  | 11.319 s |  7.141 s | 36.91% faster |
+| `106e479f6de4` total wall       | 31.955 s | 27.346 s | 14.42% faster |
+| `106e479f6de4` process-tree RSS | 956.7 MB | 899.9 MB |   5.94% lower |
+
+The memory-heavy book contains 15,911 formulas across nine output pages. Parsing both retained
+versions and serializing each `.katex` subtree produced exact before/after equality on all nine
+pages. Preview and public page byte counts were also unchanged. The current observed-v2 set remains
+15/15 reference exact. These are focused diagnostics, not a replacement for a fresh paired result.
 
 Raw machine-readable evidence remains in the ignored
 `.cache/008-publishing-performance/paired.json.runs/` directory. Focused profiler evidence is in
 the ignored `.cache/008-publishing-performance/focused-before/`,
 `.cache/008-publishing-performance/focused-after-index/` and
-`.cache/008-publishing-performance/memory-before/` directories.
+`.cache/008-publishing-performance/memory-before/`,
+`.cache/008-publishing-performance/memory-after-weighted/`,
+`.cache/008-publishing-performance/memory-after-raw-math/` and
+`.cache/008-publishing-performance/focused-after-raw-math/` directories.

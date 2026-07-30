@@ -93,7 +93,10 @@ describe("published semantic document rendering", () => {
   it("pre-renders bounded math and keeps invalid source notation as text", async () => {
     const document = normalized(
       [
+        '<code class="math-inline">y</code>',
+        "",
         "Inline $x^2$.",
+        "Untrusted $\\href{javascript:alert(1)}{x}$.",
         "",
         "$$",
         "\\frac{1}{2}",
@@ -112,11 +115,12 @@ describe("published semantic document rendering", () => {
       resourceResolution: { diagnostics: [], references: [], resources: [] },
     });
 
-    expect(rendered.html.match(/class="katex"/gu)?.length).toBeGreaterThan(1);
+    expect(rendered.html.match(/class="katex"/gu)?.length).toBeGreaterThan(2);
     const displayMath = document.blocks.find((block) => block.type === "math");
     expect(rendered.html).toContain(`data-block-id="${displayMath?.blockId}"`);
     expect(rendered.html).toContain("math-fallback");
     expect(rendered.html).toContain("\\notacommand{");
+    expect(rendered.html).not.toContain('href="javascript:');
     expect(rendered.diagnostics).toEqual([
       expect.objectContaining({ code: "MATH_RENDER_FAILED" }),
     ]);

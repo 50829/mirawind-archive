@@ -307,10 +307,14 @@ accepted-to-preview improved only 3.46%, one fixture regressed 10.79%, and peak 
 The regressing fixture was then reduced from 59.694 seconds to 31.955 seconds by reusing one
 `SourceTextIndex` during printed-directory extraction; it remained reference-v2 exact and passed
 the 94-test focused suite plus full typecheck. Retained profiling corrected the memory hypothesis:
-the 6.42 MB manifest inherits an already-high heap, while up to four oversized unified/KaTeX page
-renders and their completed HTML can overlap before ordered consumption. T092 remains open; the
-next focused change is page-weight-aware bounded rendering, not manifest optimization, and neither
-focused result is an `AB/BA/AB` completion claim.
+the 6.42 MB manifest inherits an already-high heap. A measured page-weight scheduler did not reduce
+RSS and was removed. The actual duplicate work was one discarded KaTeX render plus a second
+`rehype-katex` render/HAST expansion per valid formula. Rendering once kept 15,911 formula subtrees
+exact while reducing the memory-heavy candidate build from 19.075 seconds to 10.554 seconds; the
+regression fixture improved again from 31.955 seconds total wall to 27.346 seconds. Focused RSS is
+2.099 GB and 899.9 MB respectively, and the current observation remains 15/15 reference exact.
+T092 remains open because these focused results are not an `AB/BA/AB` completion claim.
+
 - [ ] T095 After the last source change, run the standard format, lint/architecture, typecheck, full
       Vitest, E2E and build gates once; reuse the T091 stress and T092 paired-benchmark artifacts instead
       of rerunning those workloads
