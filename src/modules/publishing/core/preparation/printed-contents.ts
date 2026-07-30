@@ -69,7 +69,6 @@ export interface PrintedHeadingEvidence {
 }
 
 interface ExtractedEntry {
-  readonly bodyHeadingBlockId?: string;
   readonly layoutOnly?: boolean;
   readonly pageIndex?: number;
   readonly normalizedTitle: string;
@@ -81,6 +80,27 @@ interface ExtractedEntry {
   };
   readonly referenceLevel: number;
   readonly sourceTitle: string;
+}
+
+type AlignedEntry = ExtractedEntry &
+  (
+    | {
+        readonly alignment: {
+          readonly bodyHeadingBlockId: string;
+          readonly state: "matched";
+        };
+      }
+    | {
+        readonly alignment: {
+          readonly state: "ambiguous" | "unmatched";
+        };
+      }
+  );
+
+function alignedBodyHeadingBlockId(entry: AlignedEntry): string | undefined {
+  return entry.alignment.state === "matched"
+    ? entry.alignment.bodyHeadingBlockId
+    : undefined;
 }
 
 interface MatchCandidate {
@@ -2745,14 +2765,43 @@ function recoverLayoutLogicalEntries(
   );
 }
 
-export function detectPrintedContents(input: {
+interface DetectPrintedContentsInput {
   readonly document: NormalizedDocument;
   readonly documentIndex?: PrintedContentsDocumentIndex;
   readonly idFactory?: () => string;
   readonly layoutEvidence?: LayoutEvidence;
   readonly sourcePath: string;
   readonly sourceSha256: string;
-}): PrintedContentsDetection {
+}
+
+interface CandidateWindow {
+  readonly endIndex: number;
+  readonly explicit: boolean;
+  readonly firstEntryIndex: number;
+  readonly startIndex: number;
+}
+
+interface EstimatedCandidateWindow {
+  readonly end: number;
+  readonly start: number;
+}
+
+interface PrintedContentsDetectionContext {
+  readonly contextualTitles: ReadonlySet<string>;
+  readonly documentIndex: PrintedContentsDocumentIndex;
+  readonly factsFor: (heading: NormalizedHeading) => HeadingMatchFacts;
+  readonly input: DetectPrintedContentsInput;
+  readonly layoutLevelByTitle: ReadonlyMap<string, readonly number[]>;
+  readonly roots: readonly TransientDocumentNode[];
+  readonly similarityIndex: TextSimilarityIndex;
+  readonly sourceBytes: Buffer;
+  readonly sourceIndex: SourceTextIndex;
+  readonly titleOf: (node: TransientDocumentNode) => string;
+}
+
+function createPrintedContentsDetectionContext(
+  input: DetectPrintedContentsInput,
+): PrintedContentsDetectionContext {
   const documentIndex =
     input.documentIndex ?? createPrintedContentsDocumentIndex(input.document);
   if (
@@ -2761,24 +2810,28 @@ export function detectPrintedContents(input: {
   ) {
     throw new Error("PRINTED_TOC_SOURCE_HASH_MISMATCH");
   }
-  const sourceBytes = documentIndex.sourceBytes;
-  const sourceIndex = documentIndex.sourceIndex;
-  const contextualTitles = repairableContextualTitles(input.layoutEvidence);
-  const similarityIndex = createTextSimilarityIndex();
-  const roots = input.document.root.children ?? [];
-  const titleOf = (node: TransientDocumentNode): string =>
-    documentIndex.rootTitleByNode.get(node) ?? rootTitle(node);
-  const factsFor = (heading: NormalizedHeading): HeadingMatchFacts =>
-    documentIndex.headingFactsByBlockId.get(heading.blockId) ??
-    createHeadingMatchFacts(heading);
-  const layoutLevelByTitle = layoutLevels(input.layoutEvidence);
-  const layoutOccurrences = new Map<string, number>();
-  const ranges: {
-    readonly endIndex: number;
-    readonly explicit: boolean;
-    readonly firstEntryIndex: number;
-    readonly startIndex: number;
-  }[] = [];
+  return Object.freeze({
+    contextualTitles: repairableContextualTitles(input.layoutEvidence),
+    documentIndex,
+    factsFor: (heading: NormalizedHeading): HeadingMatchFacts =>
+      documentIndex.headingFactsByBlockId.get(heading.blockId) ??
+      createHeadingMatchFacts(heading),
+    input,
+    layoutLevelByTitle: layoutLevels(input.layoutEvidence),
+    roots: input.document.root.children ?? [],
+    similarityIndex: createTextSimilarityIndex(),
+    sourceBytes: documentIndex.sourceBytes,
+    sourceIndex: documentIndex.sourceIndex,
+    titleOf: (node: TransientDocumentNode): string =>
+      documentIndex.rootTitleByNode.get(node) ?? rootTitle(node),
+  });
+}
+
+function discoverCandidateWindows(
+  context: PrintedContentsDetectionContext,
+): readonly CandidateWindow[] {
+  const { input, roots, sourceBytes, sourceIndex, titleOf } = context;
+  const ranges: CandidateWindow[] = [];
   const explicitLabels = roots.flatMap((root, index) =>
     contentsTitle.test(titleOf(root).normalize("NFKC")) ? [index] : [],
   );
@@ -2789,764 +2842,956 @@ export function detectPrintedContents(input: {
     while (explicitLabels[labelIndex + 1] === labelEndIndex + 1) {
       labelEndIndex = explicitLabels[++labelIndex] ?? labelEndIndex;
     }
-    ranges.push({
-      endIndex: (explicitLabels[labelIndex + 1] ?? roots.length) - 1,
-      explicit: true,
-      firstEntryIndex: labelEndIndex + 1,
-      startIndex,
-    });
+    ranges.push(
+      Object.freeze({
+        endIndex: (explicitLabels[labelIndex + 1] ?? roots.length) - 1,
+        explicit: true,
+        firstEntryIndex: labelEndIndex + 1,
+        startIndex,
+      }),
+    );
     labelIndex += 1;
   }
-  if (ranges.length === 0) {
-    const searchLimit = roots.length;
-    for (let index = 0; index < searchLimit; index += 1) {
-      if (index / Math.max(1, roots.length) > 0.5) break;
-      const root = roots[index];
-      if (!root?.position) continue;
-      const seed = lineEntries({
-        block: root,
+  if (ranges.length > 0) return Object.freeze(ranges);
+  const searchLimit = roots.length;
+  for (let index = 0; index < searchLimit; index += 1) {
+    if (index / Math.max(1, roots.length) > 0.5) break;
+    const root = roots[index];
+    if (!root?.position) continue;
+    const seed = lineEntries({
+      block: root,
+      previousLevel: 0,
+      source: input.document.source,
+      sourceBytes,
+      sourceIndex,
+    });
+    if (seed.length === 0) continue;
+    let evidenceEntries = seed.length;
+    let noiseBlocks = 0;
+    for (
+      let cursor = index + 1;
+      cursor < Math.min(searchLimit, index + 24);
+      cursor += 1
+    ) {
+      const candidate = roots[cursor];
+      if (!candidate?.position) continue;
+      const extracted = lineEntries({
+        block: candidate,
         previousLevel: 0,
         source: input.document.source,
         sourceBytes,
         sourceIndex,
       });
-      if (seed.length === 0) continue;
-      let evidenceEntries = seed.length;
-      let noiseBlocks = 0;
-      for (
-        let cursor = index + 1;
-        cursor < Math.min(searchLimit, index + 24);
-        cursor += 1
+      if (extracted.length > 0) {
+        evidenceEntries += extracted.length;
+        noiseBlocks = 0;
+      } else if (
+        evidenceEntries > 0 &&
+        ++noiseBlocks > maximumInterveningBlocks
       ) {
-        const candidate = roots[cursor];
-        if (!candidate?.position) continue;
-        const extracted = lineEntries({
-          block: candidate,
-          previousLevel: 0,
-          source: input.document.source,
-          sourceBytes,
-          sourceIndex,
-        });
-        if (extracted.length > 0) {
-          evidenceEntries += extracted.length;
-          noiseBlocks = 0;
-        } else if (
-          evidenceEntries > 0 &&
-          ++noiseBlocks > maximumInterveningBlocks
-        ) {
-          break;
-        }
+        break;
       }
-      if (evidenceEntries >= 3) {
-        ranges.push({
+    }
+    if (evidenceEntries >= 3) {
+      ranges.push(
+        Object.freeze({
           endIndex: roots.length - 1,
           explicit: false,
           firstEntryIndex: index,
           startIndex: index,
-        });
-        break;
-      }
+        }),
+      );
+      break;
     }
   }
+  return Object.freeze(ranges);
+}
 
-  const estimatedPrintedWindows = ranges.map((range) => {
-    const seenTitles = new Set<string>();
-    let endIndex: number | undefined;
-    for (
-      let index = range.firstEntryIndex;
-      index <= range.endIndex;
-      index += 1
-    ) {
-      const block = roots[index];
-      if (!block?.position) continue;
-      if (
-        index > range.firstEntryIndex &&
-        contentsTitle.test(titleOf(block).normalize("NFKC"))
+function estimateCandidateWindows(
+  context: PrintedContentsDetectionContext,
+  ranges: readonly CandidateWindow[],
+): readonly (EstimatedCandidateWindow | undefined)[] {
+  const { contextualTitles, input, roots, sourceBytes, sourceIndex, titleOf } =
+    context;
+  return Object.freeze(
+    ranges.map((range) => {
+      const seenTitles = new Set<string>();
+      let endIndex: number | undefined;
+      for (
+        let index = range.firstEntryIndex;
+        index <= range.endIndex;
+        index += 1
       ) {
-        endIndex = index - 1;
-        break;
-      }
-      const title =
-        block.type === "heading" ? normalizedTitle(titleOf(block)) : "";
-      const printedRowsContinue = roots
-        .slice(index + 1, index + 5)
-        .some((candidate) =>
-          hasPrintedPageLine(candidate, input.document.source),
-        );
-      if (
-        title &&
-        seenTitles.has(title) &&
-        printedPageEvidence(titleOf(block)) === undefined &&
-        !printedRowsContinue
-      ) {
-        endIndex = index - 1;
-        break;
-      }
-      for (const entry of lineEntries({
-        block,
-        previousLevel: 0,
-        repairableContextualTitles: contextualTitles,
-        source: input.document.source,
-        sourceBytes,
-        sourceIndex,
-      })) {
-        if (entry.normalizedTitle) seenTitles.add(entry.normalizedTitle);
-      }
-    }
-    const start = roots[range.startIndex]?.position?.start.offset;
-    const end =
-      endIndex === undefined
-        ? undefined
-        : roots[endIndex]?.position?.end.offset;
-    return start === undefined || end === undefined
-      ? undefined
-      : Object.freeze({ end, start });
-  });
-
-  const candidates: PrintedContentsCandidate[] = [];
-  for (const [rangeIndex, range] of ranges.entries()) {
-    const sourceEntries: ExtractedEntry[] = [];
-    let candidateEndIndex = range.startIndex;
-    let richContent = false;
-    let noiseBlocks = 0;
-    let requiresPdfEvidence = false;
-    for (
-      let index = range.firstEntryIndex;
-      index <= range.endIndex;
-      index += 1
-    ) {
-      const block = roots[index];
-      if (!block?.position) continue;
-      if (
-        sourceEntries.length > 0 &&
-        supplementalListTitle.test(titleOf(block).normalize("NFKC"))
-      ) {
-        break;
-      }
-      const possibleBodyTitle =
-        block.type === "heading" ? normalizedTitle(titleOf(block)) : "";
-      const printedRowsContinue = roots
-        .slice(index + 1, index + 5)
-        .some((candidate) =>
-          hasPrintedPageLine(candidate, input.document.source),
-        );
-      const nextBlock = roots[index + 1];
-      const nextBodyTitle =
-        nextBlock?.type === "heading"
-          ? normalizedTitle(titleOf(nextBlock))
-          : "";
-      const currentNumbering = inferPrintedHeadingEvidence(titleOf(block));
-      const currentKind = currentNumbering?.kind;
-      if (
-        sourceEntries.length > 0 &&
-        !printedRowsContinue &&
-        block.type === "heading" &&
-        currentNumbering &&
-        printedPageEvidence(titleOf(block)) === undefined &&
-        sourceEntries.some(
-          (entry) => entry.numbering?.key === currentNumbering.key,
-        )
-      ) {
-        break;
-      }
-      if (
-        sourceEntries.length > 0 &&
-        !printedRowsContinue &&
-        block.type === "heading" &&
-        (currentKind === "part" || currentKind === "chapter") &&
-        printedPageEvidence(titleOf(block)) === undefined &&
-        standaloneMajorLabel.test(plainTitle(titleOf(block))) &&
-        nextBodyTitle &&
-        sourceEntries.some((entry) => entry.normalizedTitle === nextBodyTitle)
-      ) {
-        break;
-      }
-      if (
-        sourceEntries.length > 0 &&
-        possibleBodyTitle &&
-        sourceEntries.some(
-          (entry) => entry.normalizedTitle === possibleBodyTitle,
-        ) &&
-        printedPageEvidence(titleOf(block)) === undefined &&
-        !printedRowsContinue
-      ) {
-        break;
-      }
-      const extracted = lineEntries({
-        block,
-        previousLevel: sourceEntries.at(-1)?.referenceLevel ?? 0,
-        repairableContextualTitles: contextualTitles,
-        source: input.document.source,
-        sourceBytes,
-        sourceIndex,
-      });
-      const previousEntry = sourceEntries.at(-1);
-      const detachedPartSubtitle =
-        extracted.length === 0 &&
-        block.type === "heading" &&
-        previousEntry?.numbering?.kind === "part" &&
-        printedPageEvidence(previousEntry.sourceTitle) === undefined &&
-        currentNumbering === undefined &&
-        possibleBodyTitle.length >= 2 &&
-        possibleBodyTitle.length <= 80 &&
-        !frontmatterEntryTitle.test(titleOf(block)) &&
-        !contextualEntryTitle.test(titleOf(block)) &&
-        roots.slice(index + 1, index + 5).some((candidate) => {
-          const candidateTitle = titleOf(candidate);
-          const candidateKind =
-            inferPrintedHeadingEvidence(candidateTitle)?.kind;
-          return (
-            hasPrintedPageLine(candidate, input.document.source) ||
-            candidateKind === "chapter"
-          );
-        });
-      if (detachedPartSubtitle && previousEntry && block.position) {
-        const sourceTitle = `${plainTitle(previousEntry.sourceTitle)} ${plainTitle(titleOf(block))}`;
-        const endByte = sourceIndex.byteOffsetAt(block.position.end.offset);
-        sourceEntries[sourceEntries.length - 1] = Object.freeze({
-          ...previousEntry,
-          normalizedTitle: normalizedTitle(sourceTitle),
-          range: Object.freeze({
-            end_byte: endByte,
-            sha256: hash(
-              sourceBytes.subarray(previousEntry.range.start_byte, endByte),
-            ),
-            start_byte: previousEntry.range.start_byte,
-          }),
-          sourceTitle,
-        });
-        candidateEndIndex = index;
-        noiseBlocks = 0;
-        continue;
-      }
-      if (requiresPdfLineRepair(block, input.document.source)) {
-        requiresPdfEvidence = true;
-      }
-      if (containsRichContent(block)) richContent = true;
-      if (extracted.length > 0) {
-        sourceEntries.push(...extracted);
-        candidateEndIndex = index;
-        noiseBlocks = 0;
-      } else if (sourceEntries.length > 0) {
-        noiseBlocks += 1;
-        if (noiseBlocks > maximumInterveningBlocks) break;
-      }
-      if (sourceEntries.length > 20_000) break;
-    }
-    const entries = [
-      ...attachReliableLayoutPageIndexes(
-        recoverLayoutLogicalEntries(
-          mergeDetachedSourceEntries(sourceEntries, sourceBytes),
-          input.layoutEvidence,
-          similarityIndex,
-        ),
-        input.layoutEvidence,
-      ),
-    ];
-    const inferredLevels = inferPrintedReferenceLevels(
-      entries.map((entry) => entry.sourceTitle),
-    );
-    let previousResolvedLevel = 0;
-    entries.forEach((entry, index) => {
-      const occurrence = layoutOccurrences.get(entry.normalizedTitle) ?? 0;
-      layoutOccurrences.set(entry.normalizedTitle, occurrence + 1);
-      const layoutLevelsForTitle = layoutLevelByTitle.get(
-        entry.normalizedTitle,
-      );
-      const layoutLevel =
-        layoutLevelsForTitle?.[occurrence] ?? layoutLevelsForTitle?.at(-1);
-      const semanticTitle =
-        printedPageEvidence(entry.sourceTitle)?.title ??
-        plainTitle(entry.sourceTitle);
-      const semanticNumbering = inferPrintedHeadingEvidence(semanticTitle);
-      const numbering = semanticNumbering ?? entry.numbering;
-      const layoutSensitiveLocal = /^appendix\s*[:：]/iu.test(semanticTitle);
-      const proposedLevel = layoutSensitiveLocal
-        ? Math.max(
-            inferredLevels[index] ?? entry.referenceLevel,
-            layoutLevel ?? 0,
-          )
-        : numbering ||
-            chapterReviewChildTitle.test(semanticTitle) ||
-            contextualEntryTitle.test(semanticTitle)
-          ? (inferredLevels[index] ?? entry.referenceLevel)
-          : topLevelBackmatterTitle.test(semanticTitle)
-            ? (inferredLevels[index] ?? entry.referenceLevel)
-            : Math.max(
-                inferredLevels[index] ?? entry.referenceLevel,
-                layoutLevel ?? 0,
-              );
-      const referenceLevel = Math.min(
-        proposedLevel,
-        previousResolvedLevel === 0 ? 1 : previousResolvedLevel + 1,
-      );
-      entries[index] = Object.freeze({
-        ...entry,
-        ...(numbering ? { numbering } : {}),
-        referenceLevel,
-      });
-      previousResolvedLevel = referenceLevel;
-    });
-
-    const candidateEndOffset =
-      roots[candidateEndIndex]?.position?.end.offset ??
-      Number.POSITIVE_INFINITY;
-    const candidateStartOffset =
-      roots[range.startIndex]?.position?.start.offset ??
-      Number.NEGATIVE_INFINITY;
-    const eligibleHeading = (
-      heading: NormalizedHeading,
-      allowNumberedPageSuffix = false,
-    ): boolean =>
-      !contentsTitle.test(heading.sourceTitle.normalize("NFKC")) &&
-      (allowNumberedPageSuffix ||
-        printedPageEvidence(heading.sourceTitle) === undefined);
-    const laterHeadings = input.document.headings.filter(
-      (heading) =>
-        (heading.position?.start.offset ?? Number.NEGATIVE_INFINITY) >
-          candidateEndOffset && eligibleHeading(heading, true),
-    );
-    const laterHeadingFacts = laterHeadings.map(factsFor);
-    const bodyHeadings = input.document.headings.filter((heading) => {
-      const start = heading.position?.start.offset ?? Number.NEGATIVE_INFINITY;
-      const insideOtherPrintedWindow = estimatedPrintedWindows.some(
-        (window, windowIndex) =>
-          windowIndex !== rangeIndex &&
-          window !== undefined &&
-          start >= window.start &&
-          start <= window.end,
-      );
-      return (
-        !insideOtherPrintedWindow &&
-        (start < candidateStartOffset || start > candidateEndOffset) &&
-        eligibleHeading(heading, start > candidateEndOffset)
-      );
-    });
-    const bodyHeadingFacts = bodyHeadings.map(factsFor);
-    const summaryCandidate =
-      entries.filter(
-        (entry) =>
-          entry.numbering?.kind === "part" ||
-          entry.numbering?.kind === "chapter",
-      ).length >= 3 &&
-      entries.filter((entry) => entry.numbering?.kind === "decimal").length /
-        Math.max(1, entries.length) <
-        0.25;
-    const alignment = monotonicMatches(
-      entries,
-      bodyHeadings,
-      bodyHeadingFacts,
-      similarityIndex,
-      {
-        allowMajorSectionFallback: summaryCandidate,
-        allowNumberOnly: false,
-      },
-    );
-    const resolvedMatches = new Map(alignment.matches);
-    const ambiguousEntries = new Set(alignment.ambiguousEntries);
-    const usedHeadingIndexes = new Set(resolvedMatches.values());
-    for (const [entryIndex, entry] of entries.entries()) {
-      const localAppendix =
-        entry.numbering?.kind === "appendix" &&
-        entry.numbering.key === "appendix";
-      const pageOnlyReviewEntry =
-        entry.normalizedTitle.length === 0 &&
-        printedPageEvidence(entry.sourceTitle) !== undefined;
-      const localUnnumberedRepair =
-        entry.numbering === undefined &&
-        (entry.normalizedTitle.length >= 2 || pageOnlyReviewEntry);
-      if (
-        resolvedMatches.has(entryIndex) ||
-        (!localAppendix &&
-          entry.numbering?.kind !== "part" &&
-          entry.numbering?.kind !== "chapter" &&
-          !entry.layoutOnly &&
-          !localUnnumberedRepair)
-      ) {
-        continue;
-      }
-      let lowerBound = -1;
-      let upperBound = bodyHeadings.length;
-      for (const [matchedEntryIndex, headingIndex] of resolvedMatches) {
-        if (matchedEntryIndex < entryIndex && headingIndex > lowerBound) {
-          lowerBound = headingIndex;
-        } else if (
-          matchedEntryIndex > entryIndex &&
-          headingIndex < upperBound
+        const block = roots[index];
+        if (!block?.position) continue;
+        if (
+          index > range.firstEntryIndex &&
+          contentsTitle.test(titleOf(block).normalize("NFKC"))
         ) {
-          upperBound = headingIndex;
+          endIndex = index - 1;
+          break;
+        }
+        const title =
+          block.type === "heading" ? normalizedTitle(titleOf(block)) : "";
+        const printedRowsContinue = roots
+          .slice(index + 1, index + 5)
+          .some((candidate) =>
+            hasPrintedPageLine(candidate, input.document.source),
+          );
+        if (
+          title &&
+          seenTitles.has(title) &&
+          printedPageEvidence(titleOf(block)) === undefined &&
+          !printedRowsContinue
+        ) {
+          endIndex = index - 1;
+          break;
+        }
+        for (const entry of lineEntries({
+          block,
+          previousLevel: 0,
+          repairableContextualTitles: contextualTitles,
+          source: input.document.source,
+          sourceBytes,
+          sourceIndex,
+        })) {
+          if (entry.normalizedTitle) seenTitles.add(entry.normalizedTitle);
         }
       }
-      const candidates = bodyHeadings
-        .map((heading, headingIndex) => {
-          const headingFacts =
-            bodyHeadingFacts[headingIndex] ?? createHeadingMatchFacts(heading);
-          const eligible =
-            headingIndex > lowerBound &&
-            headingIndex < upperBound &&
-            !usedHeadingIndexes.has(headingIndex);
-          const exactScore = eligible
-            ? matchScore(
-                entry,
-                heading,
-                headingFacts,
-                similarityIndex,
-                entry.normalizedTitle.length < 2,
-              )
-            : 0;
-          const fuzzyScore =
-            eligible &&
-            localUnnumberedRepair &&
-            !entry.sourceTitle.includes("�") &&
-            !heading.sourceTitle.includes("�")
-              ? pageOnlyReviewEntry &&
-                chapterReviewChildTitle.test(plainTitle(heading.sourceTitle))
-                ? 8
-                : characterSimilarity(
-                    entry.normalizedTitle,
-                    headingFacts.normalizedTitle,
-                    similarityIndex,
-                  ) * 10
-              : 0;
-          return {
-            headingIndex,
-            score: Math.max(exactScore, fuzzyScore >= 4.5 ? fuzzyScore : 0),
-          };
-        })
-        .filter((candidate) => candidate.score > 0)
-        .sort(
-          (left, right) =>
-            right.score - left.score || left.headingIndex - right.headingIndex,
-        );
-      const best = candidates[0];
-      const second = candidates[1];
-      const frontmatterRepair = frontmatterEntryTitle.test(
-        printedPageEvidence(entry.sourceTitle)?.title ??
-          plainTitle(entry.sourceTitle),
+      const start = roots[range.startIndex]?.position?.start.offset;
+      const end =
+        endIndex === undefined
+          ? undefined
+          : roots[endIndex]?.position?.end.offset;
+      return start === undefined || end === undefined
+        ? undefined
+        : Object.freeze({ end, start });
+    }),
+  );
+}
+
+interface ParsedCandidateRegion {
+  readonly candidateEndIndex: number;
+  readonly requiresPdfEvidence: boolean;
+  readonly richContent: boolean;
+  readonly sourceEntries: readonly ExtractedEntry[];
+  readonly window: CandidateWindow;
+}
+
+interface RecoveredCandidateRegion extends Omit<
+  ParsedCandidateRegion,
+  "sourceEntries"
+> {
+  readonly entries: readonly ExtractedEntry[];
+}
+
+function parseCandidateRegion(
+  context: PrintedContentsDetectionContext,
+  window: CandidateWindow,
+): ParsedCandidateRegion {
+  const { contextualTitles, input, roots, sourceBytes, sourceIndex, titleOf } =
+    context;
+  const sourceEntries: ExtractedEntry[] = [];
+  let candidateEndIndex = window.startIndex;
+  let richContent = false;
+  let noiseBlocks = 0;
+  let requiresPdfEvidence = false;
+  for (
+    let index = window.firstEntryIndex;
+    index <= window.endIndex;
+    index += 1
+  ) {
+    const block = roots[index];
+    if (!block?.position) continue;
+    if (
+      sourceEntries.length > 0 &&
+      supplementalListTitle.test(titleOf(block).normalize("NFKC"))
+    ) {
+      break;
+    }
+    const possibleBodyTitle =
+      block.type === "heading" ? normalizedTitle(titleOf(block)) : "";
+    const printedRowsContinue = roots
+      .slice(index + 1, index + 5)
+      .some((candidate) =>
+        hasPrintedPageLine(candidate, input.document.source),
       );
-      const minimumScore = localAppendix
-        ? 6
-        : frontmatterRepair
-          ? 7.5
-          : entry.layoutOnly || localUnnumberedRepair
-            ? 4.5
-            : 16;
-      const minimumMargin = localAppendix
-        ? 2
-        : frontmatterRepair
-          ? 2
-          : entry.layoutOnly || localUnnumberedRepair
-            ? 1.5
-            : 4;
-      if (
-        best &&
-        best.score >= minimumScore &&
-        best.score - (second?.score ?? 0) >= minimumMargin
+    const nextBlock = roots[index + 1];
+    const nextBodyTitle =
+      nextBlock?.type === "heading" ? normalizedTitle(titleOf(nextBlock)) : "";
+    const currentNumbering = inferPrintedHeadingEvidence(titleOf(block));
+    const currentKind = currentNumbering?.kind;
+    if (
+      sourceEntries.length > 0 &&
+      !printedRowsContinue &&
+      block.type === "heading" &&
+      currentNumbering &&
+      printedPageEvidence(titleOf(block)) === undefined &&
+      sourceEntries.some(
+        (entry) => entry.numbering?.key === currentNumbering.key,
+      )
+    ) {
+      break;
+    }
+    if (
+      sourceEntries.length > 0 &&
+      !printedRowsContinue &&
+      block.type === "heading" &&
+      (currentKind === "part" || currentKind === "chapter") &&
+      printedPageEvidence(titleOf(block)) === undefined &&
+      standaloneMajorLabel.test(plainTitle(titleOf(block))) &&
+      nextBodyTitle &&
+      sourceEntries.some((entry) => entry.normalizedTitle === nextBodyTitle)
+    ) {
+      break;
+    }
+    if (
+      sourceEntries.length > 0 &&
+      possibleBodyTitle &&
+      sourceEntries.some(
+        (entry) => entry.normalizedTitle === possibleBodyTitle,
+      ) &&
+      printedPageEvidence(titleOf(block)) === undefined &&
+      !printedRowsContinue
+    ) {
+      break;
+    }
+    const extracted = lineEntries({
+      block,
+      previousLevel: sourceEntries.at(-1)?.referenceLevel ?? 0,
+      repairableContextualTitles: contextualTitles,
+      source: input.document.source,
+      sourceBytes,
+      sourceIndex,
+    });
+    const previousEntry = sourceEntries.at(-1);
+    const detachedPartSubtitle =
+      extracted.length === 0 &&
+      block.type === "heading" &&
+      previousEntry?.numbering?.kind === "part" &&
+      printedPageEvidence(previousEntry.sourceTitle) === undefined &&
+      currentNumbering === undefined &&
+      possibleBodyTitle.length >= 2 &&
+      possibleBodyTitle.length <= 80 &&
+      !frontmatterEntryTitle.test(titleOf(block)) &&
+      !contextualEntryTitle.test(titleOf(block)) &&
+      roots.slice(index + 1, index + 5).some((candidate) => {
+        const candidateTitle = titleOf(candidate);
+        const candidateKind = inferPrintedHeadingEvidence(candidateTitle)?.kind;
+        return (
+          hasPrintedPageLine(candidate, input.document.source) ||
+          candidateKind === "chapter"
+        );
+      });
+    if (detachedPartSubtitle && previousEntry && block.position) {
+      const sourceTitle = `${plainTitle(previousEntry.sourceTitle)} ${plainTitle(titleOf(block))}`;
+      const endByte = sourceIndex.byteOffsetAt(block.position.end.offset);
+      sourceEntries[sourceEntries.length - 1] = Object.freeze({
+        ...previousEntry,
+        normalizedTitle: normalizedTitle(sourceTitle),
+        range: Object.freeze({
+          end_byte: endByte,
+          sha256: hash(
+            sourceBytes.subarray(previousEntry.range.start_byte, endByte),
+          ),
+          start_byte: previousEntry.range.start_byte,
+        }),
+        sourceTitle,
+      });
+      candidateEndIndex = index;
+      noiseBlocks = 0;
+      continue;
+    }
+    if (requiresPdfLineRepair(block, input.document.source)) {
+      requiresPdfEvidence = true;
+    }
+    if (containsRichContent(block)) richContent = true;
+    if (extracted.length > 0) {
+      sourceEntries.push(...extracted);
+      candidateEndIndex = index;
+      noiseBlocks = 0;
+    } else if (sourceEntries.length > 0) {
+      noiseBlocks += 1;
+      if (noiseBlocks > maximumInterveningBlocks) break;
+    }
+    if (sourceEntries.length > 20_000) break;
+  }
+  return Object.freeze({
+    candidateEndIndex,
+    requiresPdfEvidence,
+    richContent,
+    sourceEntries: Object.freeze(sourceEntries),
+    window,
+  });
+}
+
+function recoverCandidateRegion(
+  context: PrintedContentsDetectionContext,
+  parsed: ParsedCandidateRegion,
+  layoutOccurrences: Map<string, number>,
+): RecoveredCandidateRegion {
+  const { input, layoutLevelByTitle, similarityIndex, sourceBytes } = context;
+  const entries = [
+    ...attachReliableLayoutPageIndexes(
+      recoverLayoutLogicalEntries(
+        mergeDetachedSourceEntries(parsed.sourceEntries, sourceBytes),
+        input.layoutEvidence,
+        similarityIndex,
+      ),
+      input.layoutEvidence,
+    ),
+  ];
+  const inferredLevels = inferPrintedReferenceLevels(
+    entries.map((entry) => entry.sourceTitle),
+  );
+  let previousResolvedLevel = 0;
+  entries.forEach((entry, index) => {
+    const occurrence = layoutOccurrences.get(entry.normalizedTitle) ?? 0;
+    layoutOccurrences.set(entry.normalizedTitle, occurrence + 1);
+    const layoutLevelsForTitle = layoutLevelByTitle.get(entry.normalizedTitle);
+    const layoutLevel =
+      layoutLevelsForTitle?.[occurrence] ?? layoutLevelsForTitle?.at(-1);
+    const semanticTitle =
+      printedPageEvidence(entry.sourceTitle)?.title ??
+      plainTitle(entry.sourceTitle);
+    const semanticNumbering = inferPrintedHeadingEvidence(semanticTitle);
+    const numbering = semanticNumbering ?? entry.numbering;
+    const layoutSensitiveLocal = /^appendix\s*[:：]/iu.test(semanticTitle);
+    const proposedLevel = layoutSensitiveLocal
+      ? Math.max(
+          inferredLevels[index] ?? entry.referenceLevel,
+          layoutLevel ?? 0,
+        )
+      : numbering ||
+          chapterReviewChildTitle.test(semanticTitle) ||
+          contextualEntryTitle.test(semanticTitle)
+        ? (inferredLevels[index] ?? entry.referenceLevel)
+        : topLevelBackmatterTitle.test(semanticTitle)
+          ? (inferredLevels[index] ?? entry.referenceLevel)
+          : Math.max(
+              inferredLevels[index] ?? entry.referenceLevel,
+              layoutLevel ?? 0,
+            );
+    const referenceLevel = Math.min(
+      proposedLevel,
+      previousResolvedLevel === 0 ? 1 : previousResolvedLevel + 1,
+    );
+    entries[index] = Object.freeze({
+      ...entry,
+      ...(numbering ? { numbering } : {}),
+      referenceLevel,
+    });
+    previousResolvedLevel = referenceLevel;
+  });
+  return Object.freeze({
+    candidateEndIndex: parsed.candidateEndIndex,
+    entries: Object.freeze(entries),
+    requiresPdfEvidence: parsed.requiresPdfEvidence,
+    richContent: parsed.richContent,
+    window: parsed.window,
+  });
+}
+
+function recoverCandidateRegions(
+  context: PrintedContentsDetectionContext,
+  parsedRegions: readonly ParsedCandidateRegion[],
+): readonly RecoveredCandidateRegion[] {
+  const layoutOccurrences = new Map<string, number>();
+  return Object.freeze(
+    parsedRegions.map((parsed) =>
+      recoverCandidateRegion(context, parsed, layoutOccurrences),
+    ),
+  );
+}
+
+interface CandidateHeadingIndex {
+  readonly bodyHeadingFacts: readonly HeadingMatchFacts[];
+  readonly bodyHeadings: readonly NormalizedHeading[];
+  readonly laterHeadingFacts: readonly HeadingMatchFacts[];
+  readonly laterHeadings: readonly NormalizedHeading[];
+}
+
+function indexCandidateHeadings(
+  context: PrintedContentsDetectionContext,
+  recovered: RecoveredCandidateRegion,
+  rangeIndex: number,
+  estimatedWindows: readonly (EstimatedCandidateWindow | undefined)[],
+): CandidateHeadingIndex {
+  const { factsFor, input, roots } = context;
+  const candidateEndOffset =
+    roots[recovered.candidateEndIndex]?.position?.end.offset ??
+    Number.POSITIVE_INFINITY;
+  const candidateStartOffset =
+    roots[recovered.window.startIndex]?.position?.start.offset ??
+    Number.NEGATIVE_INFINITY;
+  const eligibleHeading = (
+    heading: NormalizedHeading,
+    allowNumberedPageSuffix = false,
+  ): boolean =>
+    !contentsTitle.test(heading.sourceTitle.normalize("NFKC")) &&
+    (allowNumberedPageSuffix ||
+      printedPageEvidence(heading.sourceTitle) === undefined);
+  const laterHeadings = input.document.headings.filter(
+    (heading) =>
+      (heading.position?.start.offset ?? Number.NEGATIVE_INFINITY) >
+        candidateEndOffset && eligibleHeading(heading, true),
+  );
+  const bodyHeadings = input.document.headings.filter((heading) => {
+    const start = heading.position?.start.offset ?? Number.NEGATIVE_INFINITY;
+    const insideOtherPrintedWindow = estimatedWindows.some(
+      (window, windowIndex) =>
+        windowIndex !== rangeIndex &&
+        window !== undefined &&
+        start >= window.start &&
+        start <= window.end,
+    );
+    return (
+      !insideOtherPrintedWindow &&
+      (start < candidateStartOffset || start > candidateEndOffset) &&
+      eligibleHeading(heading, start > candidateEndOffset)
+    );
+  });
+  return Object.freeze({
+    bodyHeadingFacts: Object.freeze(bodyHeadings.map(factsFor)),
+    bodyHeadings: Object.freeze(bodyHeadings),
+    laterHeadingFacts: Object.freeze(laterHeadings.map(factsFor)),
+    laterHeadings: Object.freeze(laterHeadings),
+  });
+}
+
+interface CandidateAlignment {
+  readonly ambiguousEntries: ReadonlySet<number>;
+  readonly matches: ReadonlyMap<number, number>;
+  readonly score: ReturnType<typeof monotonicMatches>;
+}
+
+interface AlignedCandidateRegion {
+  readonly alignment: ReturnType<typeof monotonicMatches>;
+  readonly diagnostics: readonly PrintedContentsDiagnostic[];
+  readonly entries: readonly AlignedEntry[];
+}
+
+function alignCandidateHeadings(
+  context: PrintedContentsDetectionContext,
+  recovered: RecoveredCandidateRegion,
+  headingIndex: CandidateHeadingIndex,
+): CandidateAlignment {
+  const { similarityIndex } = context;
+  const { entries } = recovered;
+  const { bodyHeadingFacts, bodyHeadings } = headingIndex;
+  const summaryCandidate =
+    entries.filter(
+      (entry) =>
+        entry.numbering?.kind === "part" || entry.numbering?.kind === "chapter",
+    ).length >= 3 &&
+    entries.filter((entry) => entry.numbering?.kind === "decimal").length /
+      Math.max(1, entries.length) <
+      0.25;
+  const score = monotonicMatches(
+    entries,
+    bodyHeadings,
+    bodyHeadingFacts,
+    similarityIndex,
+    {
+      allowMajorSectionFallback: summaryCandidate,
+      allowNumberOnly: false,
+    },
+  );
+  const resolvedMatches = new Map(score.matches);
+  const ambiguousEntries = new Set(score.ambiguousEntries);
+  const usedHeadingIndexes = new Set(resolvedMatches.values());
+  for (const [entryIndex, entry] of entries.entries()) {
+    const localAppendix =
+      entry.numbering?.kind === "appendix" &&
+      entry.numbering.key === "appendix";
+    const pageOnlyReviewEntry =
+      entry.normalizedTitle.length === 0 &&
+      printedPageEvidence(entry.sourceTitle) !== undefined;
+    const localUnnumberedRepair =
+      entry.numbering === undefined &&
+      (entry.normalizedTitle.length >= 2 || pageOnlyReviewEntry);
+    if (
+      resolvedMatches.has(entryIndex) ||
+      (!localAppendix &&
+        entry.numbering?.kind !== "part" &&
+        entry.numbering?.kind !== "chapter" &&
+        !entry.layoutOnly &&
+        !localUnnumberedRepair)
+    ) {
+      continue;
+    }
+    let lowerBound = -1;
+    let upperBound = bodyHeadings.length;
+    for (const [matchedEntryIndex, matchedHeadingIndex] of resolvedMatches) {
+      if (matchedEntryIndex < entryIndex && matchedHeadingIndex > lowerBound) {
+        lowerBound = matchedHeadingIndex;
+      } else if (
+        matchedEntryIndex > entryIndex &&
+        matchedHeadingIndex < upperBound
       ) {
-        resolvedMatches.set(entryIndex, best.headingIndex);
-        usedHeadingIndexes.add(best.headingIndex);
-        ambiguousEntries.delete(entryIndex);
+        upperBound = matchedHeadingIndex;
       }
     }
-    const diagnostics: PrintedContentsDiagnostic[] = [];
-    let nextLogicalEntryIndex = 0;
-    const recoveredTitleEntryIndexes = new Set<number>();
-    let matchedEntries = entries.flatMap((entry, entryIndex) => {
-      if (ambiguousEntries.has(entryIndex)) {
-        const logicalEntryIndex = nextLogicalEntryIndex++;
-        diagnostics.push(
-          diagnostic(
-            "PRINTED_TOC_AMBIGUOUS_MATCH",
-            `candidates/${candidates.length}/entries/${logicalEntryIndex}`,
-          ),
-        );
-        return [entry];
-      }
-      const headingIndex = resolvedMatches.get(entryIndex);
-      const match =
-        headingIndex === undefined ? undefined : bodyHeadings[headingIndex];
-      const matchFacts =
-        headingIndex === undefined ? undefined : bodyHeadingFacts[headingIndex];
-      if (!match) {
-        const logicalEntryIndex = nextLogicalEntryIndex++;
-        diagnostics.push(
-          diagnostic(
-            "PRINTED_TOC_UNMATCHED_ENTRY",
-            `candidates/${candidates.length}/entries/${logicalEntryIndex}`,
-          ),
-        );
-        return [entry];
-      }
-      const logicalEntryIndex = nextLogicalEntryIndex++;
-      const sourceTitle = recoveredMatchedSourceTitle(
-        entry,
-        matchFacts ?? createHeadingMatchFacts(match),
-        hasSupportedOmittedDecimalNumber(
-          entries,
-          entryIndex,
-          matchFacts ?? createHeadingMatchFacts(match),
-        ) ||
-          contextualEntryTitle.test(
-            printedPageEvidence(entry.sourceTitle)?.title ??
-              plainTitle(entry.sourceTitle),
-          ),
-        similarityIndex,
+    const candidates = bodyHeadings
+      .map((heading, candidateHeadingIndex) => {
+        const headingFacts =
+          bodyHeadingFacts[candidateHeadingIndex] ??
+          createHeadingMatchFacts(heading);
+        const eligible =
+          candidateHeadingIndex > lowerBound &&
+          candidateHeadingIndex < upperBound &&
+          !usedHeadingIndexes.has(candidateHeadingIndex);
+        const exactScore = eligible
+          ? matchScore(
+              entry,
+              heading,
+              headingFacts,
+              similarityIndex,
+              entry.normalizedTitle.length < 2,
+            )
+          : 0;
+        const fuzzyScore =
+          eligible &&
+          localUnnumberedRepair &&
+          !entry.sourceTitle.includes("�") &&
+          !heading.sourceTitle.includes("�")
+            ? pageOnlyReviewEntry &&
+              chapterReviewChildTitle.test(plainTitle(heading.sourceTitle))
+              ? 8
+              : characterSimilarity(
+                  entry.normalizedTitle,
+                  headingFacts.normalizedTitle,
+                  similarityIndex,
+                ) * 10
+            : 0;
+        return {
+          headingIndex: candidateHeadingIndex,
+          score: Math.max(exactScore, fuzzyScore >= 4.5 ? fuzzyScore : 0),
+        };
+      })
+      .filter((candidate) => candidate.score > 0)
+      .sort(
+        (left, right) =>
+          right.score - left.score || left.headingIndex - right.headingIndex,
       );
-      if (sourceTitle !== entry.sourceTitle) {
-        recoveredTitleEntryIndexes.add(logicalEntryIndex);
-      }
+    const best = candidates[0];
+    const second = candidates[1];
+    const frontmatterRepair = frontmatterEntryTitle.test(
+      printedPageEvidence(entry.sourceTitle)?.title ??
+        plainTitle(entry.sourceTitle),
+    );
+    const minimumScore = localAppendix
+      ? 6
+      : frontmatterRepair
+        ? 7.5
+        : entry.layoutOnly || localUnnumberedRepair
+          ? 4.5
+          : 16;
+    const minimumMargin = localAppendix
+      ? 2
+      : frontmatterRepair
+        ? 2
+        : entry.layoutOnly || localUnnumberedRepair
+          ? 1.5
+          : 4;
+    if (
+      best &&
+      best.score >= minimumScore &&
+      best.score - (second?.score ?? 0) >= minimumMargin
+    ) {
+      resolvedMatches.set(entryIndex, best.headingIndex);
+      usedHeadingIndexes.add(best.headingIndex);
+      ambiguousEntries.delete(entryIndex);
+    }
+  }
+  return Object.freeze({
+    ambiguousEntries,
+    matches: resolvedMatches,
+    score,
+  });
+}
+
+function materializeAlignedCandidate(
+  context: PrintedContentsDetectionContext,
+  recovered: RecoveredCandidateRegion,
+  headingIndex: CandidateHeadingIndex,
+  candidateAlignment: CandidateAlignment,
+  candidateIndex: number,
+): AlignedCandidateRegion {
+  const { similarityIndex } = context;
+  const { entries } = recovered;
+  const { bodyHeadingFacts, bodyHeadings } = headingIndex;
+  const { ambiguousEntries, matches } = candidateAlignment;
+  const diagnostics: PrintedContentsDiagnostic[] = [];
+  let nextLogicalEntryIndex = 0;
+  const recoveredTitleEntryIndexes = new Set<number>();
+  let alignedEntries = entries.flatMap<AlignedEntry>((entry, entryIndex) => {
+    if (ambiguousEntries.has(entryIndex)) {
+      const logicalEntryIndex = nextLogicalEntryIndex++;
+      diagnostics.push(
+        diagnostic(
+          "PRINTED_TOC_AMBIGUOUS_MATCH",
+          `candidates/${candidateIndex}/entries/${logicalEntryIndex}`,
+        ),
+      );
       return [
         Object.freeze({
           ...entry,
-          bodyHeadingBlockId: match.blockId,
-          normalizedTitle: normalizedTitle(sourceTitle),
-          sourceTitle,
+          alignment: Object.freeze({ state: "ambiguous" as const }),
         }),
       ];
-    });
-    const recoveredLevels = inferPrintedReferenceLevels(
-      matchedEntries.map((entry) => entry.sourceTitle),
-    );
-    const hasExplicitMajorContext = matchedEntries.some(
-      (entry) =>
-        entry.numbering?.kind === "part" || entry.numbering?.kind === "chapter",
-    );
-    matchedEntries = matchedEntries.map((entry, index) => {
-      const recoveredNumbering = inferPrintedHeadingEvidence(
-        printedPageEvidence(entry.sourceTitle)?.title ?? entry.sourceTitle,
-      );
-      const recoveredLevel = recoveredLevels[index] ?? entry.referenceLevel;
-      const numberingChanged = entry.numbering?.key !== recoveredNumbering?.key;
-      const contextualNumbering =
-        recoveredNumbering?.kind === "appendix" ||
-        recoveredNumbering?.kind === "chapter" ||
-        recoveredNumbering?.kind === "decimal";
-      const levelNeedsContext =
-        hasExplicitMajorContext &&
-        contextualNumbering &&
-        entry.referenceLevel !== recoveredLevel;
-      if (
-        !recoveredNumbering ||
-        (!numberingChanged &&
-          !levelNeedsContext &&
-          (!recoveredTitleEntryIndexes.has(index) ||
-            entry.referenceLevel === recoveredLevel))
-      ) {
-        return entry;
-      }
-      return Object.freeze({
-        ...entry,
-        numbering: recoveredNumbering,
-        referenceLevel: recoveredLevel,
-      });
-    });
-    const nearestMatchedBlock = (entryIndex: number): string | undefined => {
-      for (let distance = 1; distance < matchedEntries.length; distance += 1) {
-        const before = matchedEntries[entryIndex - distance];
-        if (before?.bodyHeadingBlockId) return before.bodyHeadingBlockId;
-        const after = matchedEntries[entryIndex + distance];
-        if (after?.bodyHeadingBlockId) return after.bodyHeadingBlockId;
-      }
-      return undefined;
-    };
-    for (let index = 0; index < diagnostics.length; index += 1) {
-      const item = diagnostics[index];
-      const entryIndex = Number(
-        /\/entries\/(\d+)$/u.exec(item?.path ?? "")?.[1],
-      );
-      if (item && Number.isSafeInteger(entryIndex) && !item.blockId) {
-        diagnostics[index] = diagnostic(
-          item.code,
-          item.path,
-          nearestMatchedBlock(entryIndex),
-        );
-      }
     }
-    if (matchedEntries.length < 3) {
+    const matchedHeadingIndex = matches.get(entryIndex);
+    const match =
+      matchedHeadingIndex === undefined
+        ? undefined
+        : bodyHeadings[matchedHeadingIndex];
+    const matchFacts =
+      matchedHeadingIndex === undefined
+        ? undefined
+        : bodyHeadingFacts[matchedHeadingIndex];
+    if (!match) {
+      const logicalEntryIndex = nextLogicalEntryIndex++;
       diagnostics.push(
         diagnostic(
-          "PRINTED_TOC_INSUFFICIENT_ENTRIES",
-          `candidates/${candidates.length}`,
+          "PRINTED_TOC_UNMATCHED_ENTRY",
+          `candidates/${candidateIndex}/entries/${logicalEntryIndex}`,
         ),
       );
-    }
-    let previousLevel = 0;
-    if (
-      matchedEntries.some((entry) => {
-        const skipped =
-          previousLevel === 0
-            ? entry.referenceLevel !== 1
-            : entry.referenceLevel > previousLevel + 1;
-        previousLevel = entry.referenceLevel;
-        return skipped;
-      })
-    ) {
-      diagnostics.push(
-        diagnostic("PRINTED_TOC_LEVEL_GAP", `candidates/${candidates.length}`),
-      );
-    }
-    const matchedCount = matchedEntries.filter(
-      (entry) => entry.bodyHeadingBlockId,
-    ).length;
-    const coverage =
-      matchedEntries.length === 0 ? 0 : matchedCount / matchedEntries.length;
-    if (coverage < 0.6) {
-      diagnostics.push(
-        diagnostic(
-          "PRINTED_TOC_LOW_COVERAGE",
-          `candidates/${candidates.length}`,
-        ),
-      );
-    }
-    const firstNode = roots[range.startIndex];
-    const candidateEnd = roots[candidateEndIndex] ?? firstNode;
-    if (!firstNode?.position || !candidateEnd?.position) continue;
-    const startByte = sourceIndex.byteOffsetAt(firstNode.position.start.offset);
-    const endByte = sourceIndex.byteOffsetAt(candidateEnd.position.end.offset);
-    const recurrenceCount = matchedEntries.filter((entry) =>
-      laterHeadings.some(
-        (heading, headingIndex) =>
-          matchScore(
-            entry,
-            heading,
-            laterHeadingFacts[headingIndex] ?? createHeadingMatchFacts(heading),
-            similarityIndex,
-          ) > 0,
-      ),
-    ).length;
-    const recurrenceCoverage =
-      matchedEntries.length === 0 ? 0 : recurrenceCount / matchedEntries.length;
-    const boundaryEvidenceCount = matchedEntries.filter(
-      (entry) =>
-        entry.numbering !== undefined ||
-        printedPageEvidence(entry.sourceTitle) !== undefined ||
-        dotLeader.test(entry.sourceTitle),
-    ).length;
-    const frontmatter = range.startIndex / Math.max(1, roots.length) <= 0.5;
-    let boundaryScore = range.explicit ? 2 : 0;
-    boundaryScore +=
-      matchedEntries.length >= 3 ? 2 : matchedEntries.length >= 2 ? 1 : 0;
-    boundaryScore +=
-      boundaryEvidenceCount >= Math.min(2, matchedEntries.length) &&
-      matchedEntries.length > 0
-        ? 2
-        : boundaryEvidenceCount > 0
-          ? 1
-          : 0;
-    boundaryScore += frontmatter ? 1 : -3;
-    if (recurrenceCoverage >= 0.5) boundaryScore += 1;
-    if (!frontmatter && recurrenceCount === 0) boundaryScore -= 2;
-    const boundaryConfidence =
-      boundaryScore >= 6 ? "high" : boundaryScore >= 4 ? "medium" : "low";
-    if (richContent && boundaryConfidence !== "high") {
-      diagnostics.push(
-        diagnostic(
-          "PRINTED_TOC_RICH_CONTENT",
-          `candidates/${candidates.length}`,
-        ),
-      );
-    }
-    const matchConfidence =
-      coverage >= 0.8 && alignment.margin >= 2
-        ? "high"
-        : coverage >= 0.5
-          ? "medium"
-          : "low";
-    const canApplyBoundary =
-      boundaryConfidence === "high" && matchedEntries.length >= 2;
-    const sourceRegionEntries = matchedEntries
-      .filter(
-        (entry, index, values) =>
-          values.findIndex(
-            (candidate) =>
-              candidate.range.start_byte === entry.range.start_byte &&
-              candidate.range.end_byte === entry.range.end_byte,
-          ) === index,
-      )
-      .sort(
-        (left, right) =>
-          left.range.start_byte - right.range.start_byte ||
-          left.range.end_byte - right.range.end_byte,
-      );
-    let previousSourceRegionHeadingIndex = -1;
-    const sourceRegionHeadingIndexes = documentIndex.sourceRegionHeadingIndexes;
-    const proposedRegion = canApplyBoundary
-      ? Object.freeze({
-          applied: true,
-          disposition: "reference_only" as const,
-          entries: Object.freeze(
-            sourceRegionEntries.map((entry) => {
-              const headingIndex = entry.bodyHeadingBlockId
-                ? sourceRegionHeadingIndexes.get(entry.bodyHeadingBlockId)
-                : undefined;
-              const retainsMatch =
-                headingIndex !== undefined &&
-                headingIndex > previousSourceRegionHeadingIndex;
-              if (retainsMatch) previousSourceRegionHeadingIndex = headingIndex;
-              return Object.freeze({
-                ...(retainsMatch && entry.bodyHeadingBlockId
-                  ? { body_heading_block_id: entry.bodyHeadingBlockId }
-                  : {}),
-                range: entry.range,
-                reference_level: entry.referenceLevel,
-              });
-            }),
-          ),
-          kind: "printed_toc" as const,
-          range: Object.freeze({
-            end_byte: endByte,
-            sha256: hash(sourceBytes.subarray(startByte, endByte)),
-            start_byte: startByte,
-          }),
-          region_id: input.idFactory?.() ?? createOpaqueId("region"),
-          source_path: input.sourcePath,
-          source_sha256: input.sourceSha256,
-        })
-      : undefined;
-    candidates.push(
-      Object.freeze({
-        alignment: Object.freeze({
-          bestScore: alignment.bestScore,
-          margin: alignment.margin,
-          secondBestScore: alignment.secondBestScore,
+      return [
+        Object.freeze({
+          ...entry,
+          alignment: Object.freeze({ state: "unmatched" as const }),
         }),
-        boundaryConfidence,
-        canonical: false,
-        confidence:
-          boundaryConfidence === "high" && matchConfidence === "high"
-            ? "high"
-            : boundaryConfidence === "low" || matchConfidence === "low"
-              ? "low"
-              : "medium",
-        diagnostics: Object.freeze(diagnostics.slice(0, 100)),
-        endByte,
-        entryCount: matchedEntries.length,
-        logicalEntries: Object.freeze(
-          matchedEntries.map((entry) =>
-            Object.freeze({
-              ...(entry.bodyHeadingBlockId
-                ? { bodyHeadingBlockId: entry.bodyHeadingBlockId }
-                : {}),
-              ...(entry.pageIndex === undefined
-                ? {}
-                : { pageIndex: entry.pageIndex }),
-              range: entry.range,
-              referenceLevel: entry.referenceLevel,
-              sourceTitle: entry.sourceTitle,
-            }),
-          ),
+      ];
+    }
+    const logicalEntryIndex = nextLogicalEntryIndex++;
+    const sourceTitle = recoveredMatchedSourceTitle(
+      entry,
+      matchFacts ?? createHeadingMatchFacts(match),
+      hasSupportedOmittedDecimalNumber(
+        entries,
+        entryIndex,
+        matchFacts ?? createHeadingMatchFacts(match),
+      ) ||
+        contextualEntryTitle.test(
+          printedPageEvidence(entry.sourceTitle)?.title ??
+            plainTitle(entry.sourceTitle),
         ),
-        matchedHeadingCount: matchedCount,
-        matchConfidence,
-        ...(proposedRegion ? { proposedRegion } : {}),
-        requiresPdfEvidence,
-        startByte,
+      similarityIndex,
+    );
+    if (sourceTitle !== entry.sourceTitle) {
+      recoveredTitleEntryIndexes.add(logicalEntryIndex);
+    }
+    return [
+      Object.freeze({
+        ...entry,
+        alignment: Object.freeze({
+          bodyHeadingBlockId: match.blockId,
+          state: "matched" as const,
+        }),
+        normalizedTitle: normalizedTitle(sourceTitle),
+        sourceTitle,
       }),
+    ];
+  });
+  const recoveredLevels = inferPrintedReferenceLevels(
+    alignedEntries.map((entry) => entry.sourceTitle),
+  );
+  const hasExplicitMajorContext = alignedEntries.some(
+    (entry) =>
+      entry.numbering?.kind === "part" || entry.numbering?.kind === "chapter",
+  );
+  alignedEntries = alignedEntries.map((entry, index) => {
+    const recoveredNumbering = inferPrintedHeadingEvidence(
+      printedPageEvidence(entry.sourceTitle)?.title ?? entry.sourceTitle,
+    );
+    const recoveredLevel = recoveredLevels[index] ?? entry.referenceLevel;
+    const numberingChanged = entry.numbering?.key !== recoveredNumbering?.key;
+    const contextualNumbering =
+      recoveredNumbering?.kind === "appendix" ||
+      recoveredNumbering?.kind === "chapter" ||
+      recoveredNumbering?.kind === "decimal";
+    const levelNeedsContext =
+      hasExplicitMajorContext &&
+      contextualNumbering &&
+      entry.referenceLevel !== recoveredLevel;
+    if (
+      !recoveredNumbering ||
+      (!numberingChanged &&
+        !levelNeedsContext &&
+        (!recoveredTitleEntryIndexes.has(index) ||
+          entry.referenceLevel === recoveredLevel))
+    ) {
+      return entry;
+    }
+    return Object.freeze({
+      ...entry,
+      numbering: recoveredNumbering,
+      referenceLevel: recoveredLevel,
+    });
+  });
+  const nearestMatchedBlock = (entryIndex: number): string | undefined => {
+    for (let distance = 1; distance < alignedEntries.length; distance += 1) {
+      const before = alignedEntries[entryIndex - distance];
+      const beforeBlockId = before
+        ? alignedBodyHeadingBlockId(before)
+        : undefined;
+      if (beforeBlockId) return beforeBlockId;
+      const after = alignedEntries[entryIndex + distance];
+      const afterBlockId = after ? alignedBodyHeadingBlockId(after) : undefined;
+      if (afterBlockId) return afterBlockId;
+    }
+    return undefined;
+  };
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const item = diagnostics[index];
+    const entryIndex = Number(/\/entries\/(\d+)$/u.exec(item?.path ?? "")?.[1]);
+    if (item && Number.isSafeInteger(entryIndex) && !item.blockId) {
+      diagnostics[index] = diagnostic(
+        item.code,
+        item.path,
+        nearestMatchedBlock(entryIndex),
+      );
+    }
+  }
+  return Object.freeze({
+    alignment: candidateAlignment.score,
+    diagnostics: Object.freeze(diagnostics),
+    entries: Object.freeze(alignedEntries),
+  });
+}
+
+interface CandidateRegionDecision {
+  readonly boundaryConfidence: PrintedContentsCandidate["boundaryConfidence"];
+  readonly canApplyBoundary: boolean;
+  readonly diagnostics: readonly PrintedContentsDiagnostic[];
+  readonly endByte: number;
+  readonly matchConfidence: PrintedContentsCandidate["matchConfidence"];
+  readonly matchedCount: number;
+  readonly startByte: number;
+}
+
+function evaluateCandidateRegion(
+  context: PrintedContentsDetectionContext,
+  recovered: RecoveredCandidateRegion,
+  headingIndex: CandidateHeadingIndex,
+  aligned: AlignedCandidateRegion,
+  candidateIndex: number,
+): CandidateRegionDecision | undefined {
+  const { roots, similarityIndex, sourceIndex } = context;
+  const { candidateEndIndex, richContent, window } = recovered;
+  const { laterHeadingFacts, laterHeadings } = headingIndex;
+  const { alignment, entries, diagnostics: alignmentDiagnostics } = aligned;
+  const diagnostics = [...alignmentDiagnostics];
+  if (entries.length < 3) {
+    diagnostics.push(
+      diagnostic(
+        "PRINTED_TOC_INSUFFICIENT_ENTRIES",
+        `candidates/${candidateIndex}`,
+      ),
     );
   }
+  let previousLevel = 0;
+  if (
+    entries.some((entry) => {
+      const skipped =
+        previousLevel === 0
+          ? entry.referenceLevel !== 1
+          : entry.referenceLevel > previousLevel + 1;
+      previousLevel = entry.referenceLevel;
+      return skipped;
+    })
+  ) {
+    diagnostics.push(
+      diagnostic("PRINTED_TOC_LEVEL_GAP", `candidates/${candidateIndex}`),
+    );
+  }
+  const matchedCount = entries.filter(
+    (entry) => entry.alignment.state === "matched",
+  ).length;
+  const coverage = entries.length === 0 ? 0 : matchedCount / entries.length;
+  if (coverage < 0.6) {
+    diagnostics.push(
+      diagnostic("PRINTED_TOC_LOW_COVERAGE", `candidates/${candidateIndex}`),
+    );
+  }
+  const firstNode = roots[window.startIndex];
+  const candidateEnd = roots[candidateEndIndex] ?? firstNode;
+  if (!firstNode?.position || !candidateEnd?.position) return;
+  const startByte = sourceIndex.byteOffsetAt(firstNode.position.start.offset);
+  const endByte = sourceIndex.byteOffsetAt(candidateEnd.position.end.offset);
+  const recurrenceCount = entries.filter((entry) =>
+    laterHeadings.some(
+      (heading, laterHeadingIndex) =>
+        matchScore(
+          entry,
+          heading,
+          laterHeadingFacts[laterHeadingIndex] ??
+            createHeadingMatchFacts(heading),
+          similarityIndex,
+        ) > 0,
+    ),
+  ).length;
+  const recurrenceCoverage =
+    entries.length === 0 ? 0 : recurrenceCount / entries.length;
+  const boundaryEvidenceCount = entries.filter(
+    (entry) =>
+      entry.numbering !== undefined ||
+      printedPageEvidence(entry.sourceTitle) !== undefined ||
+      dotLeader.test(entry.sourceTitle),
+  ).length;
+  const frontmatter = window.startIndex / Math.max(1, roots.length) <= 0.5;
+  let boundaryScore = window.explicit ? 2 : 0;
+  boundaryScore += entries.length >= 3 ? 2 : entries.length >= 2 ? 1 : 0;
+  boundaryScore +=
+    boundaryEvidenceCount >= Math.min(2, entries.length) && entries.length > 0
+      ? 2
+      : boundaryEvidenceCount > 0
+        ? 1
+        : 0;
+  boundaryScore += frontmatter ? 1 : -3;
+  if (recurrenceCoverage >= 0.5) boundaryScore += 1;
+  if (!frontmatter && recurrenceCount === 0) boundaryScore -= 2;
+  const boundaryConfidence =
+    boundaryScore >= 6 ? "high" : boundaryScore >= 4 ? "medium" : "low";
+  if (richContent && boundaryConfidence !== "high") {
+    diagnostics.push(
+      diagnostic("PRINTED_TOC_RICH_CONTENT", `candidates/${candidateIndex}`),
+    );
+  }
+  const matchConfidence =
+    coverage >= 0.8 && alignment.margin >= 2
+      ? "high"
+      : coverage >= 0.5
+        ? "medium"
+        : "low";
+  return Object.freeze({
+    boundaryConfidence,
+    canApplyBoundary: boundaryConfidence === "high" && entries.length >= 2,
+    diagnostics: Object.freeze(diagnostics),
+    endByte,
+    matchConfidence,
+    matchedCount,
+    startByte,
+  });
+}
+
+function materializeCandidateRegion(
+  context: PrintedContentsDetectionContext,
+  recovered: RecoveredCandidateRegion,
+  aligned: AlignedCandidateRegion,
+  decision: CandidateRegionDecision,
+): PrintedContentsCandidate {
+  const { documentIndex, input, sourceBytes } = context;
+  const { requiresPdfEvidence } = recovered;
+  const { alignment, entries } = aligned;
+  const {
+    boundaryConfidence,
+    canApplyBoundary,
+    diagnostics,
+    endByte,
+    matchConfidence,
+    matchedCount,
+    startByte,
+  } = decision;
+  const sourceRegionEntries = entries
+    .filter(
+      (entry, index, values) =>
+        values.findIndex(
+          (candidate) =>
+            candidate.range.start_byte === entry.range.start_byte &&
+            candidate.range.end_byte === entry.range.end_byte,
+        ) === index,
+    )
+    .sort(
+      (left, right) =>
+        left.range.start_byte - right.range.start_byte ||
+        left.range.end_byte - right.range.end_byte,
+    );
+  let previousSourceRegionHeadingIndex = -1;
+  const sourceRegionHeadingIndexes = documentIndex.sourceRegionHeadingIndexes;
+  const proposedRegion = canApplyBoundary
+    ? Object.freeze({
+        applied: true,
+        disposition: "reference_only" as const,
+        entries: Object.freeze(
+          sourceRegionEntries.map((entry) => {
+            const bodyHeadingBlockId = alignedBodyHeadingBlockId(entry);
+            const matchedHeadingIndex = bodyHeadingBlockId
+              ? sourceRegionHeadingIndexes.get(bodyHeadingBlockId)
+              : undefined;
+            const retainsMatch =
+              matchedHeadingIndex !== undefined &&
+              matchedHeadingIndex > previousSourceRegionHeadingIndex;
+            if (retainsMatch) {
+              previousSourceRegionHeadingIndex = matchedHeadingIndex;
+            }
+            return Object.freeze({
+              ...(retainsMatch && bodyHeadingBlockId
+                ? { body_heading_block_id: bodyHeadingBlockId }
+                : {}),
+              range: entry.range,
+              reference_level: entry.referenceLevel,
+            });
+          }),
+        ),
+        kind: "printed_toc" as const,
+        range: Object.freeze({
+          end_byte: endByte,
+          sha256: hash(sourceBytes.subarray(startByte, endByte)),
+          start_byte: startByte,
+        }),
+        region_id: input.idFactory?.() ?? createOpaqueId("region"),
+        source_path: input.sourcePath,
+        source_sha256: input.sourceSha256,
+      })
+    : undefined;
+  return Object.freeze({
+    alignment: Object.freeze({
+      bestScore: alignment.bestScore,
+      margin: alignment.margin,
+      secondBestScore: alignment.secondBestScore,
+    }),
+    boundaryConfidence,
+    canonical: false,
+    confidence:
+      boundaryConfidence === "high" && matchConfidence === "high"
+        ? "high"
+        : boundaryConfidence === "low" || matchConfidence === "low"
+          ? "low"
+          : "medium",
+    diagnostics: Object.freeze(diagnostics.slice(0, 100)),
+    endByte,
+    entryCount: entries.length,
+    logicalEntries: Object.freeze(
+      entries.map((entry) => {
+        const bodyHeadingBlockId = alignedBodyHeadingBlockId(entry);
+        return Object.freeze({
+          ...(bodyHeadingBlockId ? { bodyHeadingBlockId } : {}),
+          ...(entry.pageIndex === undefined
+            ? {}
+            : { pageIndex: entry.pageIndex }),
+          range: entry.range,
+          referenceLevel: entry.referenceLevel,
+          sourceTitle: entry.sourceTitle,
+        });
+      }),
+    ),
+    matchedHeadingCount: matchedCount,
+    matchConfidence,
+    ...(proposedRegion ? { proposedRegion } : {}),
+    requiresPdfEvidence,
+    startByte,
+  });
+}
+
+function finalizePrintedContentsDetection(
+  candidates: readonly PrintedContentsCandidate[],
+): PrintedContentsDetection {
   const canonical = candidates
     .filter((candidate) => candidate.proposedRegion)
-    .sort(
+    .toSorted(
       (left, right) =>
         right.entryCount - left.entryCount ||
         right.matchedHeadingCount - left.matchedHeadingCount ||
@@ -3582,6 +3827,54 @@ export function detectPrintedContents(input: {
     ...(canonicalRegionId ? { canonicalRegionId } : {}),
     candidates: Object.freeze(finalized),
   });
+}
+
+export function detectPrintedContents(
+  input: DetectPrintedContentsInput,
+): PrintedContentsDetection {
+  const context = createPrintedContentsDetectionContext(input);
+  const ranges = discoverCandidateWindows(context);
+  const estimatedWindows = estimateCandidateWindows(context, ranges);
+  const parsedRegions = ranges.map((range) =>
+    parseCandidateRegion(context, range),
+  );
+  const recoveredRegions = recoverCandidateRegions(context, parsedRegions);
+  const candidates: PrintedContentsCandidate[] = [];
+
+  for (const [rangeIndex, recovered] of recoveredRegions.entries()) {
+    const headingIndex = indexCandidateHeadings(
+      context,
+      recovered,
+      rangeIndex,
+      estimatedWindows,
+    );
+    const candidateAlignment = alignCandidateHeadings(
+      context,
+      recovered,
+      headingIndex,
+    );
+    const aligned = materializeAlignedCandidate(
+      context,
+      recovered,
+      headingIndex,
+      candidateAlignment,
+      candidates.length,
+    );
+    const decision = evaluateCandidateRegion(
+      context,
+      recovered,
+      headingIndex,
+      aligned,
+      candidates.length,
+    );
+    if (decision) {
+      candidates.push(
+        materializeCandidateRegion(context, recovered, aligned, decision),
+      );
+    }
+  }
+
+  return finalizePrintedContentsDetection(candidates);
 }
 
 export function requiresSupplementalPdfEvidence(
