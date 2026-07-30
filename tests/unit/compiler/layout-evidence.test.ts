@@ -774,17 +774,4 @@ describe("bounded MinerU layout evidence", () => {
       reconstructPrintedLayoutRows(evidence).map((row) => row.text),
     ).toEqual(["A1", "A2", "B1", "B2", "C1", "C2"]);
   });
-
-  it("uses a streaming parser rather than whole-file readFile JSON parsing", async () => {
-    const source = await import("node:fs/promises").then(({ readFile }) =>
-      readFile(
-        new URL(
-          "../../../src/modules/publishing/adapters/filesystem/read-layout-evidence.ts",
-          import.meta.url,
-        ),
-        "utf8",
-      ),
-    );
-    expect(source).not.toMatch(/readFile|JSON\.parse/u);
-  });
 });

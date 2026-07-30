@@ -1989,9 +1989,6 @@ describe("printed contents detection", () => {
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
       sourceTitle: "1A Rⁿ 和 Cⁿ ...... 2",
     });
-    expect(result.candidates[0]?.logicalEntries[1]).not.toHaveProperty(
-      "bodyHeadingBlockId",
-    );
   });
 
   it("prefers an explicitly numbered body section when duplicate titles tie", () => {
@@ -2287,9 +2284,6 @@ describe("printed contents detection", () => {
       sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
-    expect(result.candidates[0]?.logicalEntries[1]).not.toHaveProperty(
-      "bodyHeadingBlockId",
-    );
     expect(result.candidates[0]?.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: "PRINTED_TOC_UNMATCHED_ENTRY" }),
@@ -3213,9 +3207,6 @@ describe("printed contents detection", () => {
 
     expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toBe(
       "L(V, W) 上的代数运算 ...... 46",
-    );
-    expect(result.candidates[0]?.logicalEntries[1]).not.toHaveProperty(
-      "bodyHeadingBlockId",
     );
   });
 

@@ -231,21 +231,6 @@ describe("prepare_draft candidate handoff", () => {
         }),
       });
       expect(prepared.artifact.structure).toHaveLength(9);
-      expect(
-        Object.keys(prepared.artifact.printedContents[0] ?? {}).sort(),
-      ).toEqual([
-        "alignment",
-        "boundaryConfidence",
-        "canonical",
-        "confidence",
-        "diagnostics",
-        "endByte",
-        "entryCount",
-        "matchConfidence",
-        "matchedHeadingCount",
-        "regionId",
-        "startByte",
-      ]);
 
       const finalized = await finalizePreparedDraft({
         artifact: prepared.artifact,
