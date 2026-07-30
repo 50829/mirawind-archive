@@ -14,6 +14,7 @@ import type {
 
 export const draftPreparationVersion = "prepare-draft-v4";
 export const preparationArtifactFilename = "prepared-draft.json";
+export const preparedSourceFilesFilename = "prepared-source-files.json";
 
 export interface PreparedDraftArtifact {
   readonly layoutDiagnostics: readonly LayoutEvidenceDiagnostic[];
@@ -81,6 +82,56 @@ export async function readPreparedDraftArtifact(
     throw new Error("PREPARED_DRAFT_ARTIFACT_INVALID");
   }
   return parsed as PreparedDraftArtifact;
+}
+
+function validSourceRelativePath(value: unknown): value is string {
+  if (
+    typeof value !== "string" ||
+    value.length < 1 ||
+    Buffer.byteLength(value, "utf8") > 2_048 ||
+    value !== value.normalize("NFC") ||
+    value.includes("\\") ||
+    value.includes("\0") ||
+    value.startsWith("/")
+  ) {
+    return false;
+  }
+  return value
+    .split("/")
+    .every(
+      (segment) => segment.length > 0 && segment !== "." && segment !== "..",
+    );
+}
+
+export function createPreparedSourceFiles(
+  paths: readonly string[],
+): readonly string[] {
+  if (
+    paths.length > 20_000 ||
+    paths.some((path) => !validSourceRelativePath(path))
+  ) {
+    throw new Error("PREPARED_SOURCE_FILES_INVALID");
+  }
+  const sorted = [...paths].sort((left, right) =>
+    Buffer.from(left).compare(Buffer.from(right)),
+  );
+  if (sorted.some((path, index) => index > 0 && path === sorted[index - 1])) {
+    throw new Error("PREPARED_SOURCE_FILES_INVALID");
+  }
+  return Object.freeze(sorted);
+}
+
+export async function readPreparedSourceFiles(
+  sourceFilesPath: string,
+): Promise<readonly string[]> {
+  if ((await stat(sourceFilesPath)).size > 42 * 1024 * 1024) {
+    throw new Error("PREPARED_SOURCE_FILES_INVALID");
+  }
+  const parsed: unknown = JSON.parse(await readFile(sourceFilesPath, "utf8"));
+  if (!Array.isArray(parsed)) {
+    throw new Error("PREPARED_SOURCE_FILES_INVALID");
+  }
+  return createPreparedSourceFiles(parsed);
 }
 
 function validTypographyProvenance(value: unknown): boolean {

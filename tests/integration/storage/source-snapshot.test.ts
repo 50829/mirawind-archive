@@ -17,7 +17,7 @@ async function writeFixture(path: string, contents: string): Promise<void> {
 }
 
 describe("immutable accepted source snapshots", () => {
-  it("prunes outer wrappers and indexes read-only source and original copies", () =>
+  it("retains only the main Markdown and referenced resources", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const extracted = resolve(dataRoot.path, "extracted");
       const original = resolve(dataRoot.path, "upload.zip");
@@ -29,6 +29,27 @@ describe("immutable accepted source snapshots", () => {
         resolve(extracted, "outer/book/images/a.png"),
         "image",
       );
+      await writeFixture(
+        resolve(extracted, "outer/book/images/unused.png"),
+        "unused image",
+      );
+      await writeFixture(
+        resolve(extracted, "outer/book/book_layout.pdf"),
+        "layout",
+      );
+      await writeFixture(
+        resolve(extracted, "outer/book/book_span.pdf"),
+        "span",
+      );
+      await writeFixture(
+        resolve(extracted, "outer/book/book_middle.json"),
+        "{}",
+      );
+      await writeFixture(
+        resolve(extracted, "outer/book/book_model.json"),
+        "{}",
+      );
+      await writeFixture(resolve(extracted, "outer/book/notes.txt"), "notes");
       await writeFixture(resolve(extracted, "outer/ignored.txt"), "ignored");
       await writeFile(original, "PK original");
 
@@ -54,6 +75,7 @@ describe("immutable accepted source snapshots", () => {
         nowMs: 3,
         originalArchivePath: original,
         originalName: "../unsafe\u0000name.zip",
+        resourceRelativePaths: ["images/a.png"],
       });
       const sourceRoot = resolve(
         dataRoot.layout.root,
@@ -74,7 +96,8 @@ describe("immutable accepted source snapshots", () => {
       expect(await readFile(resolve(sourceRoot, "images/a.png"), "utf8")).toBe(
         "image",
       );
-      expect(await readdir(sourceRoot)).not.toContain("ignored.txt");
+      expect((await readdir(sourceRoot)).sort()).toEqual(["book.md", "images"]);
+      expect(await readdir(resolve(sourceRoot, "images"))).toEqual(["a.png"]);
       expect(await readFile(originalPath, "utf8")).toBe("PK original");
       expect(snapshot.original.originalName).toBe("unsafe_name.zip");
       expect((await stat(resolve(sourceRoot, "book.md"))).mode & 0o222).toBe(0);
@@ -108,6 +131,7 @@ describe("immutable accepted source snapshots", () => {
           nowMs: 3,
           originalArchivePath: original,
           originalName: "upload.zip",
+          resourceRelativePaths: [],
         }),
       ).rejects.toThrow();
       expect(

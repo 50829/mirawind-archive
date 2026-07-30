@@ -72,6 +72,7 @@ describe("explicit source typography reprocessing", () => {
         layout: dataRoot.layout,
         nowMs: 5,
         originalArchivePath: archivePath,
+        resourceRelativePaths: initialPrepared.sourceFiles,
       });
       const oldMarkdownPath = resolve(
         dataRoot.layout.root,
@@ -120,6 +121,7 @@ describe("explicit source typography reprocessing", () => {
           dataRoot.layout.root,
           reprocessImport.uploadRelativePath,
         ),
+        resourceRelativePaths: reprocessed.sourceFiles,
       });
       const current = drafts.requireBook(book.id);
       const configRecord = drafts.requireConfig(book.id, 2);
@@ -207,6 +209,7 @@ describe("explicit source typography reprocessing", () => {
           dataRoot.layout.root,
           revertImport.uploadRelativePath,
         ),
+        resourceRelativePaths: reverted.sourceFiles,
       });
       const revertedMarkdown = await readFile(
         resolve(

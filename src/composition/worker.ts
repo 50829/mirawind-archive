@@ -30,7 +30,9 @@ import {
 import { finalizePreparedDraft } from "@/modules/publishing/adapters/worker/finalize-prepared-draft";
 import {
   preparedDraftArtifactPath,
+  preparedSourceFilesFilename,
   readPreparedDraftArtifact,
+  readPreparedSourceFiles,
 } from "@/modules/publishing/adapters/worker/prepared-draft-artifact";
 import { operationalMetrics } from "@/observability/metrics";
 import {
@@ -357,8 +359,14 @@ async function executeClaimedJob(input: {
         );
       }
       if (input.job.kind === "prepare_draft" && input.job.importId) {
-        const expected = `staging/${input.job.id}/prepared-draft.json`;
-        if (execution.result.result?.preparedDraftRelativePath !== expected) {
+        const expectedArtifact = `staging/${input.job.id}/prepared-draft.json`;
+        const expectedSourceFiles = `staging/${input.job.id}/${preparedSourceFilesFilename}`;
+        if (
+          execution.result.result?.preparedDraftRelativePath !==
+            expectedArtifact ||
+          execution.result.result?.preparedSourceFilesRelativePath !==
+            expectedSourceFiles
+        ) {
           throw new Error("PREPARED_DRAFT_RESULT_PATH_INVALID");
         }
         const stagingDirectory = await resolveContainedPath(
@@ -367,6 +375,9 @@ async function executeClaimedJob(input: {
         );
         const artifact = await readPreparedDraftArtifact(
           preparedDraftArtifactPath(stagingDirectory),
+        );
+        const resourceRelativePaths = await readPreparedSourceFiles(
+          await resolveContainedPath(input.layout.root, expectedSourceFiles),
         );
         const imported = input.imports.require(input.job.importId);
         await finalizePreparedDraft({
@@ -380,6 +391,7 @@ async function executeClaimedJob(input: {
             input.layout.root,
             imported.uploadRelativePath,
           ),
+          resourceRelativePaths,
         });
         await rm(stagingDirectory, { force: true, recursive: true });
       }

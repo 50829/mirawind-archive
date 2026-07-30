@@ -426,3 +426,32 @@ All wall and RSS changes remain within their focused per-book tolerances, and fr
 remain `4/4` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/trusted-original-metadata-*`. This focused run does not replace
 or complete the owner-deferred T092 paired rounds.
+
+## Rebuildable source closure
+
+Draft source snapshots previously copied the selected MinerU bundle directory wholesale, including
+`layout.pdf`, `span.pdf`, `middle.json`, `model.json`, content-list evidence and unreferenced images.
+Candidate assembly then copied and hashed the same overbroad tree again. The prepare child already
+had the exact validated image-resource closure, so it now writes that bounded relative-path list to
+its short-lived staging tree. Parent finalization validates containment and regular-file status and
+copies only normalized Markdown plus those resources. The original ZIP remains independently
+retained and is still the sole input for source reprocessing.
+
+| Fixture | Snapshot files |      Snapshot bytes | Prepare parent | Candidate source copy | Candidate job |   Wall |   RSS |
+| ------- | -------------: | ------------------: | -------------: | --------------------: | ------------: | -----: | ----: |
+| `a53`   |  `2,873 -> 64` |  `146.0 -> 2.37 MB` |         -61.9% |                -96.4% |        -17.3% | -10.3% | -9.4% |
+| `106e`  | `1,847 -> 355` | `200.1 -> 17.99 MB` |         -45.3% |                -80.1% |        -12.3% |  -7.3% | -3.0% |
+| `81d`   |   `581 -> 369` | `242.5 -> 15.91 MB` |         -24.6% |                -71.3% |         -2.0% |  -1.6% | -4.5% |
+| `f840`  | `2,160 -> 449` | `357.5 -> 14.46 MB` |         -43.4% |                -84.9% |        -12.1% |  -8.1% | +1.1% |
+
+A discarded prototype reconstructed the closure by parsing Markdown again in the parent. Although
+it reduced copying, it increased prepare finalization by `12%–216%` and RSS by up to 36.5%; that
+implementation was removed. The retained handoff adds no persistent content authority or reader
+path. Resource closure, source reprocess, prepare/finalize and worker protocol tests pass, and fresh
+observations remain `4/4` reference-v2 exact. Format, lint/architecture, both TypeScript builds, all
+639 tests and the production build pass.
+
+Raw evidence is under ignored
+`.cache/008-publishing-performance/prepared-source-files-*` and
+`.cache/008-publishing-performance/prepared-source-files-reference-report.json`. This focused run
+does not replace or complete the owner-deferred T092 paired rounds.

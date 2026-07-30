@@ -50,6 +50,7 @@ export interface CreateSourceSnapshotOptions {
   readonly nowMs?: number;
   readonly originalArchivePath: string;
   readonly originalName: string;
+  readonly resourceRelativePaths: readonly string[];
 }
 
 function relativeStoragePath(root: string, target: string): string {
@@ -117,37 +118,75 @@ async function copyRegularFile(
   }
 }
 
-async function copyTree(
+async function copySourceClosure(
   sourceRoot: string,
   targetRoot: string,
   mainSourcePath: string,
+  resourceRelativePaths: readonly string[],
 ): Promise<{ readonly mainMarkdownSha256: string }> {
-  let mainMarkdownSha256: string | undefined;
-  const visit = async (sourceDirectory: string, targetDirectory: string) => {
-    await mkdir(targetDirectory, { mode: 0o700 });
-    const entries = await readdir(sourceDirectory, { withFileTypes: true });
-    entries.sort((left, right) => left.name.localeCompare(right.name, "en"));
-    for (const entry of entries) {
-      const source = resolve(sourceDirectory, entry.name);
-      const target = resolve(targetDirectory, entry.name);
-      const metadata = await lstat(source);
-      if (metadata.isSymbolicLink()) {
-        throw new Error("SNAPSHOT_SOURCE_LINK_REJECTED");
-      }
-      if (metadata.isDirectory()) {
-        await visit(source, target);
-      } else if (metadata.isFile()) {
-        const copied = await copyRegularFile(source, target);
-        if (source === mainSourcePath) {
-          mainMarkdownSha256 = copied.sha256;
-        }
-      } else {
-        throw new Error("SNAPSHOT_SOURCE_SPECIAL_FILE_REJECTED");
-      }
+  const resourcePaths: string[] = [];
+  const seenResourcePaths = new Set<string>();
+  for (const relativePath of resourceRelativePaths) {
+    const lexicalPath = await resolveContainedPath(sourceRoot, relativePath);
+    const metadata = await lstat(lexicalPath);
+    if (!metadata.isFile() || metadata.isSymbolicLink()) {
+      throw new Error("SNAPSHOT_RESOURCE_NOT_REGULAR_FILE");
     }
-    await syncDirectory(targetDirectory);
-  };
-  await visit(sourceRoot, targetRoot);
+    const resourcePath = await realpath(lexicalPath);
+    const relation = relative(sourceRoot, resourcePath);
+    if (
+      !relation ||
+      relation === ".." ||
+      relation.startsWith(`..${sep}`) ||
+      isAbsolute(relation)
+    ) {
+      throw new Error("SNAPSHOT_RESOURCE_PATH_INVALID");
+    }
+    if (
+      resourcePath === mainSourcePath ||
+      seenResourcePaths.has(resourcePath)
+    ) {
+      throw new Error("SNAPSHOT_RESOURCE_PATH_INVALID");
+    }
+    seenResourcePaths.add(resourcePath);
+    resourcePaths.push(resourcePath);
+  }
+  const sources = [mainSourcePath, ...resourcePaths].sort((left, right) =>
+    Buffer.from(relative(sourceRoot, left)).compare(
+      Buffer.from(relative(sourceRoot, right)),
+    ),
+  );
+  const directories = new Set<string>([targetRoot]);
+  let mainMarkdownSha256: string | undefined;
+  await mkdir(targetRoot, { mode: 0o700 });
+  for (const source of sources) {
+    const sourceRelativePath = relative(sourceRoot, source);
+    if (
+      !sourceRelativePath ||
+      sourceRelativePath === ".." ||
+      sourceRelativePath.startsWith(`..${sep}`) ||
+      isAbsolute(sourceRelativePath)
+    ) {
+      throw new Error("SNAPSHOT_SOURCE_PATH_INVALID");
+    }
+    const target = resolve(targetRoot, sourceRelativePath);
+    const targetDirectory = dirname(target);
+    await mkdir(targetDirectory, { mode: 0o700, recursive: true });
+    for (
+      let directory = targetDirectory;
+      directory.startsWith(`${targetRoot}${sep}`);
+      directory = dirname(directory)
+    ) {
+      directories.add(directory);
+    }
+    const copied = await copyRegularFile(source, target);
+    if (source === mainSourcePath) mainMarkdownSha256 = copied.sha256;
+  }
+  for (const directory of [...directories].sort(
+    (left, right) => right.length - left.length,
+  )) {
+    await syncDirectory(directory);
+  }
   if (!mainMarkdownSha256) throw new Error("SNAPSHOT_MAIN_MARKDOWN_MISSING");
   return Object.freeze({ mainMarkdownSha256 });
 }
@@ -242,10 +281,11 @@ export class SourceSnapshotService {
     try {
       await mkdir(bookDraftRoot, { mode: 0o700, recursive: true });
       await mkdir(stagingRoot, { mode: 0o700, recursive: false });
-      const copiedSource = await copyTree(
+      const copiedSource = await copySourceClosure(
         bundleRoot,
         stagedSource,
         mainSourcePath,
+        options.resourceRelativePaths,
       );
       const copiedOriginal = await copyRegularFile(
         options.originalArchivePath,

@@ -1,4 +1,11 @@
-import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -240,6 +247,7 @@ describe("prepare_draft candidate handoff", () => {
         layout: dataRoot.layout,
         nowMs: 5,
         originalArchivePath: archivePath,
+        resourceRelativePaths: prepared.sourceFiles,
       });
       const config = drafts.requireConfig(book.id, 1);
       const parsedConfig = parseBookConfigYaml(
@@ -488,6 +496,9 @@ describe("prepare_draft candidate handoff", () => {
             },
             { data: "[{}]", name: "wrapper/content_list.json" },
             { data: image, name: "wrapper/images/a.png" },
+            { data: "unused", name: "wrapper/images/unused.png" },
+            { data: "%PDF-layout", name: "wrapper/book_layout.pdf" },
+            { data: "{}", name: "wrapper/book_middle.json" },
           ],
         }),
       );
@@ -520,6 +531,7 @@ describe("prepare_draft candidate handoff", () => {
           "staging/job_prepare_abcdefghijklmnop",
         ),
       });
+      expect(prepared.sourceFiles).toEqual(["images/a.png"]);
       const finalized = await finalizePreparedDraft({
         artifact: prepared.artifact,
         database,
@@ -528,7 +540,14 @@ describe("prepare_draft candidate handoff", () => {
         layout: dataRoot.layout,
         nowMs: 5,
         originalArchivePath: archivePath,
+        resourceRelativePaths: prepared.sourceFiles,
       });
+      const sourceRoot = resolve(
+        dataRoot.layout.root,
+        finalized.snapshot.source.sourceRootRelativePath,
+      );
+      expect((await readdir(sourceRoot)).sort()).toEqual(["full.md", "images"]);
+      expect(await readdir(resolve(sourceRoot, "images"))).toEqual(["a.png"]);
       const config = drafts.requireConfig(book.id, 1);
       const configPath = resolve(dataRoot.layout.root, config.yamlRelativePath);
       const parsedConfig = parseBookConfigYaml(

@@ -358,6 +358,12 @@ async function execute(message: RunJobMessage): Promise<void> {
           preparedDraftRelativePath: relative(root, result.artifactPath)
             .split(sep)
             .join("/"),
+          preparedSourceFilesRelativePath: relative(
+            root,
+            result.sourceFilesPath,
+          )
+            .split(sep)
+            .join("/"),
         },
         type: "result",
       });

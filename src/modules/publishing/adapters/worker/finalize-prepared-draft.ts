@@ -136,6 +136,7 @@ export async function finalizePreparedDraft(input: {
   readonly layout: StorageLayout;
   readonly nowMs: number;
   readonly originalArchivePath: string;
+  readonly resourceRelativePaths: readonly string[];
 }): Promise<FinalizedPreparedDraft> {
   const imports = new ImportRepository(input.database);
   const drafts = new DraftRepository(input.database);
@@ -172,6 +173,7 @@ export async function finalizePreparedDraft(input: {
     nowMs: input.nowMs,
     originalArchivePath: input.originalArchivePath,
     originalName: "mineru.zip",
+    resourceRelativePaths: input.resourceRelativePaths,
   });
   const currentConfig =
     currentConfigRecord === null

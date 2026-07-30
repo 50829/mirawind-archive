@@ -565,3 +565,17 @@ integrity test proves mismatched copied bytes are still rejected by the finalize
 rename, and fresh observations remained `4/4` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/trusted-original-metadata-*`. This focused evidence does not
 complete owner-deferred T092.
+
+- [x] T111 Retain only normalized Markdown and its prepare-resolved resource closure in draft source
+      snapshots and candidate source trees; discard MinerU sidecars and unreferenced files without
+      reparsing Markdown in the parent (partial)
+
+Across four representative books, draft source snapshots fell from `581–2,873` files and
+`146–357 MB` to `64–449` files and `2.37–17.99 MB`. Prepare parent finalization improved by
+`24.6%–61.9%`, candidate `source_copy` by `71.3%–96.4%`, complete candidate jobs by `2.0%–17.3%`
+and complete wall by `1.6%–10.3%`. RSS decreased for three books and increased by 1.1% for the
+fourth. Reprocess and resource-closure tests passed, and fresh observations remained `4/4`
+reference-v2 exact. Format, lint/architecture, both TypeScript builds, all 639 tests and the
+production build passed. Raw evidence is under ignored
+`.cache/008-publishing-performance/prepared-source-files-*`. This focused evidence does not
+complete owner-deferred T092.

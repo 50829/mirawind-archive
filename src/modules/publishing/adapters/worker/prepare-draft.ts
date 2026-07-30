@@ -17,9 +17,11 @@ import { resolveDocumentResources } from "@/modules/publishing/adapters/filesyst
 import { claimSealedExtraction } from "@/modules/publishing/adapters/filesystem/sealed-extraction";
 import { analyzeDraftContents } from "@/modules/publishing/adapters/worker/draft-contents-analysis";
 import {
+  createPreparedSourceFiles,
   draftPreparationVersion,
   type PreparedDraftArtifact,
   preparationArtifactFilename,
+  preparedSourceFilesFilename,
 } from "@/modules/publishing/adapters/worker/prepared-draft-artifact";
 import {
   atomicWriteFile,
@@ -35,6 +37,8 @@ export interface PrepareDraftResult {
   readonly artifactPath: string;
   readonly extractionSource: "archive" | "sealed";
   readonly extractedRoot: string;
+  readonly sourceFiles: readonly string[];
+  readonly sourceFilesPath: string;
 }
 
 export async function prepareDraft(input: {
@@ -54,6 +58,10 @@ export async function prepareDraft(input: {
   const stagingDirectory = resolve(input.stagingDirectory);
   const extractedRoot = resolve(stagingDirectory, "extracted");
   const artifactPath = resolve(stagingDirectory, preparationArtifactFilename);
+  const sourceFilesPath = resolve(
+    stagingDirectory,
+    preparedSourceFilesFilename,
+  );
   try {
     await mkdir(dirname(stagingDirectory), { mode: 0o700, recursive: true });
     await mkdir(stagingDirectory, { mode: 0o700, recursive: false });
@@ -161,16 +169,26 @@ export async function prepareDraft(input: {
       typographyRiskSummariesTruncated: typography.riskSummariesTruncated,
       version: draftPreparationVersion,
     });
+    const sourceFiles = createPreparedSourceFiles(
+      resources.resources.map((resource) => resource.relativePath),
+    );
     await profilePipelineStage("artifact_write", () =>
-      atomicWriteFile(artifactPath, `${JSON.stringify(artifact)}\n`, {
-        mode: 0o600,
-      }),
+      Promise.all([
+        atomicWriteFile(artifactPath, `${JSON.stringify(artifact)}\n`, {
+          mode: 0o600,
+        }),
+        atomicWriteFile(sourceFilesPath, `${JSON.stringify(sourceFiles)}\n`, {
+          mode: 0o600,
+        }),
+      ]),
     );
     return Object.freeze({
       artifact,
       artifactPath,
       extractedRoot,
       extractionSource,
+      sourceFiles,
+      sourceFilesPath,
     });
   } catch (error) {
     await rm(stagingDirectory, { force: true, recursive: true });
