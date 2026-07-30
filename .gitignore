@@ -16,6 +16,10 @@ data/
 # Administrator-provided, non-redistributable MinerU acceptance fixtures.
 /tests/fixtures/mineru/real/
 
+# Administrator-provided, non-redistributable EPUB acceptance fixtures.
+/tests/fixtures/epub/*.epub
+/tests/fixtures/epub/real/
+
 # Deterministically generated renderer assets and private publishing-quality evidence.
 /public/_astro/renderers/
 /public/_astro/scripts/
