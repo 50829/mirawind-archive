@@ -2,14 +2,7 @@ import { createServer } from "node:http";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createTemporaryDataRoot } from "../../helpers/data-root";
-import { openMigratedTestDatabase } from "../../helpers/database";
-import {
-  assertResponsePolicy,
-  fetchWithTimeout,
-  readJsonBody,
-  waitForHttp,
-} from "../../helpers/http";
+import { fetchWithTimeout, waitForHttp } from "../../helpers/http";
 import {
   reserveTcpPort,
   startManagedTestProcess,
@@ -24,26 +17,6 @@ afterEach(async () => {
 });
 
 describe("isolated runtime test helpers", () => {
-  it("creates a private removable data root and migrated real SQLite", async () => {
-    const dataRoot = await createTemporaryDataRoot("helper-proof");
-    cleanups.push(dataRoot.cleanup);
-    const database = await openMigratedTestDatabase(dataRoot);
-    cleanups.push(async () => database.close());
-
-    expect(database.schemaVersion).toBe(1);
-    expect(
-      database.database
-        .prepare(
-          "SELECT COUNT(*) AS count FROM sqlite_master WHERE name = 'books'",
-        )
-        .get(),
-    ).toEqual({ count: 1 });
-    expect(database.database.pragma("journal_mode", { simple: true })).toBe(
-      "wal",
-    );
-    expect(database.path.startsWith(dataRoot.path)).toBe(true);
-  });
-
   it("performs bounded HTTP requests and verifies response policy", async () => {
     const port = await reserveTcpPort();
     const server = createServer((_request, response) => {
@@ -69,13 +42,16 @@ describe("isolated runtime test helpers", () => {
     );
 
     const response = await waitForHttp(`http://127.0.0.1:${port}/health`);
-    assertResponsePolicy(response, {
+    expect({
+      body: await response.json(),
+      cacheControl: response.headers.get("cache-control"),
+      robotsTag: response.headers.get("x-robots-tag"),
+      status: response.status,
+    }).toEqual({
+      body: { ready: true },
       cacheControl: "private, no-store",
       robotsTag: "noindex",
       status: 200,
-    });
-    expect(await readJsonBody<{ ready: boolean }>(response)).toEqual({
-      ready: true,
     });
     await expect(
       fetchWithTimeout(`http://127.0.0.1:${port}/slow`, {

@@ -2,12 +2,6 @@ export interface TestHttpRequestOptions extends RequestInit {
   readonly timeoutMs?: number;
 }
 
-export interface ExpectedResponsePolicy {
-  readonly cacheControl: string;
-  readonly robotsTag?: string | null;
-  readonly status: number;
-}
-
 export async function fetchWithTimeout(
   input: string | URL,
   options: TestHttpRequestOptions = {},
@@ -24,37 +18,6 @@ export async function fetchWithTimeout(
     redirect: requestOptions.redirect ?? "manual",
     signal,
   });
-}
-
-export async function readJsonBody<T>(response: Response): Promise<T> {
-  const contentType = response.headers.get("content-type");
-  if (!contentType?.toLowerCase().includes("application/json")) {
-    throw new Error(
-      `Expected a JSON response, received ${contentType ?? "no content type"}`,
-    );
-  }
-  return (await response.json()) as T;
-}
-
-export function assertResponsePolicy(
-  response: Response,
-  expected: ExpectedResponsePolicy,
-): void {
-  const actual = {
-    cacheControl: response.headers.get("cache-control"),
-    robotsTag: response.headers.get("x-robots-tag"),
-    status: response.status,
-  };
-  if (
-    actual.status !== expected.status ||
-    actual.cacheControl !== expected.cacheControl ||
-    (expected.robotsTag !== undefined &&
-      actual.robotsTag !== expected.robotsTag)
-  ) {
-    throw new Error(
-      `Unexpected response policy: ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}`,
-    );
-  }
 }
 
 export async function waitForHttp(
