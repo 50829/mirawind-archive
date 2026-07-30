@@ -138,7 +138,7 @@ async function runCommand(input: {
     child.stdout.on("data", append);
     child.stderr.on("data", append);
     child.once("error", rejectCommand);
-    child.once("exit", (code, signal) => {
+    child.once("close", (code, signal) => {
       if (code === 0) resolveCommand(tail);
       else {
         rejectCommand(

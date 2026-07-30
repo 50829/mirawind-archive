@@ -290,7 +290,15 @@ version remains current while the next candidate builds.
 
 **Purpose**: Prove the complete goal, remove remnants and synchronize all evidence.
 
-- [ ] T091 Run the 500-page synthetic stress book and 2,000/20,000 structure bounds, saving machine-readable output under ignored `.cache/008-publishing-performance/`
+- [x] T091 Run the 500-page synthetic stress book and 2,000/20,000 structure bounds, saving machine-readable output under ignored `.cache/008-publishing-performance/`
+
+T091 passed with machine-readable evidence in ignored `t091-stress.json` and
+`t091-structure.json`. The synthetic run produced 501 pages, 12,002 blocks and 32 resources in
+10.154 seconds wall time, reached preview in 10.084 seconds, switched publication in 0.869 ms and
+peaked at 633,589,760 bytes of process-tree RSS. The 2,000/20,000-item workbench regression passed;
+the virtualized structure DOM remained bounded to at most 30 rows, and the 20,000-item view remained
+navigable and could be exited.
+
 - [ ] T092 Run the formal fifteen-book AB/BA/AB paired benchmark, expand only when CV exceeds 10%, validate all frozen thresholds and publish the bounded report
 - [ ] T095 After the last source change, run the standard format, lint/architecture, typecheck, full
       Vitest, E2E and build gates once; reuse the T091 stress and T092 paired-benchmark artifacts instead
