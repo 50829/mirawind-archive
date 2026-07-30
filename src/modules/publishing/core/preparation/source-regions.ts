@@ -57,10 +57,6 @@ function hash(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-export function utf8ByteOffset(source: string, sourceOffset: number): number {
-  return new SourceTextIndex(source).byteOffsetAt(sourceOffset);
-}
-
 function byteRangeForNode(
   sourceIndex: SourceTextIndex,
   node: TransientDocumentNode,

@@ -18,10 +18,8 @@ import {
   supplementalPdfPageIndices,
   type PrintedContentsCandidate,
 } from "../../src/modules/publishing/core/preparation/printed-contents.js";
-import {
-  applySourceRegions,
-  utf8ByteOffset,
-} from "../../src/modules/publishing/core/preparation/source-regions.js";
+import { applySourceRegions } from "../../src/modules/publishing/core/preparation/source-regions.js";
+import { SourceTextIndex } from "../../src/modules/publishing/core/preparation/source-text-index.js";
 import {
   proposeDocumentStructure,
   type ContentRole,
@@ -149,6 +147,7 @@ function similarity(left: string, right: string): number {
 }
 
 function rootRanges(document: NormalizedDocument): readonly RootRange[] {
+  const sourceIndex = new SourceTextIndex(document.source);
   return Object.freeze(
     (document.root.children ?? []).map((root, rootIndex) => {
       const start = root.position?.start.offset;
@@ -157,9 +156,9 @@ function rootRanges(document: NormalizedDocument): readonly RootRange[] {
         throw new Error("OBSERVED_REFERENCE_ROOT_POSITION_MISSING");
       }
       return Object.freeze({
-        end: utf8ByteOffset(document.source, Number(end)),
+        end: sourceIndex.byteOffsetAt(Number(end)),
         rootIndex,
-        start: utf8ByteOffset(document.source, Number(start)),
+        start: sourceIndex.byteOffsetAt(Number(start)),
       });
     }),
   );

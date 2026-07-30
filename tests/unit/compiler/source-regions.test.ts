@@ -7,9 +7,9 @@ import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/par
 import {
   SourceRegionValidationError,
   applySourceRegions,
-  utf8ByteOffset,
 } from "@/modules/publishing/core/preparation/source-regions";
 import type { ConfirmedSourceRegion } from "@/modules/publishing/core/preparation/document-model";
+import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
 
 function sha(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -23,10 +23,11 @@ function setup() {
     idFactory: () => `blk_${String(++ordinal).padStart(16, "0")}`,
   });
   const children = document.root.children ?? [];
+  const sourceIndex = new SourceTextIndex(source);
   const start = children[0]?.position?.start.offset ?? 0;
   const end = children[1]?.position?.end.offset ?? 0;
-  const startByte = utf8ByteOffset(source, start);
-  const endByte = utf8ByteOffset(source, end);
+  const startByte = sourceIndex.byteOffsetAt(start);
+  const endByte = sourceIndex.byteOffsetAt(end);
   const region: ConfirmedSourceRegion = {
     applied: true,
     disposition: "reference_only",
@@ -47,7 +48,7 @@ function setup() {
 describe("reference-only source regions", () => {
   it("converts Unicode offsets to UTF-8 bytes and reversibly filters complete root blocks", () => {
     const { document, region, source } = setup();
-    expect(utf8ByteOffset(source, source.indexOf("中"))).toBe(
+    expect(new SourceTextIndex(source).byteOffsetAt(source.indexOf("中"))).toBe(
       Buffer.byteLength(source.slice(0, source.indexOf("中")), "utf8"),
     );
     const result = applySourceRegions({
@@ -123,10 +124,11 @@ describe("reference-only source regions", () => {
   it("rejects removing a definition referenced by active content", () => {
     const { document, source } = setup();
     const definition = document.root.children?.at(-1);
+    const sourceIndex = new SourceTextIndex(source);
     const start = definition?.position?.start.offset ?? 0;
     const end = definition?.position?.end.offset ?? 0;
-    const startByte = utf8ByteOffset(source, start);
-    const endByte = utf8ByteOffset(source, end);
+    const startByte = sourceIndex.byteOffsetAt(start);
+    const endByte = sourceIndex.byteOffsetAt(end);
     expect(() =>
       applySourceRegions({
         document,

@@ -5,13 +5,13 @@ import {
   reconstructPrintedLayoutRows,
   type LayoutEvidence,
 } from "@/modules/publishing/core/preparation/layout-evidence";
-import { utf8ByteOffset } from "@/modules/publishing/core/preparation/source-regions";
 import type {
   ConfirmedSourceRegion,
   NormalizedDocument,
   NormalizedHeading,
   TransientDocumentNode,
 } from "@/modules/publishing/core/preparation/document-model";
+import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
 
 export interface PrintedContentsDiagnostic {
   readonly blockId?: string;
@@ -633,6 +633,7 @@ function lineEntries(input: {
   readonly repairableContextualTitles?: ReadonlySet<string>;
   readonly source: string;
   readonly sourceBytes: Uint8Array;
+  readonly sourceIndex: SourceTextIndex;
 }): readonly ExtractedEntry[] {
   if (!input.block.position) return [];
   const blockSource = input.source.slice(
@@ -670,8 +671,8 @@ function lineEntries(input: {
             input.block.position.start.offset + lineOffset + segment.start;
           const endOffset =
             input.block.position.start.offset + lineOffset + segment.end;
-          const startByte = utf8ByteOffset(input.source, startOffset);
-          const endByte = utf8ByteOffset(input.source, endOffset);
+          const startByte = input.sourceIndex.byteOffsetAt(startOffset);
+          const endByte = input.sourceIndex.byteOffsetAt(endOffset);
           const referenceLevel = contextualLevel(
             segment.text,
             numbering,
@@ -2592,6 +2593,7 @@ export function detectPrintedContents(input: {
   if (hash(sourceBytes) !== input.sourceSha256) {
     throw new Error("PRINTED_TOC_SOURCE_HASH_MISMATCH");
   }
+  const sourceIndex = new SourceTextIndex(input.document.source);
   const contextualTitles = repairableContextualTitles(input.layoutEvidence);
   const roots = input.document.root.children ?? [];
   const layoutLevelByTitle = layoutLevels(input.layoutEvidence);
@@ -2631,6 +2633,7 @@ export function detectPrintedContents(input: {
         previousLevel: 0,
         source: input.document.source,
         sourceBytes,
+        sourceIndex,
       });
       if (seed.length === 0) continue;
       let evidenceEntries = seed.length;
@@ -2647,6 +2650,7 @@ export function detectPrintedContents(input: {
           previousLevel: 0,
           source: input.document.source,
           sourceBytes,
+          sourceIndex,
         });
         if (extracted.length > 0) {
           evidenceEntries += extracted.length;
@@ -2709,6 +2713,7 @@ export function detectPrintedContents(input: {
         repairableContextualTitles: contextualTitles,
         source: input.document.source,
         sourceBytes,
+        sourceIndex,
       })) {
         if (entry.normalizedTitle) seenTitles.add(entry.normalizedTitle);
       }
@@ -2798,6 +2803,7 @@ export function detectPrintedContents(input: {
         repairableContextualTitles: contextualTitles,
         source: input.document.source,
         sourceBytes,
+        sourceIndex,
       });
       const previousEntry = sourceEntries.at(-1);
       const detachedPartSubtitle =
@@ -2823,10 +2829,7 @@ export function detectPrintedContents(input: {
         const sourceTitle = `${plainTitle(previousEntry.sourceTitle)} ${plainTitle(
           rootTitle(block),
         )}`;
-        const endByte = utf8ByteOffset(
-          input.document.source,
-          block.position.end.offset,
-        );
+        const endByte = sourceIndex.byteOffsetAt(block.position.end.offset);
         sourceEntries[sourceEntries.length - 1] = Object.freeze({
           ...previousEntry,
           normalizedTitle: normalizedTitle(sourceTitle),
@@ -3200,14 +3203,8 @@ export function detectPrintedContents(input: {
     const firstNode = roots[range.startIndex];
     const candidateEnd = roots[candidateEndIndex] ?? firstNode;
     if (!firstNode?.position || !candidateEnd?.position) continue;
-    const startByte = utf8ByteOffset(
-      input.document.source,
-      firstNode.position.start.offset,
-    );
-    const endByte = utf8ByteOffset(
-      input.document.source,
-      candidateEnd.position.end.offset,
-    );
+    const startByte = sourceIndex.byteOffsetAt(firstNode.position.start.offset);
+    const endByte = sourceIndex.byteOffsetAt(candidateEnd.position.end.offset);
     const recurrenceCount = matchedEntries.filter((entry) =>
       laterHeadings.some((heading) => matchScore(entry, heading) > 0),
     ).length;

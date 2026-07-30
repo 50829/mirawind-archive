@@ -300,6 +300,17 @@ the virtualized structure DOM remained bounded to at most 30 rows, and the 20,00
 navigable and could be exited.
 
 - [ ] T092 Run the formal fifteen-book AB/BA/AB paired benchmark, expand only when CV exceeds 10%, validate all frozen thresholds and publish the bounded report
+
+The first requested `A -> B` pair is recorded in `docs/audits/008-paired-performance.md`. Both sides
+were 15/15 reference exact. Total wall improved 29.72% and slowest-five time improved 35.72%, while
+accepted-to-preview improved only 3.46%, one fixture regressed 10.79%, and peak RSS increased 34.27%.
+The regressing fixture was then reduced from 59.694 seconds to 31.955 seconds by reusing one
+`SourceTextIndex` during printed-directory extraction; it remained reference-v2 exact and passed
+the 94-test focused suite plus full typecheck. Retained profiling corrected the memory hypothesis:
+the 6.42 MB manifest inherits an already-high heap, while up to four oversized unified/KaTeX page
+renders and their completed HTML can overlap before ordered consumption. T092 remains open; the
+next focused change is page-weight-aware bounded rendering, not manifest optimization, and neither
+focused result is an `AB/BA/AB` completion claim.
 - [ ] T095 After the last source change, run the standard format, lint/architecture, typecheck, full
       Vitest, E2E and build gates once; reuse the T091 stress and T092 paired-benchmark artifacts instead
       of rerunning those workloads
