@@ -95,20 +95,21 @@ export class DraftCandidateRepository {
     if (current.current_candidate_id) {
       this.database
         .prepare(
-          `UPDATE draft_candidates
-           SET state = 'discarded', safe_error_code = 'CANDIDATE_SUPERSEDED',
-               completed_at = ?
-           WHERE id = ? AND state IN ('building', 'ready')`,
-        )
-        .run(input.nowMs, current.current_candidate_id);
-      this.database
-        .prepare(
           `UPDATE book_versions SET state = 'discarded'
            WHERE id = (
              SELECT version_id FROM draft_candidates WHERE id = ?
            ) AND state = 'ready'`,
         )
         .run(current.current_candidate_id);
+      this.database
+        .prepare(
+          `UPDATE draft_candidates
+           SET state = 'discarded', safe_error_code = 'CANDIDATE_SUPERSEDED',
+               version_id = NULL, semantic_digest = NULL,
+               blocking_diagnostic_count = NULL, completed_at = ?
+           WHERE id = ? AND state IN ('building', 'ready')`,
+        )
+        .run(input.nowMs, current.current_candidate_id);
       this.database
         .prepare(
           `UPDATE jobs

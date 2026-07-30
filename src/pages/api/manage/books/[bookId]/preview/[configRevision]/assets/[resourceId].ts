@@ -66,8 +66,10 @@ export const GET: APIRoute = async ({ params, request }) => {
   const resource = await createPublishingArtifactServer(
     layout,
   ).readPreviewResource({
-    previewRelativePath: `books/${bookId}/versions/${candidate.versionId}/published`,
+    bookId,
     resourceId,
+    versionId: candidate.versionId,
+    versionRelativePath: `books/${bookId}/versions/${candidate.versionId}`,
   });
   const headers = new Headers({
     "Access-Control-Allow-Origin": "*",
@@ -77,5 +79,5 @@ export const GET: APIRoute = async ({ params, request }) => {
     "X-Content-Type-Options": "nosniff",
   });
   applyResponsePolicy(headers, "draft");
-  return new Response(Uint8Array.from(resource.bytes).buffer, { headers });
+  return new Response(resource.body, { headers });
 };

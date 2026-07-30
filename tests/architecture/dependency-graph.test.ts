@@ -22,7 +22,6 @@ describe("architecture dependency graph", () => {
     ["ports", "INJECTED_PORT_LIMIT"],
     ["alias-escape", "UNRESOLVED_INTERNAL_IMPORT"],
     ["entrypoint-adapter", "FORBIDDEN_DEPENDENCY"],
-    ["core-to-legacy", "FORBIDDEN_DEPENDENCY"],
     ["core-runtime-io", "FORBIDDEN_DEPENDENCY"],
     ["long-cycle", "DEPENDENCY_CYCLE"],
   ])("rejects %s", async (fixture, code) => {

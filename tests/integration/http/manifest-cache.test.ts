@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -7,6 +7,8 @@ import {
   PublishedBookService,
   resetPublishedManifestCacheForTests,
 } from "@/modules/reader/adapters/filesystem/published-book";
+import { VersionArtifactIndexCache } from "@/modules/reader/adapters/filesystem/version-artifact-index";
+import { DraftArtifactReader } from "@/modules/publishing/adapters/filesystem/draft-artifacts";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
@@ -20,6 +22,7 @@ const anonymous = {
   reason: "UNAUTHENTICATED",
 } as const;
 const blockId = "blk_manifest_cache_test_0001";
+const resourceId = "res_manifest_cache_test_0001";
 
 function manifest(bookId: number): Readonly<Record<string, unknown>> {
   return {
@@ -28,7 +31,7 @@ function manifest(bookId: number): Readonly<Record<string, unknown>> {
         kind: "heading",
         normalized_visible_text: "Chapter",
         page_id: 1,
-        resource_ids: [],
+        resource_ids: [resourceId],
         source: {
           end: { column: 10, line: 1 },
           path: "source/book.md",
@@ -56,10 +59,19 @@ function manifest(bookId: number): Readonly<Record<string, unknown>> {
         first_block_id: blockId,
         output_path: "published/pages/1.html",
         page_id: 1,
+        alias: "chapter-one",
         title: "Chapter",
       },
     ],
-    resources: {},
+    resources: {
+      [resourceId]: {
+        media_type: "image/png",
+        output_path: `published/resources/${resourceId}`,
+        sha256: "e".repeat(64),
+        size: 3,
+        source_path: "source/image.png",
+      },
+    },
     schema_version: 2,
     source_files: [
       {
@@ -132,5 +144,151 @@ describe("immutable published manifest cache", () => {
         code: "BOOK_UNAVAILABLE",
         status: 503,
       });
+    }));
+
+  it("shares one cold load and resolves page, alias and resource indexes exactly", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const fixture = setupPublicationFixture(database);
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
+        database,
+        nowMs: 12,
+      });
+      const versionDirectory = resolve(
+        dataRoot.layout.root,
+        "books",
+        String(fixture.book.id),
+        "versions",
+        publicationTestVersionId,
+      );
+      await mkdir(versionDirectory, { mode: 0o700, recursive: true });
+      await writeFile(
+        resolve(versionDirectory, "document-manifest.json"),
+        `${JSON.stringify(manifest(fixture.book.id))}\n`,
+        { mode: 0o600 },
+      );
+
+      let reads = 0;
+      let releaseLoad: () => void = () => {};
+      const loadReleased = new Promise<void>((resolveLoad) => {
+        releaseLoad = resolveLoad;
+      });
+      let markStarted: () => void = () => {};
+      const loadStarted = new Promise<void>((resolveStarted) => {
+        markStarted = resolveStarted;
+      });
+      const indexes = new VersionArtifactIndexCache(async (path) => {
+        reads += 1;
+        markStarted();
+        await loadReleased;
+        return readFile(path, "utf8");
+      });
+      const service = new PublishedBookService(
+        database,
+        dataRoot.layout,
+        indexes,
+      );
+      const requests = Array.from({ length: 40 }, () =>
+        service.resolvePage({
+          administrator: anonymous,
+          bookKey: String(fixture.book.id),
+          pageKey: "1",
+        }),
+      );
+
+      await loadStarted;
+      expect(reads).toBe(1);
+      releaseLoad();
+      await expect(Promise.all(requests)).resolves.toHaveLength(40);
+      await expect(
+        service.resolvePage({
+          administrator: anonymous,
+          bookKey: String(fixture.book.id),
+          pageKey: "chapter-one",
+        }),
+      ).resolves.toMatchObject({ pageAlias: "chapter-one", pageId: 1 });
+      await expect(
+        service.resolveAsset({
+          administrator: anonymous,
+          bookKey: String(fixture.book.id),
+          resourceId,
+          versionId: publicationTestVersionId,
+        }),
+      ).resolves.toMatchObject({ resourceId, sizeBytes: 3 });
+      expect(reads).toBe(1);
+    }));
+
+  it("does not retain a failed cold load", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const fixture = setupPublicationFixture(database);
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
+        database,
+        nowMs: 12,
+      });
+      const json = `${JSON.stringify(manifest(fixture.book.id))}\n`;
+      let reads = 0;
+      const indexes = new VersionArtifactIndexCache(async () => {
+        reads += 1;
+        return reads === 1 ? "{invalid" : json;
+      });
+      const service = new PublishedBookService(
+        database,
+        dataRoot.layout,
+        indexes,
+      );
+      const input = {
+        administrator: anonymous,
+        bookKey: String(fixture.book.id),
+        pageKey: "1",
+      };
+
+      await expect(service.resolvePage(input)).rejects.toMatchObject({
+        code: "BOOK_UNAVAILABLE",
+        status: 503,
+      });
+      await expect(service.resolvePage(input)).resolves.toMatchObject({
+        pageId: 1,
+      });
+      expect(reads).toBe(2);
+    }));
+
+  it("streams preview resources from validated manifest metadata", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const fixture = setupPublicationFixture(database);
+      const versionRelativePath = `books/${fixture.book.id}/versions/${publicationTestVersionId}`;
+      const versionDirectory = resolve(
+        dataRoot.layout.root,
+        versionRelativePath,
+      );
+      await mkdir(resolve(versionDirectory, "published", "resources"), {
+        mode: 0o700,
+        recursive: true,
+      });
+      await writeFile(
+        resolve(versionDirectory, "document-manifest.json"),
+        `${JSON.stringify(manifest(fixture.book.id))}\n`,
+        { mode: 0o600 },
+      );
+      await writeFile(
+        resolve(versionDirectory, "published", "resources", resourceId),
+        Uint8Array.from([1, 2, 3]),
+        { mode: 0o600 },
+      );
+
+      const resource = await new DraftArtifactReader(
+        dataRoot.layout,
+      ).readPreviewResource({
+        bookId: fixture.book.id,
+        resourceId,
+        versionId: publicationTestVersionId,
+        versionRelativePath,
+      });
+
+      expect(resource.mediaType).toBe("image/png");
+      expect(Object.hasOwn(resource, "bytes")).toBe(false);
+      await expect(new Response(resource.body).arrayBuffer()).resolves.toEqual(
+        Uint8Array.from([1, 2, 3]).buffer,
+      );
     }));
 });

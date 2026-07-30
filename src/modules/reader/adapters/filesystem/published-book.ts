@@ -1,6 +1,4 @@
-import { constants } from "node:fs";
-import { open, readFile, type FileHandle } from "node:fs/promises";
-import { Readable } from "node:stream";
+import { readFile } from "node:fs/promises";
 
 import type Database from "better-sqlite3";
 
@@ -12,9 +10,18 @@ import {
 } from "@/http/authorization/book-guard";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
-import { validateDocumentManifest } from "@/modules/publishing/application/public";
+import {
+  sharedVersionArtifactIndex,
+  type IndexedManifestPage,
+  type VersionArtifactIndex,
+  type VersionArtifactIndexCache,
+} from "@/modules/reader/adapters/filesystem/version-artifact-index";
 import type { StorageLayout } from "@/platform/filesystem/layout";
 import { resolveContainedPath } from "@/platform/filesystem/layout";
+import {
+  fileHandleWebStream,
+  openVerifiedContainedFile,
+} from "@/platform/filesystem/verified-file";
 
 interface CurrentBookRow {
   current_version_id: string | null;
@@ -40,27 +47,6 @@ interface OriginalRow extends CurrentBookRow {
   original_name: string | null;
   sha256: string | null;
   size_bytes: number | null;
-}
-
-interface ManifestPage {
-  readonly alias?: string;
-  readonly output_path: string;
-  readonly page_id: number;
-  readonly title: string;
-}
-
-interface ManifestResource {
-  readonly media_type: string;
-  readonly output_path: string;
-  readonly sha256: string;
-  readonly size: number;
-}
-
-interface ReaderManifest {
-  readonly book_id: number;
-  readonly pages: readonly ManifestPage[];
-  readonly resources: Readonly<Record<string, ManifestResource>>;
-  readonly version_id: string;
 }
 
 export interface ResolvedPublishedBook {
@@ -101,61 +87,9 @@ export interface ResolvedOriginalFile extends ResolvedPublishedBook {
 
 const bookAliasPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const pageAliasPattern = bookAliasPattern;
-const maximumCachedManifestBytes = 64 * 1024 * 1024;
-const maximumCachedManifests = 16;
-const manifestCache = new Map<
-  string,
-  {
-    readonly bytes: number;
-    readonly manifest: ReaderManifest;
-  }
->();
-let cachedManifestBytes = 0;
-
-function manifestCacheKey(
-  layout: StorageLayout,
-  versionId: string,
-  manifestSha256: string,
-): string {
-  return `${layout.root}\0${versionId}\0${manifestSha256}`;
-}
-
-function cachedManifest(key: string): ReaderManifest | null {
-  const cached = manifestCache.get(key);
-  if (!cached) return null;
-  manifestCache.delete(key);
-  manifestCache.set(key, cached);
-  return cached.manifest;
-}
-
-function cacheManifest(
-  key: string,
-  manifest: ReaderManifest,
-  bytes: number,
-): void {
-  if (bytes > maximumCachedManifestBytes) return;
-  const existing = manifestCache.get(key);
-  if (existing) {
-    cachedManifestBytes -= existing.bytes;
-    manifestCache.delete(key);
-  }
-  manifestCache.set(key, { bytes, manifest });
-  cachedManifestBytes += bytes;
-  while (
-    manifestCache.size > maximumCachedManifests ||
-    cachedManifestBytes > maximumCachedManifestBytes
-  ) {
-    const oldestKey = manifestCache.keys().next().value as string | undefined;
-    if (!oldestKey) break;
-    const oldest = manifestCache.get(oldestKey);
-    manifestCache.delete(oldestKey);
-    cachedManifestBytes -= oldest?.bytes ?? 0;
-  }
-}
 
 export function resetPublishedManifestCacheForTests(): void {
-  manifestCache.clear();
-  cachedManifestBytes = 0;
+  sharedVersionArtifactIndex.clear();
 }
 
 function hidden(): never {
@@ -172,37 +106,6 @@ function unavailable(): never {
     "This book is temporarily unavailable.",
     503,
   );
-}
-
-async function openVerifiedFile(
-  layout: StorageLayout,
-  relativePath: string,
-  expectedSize: number,
-): Promise<FileHandle> {
-  let handle: FileHandle | undefined;
-  try {
-    const path = await resolveContainedPath(layout.root, relativePath);
-    handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-    const metadata = await handle.stat();
-    if (!metadata.isFile() || metadata.size !== expectedSize) {
-      throw new Error("READER_FILE_METADATA_MISMATCH");
-    }
-    return handle;
-  } catch {
-    await handle?.close();
-    return unavailable();
-  }
-}
-
-function webStream(
-  handle: FileHandle,
-  range?: { readonly end: number; readonly start: number },
-): ReadableStream<Uint8Array> {
-  return Readable.toWeb(
-    handle.createReadStream(
-      range ? { end: range.end, start: range.start } : {},
-    ),
-  ) as ReadableStream<Uint8Array>;
 }
 
 function keyPredicate(bookKey: string): {
@@ -274,41 +177,31 @@ function currentSelect(predicate: string): string {
           LIMIT 1`;
 }
 
-async function readManifest(
-  layout: StorageLayout,
-  book: ResolvedPublishedBook,
-  versionRelativePath = book.versionRelativePath,
-  versionId = book.versionId,
-  manifestSha256 = book.manifestSha256,
-): Promise<ReaderManifest> {
-  const cacheKey = manifestCacheKey(layout, versionId, manifestSha256);
-  const cached = cachedManifest(cacheKey);
-  if (cached) return cached;
-  const path = await resolveContainedPath(
-    layout.root,
-    `${versionRelativePath}/document-manifest.json`,
-  );
-  let parsed: unknown;
-  try {
-    const json = await readFile(path, "utf8");
-    parsed = JSON.parse(json);
-    validateDocumentManifest(parsed);
-    const manifest = parsed as ReaderManifest;
-    if (manifest.book_id !== book.bookId || manifest.version_id !== versionId) {
-      return unavailable();
-    }
-    cacheManifest(cacheKey, manifest, Buffer.byteLength(json, "utf8"));
-    return manifest;
-  } catch {
-    return unavailable();
-  }
-}
-
 export class PublishedBookService {
   constructor(
     private readonly database: Database.Database,
     private readonly layout: StorageLayout,
+    private readonly artifactIndexes: VersionArtifactIndexCache = sharedVersionArtifactIndex,
   ) {}
+
+  private async artifactIndex(
+    book: ResolvedPublishedBook,
+    versionRelativePath = book.versionRelativePath,
+    versionId = book.versionId,
+    manifestSha256 = book.manifestSha256,
+  ): Promise<VersionArtifactIndex> {
+    try {
+      return await this.artifactIndexes.load({
+        bookId: book.bookId,
+        layout: this.layout,
+        manifestSha256,
+        versionId,
+        versionRelativePath,
+      });
+    } catch {
+      return unavailable();
+    }
+  }
 
   resolveCurrent(
     bookKey: string,
@@ -328,20 +221,18 @@ export class PublishedBookService {
     readonly pageKey: string;
   }): Promise<ResolvedPublishedPage> {
     const book = this.resolveCurrent(input.bookKey, input.administrator);
-    const manifest = await readManifest(this.layout, book);
-    let page: ManifestPage | undefined;
+    const artifacts = await this.artifactIndex(book);
+    let page: IndexedManifestPage | undefined;
     if (/^[1-9][0-9]*$/u.test(input.pageKey)) {
       const pageId = Number(input.pageKey);
       if (Number.isSafeInteger(pageId)) {
-        page = manifest.pages.find((candidate) => candidate.page_id === pageId);
+        page = artifacts.pageById(pageId);
       }
     } else if (
       pageAliasPattern.test(input.pageKey) &&
       input.pageKey.length <= 120
     ) {
-      page = manifest.pages.find(
-        (candidate) => candidate.alias === input.pageKey,
-      );
+      page = artifacts.pageByAlias(input.pageKey);
     }
     if (!page) return hidden();
     return Object.freeze({
@@ -421,14 +312,13 @@ export class PublishedBookService {
     ) {
       return hidden();
     }
-    const manifest = await readManifest(
-      this.layout,
+    const artifacts = await this.artifactIndex(
       book,
       row.requested_version_rel_path,
       input.versionId,
       row.requested_manifest_sha256,
     );
-    const resource = manifest.resources[input.resourceId];
+    const resource = artifacts.resourceById(input.resourceId);
     if (!resource) return hidden();
     return Object.freeze({
       ...book,
@@ -445,13 +335,17 @@ export class PublishedBookService {
   async readAssetBody(
     asset: ResolvedPublishedAsset,
   ): Promise<ReadableStream<Uint8Array>> {
-    return webStream(
-      await openVerifiedFile(
-        this.layout,
-        asset.resourceRelativePath,
-        asset.sizeBytes,
-      ),
-    );
+    try {
+      return fileHandleWebStream(
+        await openVerifiedContainedFile({
+          expectedSize: asset.sizeBytes,
+          relativePath: asset.resourceRelativePath,
+          root: this.layout.root,
+        }),
+      );
+    } catch {
+      return unavailable();
+    }
   }
 
   resolveOriginal(input: {
@@ -515,13 +409,17 @@ export class PublishedBookService {
     original: ResolvedOriginalFile,
     range?: { readonly end: number; readonly start: number },
   ): Promise<ReadableStream<Uint8Array>> {
-    return webStream(
-      await openVerifiedFile(
-        this.layout,
-        original.originalRelativePath,
-        original.sizeBytes,
-      ),
-      range,
-    );
+    try {
+      return fileHandleWebStream(
+        await openVerifiedContainedFile({
+          expectedSize: original.sizeBytes,
+          relativePath: original.originalRelativePath,
+          root: this.layout.root,
+        }),
+        range,
+      );
+    } catch {
+      return unavailable();
+    }
   }
 }

@@ -9,10 +9,9 @@ import {
   isRunJobMessage,
   jobChildProtocolVersion,
 } from "@/entrypoints/worker/protocol";
-import nullableCommand from "../fixtures/worker/nullable-command-v2.json";
 
 describe("worker command union", () => {
-  it("accepts the closed reconcile command and rejects the legacy nullable bag", () => {
+  it("accepts an exact command from the closed union", () => {
     const jobId = createOpaqueId("job");
     const command = {
       attempt: 1,
@@ -28,7 +27,12 @@ describe("worker command union", () => {
     };
 
     expect(isRunJobMessage(message)).toBe(true);
-    expect(isRunJobMessage(nullableCommand)).toBe(false);
+    expect(
+      isRunJobMessage({
+        ...message,
+        input: { ...command, unexpected: true },
+      }),
+    ).toBe(false);
   });
 
   it("dispatches every command through an exhaustive kind registry", () => {

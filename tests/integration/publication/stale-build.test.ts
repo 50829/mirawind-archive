@@ -82,6 +82,41 @@ describe("guarded candidate publication compare-and-swap", () => {
       ).toEqual({ count: 1 });
     }));
 
+  it("queues the next candidate after publication without changing the public version", () =>
+    withMigratedTestDatabase(async ({ database }) => {
+      const fixture = setupPublicationFixture(database);
+      await publishReadyCandidateForTest({
+        bookId: fixture.book.id,
+        database,
+        nowMs: 12,
+      });
+
+      const next = fixture.candidates.createForCurrentRevision({
+        bookId: fixture.book.id,
+        configRevision: 1,
+        nowMs: 13,
+        sourceId: publicationTestSourceId,
+      });
+
+      expect(next).toMatchObject({ state: "building", versionId: null });
+      expect(
+        fixture.candidates.require(fixture.candidate.attemptId),
+      ).toMatchObject({
+        blockingDiagnosticCount: null,
+        semanticDigest: null,
+        state: "discarded",
+        versionId: null,
+      });
+      expect(fixture.drafts.requireBook(fixture.book.id)).toMatchObject({
+        currentCandidateId: next.attemptId,
+        currentVersionId: publicationTestVersionId,
+        visibility: "public",
+      });
+      expect(
+        new VersionRepository(database).require(publicationTestVersionId),
+      ).toMatchObject({ state: "published" });
+    }));
+
   it("keeps the public pointer empty when the draft becomes stale", () =>
     withMigratedTestDatabase(async ({ database }) => {
       const fixture = setupPublicationFixture(database);

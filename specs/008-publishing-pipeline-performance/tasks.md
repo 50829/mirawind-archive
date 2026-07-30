@@ -63,9 +63,9 @@ existing compiler/publication parity tests remain byte/semantic equivalent.
 
 ### Tests for User Story 4
 
-- [x] T018 [P] [US4] Add module-public-surface contract tests for publishing, reader, catalog and identity in `tests/contract/module-public-surfaces.test.ts`
+- [x] T018 [P] [US4] Enforce publishing, reader, catalog and identity public surfaces through the architecture graph and real source-tree analysis
 - [x] T019 [P] [US4] Add behavior snapshots around existing configured-document, Reader model, catalog projection and auth use cases in `tests/integration/architecture/behavior-equivalence.test.ts`
-- [x] T020 [P] [US4] Add discriminated worker-command validator tests, including old nullable-bag rejection fixtures, in `tests/contract/worker-command-union.test.ts`
+- [x] T020 [P] [US4] Add discriminated worker-command validator tests for the current closed command union and exact ingress shape in `tests/contract/worker-command-union.test.ts`
 
 ### Implementation for User Story 4
 
@@ -87,7 +87,7 @@ existing compiler/publication parity tests remain byte/semantic equivalent.
 
 Phase 3 evidence: publishing, reader, catalog and identity expose one application public surface;
 Astro pages and process entrypoints no longer import module adapters directly; the complete 222-file
-source graph and fourteen architecture fixtures report zero diagnostics. Configured-document,
+source graph and focused architecture fixtures report zero diagnostics. Configured-document,
 Reader navigation, catalog projection and Passkey policy snapshots remain equivalent. Format, lint,
 typecheck, the production process bundle, the complete Astro/Vite production build and 633 Vitest
 tests passed.
@@ -257,17 +257,30 @@ search p95 remains below 1,000 ms, and old/private/missing resources preserve au
 
 ### Behavioral Evidence for User Story 5
 
-- [ ] T080 [US5] Cover manifest cold-load single-flight and page/alias/resource index correctness in the existing Reader artifact suites
-- [ ] T082 [US5] Make the concurrent runner report and enforce separate page, resource and search p95 values
+- [x] T080 [US5] Cover manifest cold-load single-flight, retry after failed load and page/alias/resource index correctness in the existing Reader artifact suites
+- [x] T082 [US5] Make the concurrent runner report and enforce separate page, resource and search p95 values and reject requests that did not overlap a running candidate
 
 ### Implementation for User Story 5
 
-- [ ] T083 [US5] Implement promise single-flight and immutable page/alias/resource maps in `src/modules/reader/adapters/filesystem/version-artifact-index.ts`
-- [ ] T084 [US5] Route pages, resources, originals and search through reader application queries only in `src/modules/reader/application/queries/`
-- [ ] T085 [US5] Stream authorized preview/public resources from validated manifest metadata without full-file buffering in `src/modules/reader/adapters/filesystem/read-resource.ts`
-- [ ] T086 [US5] Profile candidate source/resource inventory work and implement shared validated inventory reuse only if duplicate I/O is material, preserving closure hashes and fsync rules
-- [ ] T087 [US5] Extend the benchmark runner to overlap candidate builds with page/resource/search traffic in `scripts/benchmarks/read-during-build.ts`
-- [ ] T088 [US5] Run the existing authorization/cache suites plus the concurrent page/resource/search gate and record the measured result
+- [x] T083 [US5] Implement promise single-flight and immutable page/alias/resource lookup indexes in `src/modules/reader/adapters/filesystem/version-artifact-index.ts`
+- [x] T084 [US5] Keep page, resource, original and search routes behind the composition-owned Reader facade; do not add pass-through query wrappers that duplicate the existing use cases
+- [x] T085 [US5] Stream authorized preview/public resources and originals from validated metadata through the shared verified-file primitive; delete full-resource buffering and duplicate local stream helpers
+- [x] T086 [US5] Profile candidate source/resource inventory work; retain the final closure hash pass because measured duplicate inventory is not material enough to weaken independent durability validation
+- [x] T087 [US5] Add a benchmark runner that requires every measured page/resource/search request to overlap a real running candidate in `scripts/benchmarks/read-during-build.ts`
+- [x] T088 [US5] Run the existing authorization/cache suites plus the concurrent page/resource/search gate and record the measured result
+
+Phase 7 I/O evidence: a 97-page real candidate spent 4.706 ms in resource resolution, 4.190 ms
+in asset copy and 17.743 ms in final file inventory within 279.421 ms child time. A 441-page real
+candidate with 166 resources spent 10.427 ms, 307.194 ms and 276.504 ms respectively within
+6,519.233 ms child time. The final inventory is an independent closure check after all output writes
+and accounts for 4.2% of the representative child time, so descriptor reuse was not implemented.
+
+Phase 7 Reader evidence: the authorization, private-404, cache, deletion and reading suites passed
+39 tests. During a real second 441-page candidate build, all 200 page, 200 resource and 200 search
+requests observed the running candidate. Their p95 values were 81.346 ms, 76.466 ms and 48.866 ms
+against independent 300 ms, 300 ms and 1,000 ms limits. The run also exposed and fixed the ready-to-
+discarded transition that had prevented scheduling a new candidate after publication; the published
+version remains current while the next candidate builds.
 
 **Checkpoint**: Commit as `perf(reader): bound artifact loading and candidate io`.
 

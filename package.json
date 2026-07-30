@@ -17,6 +17,7 @@
     "benchmark:reference-preflight": "tsx scripts/benchmarks/reference-preflight.ts",
     "benchmark:build": "tsx scripts/benchmarks/build.ts",
     "benchmark:read": "tsx scripts/benchmarks/read.ts",
+    "benchmark:read-during-build": "tsx scripts/benchmarks/read-during-build.ts",
     "benchmark:reference": "tsx scripts/benchmarks/reference.ts",
     "benchmark:search": "tsx scripts/benchmarks/search.ts",
     "audit:migration-recovery": "tsx scripts/audits/migration-recovery.ts",

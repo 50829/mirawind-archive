@@ -6,36 +6,21 @@ import {
   createSafeDiagnostic,
   type SafeDiagnostic,
 } from "@/domain/errors";
-import { parseBookConfigYaml } from "@/modules/publishing/application/public";
+import {
+  parseBookConfigYaml,
+  validateDocumentManifest,
+} from "@/modules/publishing/application/public";
 import {
   resolveContainedPath,
   type StorageLayout,
 } from "@/platform/filesystem/layout";
+import {
+  fileHandleWebStream,
+  openVerifiedContainedFile,
+} from "@/platform/filesystem/verified-file";
 
 function hidden(message: string): never {
   throw new SafeApplicationError("NOT_FOUND", message, 404);
-}
-
-function previewResourceMediaType(bytes: Uint8Array): string {
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return "image/jpeg";
-  }
-  if (
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47
-  ) {
-    return "image/png";
-  }
-  const prefix = Buffer.from(bytes.subarray(0, 12)).toString("ascii");
-  if (prefix.startsWith("GIF87a") || prefix.startsWith("GIF89a")) {
-    return "image/gif";
-  }
-  if (prefix.startsWith("RIFF") && prefix.slice(8, 12) === "WEBP") {
-    return "image/webp";
-  }
-  return "application/octet-stream";
 }
 
 export class DraftArtifactReader {
@@ -103,23 +88,48 @@ export class DraftArtifactReader {
   }
 
   async readPreviewResource(input: {
-    readonly previewRelativePath: string;
+    readonly bookId: number;
     readonly resourceId: string;
+    readonly versionId: string;
+    readonly versionRelativePath: string;
   }): Promise<{
-    readonly bytes: Uint8Array;
+    readonly body: ReadableStream<Uint8Array>;
     readonly mediaType: string;
   }> {
     try {
-      const previewRoot = await resolveContainedPath(
+      const manifestPath = await resolveContainedPath(
         this.layout.root,
-        input.previewRelativePath,
+        `${input.versionRelativePath}/document-manifest.json`,
       );
-      const bytes = await readFile(
-        resolve(previewRoot, "assets", input.resourceId),
+      const manifest = validateDocumentManifest(
+        JSON.parse(await readFile(manifestPath, "utf8")) as unknown,
       );
+      if (
+        manifest.book_id !== input.bookId ||
+        manifest.version_id !== input.versionId
+      ) {
+        return hidden("The asset was not found.");
+      }
+      const resources = manifest.resources as Readonly<
+        Record<
+          string,
+          {
+            readonly media_type: string;
+            readonly output_path: string;
+            readonly size: number;
+          }
+        >
+      >;
+      const resource = resources[input.resourceId];
+      if (!resource) return hidden("The asset was not found.");
+      const handle = await openVerifiedContainedFile({
+        expectedSize: resource.size,
+        relativePath: `${input.versionRelativePath}/${resource.output_path}`,
+        root: this.layout.root,
+      });
       return Object.freeze({
-        bytes,
-        mediaType: previewResourceMediaType(bytes),
+        body: fileHandleWebStream(handle),
+        mediaType: resource.media_type,
       });
     } catch {
       return hidden("The asset was not found.");
