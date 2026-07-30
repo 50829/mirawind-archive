@@ -533,3 +533,27 @@ The candidate/manifest/recovery suites passed 22 tests, and newly generated obse
 `4/4` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/single-manifest-validation-*`. This focused run does not replace
 or complete the owner-deferred T092 paired rounds.
+
+## Fused typography protected-range pass
+
+Each editable text leaf previously scanned its technical tokens during punctuation normalization,
+removed punctuation-adjacent whitespace through a separate protected-segment builder, scanned the
+same resulting leaf again, and then built the mixed Han/Latin spacing output. The retained path
+passes the still-valid protected ranges into spacing and performs both whitespace transformations in
+one ordered segment pass. Ellipsis replacement still refreshes ranges when its length change requires
+it. The replaced second scan and separate segment builder were deleted.
+
+| Fixture | Typography | Prepare job | Complete wall | Process-tree RSS |
+| ------- | ---------: | ----------: | ------------: | ---------------: |
+| `a53`   |     -16.7% |       -6.0% |         -0.8% |         -0.3 MiB |
+| `106e`  |      +7.7% |       +2.9% |         +1.2% |        -36.7 MiB |
+| `81d`   |      -7.9% |       -3.9% |         -0.9% |        +63.7 MiB |
+| `f840`  |      +2.6% |       -0.8% |         -0.4% |        +15.7 MiB |
+
+An adjacent CPU-profiled run improved typography for all four books by `1.9%–11.3%`; the clean
+non-profiled run above is used for the complete timing and memory comparison. On `f840`,
+`protectedRanges` self samples fell from `51` to `34`. The focused typography/reproducibility suite
+passed 14 tests, and newly generated observations remained `4/4` reference-v2 exact. Raw evidence is
+under ignored `.cache/008-publishing-performance/typography-fused-four*`,
+`typography-fused-observed-v2/` and `typography-fused-comparison.json`. This focused run does not
+replace or complete the owner-deferred T092 paired rounds.

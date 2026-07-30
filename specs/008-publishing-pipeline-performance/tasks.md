@@ -616,3 +616,14 @@ manifest bytes are written. Across four representative books, `manifest_build` i
 `10.7–43.6 MiB`, and fresh observations remained `4/4` reference-v2 exact. Raw evidence is under
 ignored `.cache/008-publishing-performance/single-manifest-validation-*`. This focused evidence
 does not complete owner-deferred T092.
+
+- [x] T115 Reuse each typography leaf's protected-token ranges while fusing punctuation-adjacent
+      whitespace cleanup into the mixed-spacing pass (partial)
+
+The retained path deletes the second technical-token scan and a separate unprotected-segment output
+pass without changing edit order or counters. Across four representative books, typography improved
+by up to `16.7%`; complete draft preparation improved for three books by `0.8%–6.0%` and the fourth
+changed by `+2.9%`. Complete wall improved for three books and changed by `+1.2%` (`170 ms`) for the
+fourth. RSS remained within `max(5%, 64 MiB)`, and fresh observations remained `4/4` reference-v2
+exact. Raw evidence is under ignored `.cache/008-publishing-performance/typography-fused-*`. This
+focused evidence does not complete owner-deferred T092.

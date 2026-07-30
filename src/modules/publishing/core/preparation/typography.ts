@@ -284,22 +284,6 @@ function isProtected(
   return false;
 }
 
-function transformUnprotected(
-  value: string,
-  ranges: readonly ProtectedRange[],
-  transform: (segment: string) => string,
-): string {
-  if (ranges.length === 0) return transform(value);
-  let cursor = 0;
-  let output = "";
-  for (const range of ranges) {
-    output += transform(value.slice(cursor, range.start));
-    output += value.slice(range.start, range.end);
-    cursor = range.end;
-  }
-  return output + transform(value.slice(cursor));
-}
-
 function previousVisibleCharacter(value: string, index: number): string {
   for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
     const character = value[cursor] ?? "";
@@ -326,6 +310,7 @@ function isChineseContextCharacter(value: string): boolean {
 
 function normalizePunctuation(value: string): {
   readonly converted: number;
+  readonly ranges: readonly ProtectedRange[];
   readonly value: string;
 } {
   let output = value;
@@ -432,37 +417,7 @@ function normalizePunctuation(value: string): {
     }
   }
 
-  return Object.freeze({
-    converted,
-    value: transformUnprotected(withPeriods.join(""), ranges, (segment) =>
-      segment
-        .replace(
-          new RegExp(
-            `${horizontalWhitespace}+(?=[，。；：？！）》」』】])`,
-            "gu",
-          ),
-          "",
-        )
-        .replace(
-          new RegExp(`(?<=[（《“‘「『【])${horizontalWhitespace}+`, "gu"),
-          "",
-        )
-        .replace(
-          new RegExp(
-            `(?<=[，。；：？！）》」』】])${horizontalWhitespace}+(?=[\\p{Script=Han}（《“‘「『【])`,
-            "gu",
-          ),
-          "",
-        )
-        .replace(
-          new RegExp(
-            `(?<=[\\p{Script=Han}）》」』】”’])${horizontalWhitespace}+(?=[（《“‘「『【])`,
-            "gu",
-          ),
-          "",
-        ),
-    ),
-  });
+  return Object.freeze({ converted, ranges, value: withPeriods.join("") });
 }
 
 function normalizeUnprotectedSpacing(
@@ -482,7 +437,33 @@ function normalizeUnprotectedSpacing(
     "gu",
   );
   const normalizeSegment = (segment: string): string => {
-    let output = segment.replace(
+    let output = segment
+      .replace(
+        new RegExp(
+          `${horizontalWhitespace}+(?=[，。；：？！）》」』】])`,
+          "gu",
+        ),
+        "",
+      )
+      .replace(
+        new RegExp(`(?<=[（《“‘「『【])${horizontalWhitespace}+`, "gu"),
+        "",
+      )
+      .replace(
+        new RegExp(
+          `(?<=[，。；：？！）》」』】])${horizontalWhitespace}+(?=[\\p{Script=Han}（《“‘「『【])`,
+          "gu",
+        ),
+        "",
+      )
+      .replace(
+        new RegExp(
+          `(?<=[\\p{Script=Han}）》」』】”’])${horizontalWhitespace}+(?=[（《“‘「『【])`,
+          "gu",
+        ),
+        "",
+      );
+    output = output.replace(
       forward,
       (_match, left: string, spaces: string, right: string) => {
         if (spaces !== " ") normalized += 1;
@@ -538,10 +519,12 @@ function normalizeText(value: string): {
   readonly value: string;
 } {
   const punctuation = normalizePunctuation(value);
-  const ranges = protectedRanges(punctuation.value);
-  const spacing = normalizeUnprotectedSpacing(punctuation.value, ranges);
+  const spacing = normalizeUnprotectedSpacing(
+    punctuation.value,
+    punctuation.ranges,
+  );
   return Object.freeze({
-    protectedTokens: ranges.length,
+    protectedTokens: punctuation.ranges.length,
     punctuationConverted: punctuation.converted,
     spacesNormalized: spacing.normalized,
     value: spacing.value,
