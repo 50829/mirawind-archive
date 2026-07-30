@@ -7,16 +7,16 @@ import {
 } from "@/modules/publishing/core/publication/route-neutral-links";
 
 describe("route-neutral reader HTML materialization", () => {
-  it("materializes both route policies while leaving hostile-looking text unchanged", () => {
+  it("materializes both route policies while leaving hostile-looking text unchanged", async () => {
     const headingId = "blk_0123456789abcdefghijkl";
     const resourceId = "res_0123456789abcdefghijkl";
     const headingToken = routeNeutralHeadingHref(headingId);
     const resourceToken = routeNeutralResourceUrl(resourceId);
-    const result = materializeRouteNeutralHtmlVariants({
+    const result = await materializeRouteNeutralHtmlVariants({
       html: `<p><a href="${headingToken}">next</a><img src="${resourceToken}" alt="x"></p><pre>href="${headingToken}" src="${resourceToken}"</pre>`,
       preview: {
         headingHref: (blockId) => `/preview/book/2#${blockId}`,
-        resourceUrl: (id) => `/preview/assets/${id}`,
+        resourceUrl: (id) => `/preview/assets/${id}?name="x"&raw=1`,
       },
       published: {
         headingHref: (blockId) => `/read/book/2#${blockId}`,
@@ -28,7 +28,7 @@ describe("route-neutral reader HTML materialization", () => {
       `<a href="/preview/book/2#${headingId}">next</a>`,
     );
     expect(result.preview).toContain(
-      `<img src="/preview/assets/${resourceId}" alt="x">`,
+      `<img src="/preview/assets/${resourceId}?name=&quot;x&quot;&amp;raw=1" alt="x">`,
     );
     expect(result.published).toContain(
       `<a href="/read/book/2#${headingId}">next</a>`,
@@ -45,7 +45,7 @@ describe("route-neutral reader HTML materialization", () => {
 
   it.each(["preview", "published"] as const)(
     "rejects an unsafe %s URL",
-    (unsafePolicy) => {
+    async (unsafePolicy) => {
       const headingId = "blk_0123456789abcdefghijkl";
       const safePolicy = {
         headingHref: () => "/safe",
@@ -55,19 +55,19 @@ describe("route-neutral reader HTML materialization", () => {
         headingHref: () => "https://example.test/unsafe",
         resourceUrl: () => "/asset",
       };
-      expect(() =>
+      await expect(
         materializeRouteNeutralHtmlVariants({
           html: `<a href="${routeNeutralHeadingHref(headingId)}">next</a>`,
           preview: unsafePolicy === "preview" ? unsafe : safePolicy,
           published: unsafePolicy === "published" ? unsafe : safePolicy,
         }),
-      ).toThrow("MATERIALIZED_READER_URL_INVALID");
+      ).rejects.toThrow("MATERIALIZED_READER_URL_INVALID");
     },
   );
 
-  it("rejects malformed route-neutral tokens", () => {
+  it("rejects malformed route-neutral tokens", async () => {
     const headingId = "blk_0123456789abcdefghijkl";
-    expect(() =>
+    await expect(
       materializeRouteNeutralHtmlVariants({
         html: `<a href="${routeNeutralHeadingHref(headingId)}-invalid!">next</a>`,
         preview: {
@@ -79,6 +79,6 @@ describe("route-neutral reader HTML materialization", () => {
           resourceUrl: () => "/asset",
         },
       }),
-    ).toThrow("ROUTE_NEUTRAL_HEADING_TOKEN_INVALID");
+    ).rejects.toThrow("ROUTE_NEUTRAL_HEADING_TOKEN_INVALID");
   });
 });

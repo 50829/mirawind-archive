@@ -308,7 +308,7 @@ export async function materializeCandidatePages(input: {
         resolve(bodyDirectory, `${page.pageId}.html`),
         "utf8",
       );
-      const materializedBody = materializeRouteNeutralHtmlVariants({
+      const materializedBody = await materializeRouteNeutralHtmlVariants({
         html: routeNeutralBody,
         preview: {
           headingHref(blockId) {

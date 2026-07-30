@@ -291,3 +291,36 @@ integration test, both TypeScript configurations and production build passed.
 Raw evidence is under ignored
 `.cache/008-publishing-performance/after-output-byte-removal-*`. This focused run does not replace
 or complete the owner-deferred T092 paired rounds.
+
+## SAX route materialization
+
+After removing duplicate parsing, the remaining full parse5 fragment DOM still dominated route
+materialization and retained hundreds of megabytes for the largest formula page. The replacement
+uses the maintained `parse5-sax-parser` from the same parse5 project with source locations enabled.
+It records only parsed route-neutral `href` and `src` attribute ranges, validates both URL policies,
+and reconstructs those attributes with `entities.escapeAttribute()`. It does not use regex or scan
+text for token-like strings. The old DOM construction and serialization path was deleted.
+
+Focused results against the immediately preceding unused-byte-scan removal were:
+
+| Fixture        | Materialization before | Materialization after | Change | Candidate job before | Candidate job after | RSS before | RSS after |
+| -------------- | ---------------------: | --------------------: | -----: | -------------------: | ------------------: | ---------: | --------: |
+| `a53faf7243d4` |                5.335 s |               3.800 s | -28.8% |              8.942 s |             7.475 s |   1.973 GB |  1.340 GB |
+| `106e479f6de4` |                2.520 s |               2.302 s |  -8.6% |              7.134 s |             6.843 s |     839 MB |    783 MB |
+| `81d6969edaf0` |                2.048 s |               2.056 s |  +0.4% |              7.245 s |             7.403 s |     757 MB |    807 MB |
+| `f840921d3c8d` |                4.670 s |               3.614 s | -22.6% |             10.601 s |             9.698 s |   1.046 GB |  0.998 GB |
+
+Median materialization improvement was 15.6% and median complete candidate-job improvement was
+6.3%. The only candidate regression was 158 ms, below the `max(5%, 1 s)` tolerance. The only RSS
+increase was about 47 MiB, below the `max(5%, 64 MiB)` tolerance.
+
+The candidate preview/builder suite passed 14 tests, including preview/public normalized article
+equality and route-token removal. Transient semantic comparison covered ordinary markup, table tree
+correction, templates and MathML and produced `4/4` DOM-exact results against the replaced parser.
+Unsafe URLs, malformed tokens and escaped attribute output remain covered. Fresh observations for
+the four representative books compared `4/4` reference-v2 exact.
+
+Raw machine-readable evidence is under ignored
+`.cache/008-publishing-performance/sax-route-materialization-*` and
+`.cache/008-publishing-performance/sax-route-observed-v2/`. These focused runs do not replace or
+complete the owner-deferred T092 paired rounds.

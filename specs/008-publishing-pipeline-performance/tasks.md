@@ -477,3 +477,14 @@ was 13 ms and within run noise. This deletion cannot alter generated content, an
 candidate preview integration test, both TypeScript builds and production build passed. Raw evidence
 is under ignored `.cache/008-publishing-performance/after-output-byte-removal-*`. This focused
 evidence does not complete owner-deferred T092.
+
+- [x] T104 Replace full parse5 DOM construction/serialization during route materialization with the
+      maintained parse5 SAX parser, preserve structured attribute validation and escaping, and verify
+      Reader DOM plus four representative references (partial)
+
+Candidate materialization improved by `28.8%`, `8.6%`, `-0.4%` and `22.6%`, a median `15.6%`.
+Complete candidate jobs improved by a median `6.3%`; the sole regression was 158 ms and within the
+per-book tolerance. Formula-heavy process-tree RSS decreased by `32.1%`. Preview/public behavior,
+four representative HTML fragment DOMs and fresh observations stayed exact. Raw evidence is under
+ignored `.cache/008-publishing-performance/sax-route-*`. This focused evidence does not complete
+owner-deferred T092.

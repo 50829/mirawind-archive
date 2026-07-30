@@ -56,6 +56,9 @@ importers:
       better-sqlite3:
         specifier: 12.11.1
         version: 12.11.1
+      entities:
+        specifier: 6.0.1
+        version: 6.0.1
       katex:
         specifier: 0.18.1
         version: 0.18.1
@@ -65,6 +68,9 @@ importers:
       parse5:
         specifier: 7.3.0
         version: 7.3.0
+      parse5-sax-parser:
+        specifier: 7.0.0
+        version: 7.0.0
       pino:
         specifier: 10.3.1
         version: 10.3.1
@@ -3678,6 +3684,9 @@ packages:
 
   parse-latin@7.0.0:
     resolution: {integrity: sha512-mhHgobPPua5kZ98EF4HWiH167JWBfl4pvAIXXdbaVohtK7a6YBOy56kvhCqduqyo/f3yrHFWmqmiMg/BkBkYYQ==}
+
+  parse5-sax-parser@7.0.0:
+    resolution: {integrity: sha512-5A+v2SNsq8T6/mG3ahcz8ZtQ0OUFTatxPbeidoMB7tkJSGDY3tdfl4MHovtLQHkEn5CGxijNWRQHhRQ6IRpXKg==}
 
   parse5@7.3.0:
     resolution: {integrity: sha512-IInvU7fabl34qmi9gY8XOVxhYyMyuH2xUNpb2q8/Y+7552KlejkRvqvD19nMoUW/uQGGbqNpA6Tufu5FL5BZgw==}
@@ -8490,6 +8499,10 @@ snapshots:
       unist-util-modify-children: 4.0.0
       unist-util-visit-children: 3.0.0
       vfile: 6.0.3
+
+  parse5-sax-parser@7.0.0:
+    dependencies:
+      parse5: 7.3.0
 
   parse5@7.3.0:
     dependencies:
