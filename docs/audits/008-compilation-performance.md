@@ -33,16 +33,16 @@ The 4,000/1,000 ratio is `3.3275x`, below the required `<6x` gate.
 
 ## Fifteen-book direct-candidate observation
 
-| Measurement | Result |
-| --- | ---: |
-| Fixtures passed | 15/15 |
-| Total wall time | 580.333 s |
+| Measurement                      |    Result |
+| -------------------------------- | --------: |
+| Fixtures passed                  |     15/15 |
+| Total wall time                  | 580.333 s |
 | Total accepted-to-candidate time | 577.506 s |
-| Total candidate-build time | 114.265 s |
-| Candidate compile time | 27.941 s |
-| Candidate page-render time | 41.206 s |
-| Candidate search-spool time | 29.101 s |
-| Candidate finalization time | 16.014 s |
+| Total candidate-build time       | 114.265 s |
+| Candidate compile time           |  27.941 s |
+| Candidate page-render time       |  41.206 s |
+| Candidate search-spool time      |  29.101 s |
+| Candidate finalization time      |  16.014 s |
 
 The slowest end-to-end fixture took 81.685 seconds. The five slowest direct candidate builds took
 between 9.521 and 16.809 seconds. Across draft preparation, the largest measured stage families were
@@ -66,3 +66,29 @@ reader and search thresholds.
 Raw local evidence is retained under `.cache/008-publishing-performance/` as
 `t053-compilation-complexity.json`, `t053-reference-final.json` and
 `t053-candidate-final-15.json`.
+
+## Ordered page materialization follow-up
+
+The candidate adapter now consumes each ordered `RenderedPage` once, materializes its preview and
+public ReaderShell documents with that page's renderer CSS, writes both documents, appends manifest
+and search rows, and releases the page. It no longer writes every route-neutral body under
+`.rendered-pages` and reads the full set back after rendering. The union of renderer CSS is still
+written to `published/styles/document.css` for the complete immutable artifact.
+
+Four representative production-worker comparisons produced the following candidate-materialization
+results:
+
+| Fixture       | Before ms |  After ms | Change |
+| ------------- | --------: | --------: | -----: |
+| `106e`        | 2,302.097 | 1,888.731 | -18.0% |
+| `81d`         | 2,055.534 | 2,036.827 |  -0.9% |
+| `a53`         | 3,664.747 | 3,409.872 |  -7.0% |
+| `f840` pair 1 | 3,613.556 | 4,248.180 | +17.6% |
+| `f840` pair 2 | 3,910.721 | 3,545.772 |  -9.3% |
+
+The fourth fixture exposed substantial single-run noise: its two-run medians differ by 3.6% for
+materialization and 0.6% for complete wall time. It is therefore recorded as neutral within the
+focused gate rather than claimed as either a regression or improvement. Process-tree RSS stayed
+within the per-book tolerance for all four comparisons. The 14 focused candidate tests, both
+TypeScript builds, production build and `4/4` reference-v2 comparison passed. These focused runs do
+not replace formal T092 evidence.

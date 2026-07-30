@@ -488,3 +488,16 @@ per-book tolerance. Formula-heavy process-tree RSS decreased by `32.1%`. Preview
 four representative HTML fragment DOMs and fresh observations stayed exact. Raw evidence is under
 ignored `.cache/008-publishing-performance/sax-route-*`. This focused evidence does not complete
 owner-deferred T092.
+
+- [x] T105 Materialize each preview/public ReaderShell while its ordered `RenderedPage` is current,
+      inline only that page's renderer CSS, retain the complete shared document stylesheet, and
+      delete the intermediate page-body write/read pass (partial)
+
+Across four representative books, candidate materialization improved by `18.0%`, `0.9%` and `7.0%`
+in three cases. The initially regressing fourth case reversed from `+17.6%` to `-9.3%` in an adjacent
+old/new rerun; its two-run medians differed by only `3.6%`, while complete wall time differed by
+`0.6%`. All process-tree RSS results stayed within the per-book gate. The candidate builder and
+preview suites passed 14 tests, both TypeScript builds and the production build passed, and four
+representative observations remained `4/4` reference-v2 exact. Raw evidence is under ignored
+`.cache/008-publishing-performance/immediate-page-write-*`. This focused evidence does not complete
+owner-deferred T092.
