@@ -84,69 +84,102 @@ interface PageLabelCandidate {
   readonly label: string;
 }
 
-function supplementalPageLabels(
-  evidence: LayoutEvidence,
-  pageIndex: number,
-): readonly PageLabelCandidate[] {
-  return Object.freeze(
-    evidence.records
-      .flatMap((record) => {
-        const text = record.text?.trim().toLocaleLowerCase("und");
-        const label =
-          text && standalonePageLabel.test(text)
-            ? text
-            : evidence.source === "native-pdf"
-              ? pageLabel(text)
-              : undefined;
-        if (
-          record.pageIndex !== pageIndex ||
-          (record.type !== "page-label" &&
-            !(evidence.source === "native-pdf" && record.type === "text")) ||
-          !label ||
-          !record.bbox
-        ) {
-          return [];
-        }
-        return [
-          Object.freeze({
-            centerY: (record.bbox[1] + record.bbox[3]) / 2,
-            label,
-          }),
-        ];
-      })
-      .sort((left, right) => left.centerY - right.centerY),
-  );
+interface LayoutEvidenceIndex {
+  readonly maximumBottomByPage: ReadonlyMap<number, number>;
+  readonly recordsByPage: ReadonlyMap<number, readonly LayoutEvidenceRecord[]>;
 }
 
-function maximumPageBottom(
-  records: readonly LayoutEvidenceRecord[],
-  pageIndex: number,
-): number | undefined {
-  const bottoms = records.flatMap((record) => {
+interface PageLabelNeighbors {
+  readonly after: readonly (number | undefined)[];
+  readonly before: readonly (number | undefined)[];
+}
+
+function indexLayoutEvidence(evidence: LayoutEvidence): LayoutEvidenceIndex {
+  const maximumBottomByPage = new Map<number, number>();
+  const recordsByPage = new Map<number, LayoutEvidenceRecord[]>();
+  for (const record of evidence.records) {
+    const records = recordsByPage.get(record.pageIndex);
+    if (records) records.push(record);
+    else recordsByPage.set(record.pageIndex, [record]);
     const box = placement(record);
-    return record.pageIndex === pageIndex && box ? [box[3]] : [];
-  });
-  return bottoms.length > 0 ? Math.max(...bottoms) : undefined;
+    if (box) {
+      maximumBottomByPage.set(
+        record.pageIndex,
+        Math.max(maximumBottomByPage.get(record.pageIndex) ?? box[3], box[3]),
+      );
+    }
+  }
+  return Object.freeze({ maximumBottomByPage, recordsByPage });
+}
+
+function indexSupplementalPageLabels(
+  evidence: LayoutEvidence,
+  parsePageLabel: (value: string | undefined) => string | undefined,
+): ReadonlyMap<number, readonly PageLabelCandidate[]> {
+  const byPage = new Map<number, PageLabelCandidate[]>();
+  for (const record of evidence.records) {
+    const text = record.text?.trim().toLocaleLowerCase("und");
+    const label =
+      text && standalonePageLabel.test(text)
+        ? text
+        : evidence.source === "native-pdf"
+          ? parsePageLabel(text)
+          : undefined;
+    if (
+      (record.type !== "page-label" &&
+        !(evidence.source === "native-pdf" && record.type === "text")) ||
+      !label ||
+      !record.bbox
+    ) {
+      continue;
+    }
+    const candidates = byPage.get(record.pageIndex);
+    const candidate = Object.freeze({
+      centerY: (record.bbox[1] + record.bbox[3]) / 2,
+      label,
+    });
+    if (candidates) candidates.push(candidate);
+    else byPage.set(record.pageIndex, [candidate]);
+  }
+  for (const candidates of byPage.values()) {
+    candidates.sort((left, right) => left.centerY - right.centerY);
+  }
+  return byPage;
+}
+
+function pageLabelNeighbors(
+  records: readonly LayoutEvidenceRecord[],
+  parsePageLabel: (value: string | undefined) => string | undefined,
+  parseNumericPageLabel: (value: string) => number | undefined,
+): PageLabelNeighbors {
+  const before: (number | undefined)[] = [];
+  const after: (number | undefined)[] = [];
+  let nearest: number | undefined;
+  for (const [index, record] of records.entries()) {
+    before[index] = nearest;
+    const label = parsePageLabel(record.text);
+    if (label !== undefined) nearest = parseNumericPageLabel(label);
+  }
+  nearest = undefined;
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const record = records[index];
+    after[index] = nearest;
+    const label = parsePageLabel(record?.text);
+    if (label !== undefined) nearest = parseNumericPageLabel(label);
+  }
+  return Object.freeze({ after, before });
 }
 
 function monotonicPageLabel(
-  records: readonly LayoutEvidenceRecord[],
+  neighbors: PageLabelNeighbors,
   itemIndex: number,
   candidate: string,
+  parseNumericPageLabel: (value: string) => number | undefined,
 ): boolean {
-  const value = numericPageLabel(candidate);
+  const value = parseNumericPageLabel(candidate);
   if (value === undefined) return false;
-  const before = [...records]
-    .slice(0, itemIndex)
-    .reverse()
-    .map((record) => pageLabel(record.text))
-    .find((label) => label !== undefined);
-  const after = records
-    .slice(itemIndex + 1)
-    .map((record) => pageLabel(record.text))
-    .find((label) => label !== undefined);
-  const beforeValue = before ? numericPageLabel(before) : undefined;
-  const afterValue = after ? numericPageLabel(after) : undefined;
+  const beforeValue = neighbors.before[itemIndex];
+  const afterValue = neighbors.after[itemIndex];
   return (
     (beforeValue === undefined || value >= beforeValue) &&
     (afterValue === undefined || value <= afterValue)
@@ -164,6 +197,29 @@ export function supplementMissingListPageLabels(
   if (base.source !== "content-list" || supplemental.records.length < 1) {
     return base;
   }
+  const pageLabelByText = new Map<string, string | null>();
+  const numericPageLabelByText = new Map<string, number | null>();
+  const cachedPageLabel = (value: string | undefined): string | undefined => {
+    if (value === undefined) return;
+    const cached = pageLabelByText.get(value);
+    if (cached !== undefined) return cached ?? undefined;
+    const label = pageLabel(value);
+    pageLabelByText.set(value, label ?? null);
+    return label;
+  };
+  const cachedNumericPageLabel = (value: string): number | undefined => {
+    const cached = numericPageLabelByText.get(value);
+    if (cached !== undefined) return cached ?? undefined;
+    const label = numericPageLabel(value);
+    numericPageLabelByText.set(value, label ?? null);
+    return label;
+  };
+  const baseIndex = indexLayoutEvidence(base);
+  const supplementalIndex = indexLayoutEvidence(supplemental);
+  const supplementalLabelsByPage = indexSupplementalPageLabels(
+    supplemental,
+    cachedPageLabel,
+  );
   const groups = new Map<string, LayoutEvidenceRecord[]>();
   for (const record of base.records) {
     if (
@@ -176,7 +232,9 @@ export function supplementMissingListPageLabels(
       continue;
     }
     const key = `${record.pageIndex}/${record.groupId}`;
-    groups.set(key, [...(groups.get(key) ?? []), record]);
+    const records = groups.get(key);
+    if (records) records.push(record);
+    else groups.set(key, [record]);
   }
   const replacements = new Map<LayoutEvidenceRecord, LayoutEvidenceRecord>();
   for (const records of groups.values()) {
@@ -185,11 +243,10 @@ export function supplementMissingListPageLabels(
     );
     const first = records[0];
     if (!first?.groupBbox || records.length !== first.groupItemCount) continue;
-    const candidates = supplementalPageLabels(supplemental, first.pageIndex);
+    const candidates = supplementalLabelsByPage.get(first.pageIndex) ?? [];
     if (candidates.length < 3) continue;
-    const baseBottom = maximumPageBottom(base.records, first.pageIndex);
-    const supplementalBottom = maximumPageBottom(
-      supplemental.records,
+    const baseBottom = baseIndex.maximumBottomByPage.get(first.pageIndex);
+    const supplementalBottom = supplementalIndex.maximumBottomByPage.get(
       first.pageIndex,
     );
     if (!baseBottom || !supplementalBottom) continue;
@@ -201,7 +258,7 @@ export function supplementMissingListPageLabels(
     const anchors: { readonly index: number; readonly y: number }[] = [];
     let previousY = Number.NEGATIVE_INFINITY;
     for (const [index, record] of records.entries()) {
-      const label = pageLabel(record.text);
+      const label = cachedPageLabel(record.text);
       if (!label) continue;
       const roughY =
         (first.groupBbox[1] + ((index + 0.5) * groupHeight) / records.length) *
@@ -251,9 +308,14 @@ export function supplementMissingListPageLabels(
     ) {
       continue;
     }
+    const neighbors = pageLabelNeighbors(
+      records,
+      cachedPageLabel,
+      cachedNumericPageLabel,
+    );
     for (const [index, record] of records.entries()) {
       if (
-        pageLabel(record.text) ||
+        cachedPageLabel(record.text) ||
         !record.text ||
         (!numberingPrefix.test(record.text.trim()) &&
           !trailingLeader.test(record.text.trim()))
@@ -265,7 +327,12 @@ export function supplementMissingListPageLabels(
         .filter(
           (candidate) =>
             !used.has(candidate) &&
-            monotonicPageLabel(records, index, candidate.label) &&
+            monotonicPageLabel(
+              neighbors,
+              index,
+              candidate.label,
+              cachedNumericPageLabel,
+            ) &&
             Math.abs(candidate.centerY - expectedY) <=
               Math.max(10, slope * 0.45),
         )
@@ -292,13 +359,12 @@ export function supplementMissingListPageLabels(
     ),
   );
   for (const pageIndex of positionedPageIndexes) {
-    const records = base.records
+    const records = (baseIndex.recordsByPage.get(pageIndex) ?? [])
       .filter(
         (record) =>
-          record.pageIndex === pageIndex &&
           record.bbox &&
           record.text &&
-          (pageLabel(record.text) !== undefined ||
+          (cachedPageLabel(record.text) !== undefined ||
             trailingLeader.test(record.text.trim())),
       )
       .sort(
@@ -306,13 +372,11 @@ export function supplementMissingListPageLabels(
           ((left.bbox?.[1] ?? 0) + (left.bbox?.[3] ?? 0)) / 2 -
           ((right.bbox?.[1] ?? 0) + (right.bbox?.[3] ?? 0)) / 2,
       );
-    const candidates = supplementalPageLabels(supplemental, pageIndex);
+    const candidates = supplementalLabelsByPage.get(pageIndex) ?? [];
     if (records.length < 3 || candidates.length < 3) continue;
-    const baseBottom = maximumPageBottom(base.records, pageIndex);
-    const supplementalBottom = maximumPageBottom(
-      supplemental.records,
-      pageIndex,
-    );
+    const baseBottom = baseIndex.maximumBottomByPage.get(pageIndex);
+    const supplementalBottom =
+      supplementalIndex.maximumBottomByPage.get(pageIndex);
     if (!baseBottom || !supplementalBottom) continue;
     const roughScale = supplementalBottom / baseBottom;
     const used = new Set<PageLabelCandidate>();
@@ -321,7 +385,7 @@ export function supplementMissingListPageLabels(
       readonly targetY: number;
     }[] = [];
     for (const record of records) {
-      const label = pageLabel(record.text);
+      const label = cachedPageLabel(record.text);
       const box = record.bbox;
       if (!label || !box) continue;
       const sourceY = (box[1] + box[3]) / 2;
@@ -372,13 +436,18 @@ export function supplementMissingListPageLabels(
     ) {
       continue;
     }
+    const neighbors = pageLabelNeighbors(
+      records,
+      cachedPageLabel,
+      cachedNumericPageLabel,
+    );
     for (const [index, record] of records.entries()) {
       const box = record.bbox;
       if (
         !box ||
         !record.text ||
         replacements.has(record) ||
-        pageLabel(record.text) ||
+        cachedPageLabel(record.text) ||
         !trailingLeader.test(record.text.trim())
       ) {
         continue;
@@ -390,7 +459,12 @@ export function supplementMissingListPageLabels(
         .filter(
           (candidate) =>
             !used.has(candidate) &&
-            monotonicPageLabel(records, index, candidate.label) &&
+            monotonicPageLabel(
+              neighbors,
+              index,
+              candidate.label,
+              cachedNumericPageLabel,
+            ) &&
             Math.abs(candidate.centerY - expectedY) <= tolerance,
         )
         .sort(

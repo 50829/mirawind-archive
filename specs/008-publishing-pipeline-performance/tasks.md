@@ -438,3 +438,13 @@ global cache or contract change. On the 1,278-page focused fixture, repaired pri
 improved by 14.6%, draft preparation by 8.0% and total wall by 3.7% by median across two before and
 two after runs. Peak RSS showed no median regression, and a fresh all-book comparison remained
 `15/15` reference exact. This focused evidence does not complete owner-deferred T092.
+
+- [x] T100 Replace repeated layout page-label supplementation scans with detection-local page,
+      bottom, candidate and nearest-label indexes; delete the old helpers and verify representative
+      reference exactness (partial)
+
+The 1,278-page focused fixture reduced repaired printed-contents time by 54.0%, draft preparation
+by 10.6% and total wall by 7.4% by median across two before and two after runs. Median RSS decreased,
+and four representative books remained `4/4` reference-v2 exact. The post-change CPU profile no
+longer lists page-label parsing or supplementation as a hotspot. This focused evidence does not
+complete owner-deferred T092.

@@ -207,3 +207,27 @@ regression. The current source regenerated every observed-v2 artifact and compar
 against `references-v2`. Raw focused and comparison evidence remains under the ignored
 `.cache/008-publishing-performance/after-similarity-index*` paths. This focused result does not
 replace or complete the owner-deferred T092 paired rounds.
+
+## Indexed layout page-label supplementation
+
+The next current-source CPU profile showed that missing printed page-label supplementation still
+rescanned all layout records for every group and page, reparsed the same labels and searched both
+directions from every missing item. The replacement builds detection-local records-by-page,
+maximum-bottom, supplemental-label and nearest-label indexes once. It preserves source order,
+geometric thresholds and matching decisions; the old repeated-scan helpers were deleted.
+
+On the same 1,278-page fixture, the median of two current-source runs before and after the change
+was:
+
+| Measurement               | Before median | After median |       Change |
+| ------------------------- | ------------: | -----------: | -----------: |
+| Repaired printed contents |       4.015 s |      1.846 s | 54.0% faster |
+| Draft preparation         |      10.355 s |      9.254 s | 10.6% faster |
+| Total wall                |      23.108 s |     21.391 s |  7.4% faster |
+
+Median process-tree RSS decreased from about 805 MB to 774 MB. Four representative books covering
+the large printed-contents case, the former wall regression, the formula/memory case and the former
+slowest case were regenerated and remained `4/4` reference-v2 exact. Post-change CPU evidence no
+longer lists `pageLabel` or `supplementMissingListPageLabels` as hotspots. Raw focused evidence is
+retained under the ignored `.cache/008-publishing-performance/after-layout-index*` paths. This
+focused result does not replace or complete the owner-deferred T092 paired rounds.
