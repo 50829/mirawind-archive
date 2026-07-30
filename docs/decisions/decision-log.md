@@ -1096,3 +1096,27 @@
   dirty 状态、环境、fixture/reference/lockfile hash、阶段耗时、书序和进程树 RSS。
 - 替代：本决策取代 D-117 和 008 文档中要求继续运行 AB/BA/AB 的部分；性能阈值、十五本
   正确性、逐本回退、Reader/Search 并发门禁及压力测试不变。
+
+## D-119：维护任务与永久删除采用单一所有权和直接切换
+
+- 状态：Accepted
+- 任务身份：内部维护任务拆为 `reclaim_versions` 与 `purge_book`，分别承担旧版本/隔离目录
+  回收和单书永久删除。管理 API 继续输出既有 `reclaim` 与 `permanent_book_deletion`，但只能
+  由任务自身身份直接映射，不再查询删除表推断任务含义。
+- 图书范围：任务一旦归属某本书，`jobs.book_id` 即为唯一权威范围。导入分析可在创建图书前
+  暂时无范围；导入绑定图书时必须在同一事务补全其已有任务。删除、取消和 retry 不再通过
+  import/source/version 关系反推任务归属。
+- 所有权：Catalog 负责图书删除策略、可见性屏障、普通图书行和保留 tombstone；Publishing
+  负责其任务、candidate、import、source、config、original、version 与 search 数据。Catalog
+  只能通过窄 application cleanup port 请求 Publishing 取消、列举不含路径的清理身份和清除其
+  记录；composition 装配共享事务。两模块不得再直接编写对方的命令侧业务表。
+- 原子性：删除任务的 failed、canceled、interrupted、retry 和最终 purge 必须与相应
+  `book_deletions` 状态在同一 immediate transaction 提交。通用 job repository 不再负责
+  candidate 或删除 tombstone 的生命周期。
+- 投影：`book_version_presentations` 只保留一个 Catalog SQLite writer。candidate 登记、恢复和
+  reconcile 通过同一 application writer 参与各自既有事务，不保留重复 INSERT。
+- 切换：本轮直接更新唯一 `0001` 数据库基线与 worker protocol；测试阶段数据重新初始化，
+  不增加旧 job kind、旧 ledger、缺表 schema 或双写兼容链。`book.yaml` v3、manifest v2、
+  version marker v2、已发布不可变版本语义及用户可见功能保持不变。
+- 范围：本决策不提前实现 M2 元数据/可见性/附件/文件夹或 M5 EPUB，只保留当前删除与投影
+  流程实际使用的窄边界。无调用的文件和 export 可直接删除，不增加“旧代码不存在”测试。
