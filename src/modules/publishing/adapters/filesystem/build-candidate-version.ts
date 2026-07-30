@@ -36,6 +36,7 @@ import {
   resolveContainedPath,
   type StorageLayout,
 } from "@/platform/filesystem/layout";
+import { profilePipelineStage } from "@/observability/pipeline-profile";
 
 function sha256(bytes: string | Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -251,12 +252,14 @@ export async function buildCandidateVersion(input: {
     total: 1,
     unit: "steps",
   });
-  const finalDirectory = await finalizeCandidateTree({
-    artifact: result,
-    ...(input.crashPoint ? { crashPoint: input.crashPoint } : {}),
-    layout: input.layout,
-    stagingDirectory,
-  });
+  const finalDirectory = await profilePipelineStage("candidate_finalize", () =>
+    finalizeCandidateTree({
+      artifact: result,
+      ...(input.crashPoint ? { crashPoint: input.crashPoint } : {}),
+      layout: input.layout,
+      stagingDirectory,
+    }),
+  );
   const [manifestBytes, markerBytes] = await Promise.all([
     readFile(resolve(finalDirectory, "document-manifest.json")),
     readFile(resolve(finalDirectory, "version.json")),

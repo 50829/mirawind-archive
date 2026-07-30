@@ -24,16 +24,13 @@ export const pipelineProfileStageNames = [
   "input_validation",
   "configured_document",
   "asset_copy",
-  "page_model",
-  "page_render",
-  "page_write",
-  "model_diagnostics",
+  "candidate_materialization",
   "manifest_build",
   "source_copy",
   "original_copy",
-  "search_build",
   "file_inventory_hash",
   "version_marker",
+  "candidate_finalize",
 ] as const;
 
 export type PipelineProfileStageName =

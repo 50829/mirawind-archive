@@ -456,3 +456,14 @@ Typography stage time improved by a median 8.4% across the four books. A monoton
 cursor regressed all four measurements and was deleted; only the independently beneficial range
 reuse remains. The regenerated observations stayed `4/4` reference-v2 exact. This focused evidence
 does not complete owner-deferred T092.
+
+- [x] T102 Parse each route-neutral semantic page once, materialize preview/public URL policies from
+      the same recorded attribute references, delete the old single-output materializer, and verify
+      four representative books remain reference exact (partial)
+
+Candidate materialization improved by `24.1%`, `24.0%`, `11.1%` and `19.3%`, a median `21.6%`,
+across the four books. Candidate job duration improved for every fixture; process-tree RSS decreased
+for three and increased by only 1.6% (about 16 MiB) for the fourth. The independently regenerated
+observations stayed `4/4` reference-v2 exact. Raw stage evidence is under ignored
+`.cache/008-publishing-performance/after-route-variants-*`. This focused evidence does not complete
+owner-deferred T092.

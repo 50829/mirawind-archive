@@ -14,7 +14,7 @@ import {
   buildSearchShortRows,
   type SearchRowCursor,
 } from "@/modules/publishing/core/publication/search-model";
-import { materializeRouteNeutralHtml } from "@/modules/publishing/adapters/reader-html/materialize-route-neutral-html";
+import { materializeRouteNeutralHtmlVariants } from "@/modules/publishing/adapters/reader-html/materialize-route-neutral-html";
 import type { CompiledBook } from "@/modules/publishing/core/publication/compiled-book";
 import { pageMetadata } from "@/modules/publishing/core/publication/compiled-book";
 import { buildManifestPageRecord } from "@/modules/publishing/core/publication/manifest";
@@ -310,29 +310,30 @@ export async function materializeCandidatePages(input: {
         resolve(bodyDirectory, `${page.pageId}.html`),
         "utf8",
       );
-      const previewBody = materializeRouteNeutralHtml({
-        headingHref(blockId) {
-          const pageId = pageByHeading.get(blockId);
-          if (!pageId) throw new Error("CANDIDATE_HEADING_PAGE_MISSING");
-          const target = compiled.pageById.get(pageId);
-          if (!target) throw new Error("CANDIDATE_PAGE_MISSING");
-          return `${previewPageHref(target)}#${blockId}`;
-        },
+      const materializedBody = materializeRouteNeutralHtmlVariants({
         html: routeNeutralBody,
-        resourceUrl: (resourceId) =>
-          `/api/manage/books/${input.bookId}/preview/${input.configRevision}/assets/${resourceId}`,
-      });
-      const publicBody = materializeRouteNeutralHtml({
-        headingHref(blockId) {
-          const pageId = pageByHeading.get(blockId);
-          if (!pageId) throw new Error("CANDIDATE_HEADING_PAGE_MISSING");
-          const target = compiled.pageById.get(pageId);
-          if (!target) throw new Error("CANDIDATE_PAGE_MISSING");
-          return `${publicPageHref(target)}#${blockId}`;
+        preview: {
+          headingHref(blockId) {
+            const pageId = pageByHeading.get(blockId);
+            if (!pageId) throw new Error("CANDIDATE_HEADING_PAGE_MISSING");
+            const target = compiled.pageById.get(pageId);
+            if (!target) throw new Error("CANDIDATE_PAGE_MISSING");
+            return `${previewPageHref(target)}#${blockId}`;
+          },
+          resourceUrl: (resourceId) =>
+            `/api/manage/books/${input.bookId}/preview/${input.configRevision}/assets/${resourceId}`,
         },
-        html: routeNeutralBody,
-        resourceUrl: (resourceId) =>
-          `/books/${input.bookId}/assets/${input.versionId}/${resourceId}`,
+        published: {
+          headingHref(blockId) {
+            const pageId = pageByHeading.get(blockId);
+            if (!pageId) throw new Error("CANDIDATE_HEADING_PAGE_MISSING");
+            const target = compiled.pageById.get(pageId);
+            if (!target) throw new Error("CANDIDATE_PAGE_MISSING");
+            return `${publicPageHref(target)}#${blockId}`;
+          },
+          resourceUrl: (resourceId) =>
+            `/books/${input.bookId}/assets/${input.versionId}/${resourceId}`,
+        },
       });
       const common = {
         bookKey,
@@ -344,7 +345,7 @@ export async function materializeCandidatePages(input: {
       const previewHtml = renderReaderHtmlDocument({
         body: renderReaderShell({
           ...common,
-          bodyHtml: previewBody,
+          bodyHtml: materializedBody.preview,
           firstPageHref: previewPageHref(compiled.pages[0] ?? page),
           mode: "preview",
           nextHref: nextPage ? previewPageHref(nextPage) : null,
@@ -360,7 +361,7 @@ export async function materializeCandidatePages(input: {
       const publicHtml = renderReaderHtmlDocument({
         body: renderReaderShell({
           ...common,
-          bodyHtml: publicBody,
+          bodyHtml: materializedBody.published,
           firstPageHref: publicPageHref(compiled.pages[0] ?? page),
           mode: "published",
           nextHref: nextPage ? publicPageHref(nextPage) : null,

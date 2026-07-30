@@ -367,16 +367,20 @@ export async function assembleCandidate(
       resources: resourceResolution.resources.length,
     });
 
-    const pageMaterialization = await input.materializePages({
-      bookId: input.bookId,
-      candidateDirectory: versionDirectory,
-      compiled: configured,
-      config,
-      configRevision: input.configRevision,
-      originalFiles,
-      resourceResolution,
-      versionId: input.versionId,
-    });
+    const pageMaterialization = await profilePipelineStage(
+      "candidate_materialization",
+      () =>
+        input.materializePages({
+          bookId: input.bookId,
+          candidateDirectory: versionDirectory,
+          compiled: configured,
+          config,
+          configRevision: input.configRevision,
+          originalFiles,
+          resourceResolution,
+          versionId: input.versionId,
+        }),
+    );
     input.signal?.throwIfAborted();
 
     const createdAt = toIsoDateTime(input.createdAtMs);

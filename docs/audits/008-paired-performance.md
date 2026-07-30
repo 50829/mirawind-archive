@@ -245,3 +245,32 @@ remain `4/4` reference-v2 exact. Raw evidence is under ignored
 `.cache/008-publishing-performance/after-typography-range-reuse*` and
 `.cache/008-publishing-performance/after-typography-cursor*` paths. This focused result does not
 replace or complete the owner-deferred T092 paired rounds.
+
+## Single-parse route materialization
+
+The candidate materializer previously parsed every route-neutral semantic page twice with parse5:
+once for private preview URLs and again for public URLs. CPU profiling of the formula-heavy fixture
+showed parse5 tokenization, parsing and the resulting garbage collection dominating the remaining
+materialization cost. The replacement parses once, records only validated route-neutral `href` and
+`src` attributes, applies and validates each route policy in turn, and serializes both outputs from
+the same fragment. The old single-output materializer was deleted.
+
+Focused current-source results against the immediately preceding stage-attribution run were:
+
+| Fixture        | Pages | Materialization before | Materialization after | Change | Candidate job before | Candidate job after |
+| -------------- | ----: | ---------------------: | --------------------: | -----: | -------------------: | ------------------: |
+| `a53faf7243d4` |     9 |                7.184 s |               5.452 s | -24.1% |             10.800 s |             9.281 s |
+| `106e479f6de4` |    25 |                3.561 s |               2.706 s | -24.0% |              8.238 s |             7.326 s |
+| `81d6969edaf0` |    55 |                2.289 s |               2.035 s | -11.1% |              7.645 s |             7.436 s |
+| `f840921d3c8d` |    43 |                6.291 s |               5.080 s | -19.3% |             12.487 s |            11.177 s |
+
+Median candidate-materialization improvement was 21.6%. Process-tree RSS decreased from 2.132 GB
+to 1.996 GB, 951 MB to 828 MB and 891 MB to 785 MB for the first three fixtures. The fourth changed
+from 1.050 GB to 1.067 GB, a 1.6% increase within the configured tolerance. A fresh independent
+observation and comparison remained `4/4` reference-v2 exact.
+
+Raw machine-readable results are under ignored
+`.cache/008-publishing-performance/candidate-stage-attribution*`,
+`.cache/008-publishing-performance/after-route-variants-*` and
+`.cache/008-publishing-performance/after-route-variants-observed-v2/`. These focused runs do not
+replace or complete the owner-deferred T092 paired rounds.
