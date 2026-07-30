@@ -619,8 +619,8 @@ manifest bytes are written. Across four representative books, `manifest_build` i
 ignored `.cache/008-publishing-performance/single-manifest-validation-*`. This focused evidence
 does not complete owner-deferred T092.
 
-- [x] T115 Reuse each typography leaf's protected-token ranges while fusing punctuation-adjacent
-      whitespace cleanup into the mixed-spacing pass (partial)
+- [x] T115 Reuse each typography leaf's protected-token ranges, fuse punctuation-adjacent
+      whitespace cleanup into the mixed-spacing pass, and reuse invariant matchers across leaves
 
 The retained path deletes the second technical-token scan and a separate unprotected-segment output
 pass without changing edit order or counters. Across four representative books, typography improved
@@ -628,4 +628,10 @@ by up to `16.7%`; complete draft preparation improved for three books by `0.8%�
 changed by `+2.9%`. Complete wall improved for three books and changed by `+1.2%` (`170 ms`) for the
 fourth. RSS remained within `max(5%, 64 MiB)`, and fresh observations remained `4/4` reference-v2
 exact. Raw evidence is under ignored `.cache/008-publishing-performance/typography-fused-*`. This
-focused evidence does not complete owner-deferred T092.
+focused evidence does not complete owner-deferred T092. A following four-book comparison compiled
+the invariant whitespace and punctuation expressions once per module. Typography improved for all
+four books by `3.4%–18.9%`; prepare improved for three books by `1.4%–9.1%` and changed by `+2.6%`
+for the fourth. Complete wall improved for two books and changed by only `+0.1%/+1.5%` for the
+others; RSS remained within tolerance and fresh observations stayed `4/4` exact. Full typecheck,
+the 236-file zero-diagnostic architecture graph, all 640 tests and the production build passed. Raw
+evidence is under ignored `.cache/008-publishing-performance/typography-regex-reuse-*`.

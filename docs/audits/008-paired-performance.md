@@ -557,3 +557,21 @@ passed 14 tests, and newly generated observations remained `4/4` reference-v2 ex
 under ignored `.cache/008-publishing-performance/typography-fused-four*`,
 `typography-fused-observed-v2/` and `typography-fused-comparison.json`. This focused run does not
 replace or complete the owner-deferred T092 paired rounds.
+
+The subsequent CPU profile showed that invariant whitespace and punctuation expressions were still
+being constructed for every editable text leaf. Those expressions and the punctuation lookup now
+have one module-level instance; rule order, protected ranges and output construction are unchanged.
+
+| Fixture | Typography | Prepare job | Complete wall | Process-tree RSS |
+| ------- | ---------: | ----------: | ------------: | ---------------: |
+| `a53`   |      -3.4% |       -1.4% |         +0.1% |            +1.7% |
+| `106e`  |     -18.9% |       -9.1% |         -2.8% |            +1.1% |
+| `81d`   |      -5.8% |       +2.6% |         +1.5% |            -8.7% |
+| `f840`  |     -15.4% |       -6.3% |         -1.3% |            -1.2% |
+
+Typography improved for every fixture. The two complete-wall increases remain below the focused
+per-book tolerance and occurred outside the consistently improved typography stage. Process-tree
+RSS remained within tolerance. The full 640-test suite, typecheck, production build and the 236-file
+architecture graph passed; fresh observations remained `4/4` reference-v2 exact. Raw evidence is
+under ignored `.cache/008-publishing-performance/typography-regex-reuse-*`. This focused run does
+not replace or complete T092.

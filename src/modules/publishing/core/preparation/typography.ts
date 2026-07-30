@@ -78,9 +78,58 @@ const maximumProtectedRanges = 100_000;
 const maximumRiskSummaries = 100;
 const horizontalWhitespace =
   "[\\t\\f\\v \\u00a0\\u1680\\u2000-\\u200a\\u202f\\u205f\\u3000]";
+const horizontalWhitespacePattern = new RegExp(horizontalWhitespace, "u");
+const horizontalWhitespaceAtStartPattern = new RegExp(
+  `^${horizontalWhitespace}`,
+  "u",
+);
+const horizontalWhitespaceAtEndPattern = new RegExp(
+  `${horizontalWhitespace}$`,
+  "u",
+);
+const leadingHorizontalWhitespacePattern = new RegExp(
+  `^${horizontalWhitespace}*`,
+  "u",
+);
+const trailingHorizontalWhitespacePattern = new RegExp(
+  `${horizontalWhitespace}*$`,
+  "u",
+);
+const whitespaceBeforeClosingPunctuationPattern = new RegExp(
+  `${horizontalWhitespace}+(?=[，。；：？！）》」』】])`,
+  "gu",
+);
+const whitespaceAfterOpeningPunctuationPattern = new RegExp(
+  `(?<=[（《“‘「『【])${horizontalWhitespace}+`,
+  "gu",
+);
+const whitespaceBetweenClosingAndChinesePattern = new RegExp(
+  `(?<=[，。；：？！）》」』】])${horizontalWhitespace}+(?=[\\p{Script=Han}（《“‘「『【])`,
+  "gu",
+);
+const whitespaceBeforeOpeningPunctuationPattern = new RegExp(
+  `(?<=[\\p{Script=Han}）》」』】”’])${horizontalWhitespace}+(?=[（《“‘「『【])`,
+  "gu",
+);
+const forwardMixedSpacingPattern = new RegExp(
+  `(\\p{Script=Han})(${horizontalWhitespace}*)([\\p{Script=Latin}0-9])`,
+  "gu",
+);
+const backwardMixedSpacingPattern = new RegExp(
+  `([\\p{Script=Latin}0-9])(${horizontalWhitespace}*)(\\p{Script=Han})`,
+  "gu",
+);
 const hanPattern = /\p{Script=Han}/u;
 const latinOrDigitPattern = /[\p{Script=Latin}0-9]/u;
 const chinesePunctuationPattern = /[，。；：？！、（）《》“”‘’「」『』【】]/u;
+const closingPunctuationPattern = /[”’）》」』】]/u;
+const punctuationReplacements = new Map([
+  [",", "，"],
+  [";", "；"],
+  [":", "："],
+  ["?", "？"],
+  ["!", "！"],
+]);
 const opaqueTypes = new Set([
   "code",
   "html",
@@ -287,7 +336,7 @@ function isProtected(
 function previousVisibleCharacter(value: string, index: number): string {
   for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
     const character = value[cursor] ?? "";
-    if (!new RegExp(horizontalWhitespace, "u").test(character)) {
+    if (!horizontalWhitespacePattern.test(character)) {
       return character;
     }
   }
@@ -297,7 +346,7 @@ function previousVisibleCharacter(value: string, index: number): string {
 function nextVisibleCharacter(value: string, index: number): string {
   for (let cursor = index + 1; cursor < value.length; cursor += 1) {
     const character = value[cursor] ?? "";
-    if (!new RegExp(horizontalWhitespace, "u").test(character)) {
+    if (!horizontalWhitespacePattern.test(character)) {
       return character;
     }
   }
@@ -380,15 +429,8 @@ function normalizePunctuation(value: string): {
     openQuote = undefined;
   }
 
-  const punctuation = new Map([
-    [",", "，"],
-    [";", "；"],
-    [":", "："],
-    ["?", "？"],
-    ["!", "！"],
-  ]);
   for (let index = 0; index < characters.length; index += 1) {
-    const replacement = punctuation.get(characters[index] ?? "");
+    const replacement = punctuationReplacements.get(characters[index] ?? "");
     if (!replacement || isProtected(ranges, index)) continue;
     if (
       isChineseContextCharacter(previousVisibleCharacter(output, index)) ||
@@ -406,11 +448,11 @@ function normalizePunctuation(value: string): {
     const left = previousVisibleCharacter(output, index);
     const right = nextVisibleCharacter(output, index);
     if (
-      (hanPattern.test(left) || /[”’）》」』】]/u.test(left)) &&
+      (hanPattern.test(left) || closingPunctuationPattern.test(left)) &&
       (!right ||
         right === "\n" ||
         hanPattern.test(right) ||
-        /[”’）》」』】]/u.test(right))
+        closingPunctuationPattern.test(right))
     ) {
       withPeriods[index] = "。";
       converted += 1;
@@ -428,50 +470,21 @@ function normalizeUnprotectedSpacing(
   readonly value: string;
 } {
   let normalized = 0;
-  const forward = new RegExp(
-    `(\\p{Script=Han})(${horizontalWhitespace}*)([\\p{Script=Latin}0-9])`,
-    "gu",
-  );
-  const backward = new RegExp(
-    `([\\p{Script=Latin}0-9])(${horizontalWhitespace}*)(\\p{Script=Han})`,
-    "gu",
-  );
   const normalizeSegment = (segment: string): string => {
     let output = segment
-      .replace(
-        new RegExp(
-          `${horizontalWhitespace}+(?=[，。；：？！）》」』】])`,
-          "gu",
-        ),
-        "",
-      )
-      .replace(
-        new RegExp(`(?<=[（《“‘「『【])${horizontalWhitespace}+`, "gu"),
-        "",
-      )
-      .replace(
-        new RegExp(
-          `(?<=[，。；：？！）》」』】])${horizontalWhitespace}+(?=[\\p{Script=Han}（《“‘「『【])`,
-          "gu",
-        ),
-        "",
-      )
-      .replace(
-        new RegExp(
-          `(?<=[\\p{Script=Han}）》」』】”’])${horizontalWhitespace}+(?=[（《“‘「『【])`,
-          "gu",
-        ),
-        "",
-      );
+      .replace(whitespaceBeforeClosingPunctuationPattern, "")
+      .replace(whitespaceAfterOpeningPunctuationPattern, "")
+      .replace(whitespaceBetweenClosingAndChinesePattern, "")
+      .replace(whitespaceBeforeOpeningPunctuationPattern, "");
     output = output.replace(
-      forward,
+      forwardMixedSpacingPattern,
       (_match, left: string, spaces: string, right: string) => {
         if (spaces !== " ") normalized += 1;
         return `${left} ${right}`;
       },
     );
     output = output.replace(
-      backward,
+      backwardMixedSpacingPattern,
       (_match, left: string, spaces: string, right: string) => {
         if (spaces !== " ") normalized += 1;
         return `${left} ${right}`;
@@ -489,7 +502,7 @@ function normalizeUnprotectedSpacing(
     if (
       before &&
       needsMixedSpace(left, tokenFirst) &&
-      !new RegExp(`${horizontalWhitespace}$`, "u").test(before)
+      !horizontalWhitespaceAtEndPattern.test(before)
     ) {
       before += " ";
       normalized += 1;
@@ -502,7 +515,7 @@ function normalizeUnprotectedSpacing(
     if (
       next &&
       needsMixedSpace(tokenLast, nextFirst) &&
-      !new RegExp(`^${horizontalWhitespace}`, "u").test(next)
+      !horizontalWhitespaceAtStartPattern.test(next)
     ) {
       output += " ";
       normalized += 1;
@@ -613,12 +626,9 @@ function boundaryCharacters(value: string): {
   readonly first: string;
   readonly last: string;
 } {
-  const withoutLeading = value.replace(
-    new RegExp(`^${horizontalWhitespace}*`, "u"),
-    "",
-  );
+  const withoutLeading = value.replace(leadingHorizontalWhitespacePattern, "");
   const withoutTrailing = value.replace(
-    new RegExp(`${horizontalWhitespace}*$`, "u"),
+    trailingHorizontalWhitespacePattern,
     "",
   );
   return {
@@ -715,11 +725,11 @@ function preprocessBody(source: string): {
       if (
         needsMixedSpace(left, right) &&
         !gap.includes("\n") &&
-        !new RegExp(horizontalWhitespace, "u").test(gap) &&
-        !new RegExp(`${horizontalWhitespace}$`, "u").test(
+        !horizontalWhitespacePattern.test(gap) &&
+        !horizontalWhitespaceAtEndPattern.test(
           isTextLeaf(previous) ? previous.transformed : previous.visible,
         ) &&
-        !new RegExp(`^${horizontalWhitespace}`, "u").test(
+        !horizontalWhitespaceAtStartPattern.test(
           isTextLeaf(leaf) ? leaf.transformed : leaf.visible,
         )
       ) {
