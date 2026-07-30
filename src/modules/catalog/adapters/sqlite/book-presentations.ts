@@ -1,6 +1,9 @@
 import type Database from "better-sqlite3";
 
-import type { BookVersionPresentation } from "@/modules/catalog/application/public";
+import type {
+  BookVersionPresentation,
+  BookVersionPresentationWriter,
+} from "@/modules/catalog/application/public";
 import type { BookVersionRecord } from "@/modules/publishing/application/public";
 
 interface PresentationRow {
@@ -92,7 +95,7 @@ function mapCandidate(row: CandidateRow): BookVersionRecord {
   });
 }
 
-export class BookPresentationRepository {
+export class BookPresentationRepository implements BookVersionPresentationWriter {
   constructor(private readonly database: Database.Database) {}
 
   insert(presentation: BookVersionPresentation): BookVersionPresentation {

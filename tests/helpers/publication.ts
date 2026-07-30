@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 
 import type { BookVersionPresentation } from "@/modules/catalog/application/public";
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 import { CandidatePublicationRepository } from "@/modules/publishing/adapters/sqlite/candidate-publication";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
@@ -143,6 +144,7 @@ export function setupPublicationFixture(
         manifestSha256: hash,
         predecessorVersionId: null,
         presentation: presentationForTest(book.id),
+        presentationWriter: new BookPresentationRepository(database),
         rendererVersion: "semantic-html-v5-katex-0.18.1",
         semanticDigest: hash,
         sourceId: publicationTestSourceId,

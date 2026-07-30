@@ -17,6 +17,7 @@ import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { CandidateRegistrationAdapter } from "@/modules/publishing/adapters/sqlite/candidate-registration";
 import { CandidatePublicationRepository } from "@/modules/publishing/adapters/sqlite/candidate-publication";
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 import { buildCandidateVersion } from "@/modules/publishing/adapters/filesystem/build-candidate-version";
 import {
   finalizeCandidate,
@@ -236,6 +237,7 @@ async function seedPublishedLibraryBook(input: {
     registration: new CandidateRegistrationAdapter(
       input.database,
       input.layout,
+      new BookPresentationRepository(input.database),
     ),
   });
   await publishCandidate({

@@ -110,11 +110,11 @@ contract/integration/E2E coverage and observe unchanged external status values.
       dispatch in `src/modules/publishing/adapters/sqlite/jobs.ts`,
       `src/modules/publishing/application/recover-expired-jobs.ts` and
       `src/modules/publishing/application/retry-policy.ts`.
-- [ ] T016 [US2] Update existing maintenance task coverage for the direct identity mapping and
+- [x] T016 [US2] Update existing maintenance task coverage for the direct identity mapping and
       bounded phase sets in `tests/integration/recovery/retention.test.ts`,
       `tests/integration/recovery/retry-policy.test.ts`,
       `tests/integration/recovery/worker-leases.test.ts` and `tests/e2e/worker-recovery.spec.ts`.
-- [ ] T017 [US2] Verify management task authorization, `private, no-store` behavior and unchanged
+- [x] T017 [US2] Verify management task authorization, `private, no-store` behavior and unchanged
       public status values with `tests/contract/jobs.contract.test.ts` and the focused worker E2E flow.
 
 **Checkpoint**: Status serialization performs no deletion lookup and generic task handling contains
@@ -136,16 +136,16 @@ tests; presentation data and task/candidate terminal states remain consistent at
       `src/modules/publishing/adapters/sqlite/jobs.ts` into
       `src/modules/publishing/adapters/sqlite/draft-candidate-repository.ts` and the candidate application
       commands under `src/modules/publishing/application/commands/`.
-- [ ] T019 [US3] Expose the existing presentation insert as a narrow Catalog application writer in
+- [x] T019 [US3] Expose the existing presentation insert as a narrow Catalog application writer in
       `src/modules/catalog/application/book-version-presentation.ts` and keep
       `src/modules/catalog/adapters/sqlite/book-presentations.ts` as its sole SQLite implementation.
-- [ ] T020 [US3] Inject the Catalog presentation writer into candidate registration and remove the
+- [x] T020 [US3] Inject the Catalog presentation writer into candidate registration and remove the
       duplicate insert from `src/modules/publishing/adapters/sqlite/versions.ts` and
       `src/modules/publishing/adapters/sqlite/candidate-registration.ts`.
-- [ ] T021 [US3] Route presentation reconciliation/recovery through the same writer in
+- [x] T021 [US3] Route presentation reconciliation/recovery through the same writer in
       `src/modules/publishing/adapters/filesystem/storage-reconciliation.ts` and
       `src/composition/storage-reconciliation.ts`.
-- [ ] T022 [US3] Pass existing candidate crash-boundary, publication, search and presentation
+- [x] T022 [US3] Pass existing candidate crash-boundary, publication, search and presentation
       evidence in `tests/integration/publication/candidate-builder.test.ts`,
       `tests/integration/publication/book-presentations.test.ts` and
       `tests/integration/recovery/book-presentations.test.ts` without adding private-shape tests.

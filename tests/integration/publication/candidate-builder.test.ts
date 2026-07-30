@@ -14,6 +14,7 @@ import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
 import { reconcileStorage } from "@/composition/storage-reconciliation";
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 import { handleBuildCandidate } from "@/entrypoints/worker/handlers/build-candidate";
 import type { JobProgressMessage } from "@/entrypoints/worker/protocol";
 import { buildCandidateVersion } from "@/modules/publishing/adapters/filesystem/build-candidate-version";
@@ -572,6 +573,7 @@ describe("isolated candidate child builder", () => {
             registration: new CandidateRegistrationAdapter(
               migrated.database,
               dataRoot.layout,
+              new BookPresentationRepository(migrated.database),
               (crashPoint: CandidateRegistrationCrashPoint) => {
                 if (crashPoint === point) throw new Error(`CRASH_${point}`);
               },
@@ -624,6 +626,7 @@ describe("isolated candidate child builder", () => {
           registration: new CandidateRegistrationAdapter(
             migrated.database,
             dataRoot.layout,
+            new BookPresentationRepository(migrated.database),
             (point) => {
               if (point === "after_commit") throw new Error("RESPONSE_LOST");
             },
@@ -640,6 +643,7 @@ describe("isolated candidate child builder", () => {
           registration: new CandidateRegistrationAdapter(
             migrated.database,
             dataRoot.layout,
+            new BookPresentationRepository(migrated.database),
           ),
         }),
       ).resolves.toEqual({
@@ -692,6 +696,7 @@ describe("isolated candidate child builder", () => {
           registration: new CandidateRegistrationAdapter(
             migrated.database,
             dataRoot.layout,
+            new BookPresentationRepository(migrated.database),
           ),
         }),
       ).rejects.toThrow("CANDIDATE_FINALIZATION_STALE");

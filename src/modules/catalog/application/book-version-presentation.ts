@@ -14,3 +14,7 @@ export interface BookVersionPresentation {
   readonly tocPreviewJson: string;
   readonly versionId: string;
 }
+
+export interface BookVersionPresentationWriter {
+  insert(presentation: BookVersionPresentation): BookVersionPresentation;
+}

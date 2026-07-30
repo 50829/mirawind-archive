@@ -6,6 +6,7 @@ import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import { presentationForTest } from "../../helpers/publication.js";
@@ -106,6 +107,7 @@ describe("ready-version and search index transaction", () => {
         manifestSha256: hash,
         predecessorVersionId: null,
         presentation: presentationForTest(book.id, versionId),
+        presentationWriter: new BookPresentationRepository(database),
         rendererVersion: "semantic-html-v5-katex-0.18.1",
         sourceId,
         spool: spool({ bookId: book.id, versionId }),
@@ -147,6 +149,7 @@ describe("ready-version and search index transaction", () => {
           manifestSha256: hash,
           predecessorVersionId: versionId,
           presentation: presentationForTest(book.id, secondVersionId),
+          presentationWriter: new BookPresentationRepository(database),
           rendererVersion: "semantic-html-v5-katex-0.18.1",
           sourceId,
           spool: spool({ bookId: book.id, versionId: secondVersionId }),

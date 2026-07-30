@@ -1,4 +1,7 @@
-export type { BookVersionPresentation } from "@/modules/catalog/application/book-version-presentation";
+export type {
+  BookVersionPresentation,
+  BookVersionPresentationWriter,
+} from "@/modules/catalog/application/book-version-presentation";
 export type {
   AdministratorLibraryEntry,
   AdministratorLibraryPage,

@@ -1,6 +1,9 @@
 import type Database from "better-sqlite3";
 
-import type { BookVersionPresentation } from "@/modules/catalog/application/public";
+import type {
+  BookVersionPresentation,
+  BookVersionPresentationWriter,
+} from "@/modules/catalog/application/public";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import type { SearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { SearchIndexRepository } from "@/modules/publishing/adapters/sqlite/search-index";
@@ -57,38 +60,6 @@ function mapVersion(row: VersionRow): BookVersionRecord {
     versionRelativePath: row.version_rel_path,
     versionMarkerSha256: row.version_marker_sha256,
   });
-}
-
-function insertPresentation(
-  database: Database.Database,
-  presentation: BookVersionPresentation,
-): void {
-  const changed = database
-    .prepare(
-      `INSERT INTO book_version_presentations (
-        version_id, book_id, config_revision, projection_schema_version,
-        alias, title, metadata_json, cover_resource_id, first_page_id,
-        first_page_alias, toc_preview_json, toc_entry_count,
-        projection_sha256, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      presentation.versionId,
-      presentation.bookId,
-      presentation.configRevision,
-      presentation.projectionSchemaVersion,
-      presentation.alias,
-      presentation.title,
-      presentation.metadataJson,
-      presentation.coverResourceId,
-      presentation.firstPageId,
-      presentation.firstPageAlias,
-      presentation.tocPreviewJson,
-      presentation.tocEntryCount,
-      presentation.projectionSha256,
-      presentation.createdAtMs,
-    );
-  if (changed.changes !== 1) throw new Error("PRESENTATION_INSERT_FAILED");
 }
 
 export class VersionRepository {
@@ -160,6 +131,7 @@ export class VersionRepository {
     readonly previewVersion?: string;
     readonly predecessorVersionId: string | null;
     readonly presentation: BookVersionPresentation;
+    readonly presentationWriter: BookVersionPresentationWriter;
     readonly rendererVersion: string;
     readonly readerVersion?: string;
     readonly semanticDigest?: string;
@@ -221,7 +193,7 @@ export class VersionRepository {
           input.completeAtMs,
           input.createdByJobId,
         );
-      insertPresentation(this.database, input.presentation);
+      input.presentationWriter.insert(input.presentation);
       new SearchIndexRepository(this.database).insertAndValidate({
         expectedBlockIds: input.expectedSearchBlockIds,
         spool: input.spool,

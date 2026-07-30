@@ -10,6 +10,7 @@ import { parseEnvironment } from "@/config/environment";
 import { openDatabase } from "@/platform/sqlite/connection";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import { CandidateRegistrationAdapter } from "@/modules/publishing/adapters/sqlite/candidate-registration";
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 import {
   completeBookDeletionFailure,
   completeBookDeletionInterruption,
@@ -479,6 +480,7 @@ async function executeClaimedJob(input: {
           registration: new CandidateRegistrationAdapter(
             input.database,
             input.layout,
+            new BookPresentationRepository(input.database),
           ),
         });
         return;
