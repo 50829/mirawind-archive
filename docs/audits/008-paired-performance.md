@@ -376,3 +376,29 @@ other three books decreased. The complete 645-test suite, both TypeScript builds
 235-file architecture graph, production build, and fresh `4/4` reference-v2 comparison passed. Raw
 evidence is under ignored `.cache/008-publishing-performance/route-offsets-*`. These focused runs do
 not replace or complete the owner-deferred T092 paired rounds.
+
+## Write-time candidate inventory
+
+The next candidate profile showed that assembly reopened every generated and copied file to build
+`version.json`, although page HTML, spools, metadata, assets and verified copies already had their
+bytes or SHA-256 available at the write boundary. Candidate assembly now records one bounded,
+path-unique descriptor after each successful write or verified copy and builds the marker from that
+adapter-local inventory. The old pre-marker tree walk was deleted. The finalizer remains an
+independent full-tree hash and closure validation followed by file/directory fsync and atomic rename;
+there is still no trust in the in-memory inventory at the durability boundary.
+
+Focused results against the structured route-reference checkpoint were:
+
+| Fixture | Inventory before | Inventory after | Candidate before | Candidate after | Wall change | Process-tree RSS change |
+| ------- | ---------------: | --------------: | ---------------: | --------------: | ----------: | ----------------------: |
+| `a53`   |         427.3 ms |          1.9 ms |          5.467 s |         5.255 s |       +0.1% |               -18.9 MiB |
+| `106e`  |         386.6 ms |          1.4 ms |          5.432 s |         5.073 s |       -2.9% |               +11.1 MiB |
+| `81d`   |         382.9 ms |          1.2 ms |          6.668 s |         6.082 s |       -4.0% |               +42.9 MiB |
+| `f840`  |         710.3 ms |          1.8 ms |          8.372 s |         7.564 s |       -5.6% |               +16.6 MiB |
+
+All memory changes remain within `max(5%, 64 MiB)`. The first wall result differs by only 13.7 ms
+while its candidate child is 211.3 ms faster. The focused candidate/preview/recovery tests, both
+TypeScript builds, lint and the 236-file architecture graph, production build, and fresh `4/4`
+reference-v2 comparison passed. Raw evidence is under ignored
+`.cache/008-publishing-performance/write-time-inventory-*`. This focused run does not replace or
+complete the owner-deferred T092 paired rounds.

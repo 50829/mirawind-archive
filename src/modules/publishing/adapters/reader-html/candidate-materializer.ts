@@ -1,3 +1,4 @@
+import { createHash, type Hash } from "node:crypto";
 import { chmod, mkdir, open, rm, type FileHandle } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
@@ -16,7 +17,7 @@ import {
   type PageRenderer,
 } from "@/modules/publishing/core/publication/render-pages";
 import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
-import { atomicWriteFile } from "@/platform/filesystem/layout";
+import type { CandidateFileSink } from "@/modules/publishing/adapters/filesystem/candidate-file-inventory";
 import { renderReaderHtmlDocument } from "@/web/features/reader/render-document";
 import { renderReaderShell } from "@/web/features/reader/render";
 
@@ -33,13 +34,23 @@ interface NavigationLink {
 }
 
 class JsonLineSpool {
+  readonly #files: CandidateFileSink;
+  readonly #hash: Hash = createHash("sha256");
   readonly #path: string;
+  readonly #relativePath: string;
   #buffer: string[] = [];
   #bufferBytes = 0;
   #handle: FileHandle | undefined;
+  #size = 0;
 
-  constructor(path: string) {
-    this.#path = path;
+  constructor(input: {
+    readonly files: CandidateFileSink;
+    readonly path: string;
+    readonly relativePath: string;
+  }) {
+    this.#files = input.files;
+    this.#path = input.path;
+    this.#relativePath = input.relativePath;
   }
 
   async open(): Promise<void> {
@@ -61,7 +72,10 @@ class JsonLineSpool {
     for (const value of values) {
       const line = `${JSON.stringify(value)}\n`;
       this.#buffer.push(line);
-      this.#bufferBytes += Buffer.byteLength(line);
+      const bytes = Buffer.byteLength(line);
+      this.#bufferBytes += bytes;
+      this.#size += bytes;
+      this.#hash.update(line, "utf8");
     }
     if (this.#bufferBytes >= 256 * 1024) await this.#flush();
   }
@@ -77,6 +91,11 @@ class JsonLineSpool {
       await handle.close();
     }
     await chmod(this.#path, 0o400);
+    this.#files.record({
+      path: this.#relativePath,
+      sha256: this.#hash.digest("hex"),
+      size: this.#size,
+    });
   }
 
   async abort(): Promise<void> {
@@ -124,6 +143,7 @@ export async function materializeCandidatePages(input: {
   readonly compiled: CompiledBook;
   readonly config: Readonly<Record<string, unknown>>;
   readonly configRevision: number;
+  readonly files: CandidateFileSink;
   readonly originalFiles: readonly Readonly<Record<string, unknown>>[];
   readonly onPageRendered?: (completed: number, total: number) => void;
   readonly preparationDiagnostics?: readonly SafeDiagnostic[];
@@ -150,12 +170,16 @@ export async function materializeCandidatePages(input: {
     }),
   ]);
 
-  const manifestSpool = new JsonLineSpool(
-    resolve(input.candidateDirectory, "derived/manifest-pages.ndjson"),
-  );
-  const searchSpool = new JsonLineSpool(
-    resolve(input.candidateDirectory, "derived/search-rows.ndjson"),
-  );
+  const manifestSpool = new JsonLineSpool({
+    files: input.files,
+    path: resolve(input.candidateDirectory, "derived/manifest-pages.ndjson"),
+    relativePath: "derived/manifest-pages.ndjson",
+  });
+  const searchSpool = new JsonLineSpool({
+    files: input.files,
+    path: resolve(input.candidateDirectory, "derived/search-rows.ndjson"),
+    relativePath: "derived/search-rows.ndjson",
+  });
   const pageByHeading = new Map<string, number>();
   const headingsByPageId = new Map<
     number,
@@ -314,16 +338,8 @@ export async function materializeCandidatePages(input: {
         title: pageMetadata(compiled, page).title,
       });
       await Promise.all([
-        atomicWriteFile(
-          resolve(previewDirectory, `pages/${page.pageId}.html`),
-          previewHtml,
-          { mode: 0o400 },
-        ),
-        atomicWriteFile(
-          resolve(publishedDirectory, `pages/${page.pageId}.html`),
-          publicHtml,
-          { mode: 0o400 },
-        ),
+        input.files.write(`preview/pages/${page.pageId}.html`, previewHtml),
+        input.files.write(`published/pages/${page.pageId}.html`, publicHtml),
       ]);
       await manifestSpool.writeMany([
         {
@@ -363,11 +379,7 @@ export async function materializeCandidatePages(input: {
     await searchSpool.close();
 
     const css = [...styles].sort().join("");
-    await atomicWriteFile(
-      resolve(publishedDirectory, "styles/document.css"),
-      css,
-      { mode: 0o400 },
-    );
+    await input.files.write("published/styles/document.css", css);
     return Object.freeze({
       diagnostics: Object.freeze(diagnostics),
       manifestPageCount: compiled.pages.length,

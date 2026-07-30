@@ -206,9 +206,11 @@ version builder and forwarding exports in the same cutover.
 
 ### Phase E - Reader and I/O Optimization
 
-Use one resource inventory through candidate assembly, retain durability validation, add immutable
-manifest single-flight plus O(1) page/resource lookup, and stream preview resources from validated
-metadata. A successful import analysis atomically seals its validated extraction under that import;
+Use one file inventory through candidate assembly: record hashes from bytes or verified copies when
+each file is written, build the marker from that bounded adapter-local state, then retain one
+independent whole-tree hash validation before fsync and rename. Add immutable manifest single-flight
+plus O(1) page/resource lookup, and stream preview resources from validated metadata. A successful
+import analysis atomically seals its validated extraction under that import;
 draft preparation claims it once, while missing/invalid handoffs re-extract normally and terminal
 cleanup removes only the derived tree. Archive validation is unchanged.
 

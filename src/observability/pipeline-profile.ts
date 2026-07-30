@@ -28,7 +28,7 @@ export const pipelineProfileStageNames = [
   "manifest_build",
   "source_copy",
   "original_copy",
-  "file_inventory_hash",
+  "file_inventory",
   "version_marker",
   "candidate_finalize",
 ] as const;

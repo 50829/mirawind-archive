@@ -540,3 +540,17 @@ lint/architecture and production build passed, and fresh observations remained `
 exact. `parse5-sax-parser` is no longer a runtime or lockfile dependency. Raw evidence is under
 ignored `.cache/008-publishing-performance/route-offsets-*`. This focused evidence does not complete
 owner-deferred T092.
+
+- [x] T109 Build `version.json` from hashes captured when candidate files are successfully written
+      or verified, delete the preceding whole-tree reread, and retain the finalizer's independent
+      closure hash/fsync/rename boundary (partial)
+
+The four representative candidates reduced the assembly inventory stage from
+`382.909–710.309 ms` to `1.242–1.851 ms`. Complete candidate-child duration improved by `3.9%`,
+`6.6%`, `8.8%` and `9.7%`; complete wall changed by `+0.1%`, `-2.9%`, `-4.0%` and `-5.6%`, with the
+13.7 ms increase inside run noise. Process-tree RSS remained within `max(5%, 64 MiB)` for every
+fixture. Candidate construction, preview and recovery tests, both TypeScript builds, lint and the
+236-file architecture graph, production build, and fresh `4/4` reference-v2 comparison passed. Raw
+evidence is under ignored `.cache/008-publishing-performance/write-time-inventory-*`. The finalizer
+still rereads and hashes every declared file, rejects extra or changed files, fsyncs the complete
+tree and atomically renames it. This focused evidence does not complete owner-deferred T092.

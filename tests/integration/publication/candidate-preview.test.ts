@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { authorizePreviewHtmlResources } from "@/http/authorization/preview-resource";
 import { responsePolicyFor } from "@/http/cache/policies";
 import { materializeCandidatePages } from "@/modules/publishing/adapters/reader-html/candidate-materializer";
+import { createCandidateFileInventory } from "@/modules/publishing/adapters/filesystem/candidate-file-inventory";
 import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import { buildManifestPageRecord } from "@/modules/publishing/core/publication/manifest";
 import { renderSemanticDocument } from "@/modules/publishing/core/publication/render-document";
@@ -94,6 +95,7 @@ describe("candidate preview materialization", () => {
         compiled: book,
         config,
         configRevision: 3,
+        files: createCandidateFileInventory(candidateDirectory),
         originalFiles: [{ id: "orig_candidate_0001", role: "mineru_zip" }],
         renderPage,
         resourceResolution: {

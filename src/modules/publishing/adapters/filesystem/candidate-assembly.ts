@@ -22,7 +22,6 @@ import {
 import { inspectRasterImage } from "@/modules/publishing/core/publication/inspect-image";
 import { resolveDocumentResources } from "@/modules/publishing/adapters/filesystem/resolve-document-resources";
 import type { CompiledBook } from "@/modules/publishing/core/publication/compiled-book";
-import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
 import { toIsoDateTime } from "@/domain/time";
 import type { SemanticCompilationIdentity } from "@/modules/publishing/core/preparation/document-model";
 import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
@@ -34,6 +33,10 @@ import {
   atomicWriteFile,
   resolveContainedPath,
 } from "@/platform/filesystem/layout";
+import {
+  createCandidateFileInventory,
+  type CandidateFileInventory,
+} from "@/modules/publishing/adapters/filesystem/candidate-file-inventory";
 import {
   profilePipelineStage,
   recordPipelineProfileMetrics,
@@ -58,8 +61,11 @@ export interface CandidatePageMaterializationContext {
   readonly compiled: CompiledBook;
   readonly config: Readonly<Record<string, unknown>>;
   readonly configRevision: number;
+  readonly files: CandidateFileInventory;
   readonly originalFiles: readonly Readonly<Record<string, unknown>>[];
-  readonly resourceResolution: ResourceResolution;
+  readonly resourceResolution: Awaited<
+    ReturnType<typeof resolveDocumentResources>
+  >;
   readonly versionId: string;
 }
 
@@ -78,13 +84,6 @@ export interface AssembleCandidateInput {
   readonly sourceRoot: string;
   readonly stagingDirectory: string;
   readonly versionId: string;
-}
-
-interface FileDescriptor {
-  readonly absolutePath: string;
-  readonly path: string;
-  readonly sha256: string;
-  readonly size: number;
 }
 
 function sha256(bytes: string | Uint8Array): string {
@@ -188,33 +187,12 @@ async function copyTree(input: {
   return Object.freeze(descriptors);
 }
 
-async function describeFiles(root: string): Promise<readonly FileDescriptor[]> {
-  const files = await filesUnder(root);
-  const descriptors: FileDescriptor[] = [];
-  for (const absolutePath of files) {
-    const path = relativePath(root, absolutePath);
-    if (path === "version.json") continue;
-    const digest = await digestFile(absolutePath);
-    descriptors.push(
-      Object.freeze({
-        absolutePath,
-        path,
-        sha256: digest.sha256,
-        size: digest.size,
-      }),
-    );
-  }
-  descriptors.sort((left, right) =>
-    Buffer.from(left.path).compare(Buffer.from(right.path)),
-  );
-  return Object.freeze(descriptors);
-}
-
 export async function assembleCandidate(
   input: AssembleCandidateInput,
 ): Promise<CandidateAssemblyResult> {
   const stagingDirectory = resolve(input.stagingDirectory);
   const versionDirectory = resolve(stagingDirectory, "version");
+  const files = createCandidateFileInventory(versionDirectory);
   try {
     input.signal?.throwIfAborted();
     await mkdir(dirname(stagingDirectory), { mode: 0o700, recursive: true });
@@ -291,16 +269,14 @@ export async function assembleCandidate(
 
     const sourceFiles = await profilePipelineStage("source_copy", async () => {
       input.signal?.throwIfAborted();
-      await atomicWriteFile(
-        resolve(versionDirectory, "book.yaml"),
-        configYaml,
-        { mode: 0o400 },
-      );
-      return copyTree({
+      await files.write("book.yaml", configYaml);
+      const copied = await copyTree({
         destination: resolve(versionDirectory, "source"),
         ...(input.signal ? { signal: input.signal } : {}),
         source: input.sourceRoot,
       });
+      for (const file of copied) files.record(file);
+      return copied;
     });
     const originalFiles = source.original_files as readonly Readonly<
       Record<string, unknown>
@@ -331,6 +307,11 @@ export async function assembleCandidate(
         ) {
           throw new Error("VERSION_ORIGINAL_HASH_MISMATCH");
         }
+        files.record({
+          path: `originals/${String(original.id)}`,
+          sha256: copied.sha256,
+          size: copied.size,
+        });
       }
     });
 
@@ -349,13 +330,19 @@ export async function assembleCandidate(
         await atomicWriteFile(resolve(versionDirectory, outputPath), bytes, {
           mode: 0o400,
         });
+        const resourceSha256 = sha256(bytes);
+        files.record({
+          path: outputPath,
+          sha256: resourceSha256,
+          size: bytes.byteLength,
+        });
         manifestResources.push(
           Object.freeze({
             ...resource,
             height: inspection.height,
             mediaType: mediaType(inspection.format),
             outputPath,
-            sha256: sha256(bytes),
+            sha256: resourceSha256,
             size: bytes.byteLength,
             width: inspection.width,
           }),
@@ -376,6 +363,7 @@ export async function assembleCandidate(
           compiled: configured,
           config,
           configRevision: input.configRevision,
+          files,
           originalFiles,
           resourceResolution,
           versionId: input.versionId,
@@ -400,16 +388,12 @@ export async function assembleCandidate(
         });
         validateDocumentManifest(manifest);
         const json = canonicalJson(manifest);
-        await atomicWriteFile(
-          resolve(versionDirectory, "document-manifest.json"),
-          json,
-          { mode: 0o400 },
-        );
+        await files.write("document-manifest.json", json);
         return json;
       },
     );
-    const files = await profilePipelineStage("file_inventory_hash", () =>
-      describeFiles(versionDirectory),
+    const inventory = await profilePipelineStage("file_inventory", () =>
+      files.snapshot(),
     );
     return await profilePipelineStage("version_marker", async () => {
       const marker = {
@@ -419,7 +403,7 @@ export async function assembleCandidate(
         compiler: compilerIdentity,
         config_revision: input.configRevision,
         created_at: createdAt,
-        files: files.map(({ path, sha256: hash, size }) => ({
+        files: inventory.map(({ path, sha256: hash, size }) => ({
           path,
           sha256: hash,
           size,

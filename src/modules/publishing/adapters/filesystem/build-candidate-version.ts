@@ -32,7 +32,6 @@ import {
 } from "@/modules/publishing/core/publication/manifest";
 import { pageMetadata } from "@/modules/publishing/core/publication/compiled-book";
 import {
-  atomicWriteFile,
   resolveContainedPath,
   type StorageLayout,
 } from "@/platform/filesystem/layout";
@@ -142,6 +141,7 @@ export async function buildCandidateVersion(input: {
         compiled: context.compiled,
         config: context.config,
         configRevision: command.configRevision,
+        files: context.files,
         onPageRendered(completed, total) {
           report(input.onStage, {
             completed,
@@ -179,13 +179,12 @@ export async function buildCandidateVersion(input: {
         (context.config.source as Readonly<Record<string, unknown>>)
           .preprocessing as Readonly<Record<string, unknown>>
       ).typography as TypographyProvenance;
-      await atomicWriteFile(
-        resolve(context.candidateDirectory, "preview/diagnostics.json"),
+      await context.files.write(
+        "preview/diagnostics.json",
         canonicalJson({ diagnostics: safeDiagnostics }),
-        { mode: 0o400 },
       );
-      await atomicWriteFile(
-        resolve(context.candidateDirectory, "preview/preview-model.json"),
+      await context.files.write(
+        "preview/preview-model.json",
         canonicalJson({
           compiler_version: context.compiled.identity.compiler_version,
           config_sha256: context.compiled.identity.config_sha256,
@@ -213,10 +212,9 @@ export async function buildCandidateVersion(input: {
           typography,
           version: command.previewIdentity,
         }),
-        { mode: 0o400 },
       );
-      await atomicWriteFile(
-        resolve(context.candidateDirectory, "derived/candidate.json"),
+      await context.files.write(
+        "derived/candidate.json",
         canonicalJson({
           candidate_id: command.candidateId,
           compiler_identity: command.compilerIdentity,
@@ -226,7 +224,6 @@ export async function buildCandidateVersion(input: {
           semantic_digest: context.compiled.identity.semantic_digest,
           version_id: command.versionId,
         }),
-        { mode: 0o400 },
       );
       report(input.onStage, {
         completed:
