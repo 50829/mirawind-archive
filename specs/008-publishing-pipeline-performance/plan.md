@@ -41,10 +41,12 @@ least 35% lower; accepted-to-preview at least 25% lower; publish-to-public at le
 fourfold source-region input below sixfold runtime; reader p95 at most 300 ms and search p95 below
 1,000 ms during at least 200 overlapping requests
 
-**Constraints**: Fifteen out of fifteen reference v2 exact every round; no book regression above
-`max(5%, 1 s)`; RSS increase no greater than `max(5%, 64 MiB)`; at most four rendered pages in
-flight; 30-minute job timeout and 10-second cancellation grace; no request-path parsing/rendering;
-no legacy runtime branch after candidate cutover
+**Constraints**: Focused development comparisons use a declared three-to-five-book workload and
+must remain exact for every selected reference; the formal paired benchmark and final acceptance
+must remain fifteen out of fifteen exact. No measured book may regress above `max(5%, 1 s)`; RSS
+increase may not exceed `max(5%, 64 MiB)`; at most four rendered pages may be in flight; the job
+timeout remains 30 minutes with a 10-second cancellation grace; no request-path parsing/rendering
+or legacy runtime branch remains after candidate cutover.
 
 **Scale/Scope**: Fifteen MinerU 3.4.4 books from 97 to 1,278 PDF pages, 500-page synthetic stress
 book, up to 20,000 archive entries, 256 MiB Markdown and 2 GiB uploads

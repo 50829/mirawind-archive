@@ -111,7 +111,8 @@ raise RSS and reader latency; weakening security/hash/fsync checks is prohibited
 five pairs when coefficient of variation exceeds 10%. The baseline is `c176fdd` plus the minimal
 nested body-role and validator-contract backports needed for 15/15 reference exactness; it contains no
 performance optimization. Bind commits, dirty state, lockfile, fixture hashes, environment, order,
-per-stage time and process-tree RSS. Run fifteen reference comparisons in every round and overlap at
+per-stage time and process-tree RSS. Use a declared three-to-five-book reference-exact workload for
+focused development comparisons; run all fifteen references for formal paired rounds and overlap at
 least 200 reader requests.
 
 **Rationale**: the 901.234-second `c176fdd` result is one diagnostic run with uncontrolled OS cache

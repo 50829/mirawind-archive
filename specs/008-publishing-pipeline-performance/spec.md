@@ -161,8 +161,9 @@ work and measure page, resource and search behavior.
   bounded retained results so cancellation remains effective.
 - **FR-013**: Published reading MUST resolve current pages, resources, originals and search through
   a dedicated reading boundary and MUST NOT execute publishing analysis or compilation.
-- **FR-014**: The complete fifteen-book reference set MUST remain an exact correctness gate during
-  every accepted performance comparison.
+- **FR-014**: Every accepted focused optimization comparison MUST remain reference-exact for its
+  declared three-to-five-book workload. The formal paired benchmark and final acceptance MUST use
+  the complete fifteen-book reference set and remain exact for all fifteen fixtures.
 - **FR-015**: The implementation MUST remove the old preview-build, publish-build and mixed compiler
   runtime paths when the candidate path becomes active.
 
@@ -208,7 +209,9 @@ work and measure page, resource and search behavior.
 
 ### Measurable Outcomes
 
-- **SC-001**: Every performance round matches all fifteen reference v2 fixtures exactly.
+- **SC-001**: Every formal performance round and final acceptance matches all fifteen reference v2
+  fixtures exactly; every focused development comparison matches its declared three-to-five-book
+  subset exactly.
 - **SC-002**: Paired median total wall time across the fifteen books is at least 30% lower than the
   frozen baseline and the slowest five books improve by at least 35%.
 - **SC-003**: Median accepted-to-preview time improves by at least 25% and publish-to-public time
