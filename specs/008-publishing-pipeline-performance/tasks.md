@@ -605,3 +605,14 @@ production build passed.
 Raw evidence is under ignored `.cache/008-publishing-performance/current-f840-profile/`,
 `container-fastpath-f840/`, `parser-typography-four/` and `parser-typography-81d-rerun/`. This
 focused evidence does not complete owner-deferred T092.
+
+- [x] T114 Remove the candidate adapter's second full validation of the already validated and
+      deeply frozen document manifest (partial)
+
+`buildDocumentManifest()` remains the single schema and semantic validation boundary before any
+manifest bytes are written. Across four representative books, `manifest_build` improved by
+`14.9%–29.5%`; three complete candidate jobs improved by `2.2%–8.1%` and the fourth changed by
+`+0.05%`. Complete wall improved for all four by `0.08%–2.71%`, RSS decreased by
+`10.7–43.6 MiB`, and fresh observations remained `4/4` reference-v2 exact. Raw evidence is under
+ignored `.cache/008-publishing-performance/single-manifest-validation-*`. This focused evidence
+does not complete owner-deferred T092.

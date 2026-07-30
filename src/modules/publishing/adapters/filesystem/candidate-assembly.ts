@@ -25,10 +25,7 @@ import type { CompiledBook } from "@/modules/publishing/core/publication/compile
 import { toIsoDateTime } from "@/domain/time";
 import type { SemanticCompilationIdentity } from "@/modules/publishing/core/preparation/document-model";
 import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
-import {
-  validateDocumentManifest,
-  validateVersionMarker,
-} from "@/modules/publishing/core/publication/document-manifest-schema";
+import { validateVersionMarker } from "@/modules/publishing/core/publication/document-manifest-schema";
 import {
   atomicWriteFile,
   resolveContainedPath,
@@ -379,7 +376,6 @@ export async function assembleCandidate(
           sourceFiles,
           versionId: input.versionId,
         });
-        validateDocumentManifest(manifest);
         const json = canonicalJson(manifest);
         await files.write("document-manifest.json", json);
         return json;

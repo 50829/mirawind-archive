@@ -513,3 +513,23 @@ Raw evidence is under ignored `.cache/008-publishing-performance/current-f840-pr
 `container-fastpath-f840/`, `parser-typography-four/`, `parser-typography-81d-rerun/` and
 `parser-typography-observed-v2/`. This focused run does not replace or complete the owner-deferred
 T092 paired rounds.
+
+## Single document-manifest validation
+
+`buildDocumentManifest()` validates the completed manifest against schema v2, checks page, block,
+resource and TOC references, and deeply freezes the result before returning it. Candidate assembly
+previously passed that same frozen object through the complete validator a second time immediately
+before canonical serialization. The adapter-level duplicate has been deleted; the builder's
+validation and the finalizer's independent on-disk hash/closure validation remain unchanged.
+
+| Fixture | Manifest build | Candidate job | Complete wall | Process-tree RSS |
+| ------- | -------------: | ------------: | ------------: | ---------------: |
+| `a53`   |         -23.7% |         -3.4% |         -0.1% |        -28.4 MiB |
+| `106e`  |         -29.5% |         -2.2% |         -0.5% |        -43.6 MiB |
+| `81d`   |         -15.7% |         +0.1% |         -0.8% |        -10.7 MiB |
+| `f840`  |         -14.9% |         -8.1% |         -2.7% |        -15.4 MiB |
+
+The candidate/manifest/recovery suites passed 22 tests, and newly generated observations remained
+`4/4` reference-v2 exact. Raw evidence is under ignored
+`.cache/008-publishing-performance/single-manifest-validation-*`. This focused run does not replace
+or complete the owner-deferred T092 paired rounds.
