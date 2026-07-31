@@ -37,11 +37,11 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
     return new Response(null, { headers, status: 302 });
   }
   const response = readingPageHeaders({
+    access: page.access,
     pageIdentity: String(page.pageId),
     rendererVersion: page.rendererVersion,
     requestPath: new URL(request.url).pathname,
     versionId: page.versionId,
-    visibility: page.visibility,
   });
   const notModified = conditionalNotModified(
     request,

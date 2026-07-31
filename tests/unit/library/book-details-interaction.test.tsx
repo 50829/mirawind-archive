@@ -40,7 +40,7 @@ const details: BookDetailsView = {
   tocEntryCount: 1,
   tocTruncated: false,
   versionId: "ver_details_component_0001",
-  visibility: "public",
+  access: "public",
 };
 
 describe("book details interaction", () => {

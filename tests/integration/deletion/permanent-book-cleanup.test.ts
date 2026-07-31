@@ -323,7 +323,7 @@ describe("permanent book cleanup", () => {
       database
         .prepare(
           `UPDATE books
-           SET alias = 'full-graph', visibility = 'public',
+           SET alias = 'full-graph', access = 'public',
                draft_source_id = ?, draft_config_revision = 1,
                current_candidate_id = ?, current_version_id = ?,
                updated_at = 1600

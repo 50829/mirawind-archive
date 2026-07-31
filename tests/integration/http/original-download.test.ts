@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 describe("registered original HTTP download", () => {
-  it("streams a multi-GiB-capable sparse original with resumable ranges and rechecked visibility", async () => {
+  it("streams a multi-GiB-capable sparse original with resumable ranges and rechecked access", async () => {
     const previous = Object.fromEntries(
       environmentKeys.map((key) => [key, process.env[key]]),
     );
@@ -165,7 +165,7 @@ describe("registered original HTTP download", () => {
       await full.body?.cancel();
 
       getRuntimeDatabase()
-        .prepare("UPDATE books SET visibility = 'private' WHERE id = ?")
+        .prepare("UPDATE books SET access = 'private' WHERE id = ?")
         .run(bookId);
       await expect(
         invoke({

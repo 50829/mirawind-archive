@@ -130,7 +130,7 @@ describe("current-version public book search", () => {
       ).toEqual([]);
 
       database
-        .prepare("UPDATE books SET visibility = 'private' WHERE id = ?")
+        .prepare("UPDATE books SET access = 'private' WHERE id = ?")
         .run(fixture.book.id);
       expect(
         repository.search({

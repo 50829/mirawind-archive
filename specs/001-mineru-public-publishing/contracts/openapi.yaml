@@ -18,7 +18,7 @@ tags:
   - name: Imports
     description: Sole-administrator ZIP upload, analysis and main-document confirmation.
   - name: Drafts
-    description: Sole-administrator configuration, preview, visibility and publication.
+    description: Sole-administrator configuration, preview, access and publication.
   - name: Jobs
     description: Sole-administrator durable task inspection and control.
 
@@ -349,7 +349,6 @@ paths:
           $ref: "#/components/responses/NotFoundJson"
         "409":
           $ref: "#/components/responses/Conflict"
-
   /api/manage/books/{bookId}:
     delete:
       tags: [Drafts]
@@ -580,19 +579,19 @@ paths:
     post:
       tags: [Drafts]
       operationId: publishBook
-      summary: Enqueue a guarded build and public cutover
+      summary: Promote the current ready candidate
       description: |
-        M1 runs the publish policy hook but does not accept or fabricate a rights
-        confirmation field. Successful completion sets visibility to public.
+        Publishing atomically promotes the server-selected current ready candidate and
+        preserves the book's existing private or public access.
       security:
         - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/BookId"
         - $ref: "#/components/parameters/Origin"
-        - name: Idempotency-Key
+        - name: If-Match
           in: header
           required: true
-          schema: { type: string, minLength: 16, maxLength: 200 }
+          schema: { type: string }
       requestBody:
         required: true
         content:
@@ -600,18 +599,23 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [expected_config_revision]
-              properties:
-                expected_config_revision: { type: integer, minimum: 1 }
+              properties: {}
       responses:
-        "202":
-          description: Build/publish job queued
+        "200":
+          description: Candidate published atomically
           headers:
             Cache-Control:
               schema: { type: string, const: "private, no-store" }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/JobAccepted" }
+              schema:
+                type: object
+                additionalProperties: false
+                required: [published_at, state, version_id]
+                properties:
+                  published_at: { type: integer, minimum: 0 }
+                  state: { type: string, const: published }
+                  version_id: { type: string }
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -621,6 +625,8 @@ paths:
         "404":
           $ref: "#/components/responses/NotFoundJson"
         "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
           $ref: "#/components/responses/Conflict"
 
   /api/manage/books/{bookId}/reprocess:
@@ -673,12 +679,12 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
-  /api/manage/books/{bookId}/visibility:
+  /api/manage/books/{bookId}/access:
     patch:
       tags: [Drafts]
-      operationId: makeBookNonPublic
-      summary: Immediately remove a published book from anonymous access
-      description: Publishing or re-publishing as public uses the publish operation.
+      operationId: setBookAccess
+      summary: Change private or public access independently from publication
+      description: Public access requires an existing published version.
       security:
         - cookieAuth: []
       parameters:
@@ -691,14 +697,14 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [visibility]
+              required: [access]
               properties:
-                visibility:
+                access:
                   type: string
-                  enum: [draft, private]
+                  enum: [private, public]
       responses:
         "200":
-          description: Visibility changed atomically
+          description: Access changed atomically
           headers:
             Cache-Control:
               schema: { type: string, const: "private, no-store" }
@@ -706,16 +712,18 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [book_id, visibility]
+                required: [book_id, access]
                 properties:
                   book_id: { type: integer }
-                  visibility: { type: string, enum: [draft, private] }
+                  access: { type: string, enum: [private, public] }
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /api/manage/jobs/{jobId}:
     get:

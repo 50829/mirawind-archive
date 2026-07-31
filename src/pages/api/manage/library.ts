@@ -73,6 +73,7 @@ export const GET: APIRoute = ({ locals, request }) => {
   return Response.json(
     {
       entries: page.entries.map((entry) => ({
+        access: entry.access,
         book_id: entry.bookId,
         current_version_available: entry.currentVersionAvailable,
         deletion_mutation_token: entry.deletionMutationToken,
@@ -80,7 +81,6 @@ export const GET: APIRoute = ({ locals, request }) => {
         primary_href: entry.primaryHref,
         status_label: entry.statusLabel,
         title: entry.title,
-        visibility: entry.visibility,
       })),
       next_cursor: encodeCursor(page.nextBookId),
     },

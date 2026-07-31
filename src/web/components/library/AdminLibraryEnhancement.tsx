@@ -4,6 +4,7 @@ import type { AdministratorLibraryEntry } from "@/modules/catalog/application/pu
 
 interface ResponseBody {
   readonly entries: readonly {
+    readonly access: AdministratorLibraryEntry["access"];
     readonly book_id: number;
     readonly current_version_available: boolean;
     readonly deletion_mutation_token: string;
@@ -11,7 +12,6 @@ interface ResponseBody {
     readonly primary_href: string;
     readonly status_label: string;
     readonly title: string;
-    readonly visibility: AdministratorLibraryEntry["visibility"];
   }[];
   readonly next_cursor: string | null;
 }
@@ -67,6 +67,7 @@ export function AdminLibraryEnhancement() {
       }
       setEntries(
         collected.map((entry) => ({
+          access: entry.access,
           bookId: entry.book_id,
           currentVersionAvailable: entry.current_version_available,
           deletionMutationToken: entry.deletion_mutation_token,
@@ -74,7 +75,6 @@ export function AdminLibraryEnhancement() {
           primaryHref: entry.primary_href,
           statusLabel: entry.status_label,
           title: entry.title,
-          visibility: entry.visibility,
         })),
       );
     };

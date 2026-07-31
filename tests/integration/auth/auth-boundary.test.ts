@@ -126,7 +126,7 @@ describe("sole-administrator authorization", () => {
     const hidden = authorizeBookResource({
       administrator,
       exists: true,
-      visibility: "private",
+      access: "private",
     });
     const missing = authorizeBookResource({
       administrator,
@@ -149,7 +149,7 @@ describe("sole-administrator authorization", () => {
           administrator,
           exists: true,
           versionState,
-          visibility: "public",
+          access: "public",
         }).allowed,
       ).toBe(false);
     }

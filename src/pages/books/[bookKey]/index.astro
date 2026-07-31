@@ -26,11 +26,11 @@ if (requestedKey !== details.bookKey) {
 }
 const library = service.publicLibrary({ limit: 12 });
 const response = libraryHtmlResponse({
+  access: details.access,
   digest: `${library.digest}\0${details.versionId}\0${details.presentationDigest}`,
   rendererIdentity: "book-details-dialog-v1",
   request: Astro.request,
   requestPath: Astro.url.pathname,
-  visibility: details.visibility,
 });
 if (response.notModified) return response.notModified;
 for (const [name, value] of response.headers) {
@@ -45,7 +45,7 @@ const canonical = new URL(`/books/${details.bookKey}`, Astro.url);
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     {
-      details.visibility === "private" ? (
+      details.access === "private" ? (
         <meta name="robots" content="noindex, nofollow" />
       ) : (
         <meta

@@ -6,6 +6,9 @@ import { promisify } from "node:util";
 
 import { stringify } from "yaml";
 
+import { createStrongEtag } from "@/http/cache/policies";
+import { SqliteBookAccessRepository } from "@/modules/catalog/adapters/sqlite/book-access";
+import { setBookAccess } from "@/modules/catalog/application/commands/set-book-access";
 import { createSetupAuth } from "@/modules/identity/adapters/better-auth/setup-auth";
 import { bootstrapAdministrator } from "@/composition/cli";
 import { openDatabase } from "@/platform/sqlite/connection";
@@ -196,6 +199,7 @@ async function seedPublishedLibraryBook(input: {
     title,
   });
   const configYaml = stringify(config, { lineWidth: 0 });
+  const configSha256 = createHash("sha256").update(configYaml).digest("hex");
   const configPath = resolve(draftRoot, "configs", "1", "book.yaml");
   await mkdir(dirname(configPath), { mode: 0o700, recursive: true });
   await writeFile(configPath, configYaml, { mode: 0o400 });
@@ -207,7 +211,7 @@ async function seedPublishedLibraryBook(input: {
     sourceId,
     title,
     yamlRelativePath: `books/${book.id}/draft/configs/1/book.yaml`,
-    yamlSha256: createHash("sha256").update(configYaml).digest("hex"),
+    yamlSha256: configSha256,
   });
   const candidates = new DraftCandidateRepository(input.database);
   const candidate = candidates.createForCurrentRevision({
@@ -239,11 +243,17 @@ async function seedPublishedLibraryBook(input: {
   await publishCandidate({
     actorUserId: null,
     bookId: book.id,
-    expectedConfigRevision: 1,
-    expectedVersionId: artifact.versionId,
+    expectedConfigEtag: createStrongEtag(configSha256),
     nowMs: nowMs + 8,
     policy: m1PublishPolicy,
     publication: new CandidatePublicationRepository(input.database),
+  });
+  setBookAccess({
+    access: "public",
+    actorUserId: null,
+    bookId: book.id,
+    books: new SqliteBookAccessRepository(input.database),
+    nowMs: nowMs + 9,
   });
 }
 

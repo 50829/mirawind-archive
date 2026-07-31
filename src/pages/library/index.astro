@@ -15,7 +15,7 @@ const response = libraryHtmlResponse({
   rendererIdentity: "library-scene-v1",
   request: Astro.request,
   requestPath: Astro.url.pathname,
-  visibility: "public",
+  access: "public",
 });
 if (response.notModified) return response.notModified;
 for (const [name, value] of response.headers) {

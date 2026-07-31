@@ -42,7 +42,7 @@ export const GET: APIRoute = ({ locals, params, request }) => {
     return new Response(null, { headers, status: 302 });
   }
   let headers: Headers;
-  if (details.visibility === "public") {
+  if (details.access === "public") {
     const response = publicJsonResponse({
       digest: detailsDigest(details),
       rendererIdentity: "book-details-json-v1",

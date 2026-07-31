@@ -63,7 +63,7 @@ describe("current-version presentation publication", () => {
       ).rejects.toMatchObject({ code: "PUBLICATION_STALE" });
       expect(fixture.drafts.requireBook(fixture.book.id)).toMatchObject({
         currentVersionId: null,
-        visibility: "draft",
+        access: "private",
       });
     }));
 });

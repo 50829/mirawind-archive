@@ -62,7 +62,7 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
     expect(at(operation, "responses")).toHaveProperty("412");
   });
 
-  it("freezes guarded publish enqueue without a fabricated rights field", async () => {
+  it("publishes the server-selected ready candidate with a config precondition", async () => {
     const document = await contract();
     const operation = at(
       document,
@@ -70,6 +70,10 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
       "/api/manage/books/{bookId}/publish",
       "post",
     );
+    const parameters = operation.parameters as readonly Record<
+      string,
+      unknown
+    >[];
     const body = at(
       operation,
       "requestBody",
@@ -79,12 +83,19 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
     );
 
     expect(operation.operationId).toBe("publishBook");
+    expect(parameters).toContainEqual(
+      expect.objectContaining({
+        in: "header",
+        name: "If-Match",
+        required: true,
+      }),
+    );
     expect(body).toMatchObject({
       additionalProperties: false,
-      required: ["expected_config_revision"],
     });
-    expect(at(body, "properties")).not.toHaveProperty("rights_confirmed");
-    expect(at(operation, "responses")).toHaveProperty("202");
+    expect(at(body, "properties")).toEqual({});
+    expect(at(operation, "responses")).toHaveProperty("200");
+    expect(at(operation, "responses")).toHaveProperty("412");
   });
 
   it("reprocesses retained source into a new preconditioned draft revision", async () => {
@@ -116,15 +127,15 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
     expect(at(operation, "responses")).toHaveProperty("409");
   });
 
-  it("allows only an immediate transition to draft or private", async () => {
+  it("changes private or public access independently from publication", async () => {
     const document = await contract();
     const operation = at(
       document,
       "paths",
-      "/api/manage/books/{bookId}/visibility",
+      "/api/manage/books/{bookId}/access",
       "patch",
     );
-    expect(operation.operationId).toBe("makeBookNonPublic");
+    expect(operation.operationId).toBe("setBookAccess");
     expect(
       at(
         operation,
@@ -133,8 +144,8 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
         "application/json",
         "schema",
         "properties",
-        "visibility",
+        "access",
       ).enum,
-    ).toEqual(["draft", "private"]);
+    ).toEqual(["private", "public"]);
   });
 });

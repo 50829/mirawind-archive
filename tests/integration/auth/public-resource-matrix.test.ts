@@ -26,7 +26,7 @@ describe("public/private current-version resolution matrix", () => {
       "failed",
       "corrupt",
     ] as const) {
-      for (const visibility of ["public", "private", "draft"] as const) {
+      for (const access of ["public", "private"] as const) {
         for (const [audience, decision] of [
           ["anonymous", anonymous],
           ["administrator", administrator],
@@ -35,11 +35,11 @@ describe("public/private current-version resolution matrix", () => {
             administrator: decision,
             exists: true,
             versionState,
-            visibility,
+            access,
           });
           const expected =
             (versionState === "published" || versionState === "superseded") &&
-            (audience === "administrator" || visibility === "public");
+            (audience === "administrator" || access === "public");
           expect(result.allowed).toBe(expected);
           if (!expected) {
             expect(result).toMatchObject({
@@ -67,18 +67,18 @@ describe("public/private current-version resolution matrix", () => {
       expect(service.resolveCurrent("matrix-book", anonymous)).toMatchObject({
         audience: "anonymous",
         versionId: publicationTestVersionId,
-        visibility: "public",
+        access: "public",
       });
 
       database
-        .prepare("UPDATE books SET visibility = 'private' WHERE id = ?")
+        .prepare("UPDATE books SET access = 'private' WHERE id = ?")
         .run(fixture.book.id);
       expect(
         service.resolveCurrent(String(fixture.book.id), administrator),
       ).toMatchObject({
         audience: "administrator",
         versionId: publicationTestVersionId,
-        visibility: "private",
+        access: "private",
       });
       expect(() => service.resolveCurrent("matrix-book", anonymous)).toThrow(
         expect.objectContaining<Partial<SafeApplicationError>>({

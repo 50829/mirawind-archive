@@ -2,9 +2,10 @@ import type Database from "better-sqlite3";
 
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
-export type BookVisibility = "draft" | "private" | "public";
+export type BookAccess = "private" | "public";
 
 interface BookRow {
+  access: BookAccess;
   alias: string | null;
   created_at: number;
   current_candidate_id: string | null;
@@ -15,7 +16,6 @@ interface BookRow {
   title_cache: string;
   unavailable_reason: string | null;
   updated_at: number;
-  visibility: BookVisibility;
 }
 
 interface ConfigRow {
@@ -29,6 +29,7 @@ interface ConfigRow {
 }
 
 export interface BookRecord {
+  readonly access: BookAccess;
   readonly alias: string | null;
   readonly createdAtMs: number;
   readonly currentCandidateId: string | null;
@@ -39,7 +40,6 @@ export interface BookRecord {
   readonly title: string;
   readonly unavailableReason: string | null;
   readonly updatedAtMs: number;
-  readonly visibility: BookVisibility;
 }
 
 export interface ConfigRevisionRecord {
@@ -54,6 +54,7 @@ export interface ConfigRevisionRecord {
 
 function mapBook(row: BookRow): BookRecord {
   return Object.freeze({
+    access: row.access,
     alias: row.alias,
     createdAtMs: row.created_at,
     currentCandidateId: row.current_candidate_id,
@@ -64,7 +65,6 @@ function mapBook(row: BookRow): BookRecord {
     title: row.title_cache,
     unavailableReason: row.unavailable_reason,
     updatedAtMs: row.updated_at,
-    visibility: row.visibility,
   });
 }
 
@@ -94,10 +94,10 @@ export class DraftRepository {
     const result = this.database
       .prepare(
         `INSERT INTO books (
-          alias, visibility, title_cache, draft_source_id,
+          alias, access, title_cache, draft_source_id,
           draft_config_revision, current_candidate_id, current_version_id,
           unavailable_reason, created_at, updated_at
-        ) VALUES (NULL, 'draft', ?, NULL, NULL, NULL, NULL, NULL, ?, ?)`,
+        ) VALUES (NULL, 'private', ?, NULL, NULL, NULL, NULL, NULL, ?, ?)`,
       )
       .run(input.title, input.nowMs, input.nowMs);
     return this.requireBook(Number(result.lastInsertRowid));

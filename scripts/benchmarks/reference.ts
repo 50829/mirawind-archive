@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import Database from "better-sqlite3";
 
+import { createStrongEtag } from "@/http/cache/policies";
 import { normalizeSearchQuery } from "../../src/modules/reader/core/search-query.js";
 import { CandidatePublicationRepository } from "../../src/modules/publishing/adapters/sqlite/candidate-publication.js";
 import { DraftCandidateRepository } from "../../src/modules/publishing/adapters/sqlite/draft-candidate-repository.js";
@@ -185,7 +186,7 @@ async function fixtureContext(dataRoot: string): Promise<FixtureContext> {
       .prepare(
         `SELECT id, alias, current_version_id
          FROM books
-         WHERE visibility = 'public' AND current_version_id IS NOT NULL
+         WHERE access = 'public' AND current_version_id IS NOT NULL
          ORDER BY id
          LIMIT 1`,
       )
@@ -314,7 +315,7 @@ async function waitForWorker(process_: ManagedProcess): Promise<void> {
 
 function queueRebuild(databasePath: string): {
   readonly bookId: number;
-  readonly configRevision: number;
+  readonly configEtag: string;
   readonly jobId: string;
   readonly versionId: string;
   readonly versionBefore: string;
@@ -340,9 +341,13 @@ function queueRebuild(databasePath: string): {
     const command = new DraftCandidateRepository(database).buildCommand(
       candidate.attemptId,
     );
+    const config = new DraftRepository(database).requireConfig(
+      book.id,
+      book.draftConfigRevision,
+    );
     return Object.freeze({
       bookId: book.id,
-      configRevision: book.draftConfigRevision,
+      configEtag: createStrongEtag(config.yamlSha256),
       jobId: candidate.jobId,
       versionId: command.versionId,
       versionBefore: book.currentVersionId,
@@ -361,8 +366,7 @@ async function publishRebuild(
     await publishCandidate({
       actorUserId: null,
       bookId: rebuild.bookId,
-      expectedConfigRevision: rebuild.configRevision,
-      expectedVersionId: rebuild.versionId,
+      expectedConfigEtag: rebuild.configEtag,
       nowMs: Date.now(),
       policy: m1PublishPolicy,
       publication: new CandidatePublicationRepository(database),

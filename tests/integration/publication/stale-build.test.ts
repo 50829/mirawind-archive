@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { createStrongEtag } from "@/http/cache/policies";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import {
   CandidatePublicationRepository,
@@ -24,6 +25,7 @@ describe("guarded candidate publication compare-and-swap", () => {
       const fixture = setupPublicationFixture(database);
 
       await publishReadyCandidateForTest({
+        access: "private",
         bookId: fixture.book.id,
         database,
         nowMs: 12,
@@ -31,7 +33,7 @@ describe("guarded candidate publication compare-and-swap", () => {
 
       expect(fixture.drafts.requireBook(fixture.book.id)).toMatchObject({
         currentVersionId: publicationTestVersionId,
-        visibility: "public",
+        access: "private",
       });
       expect(
         new VersionRepository(database).require(publicationTestVersionId),
@@ -110,7 +112,7 @@ describe("guarded candidate publication compare-and-swap", () => {
       expect(fixture.drafts.requireBook(fixture.book.id)).toMatchObject({
         currentCandidateId: next.attemptId,
         currentVersionId: publicationTestVersionId,
-        visibility: "public",
+        access: "public",
       });
       expect(
         new VersionRepository(database).require(publicationTestVersionId),
@@ -141,7 +143,7 @@ describe("guarded candidate publication compare-and-swap", () => {
       expect(fixture.drafts.requireBook(fixture.book.id)).toMatchObject({
         currentVersionId: null,
         draftConfigRevision: 2,
-        visibility: "draft",
+        access: "private",
       });
       expect(
         new VersionRepository(database).require(publicationTestVersionId).state,
@@ -160,8 +162,7 @@ describe("guarded candidate publication compare-and-swap", () => {
           publishCandidate({
             actorUserId: null,
             bookId: fixture.book.id,
-            expectedConfigRevision: 1,
-            expectedVersionId: publicationTestVersionId,
+            expectedConfigEtag: createStrongEtag("a".repeat(64)),
             nowMs: 12,
             policy: m1PublishPolicy,
             publication: new CandidatePublicationRepository(
@@ -174,7 +175,7 @@ describe("guarded candidate publication compare-and-swap", () => {
         ).rejects.toThrow(`CRASH_${point}`);
         expect(fixture.drafts.requireBook(fixture.book.id)).toMatchObject({
           currentVersionId: null,
-          visibility: "draft",
+          access: "private",
         });
         expect(
           new VersionRepository(database).require(publicationTestVersionId)
@@ -198,8 +199,7 @@ describe("guarded candidate publication compare-and-swap", () => {
         publishCandidate({
           actorUserId: null,
           bookId: fixture.book.id,
-          expectedConfigRevision: 1,
-          expectedVersionId: publicationTestVersionId,
+          expectedConfigEtag: createStrongEtag("a".repeat(64)),
           nowMs: 12,
           policy: m1PublishPolicy,
           publication: new CandidatePublicationRepository(database, (point) => {

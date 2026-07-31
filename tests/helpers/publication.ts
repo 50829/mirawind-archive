@@ -1,5 +1,8 @@
 import type Database from "better-sqlite3";
 
+import { createStrongEtag } from "@/http/cache/policies";
+import { SqliteBookAccessRepository } from "@/modules/catalog/adapters/sqlite/book-access";
+import { setBookAccess } from "@/modules/catalog/application/commands/set-book-access";
 import type { BookVersionPresentation } from "@/modules/catalog/application/public";
 import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 import { CandidatePublicationRepository } from "@/modules/publishing/adapters/sqlite/candidate-publication";
@@ -184,21 +187,40 @@ export function setupPublicationFixture(
   };
 }
 
-export function publishReadyCandidateForTest(input: {
+export async function publishReadyCandidateForTest(input: {
+  readonly access?: "private" | "public";
   readonly actorUserId?: string | null;
   readonly bookId: number;
   readonly database: Database.Database;
-  readonly expectedConfigRevision?: number;
-  readonly expectedVersionId?: string;
+  readonly expectedConfigEtag?: string;
   readonly nowMs: number;
 }) {
-  return publishCandidate({
+  let expectedConfigEtag = input.expectedConfigEtag;
+  if (!expectedConfigEtag) {
+    const drafts = new DraftRepository(input.database);
+    const book = drafts.requireBook(input.bookId);
+    if (book.draftConfigRevision === null) {
+      throw new Error("DRAFT_CONFIG_REVISION_MISSING");
+    }
+    const config = drafts.requireConfig(input.bookId, book.draftConfigRevision);
+    expectedConfigEtag = createStrongEtag(config.yamlSha256);
+  }
+  const published = await publishCandidate({
     actorUserId: input.actorUserId ?? null,
     bookId: input.bookId,
-    expectedConfigRevision: input.expectedConfigRevision ?? 1,
-    expectedVersionId: input.expectedVersionId ?? publicationTestVersionId,
+    expectedConfigEtag,
     nowMs: input.nowMs,
     policy: m1PublishPolicy,
     publication: new CandidatePublicationRepository(input.database),
   });
+  if ((input.access ?? "public") === "public") {
+    setBookAccess({
+      access: "public",
+      actorUserId: input.actorUserId ?? null,
+      bookId: input.bookId,
+      books: new SqliteBookAccessRepository(input.database),
+      nowMs: input.nowMs,
+    });
+  }
+  return published;
 }

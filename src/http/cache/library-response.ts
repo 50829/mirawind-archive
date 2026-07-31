@@ -22,11 +22,11 @@ function conditional(
 }
 
 export function libraryHtmlResponse(input: {
+  readonly access: "private" | "public";
   readonly digest: string;
   readonly rendererIdentity: string;
   readonly request: Request;
   readonly requestPath: string;
-  readonly visibility: "private" | "public";
 }): ConditionalResponseHeaders {
   const etag = createStrongEtag(
     "library-html-v1",
@@ -41,7 +41,7 @@ export function libraryHtmlResponse(input: {
   });
   applyResponsePolicy(
     headers,
-    input.visibility === "public" ? "public-html" : "private",
+    input.access === "public" ? "public-html" : "private",
   );
   return Object.freeze({
     etag,

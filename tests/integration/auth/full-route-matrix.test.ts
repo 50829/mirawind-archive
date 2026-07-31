@@ -127,7 +127,7 @@ const routePolicyEvidence: Readonly<Record<string, readonly string[]>> = {
   ],
   "api/manage/books/[bookId]/publish.ts": ["applyResponsePolicy"],
   "api/manage/books/[bookId]/reprocess.ts": ["applyResponsePolicy"],
-  "api/manage/books/[bookId]/visibility.ts": ["applyResponsePolicy"],
+  "api/manage/books/[bookId]/access.ts": ["applyResponsePolicy"],
   "api/manage/health.ts": ["applyResponsePolicy"],
   "api/manage/imports/[importId]/index.ts": ["applyResponsePolicy"],
   "api/manage/imports/[importId]/main-markdown.ts": ["applyResponsePolicy"],
@@ -243,7 +243,7 @@ describe("full route authorization, cache and indexing matrix", () => {
         rendererVersion: "renderer-v1",
         requestPath: "/read/book/page",
         versionId: "ver_route_matrix_0000000001",
-        visibility: "public",
+        access: "public",
       }).headers.get("cache-control"),
     ).toBe("public, max-age=0, must-revalidate");
     expect(
@@ -252,7 +252,7 @@ describe("full route authorization, cache and indexing matrix", () => {
         rendererVersion: "renderer-v1",
         requestPath: "/read/book/page",
         versionId: "ver_route_matrix_0000000001",
-        visibility: "private",
+        access: "private",
       }).headers.get("cache-control"),
     ).toBe("private, no-store");
     const library = libraryHtmlResponse({
@@ -260,7 +260,7 @@ describe("full route authorization, cache and indexing matrix", () => {
       rendererIdentity: "library-v1",
       request: new Request("https://library.example/library"),
       requestPath: "/library",
-      visibility: "public",
+      access: "public",
     });
     expect(library.headers.get("cache-control")).toBe(
       "public, max-age=0, must-revalidate",
@@ -281,7 +281,7 @@ describe("full route authorization, cache and indexing matrix", () => {
         mediaType: "image/png",
         sha256: "a".repeat(64),
         sizeBytes: 1,
-        visibility: "public",
+        access: "public",
       }).headers.get("cache-control"),
     ).toBe("private, max-age=31536000, immutable");
     expect(
@@ -289,7 +289,7 @@ describe("full route authorization, cache and indexing matrix", () => {
         mediaType: "image/png",
         sha256: "a".repeat(64),
         sizeBytes: 1,
-        visibility: "private",
+        access: "private",
       }).headers.get("cache-control"),
     ).toBe("private, no-store");
   });
@@ -302,7 +302,7 @@ describe("full route authorization, cache and indexing matrix", () => {
     const hidden = authorizeBookResource({
       administrator: anonymous,
       exists: true,
-      visibility: "private",
+      access: "private",
     });
     const missing = authorizeBookResource({
       administrator: anonymous,
@@ -320,7 +320,7 @@ describe("full route authorization, cache and indexing matrix", () => {
         administrator: { allowed: true },
         exists: true,
         versionState: "published",
-        visibility: "private",
+        access: "private",
       }),
     ).toMatchObject({
       allowed: true,

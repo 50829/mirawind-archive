@@ -21,7 +21,7 @@ describe("public/private cache and indexing boundaries", () => {
       rendererIdentity: "library-v1",
       request,
       requestPath: "/library",
-      visibility: "public",
+      access: "public",
     });
     expect(baseline.headers.get("cache-control")).toBe(
       "public, max-age=0, must-revalidate",
@@ -32,7 +32,7 @@ describe("public/private cache and indexing boundaries", () => {
         rendererIdentity: "library-v1",
         request,
         requestPath: "/library",
-        visibility: "public",
+        access: "public",
       }).etag,
     ).not.toBe(baseline.etag);
     const details = publicJsonResponse({
@@ -51,7 +51,7 @@ describe("public/private cache and indexing boundaries", () => {
       rendererVersion: "renderer-v1",
       requestPath: "/read/1/1",
       versionId: "ver_cache_headers_test_0001",
-      visibility: "public",
+      access: "public",
     });
     expect(baseline.headers.get("cache-control")).toBe(
       "public, max-age=0, must-revalidate",
@@ -68,7 +68,7 @@ describe("public/private cache and indexing boundaries", () => {
           rendererVersion: "renderer-v1",
           requestPath: "/read/1/1",
           versionId: "ver_cache_headers_test_0001",
-          visibility: "public",
+          access: "public",
           ...change,
         }).etag,
       ).not.toBe(baseline.etag);
@@ -82,7 +82,7 @@ describe("public/private cache and indexing boundaries", () => {
         rendererVersion: "renderer-v1",
         requestPath: "/read/1/1",
         versionId: "ver_cache_headers_test_0001",
-        visibility: "private",
+        access: "private",
       }).headers.get("cache-control"),
     ).toBe("private, no-store");
     expect(
@@ -90,7 +90,7 @@ describe("public/private cache and indexing boundaries", () => {
         mediaType: "image/png",
         sha256: "a".repeat(64),
         sizeBytes: 1,
-        visibility: "public",
+        access: "public",
       }).headers.get("cache-control"),
     ).toBe("private, max-age=31536000, immutable");
     expect(
@@ -98,7 +98,7 @@ describe("public/private cache and indexing boundaries", () => {
         mediaType: "image/png",
         sha256: "a".repeat(64),
         sizeBytes: 1,
-        visibility: "private",
+        access: "private",
       }).headers.get("cache-control"),
     ).toBe("private, no-store");
   });

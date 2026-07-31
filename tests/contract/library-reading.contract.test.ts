@@ -18,14 +18,14 @@ describe("library HTTP contract", () => {
       rendererIdentity: "library-v1",
       request,
       requestPath: "/library",
-      visibility: "public",
+      access: "public",
     });
     const second = libraryHtmlResponse({
       digest: "library-digest",
       rendererIdentity: "library-v1",
       request,
       requestPath: "/library",
-      visibility: "public",
+      access: "public",
     });
     expect(first.etag).toBe(second.etag);
     expect(first.headers.get("cache-control")).toBe(
@@ -40,7 +40,7 @@ describe("library HTTP contract", () => {
       rendererIdentity: "library-v1",
       request: new Request("https://library.example/library"),
       requestPath: "/library",
-      visibility: "public",
+      access: "public",
     });
     const conditional = libraryHtmlResponse({
       digest: "library-digest",
@@ -49,7 +49,7 @@ describe("library HTTP contract", () => {
         headers: { "If-None-Match": initial.etag },
       }),
       requestPath: "/library",
-      visibility: "public",
+      access: "public",
     });
     expect(conditional.notModified?.status).toBe(304);
   });

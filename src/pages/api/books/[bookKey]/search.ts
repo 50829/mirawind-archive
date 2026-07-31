@@ -112,7 +112,7 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
     limit: limit + 1,
     offset,
     query,
-    requirePublic: book.visibility === "public",
+    requirePublic: book.access === "public",
     versionId: book.versionId,
   });
   const results = rows.slice(0, limit).map((row) => ({
@@ -146,7 +146,7 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
   });
   applyResponsePolicy(
     headers,
-    book.visibility === "public" ? "public-html" : "private",
+    book.access === "public" ? "public-html" : "private",
   );
   headers.set("X-Robots-Tag", noIndexRobotsTag);
   if (ifNoneMatchMatches(request.headers.get("if-none-match"), etag)) {

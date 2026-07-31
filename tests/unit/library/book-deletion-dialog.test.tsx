@@ -12,7 +12,7 @@ const book: AdministratorLibraryEntry = {
   primaryHref: "/read/seven/1",
   statusLabel: "已发布",
   title: "Café",
-  visibility: "public",
+  access: "public",
 };
 
 function markup(confirmationTitle: string): string {

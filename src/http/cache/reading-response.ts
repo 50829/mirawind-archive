@@ -1,13 +1,13 @@
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
 import { ifNoneMatchMatches } from "@/http/conditional";
-import type { BookVisibility } from "@/http/authorization/book-guard";
+import type { BookAccess } from "@/http/authorization/book-guard";
 
 export function readingPageHeaders(input: {
+  readonly access: BookAccess;
   readonly pageIdentity: string;
   readonly rendererVersion: string;
   readonly requestPath: string;
   readonly versionId: string;
-  readonly visibility: BookVisibility;
 }): { readonly etag: string; readonly headers: Headers } {
   const etag = createStrongEtag(
     "published-page-v1",
@@ -23,16 +23,16 @@ export function readingPageHeaders(input: {
   });
   applyResponsePolicy(
     headers,
-    input.visibility === "public" ? "public-html" : "private",
+    input.access === "public" ? "public-html" : "private",
   );
   return Object.freeze({ etag, headers });
 }
 
 export function immutableAssetHeaders(input: {
+  readonly access: BookAccess;
   readonly mediaType: string;
   readonly sha256: string;
   readonly sizeBytes: number;
-  readonly visibility: BookVisibility;
 }): { readonly etag: string; readonly headers: Headers } {
   const etag = createStrongEtag("published-asset-v1", input.sha256);
   const headers = new Headers({
@@ -43,7 +43,7 @@ export function immutableAssetHeaders(input: {
   });
   applyResponsePolicy(
     headers,
-    input.visibility === "public" ? "public-versioned-resource" : "private",
+    input.access === "public" ? "public-versioned-resource" : "private",
   );
   return Object.freeze({ etag, headers });
 }

@@ -151,14 +151,14 @@ function representativeSnapshot(
     );
   const pointers = database
     .prepare(
-      `SELECT id, current_version_id, visibility
+      `SELECT id, current_version_id, access
        FROM books
        ORDER BY id`,
     )
     .all() as {
     current_version_id: string | null;
     id: number;
-    visibility: string;
+    access: string;
   }[];
   const pointerDigest = createHash("sha256")
     .update(JSON.stringify(pointers), "utf8")
@@ -170,7 +170,7 @@ function representativeSnapshot(
     imports: count("imports"),
     jobs: count("jobs"),
     original_files: count("original_files"),
-    public_books: pointers.filter((book) => book.visibility === "public")
+    public_books: pointers.filter((book) => book.access === "public")
       .length,
     search_fts_rows: count("search_fts"),
     search_short_rows: count("search_short_fields"),
@@ -364,7 +364,7 @@ export async function runMigrationRecoveryAudit(input: AuditArguments) {
                   book_versions.version_rel_path
            FROM books
            JOIN book_versions ON book_versions.id = books.current_version_id
-           WHERE books.visibility = 'public'
+           WHERE books.access = 'public'
            ORDER BY books.id
            LIMIT 1`,
         )
@@ -390,11 +390,11 @@ export async function runMigrationRecoveryAudit(input: AuditArguments) {
       });
       const bookAfter = recoveryDatabase
         .prepare(
-          "SELECT current_version_id, visibility FROM books WHERE id = ?",
+          "SELECT current_version_id, access FROM books WHERE id = ?",
         )
         .get(current.book_id) as {
         current_version_id: string | null;
-        visibility: string;
+        access: string;
       };
       const event = recoveryDatabase
         .prepare(
@@ -411,7 +411,7 @@ export async function runMigrationRecoveryAudit(input: AuditArguments) {
         audit_event_recorded: event.count > 0,
         detected: item?.failedVersionId === current.current_version_id,
         public_pointer_available:
-          bookAfter.visibility === "public" &&
+          bookAfter.access === "public" &&
           typeof bookAfter.current_version_id === "string",
         replacement_promoted:
           typeof item?.replacementVersionId === "string" &&

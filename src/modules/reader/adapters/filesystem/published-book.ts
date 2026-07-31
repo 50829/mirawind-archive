@@ -5,7 +5,7 @@ import type Database from "better-sqlite3";
 import type { AuthorizationDecision } from "@/http/authorization/admin-guard";
 import {
   authorizeBookResource,
-  type BookVisibility,
+  type BookAccess,
   type VersionState,
 } from "@/http/authorization/book-guard";
 import { SafeApplicationError } from "@/domain/errors";
@@ -24,6 +24,7 @@ import {
 } from "@/platform/filesystem/verified-file";
 
 interface CurrentBookRow {
+  access: BookAccess;
   current_version_id: string | null;
   id: number;
   manifest_sha256: string | null;
@@ -32,7 +33,6 @@ interface CurrentBookRow {
   renderer_version: string | null;
   state: VersionState | null;
   version_rel_path: string | null;
-  visibility: BookVisibility;
 }
 
 interface VersionAssetRow extends CurrentBookRow {
@@ -50,6 +50,7 @@ interface OriginalRow extends CurrentBookRow {
 }
 
 export interface ResolvedPublishedBook {
+  readonly access: BookAccess;
   readonly alias: string | null;
   readonly audience: "administrator" | "anonymous";
   readonly bookId: number;
@@ -58,7 +59,6 @@ export interface ResolvedPublishedBook {
   readonly title: string;
   readonly versionId: string;
   readonly versionRelativePath: string;
-  readonly visibility: BookVisibility;
 }
 
 export interface ResolvedPublishedPage extends ResolvedPublishedBook {
@@ -126,9 +126,9 @@ function mapCurrent(
   administrator: AuthorizationDecision,
 ): ResolvedPublishedBook {
   const access = authorizeBookResource({
+    access: row.access,
     administrator,
     exists: true,
-    visibility: row.visibility,
   });
   if (!access.allowed) return hidden();
   if (
@@ -139,12 +139,13 @@ function mapCurrent(
     !row.presentation_title ||
     row.state !== "published"
   ) {
-    if (row.visibility === "public" || row.current_version_id) {
+    if (row.access === "public" || row.current_version_id) {
       return unavailable();
     }
     return hidden();
   }
   return Object.freeze({
+    access: row.access,
     alias: row.presentation_alias,
     audience: access.audience,
     bookId: row.id,
@@ -153,12 +154,11 @@ function mapCurrent(
     title: row.presentation_title,
     versionId: row.current_version_id,
     versionRelativePath: row.version_rel_path,
-    visibility: row.visibility,
   });
 }
 
 function currentSelect(predicate: string): string {
-  return `SELECT books.id, books.visibility,
+  return `SELECT books.id, books.access,
                  books.current_version_id, book_versions.state,
                  book_versions.version_rel_path, book_versions.renderer_version,
                  book_versions.manifest_sha256,
@@ -270,7 +270,7 @@ export class PublishedBookService {
     const predicate = keyPredicate(input.bookKey);
     const row = this.database
       .prepare(
-        `SELECT books.id, books.visibility,
+        `SELECT books.id, books.access,
                 books.current_version_id, current_version.state,
                 current_version.version_rel_path,
                 current_version.renderer_version,
@@ -300,10 +300,10 @@ export class PublishedBookService {
     if (!row) return hidden();
     const book = mapCurrent(row, input.administrator);
     const access = authorizeBookResource({
+      access: row.access,
       administrator: input.administrator,
       exists: Boolean(row.requested_version_rel_path),
       ...(row.requested_state ? { versionState: row.requested_state } : {}),
-      visibility: row.visibility,
     });
     if (
       !access.allowed ||
@@ -357,7 +357,7 @@ export class PublishedBookService {
     const predicate = keyPredicate(input.bookKey);
     const row = this.database
       .prepare(
-        `SELECT books.id, books.visibility,
+        `SELECT books.id, books.access,
                 books.current_version_id, book_versions.state,
                 book_versions.version_rel_path, book_versions.renderer_version,
                 book_versions.manifest_sha256,

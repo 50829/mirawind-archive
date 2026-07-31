@@ -42,10 +42,10 @@ const migrations: readonly Migration[] = [
   },
   {
     checksum: checksumMigration(
-      "ALTER TABLE books ADD COLUMN visibility TEXT NOT NULL DEFAULT 'draft';",
+      "ALTER TABLE books ADD COLUMN access TEXT NOT NULL DEFAULT 'private';",
     ),
-    name: "visibility",
-    sql: "ALTER TABLE books ADD COLUMN visibility TEXT NOT NULL DEFAULT 'draft';",
+    name: "access",
+    sql: "ALTER TABLE books ADD COLUMN access TEXT NOT NULL DEFAULT 'private';",
     version: 2,
   },
 ];
@@ -62,7 +62,7 @@ describe("checksummed migrations", () => {
     });
     expect(database.prepare("SELECT * FROM books").get()).toMatchObject({
       title: "Fixture",
-      visibility: "draft",
+      access: "private",
     });
     expect(applyMigrations(database, migrations)).toEqual({
       applied: [],
@@ -90,7 +90,7 @@ describe("checksummed migrations", () => {
     expect(
       database
         .prepare(
-          "SELECT COUNT(*) AS count FROM pragma_table_info('books') WHERE name = 'visibility'",
+          "SELECT COUNT(*) AS count FROM pragma_table_info('books') WHERE name = 'access'",
         )
         .get(),
     ).toEqual({ count: 0 });

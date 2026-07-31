@@ -1,6 +1,6 @@
 import type { AuthorizationDecision } from "@/http/authorization/admin-guard";
 
-export type BookVisibility = "draft" | "private" | "public";
+export type BookAccess = "private" | "public";
 export type VersionState =
   "ready" | "published" | "superseded" | "failed" | "corrupt";
 
@@ -24,12 +24,12 @@ const hiddenOrMissing = Object.freeze({
 } as const);
 
 export function authorizeBookResource(input: {
+  readonly access?: BookAccess;
   readonly administrator: AuthorizationDecision;
   readonly exists: boolean;
   readonly versionState?: VersionState;
-  readonly visibility?: BookVisibility;
 }): BookAccessDecision {
-  if (!input.exists || !input.visibility) return hiddenOrMissing;
+  if (!input.exists || !input.access) return hiddenOrMissing;
   if (
     input.versionState &&
     !["published", "superseded"].includes(input.versionState)
@@ -39,7 +39,7 @@ export function authorizeBookResource(input: {
   if (input.administrator.allowed) {
     return { allowed: true, audience: "administrator" };
   }
-  if (input.visibility === "public") {
+  if (input.access === "public") {
     return { allowed: true, audience: "anonymous" };
   }
   return hiddenOrMissing;

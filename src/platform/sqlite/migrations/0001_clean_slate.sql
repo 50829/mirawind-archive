@@ -25,7 +25,8 @@ CREATE TABLE books (
       AND alias NOT GLOB '[0-9]*'
     )
   ),
-  visibility TEXT NOT NULL CHECK (visibility IN ('draft', 'private', 'public')),
+  access TEXT NOT NULL DEFAULT 'private'
+    CHECK (access IN ('private', 'public')),
   title_cache TEXT NOT NULL CHECK (length(title_cache) BETWEEN 1 AND 500),
   draft_source_id TEXT,
   draft_config_revision INTEGER,
@@ -558,8 +559,8 @@ CREATE INDEX book_version_presentations_alias
   ON book_version_presentations(alias)
   WHERE alias IS NOT NULL;
 
-CREATE INDEX books_active_visibility_current
-ON books(visibility, current_version_id)
+CREATE INDEX books_active_access_current
+ON books(access, current_version_id)
 WHERE deletion_requested_at IS NULL;
 
 CREATE TABLE book_deletions (

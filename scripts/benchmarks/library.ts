@@ -84,7 +84,7 @@ async function freePort(): Promise<number> {
 function seedBooks(database: Database.Database, count: number): void {
   const insertBook = database.prepare(
     `INSERT INTO books (
-       id, alias, visibility, title_cache, created_at, updated_at
+       id, alias, access, title_cache, created_at, updated_at
      ) VALUES (?, ?, 'public', ?, 1, 1)`,
   );
   const insertImport = database.prepare(

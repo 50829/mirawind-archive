@@ -18,6 +18,9 @@ import { fileURLToPath } from "node:url";
 
 import type Database from "better-sqlite3";
 
+import { createStrongEtag } from "@/http/cache/policies";
+import { SqliteBookAccessRepository } from "@/modules/catalog/adapters/sqlite/book-access";
+import { setBookAccess } from "@/modules/catalog/application/commands/set-book-access";
 import { applyMigrations } from "../../src/platform/sqlite/migrate.js";
 import { loadMigrationManifest } from "../../src/platform/sqlite/migration-manifest.js";
 import { openDatabase } from "../../src/platform/sqlite/connection.js";
@@ -693,17 +696,24 @@ async function benchmarkFixture(
     const previewReadyAt = performance.now();
 
     const publishRequestedAt = performance.now();
+    const config = drafts.requireConfig(book.id, book.draftConfigRevision);
     await publishCandidate({
       actorUserId: null,
       bookId: book.id,
-      expectedConfigRevision: book.draftConfigRevision,
-      expectedVersionId: candidate.versionId,
+      expectedConfigEtag: createStrongEtag(config.yamlSha256),
       nowMs: Date.now(),
       policy: m1PublishPolicy,
       publication: new CandidatePublicationRepository(database),
     });
+    setBookAccess({
+      access: "public",
+      actorUserId: null,
+      bookId: book.id,
+      books: new SqliteBookAccessRepository(database),
+      nowMs: Date.now(),
+    });
     const current = drafts.requireBook(book.id);
-    if (!current.currentVersionId || current.visibility !== "public") {
+    if (!current.currentVersionId || current.access !== "public") {
       throw new Error("BENCHMARK_PUBLICATION_MISSING");
     }
     const publicReadyAt = performance.now();

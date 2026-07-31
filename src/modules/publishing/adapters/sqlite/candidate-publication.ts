@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 
 import { SafeApplicationError } from "@/domain/errors";
+import { createStrongEtag } from "@/http/cache/policies";
 import type {
   CandidatePublicationCapture,
   CandidatePublicationPort,
@@ -17,6 +18,7 @@ interface PublicationRow {
   candidate_source_id: string;
   candidate_state: string;
   candidate_version_id: string;
+  config_yaml_sha256: string;
   config_revision: number;
   current_version_id: string | null;
   draft_config_revision: number;
@@ -44,13 +46,21 @@ function stale(): never {
   );
 }
 
+function preconditionFailed(): never {
+  throw new SafeApplicationError(
+    "DRAFT_PRECONDITION_FAILED",
+    "The draft changed since it was read.",
+    412,
+  );
+}
+
 export class CandidatePublicationRepository implements CandidatePublicationPort {
   constructor(
     private readonly database: Database.Database,
     private readonly crashPoint?: CandidatePromotionCrashPointInjector,
   ) {}
 
-  private row(bookId: number, versionId: string): PublicationRow | null {
+  private row(bookId: number): PublicationRow | null {
     return (this.database
       .prepare(
         `SELECT books.id AS book_id, books.draft_source_id,
@@ -60,6 +70,7 @@ export class CandidatePublicationRepository implements CandidatePublicationPort 
                 candidate.config_revision, candidate.job_id AS candidate_job_id,
                 candidate.version_id AS candidate_version_id,
                 candidate.semantic_digest AS candidate_semantic_digest,
+                config.yaml_sha256 AS config_yaml_sha256,
                 version.id AS version_id, version.state AS version_state,
                 version.source_id, version.predecessor_version_id,
                 version.semantic_digest, version.blocking_diagnostic_count,
@@ -68,30 +79,27 @@ export class CandidatePublicationRepository implements CandidatePublicationPort 
          JOIN draft_candidates AS candidate
            ON candidate.id = books.current_candidate_id
           AND candidate.book_id = books.id
+         JOIN config_revisions AS config
+           ON config.book_id = books.id
+          AND config.revision = books.draft_config_revision
          JOIN book_versions AS version
            ON version.id = candidate.version_id
           AND version.book_id = books.id
          JOIN book_version_presentations AS presentation
            ON presentation.version_id = version.id
           AND presentation.book_id = books.id
-         WHERE books.id = ? AND version.id = ?
+         WHERE books.id = ?
            AND books.deletion_requested_at IS NULL`,
       )
-      .get(bookId, versionId) ?? null) as PublicationRow | null;
+      .get(bookId) ?? null) as PublicationRow | null;
   }
 
-  private validate(
-    row: PublicationRow | null,
-    expectedConfigRevision: number,
-    expectedVersionId: string,
-  ): PublicationRow {
+  private validate(row: PublicationRow | null): PublicationRow {
     if (
       !row ||
       row.candidate_state !== "ready" ||
-      row.candidate_version_id !== expectedVersionId ||
-      row.version_id !== expectedVersionId ||
-      row.config_revision !== expectedConfigRevision ||
-      row.draft_config_revision !== expectedConfigRevision ||
+      row.candidate_version_id !== row.version_id ||
+      row.config_revision !== row.draft_config_revision ||
       row.candidate_source_id !== row.draft_source_id ||
       row.source_id !== row.draft_source_id ||
       row.candidate_semantic_digest !== row.semantic_digest ||
@@ -102,7 +110,7 @@ export class CandidatePublicationRepository implements CandidatePublicationPort 
     }
     if (
       row.version_state === "published" &&
-      row.current_version_id !== expectedVersionId
+      row.current_version_id !== row.version_id
     ) {
       return stale();
     }
@@ -117,14 +125,12 @@ export class CandidatePublicationRepository implements CandidatePublicationPort 
 
   capture(input: {
     readonly bookId: number;
-    readonly expectedConfigRevision: number;
-    readonly expectedVersionId: string;
+    readonly expectedConfigEtag: string;
   }): CandidatePublicationCapture {
-    const row = this.validate(
-      this.row(input.bookId, input.expectedVersionId),
-      input.expectedConfigRevision,
-      input.expectedVersionId,
-    );
+    const row = this.validate(this.row(input.bookId));
+    if (createStrongEtag(row.config_yaml_sha256) !== input.expectedConfigEtag) {
+      return preconditionFailed();
+    }
     return Object.freeze({
       bookId: row.book_id,
       configRevision: row.config_revision,
@@ -141,11 +147,13 @@ export class CandidatePublicationRepository implements CandidatePublicationPort 
     readonly nowMs: number;
   }): PublishedCandidate {
     const published = withImmediateTransaction(this.database, () => {
-      const row = this.validate(
-        this.row(input.bookId, input.expectedVersionId),
-        input.expectedConfigRevision,
-        input.expectedVersionId,
-      );
+      const row = this.validate(this.row(input.bookId));
+      if (
+        row.config_revision !== input.expectedConfigRevision ||
+        row.version_id !== input.expectedVersionId
+      ) {
+        return stale();
+      }
       if (row.version_state === "published") {
         if (row.published_at === null)
           throw new Error("PUBLICATION_TIMESTAMP_MISSING");
@@ -178,7 +186,7 @@ export class CandidatePublicationRepository implements CandidatePublicationPort 
       const book = this.database
         .prepare(
           `UPDATE books
-           SET current_version_id = ?, visibility = 'public', alias = ?,
+           SET current_version_id = ?, alias = ?,
                unavailable_reason = NULL, updated_at = ?
            WHERE id = ? AND current_candidate_id = (
              SELECT id FROM draft_candidates WHERE version_id = ?

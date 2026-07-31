@@ -16,8 +16,7 @@ export interface PublishedCandidate {
 export interface CandidatePublicationPort {
   capture(input: {
     readonly bookId: number;
-    readonly expectedConfigRevision: number;
-    readonly expectedVersionId: string;
+    readonly expectedConfigEtag: string;
   }): CandidatePublicationCapture;
   promote(input: {
     readonly actorUserId: string | null;
@@ -31,16 +30,14 @@ export interface CandidatePublicationPort {
 export async function publishCandidate(input: {
   readonly actorUserId: string | null;
   readonly bookId: number;
-  readonly expectedConfigRevision: number;
-  readonly expectedVersionId: string;
+  readonly expectedConfigEtag: string;
   readonly nowMs: number;
   readonly policy: PublishPolicy;
   readonly publication: CandidatePublicationPort;
 }): Promise<PublishedCandidate> {
   const capture = input.publication.capture({
     bookId: input.bookId,
-    expectedConfigRevision: input.expectedConfigRevision,
-    expectedVersionId: input.expectedVersionId,
+    expectedConfigEtag: input.expectedConfigEtag,
   });
   const decision = await input.policy.evaluate({
     bookId: capture.bookId,
@@ -55,8 +52,8 @@ export async function publishCandidate(input: {
   return input.publication.promote({
     actorUserId: input.actorUserId,
     bookId: input.bookId,
-    expectedConfigRevision: input.expectedConfigRevision,
-    expectedVersionId: input.expectedVersionId,
+    expectedConfigRevision: capture.configRevision,
+    expectedVersionId: capture.versionId,
     nowMs: input.nowMs,
   });
 }

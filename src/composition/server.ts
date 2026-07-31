@@ -6,7 +6,9 @@ import {
 } from "@/composition/book-deletion";
 
 import { acceptBookDeletion } from "@/modules/catalog/adapters/sqlite/book-deletion";
+import { SqliteBookAccessRepository } from "@/modules/catalog/adapters/sqlite/book-access";
 import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
+import { setBookAccess } from "@/modules/catalog/application/commands/set-book-access";
 import { deleteFinalPasskey } from "@/modules/identity/adapters/sqlite/final-passkey";
 import { InstallationRepository } from "@/modules/identity/adapters/sqlite/installation";
 import { patchDraftConfig } from "@/modules/publishing/adapters/filesystem/config-revisions";
@@ -27,7 +29,6 @@ import {
 } from "@/modules/publishing/adapters/sqlite/job-status";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SqliteBookPublishingCleanup } from "@/modules/publishing/adapters/sqlite/book-cleanup";
-import { makeBookNonPublic } from "@/modules/publishing/adapters/sqlite/publication";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { confirmImportCandidateAndQueuePreparation } from "@/modules/publishing/application/commands/confirm-import-candidate";
 import {
@@ -114,8 +115,7 @@ export function createPublishingServer(database: Database.Database) {
     publishCandidate: (input: {
       readonly actorUserId: string | null;
       readonly bookId: number;
-      readonly expectedConfigRevision: number;
-      readonly expectedVersionId: string;
+      readonly expectedConfigEtag: string;
       readonly nowMs: number;
     }) =>
       publishCandidate({
@@ -167,6 +167,7 @@ export function createPublishingArtifactServer(layout: StorageLayout) {
 
 export function createCatalogServer(database: Database.Database) {
   const library = new LibraryService(database);
+  const bookAccess = new SqliteBookAccessRepository(database);
   return Object.freeze({
     acceptBookDeletion: (
       input: Omit<
@@ -185,6 +186,9 @@ export function createCatalogServer(database: Database.Database) {
     administratorLibrary: library.administratorLibrary.bind(library),
     publicLibrary: library.publicLibrary.bind(library),
     resolveDetails: library.resolveDetails.bind(library),
+    setBookAccess: (
+      input: Omit<Parameters<typeof setBookAccess>[0], "books">,
+    ) => setBookAccess({ ...input, books: bookAccess }),
   });
 }
 
@@ -212,7 +216,6 @@ export function createIdentityServer(database: Database.Database) {
 
 export const publishingServerActions = Object.freeze({
   getDraftBlock,
-  makeBookNonPublic,
   patchDraftBlock,
   patchDraftConfig,
   queueSourceReprocess,

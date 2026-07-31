@@ -68,7 +68,7 @@ describe("reader loop", () => {
         nowMs: 12,
       });
       database
-        .prepare("UPDATE books SET visibility = 'private' WHERE id = ?")
+        .prepare("UPDATE books SET access = 'private' WHERE id = ?")
         .run(fixture.book.id);
       expect(() =>
         new PublishedBookService(database, dataRoot.layout).resolveCurrent(

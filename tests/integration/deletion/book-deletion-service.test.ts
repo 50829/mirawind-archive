@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { createStrongEtag } from "@/http/cache/policies";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { serializeJobStatus } from "@/modules/publishing/adapters/sqlite/job-status";
@@ -371,6 +372,7 @@ describe("permanent book deletion acceptance", () => {
         publishReadyCandidateForTest({
           bookId: current.id,
           database,
+          expectedConfigEtag: createStrongEtag("a".repeat(64)),
           nowMs: 21,
         }),
       ).rejects.toMatchObject({ code: "PUBLICATION_STALE" });

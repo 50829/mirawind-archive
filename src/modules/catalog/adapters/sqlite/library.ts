@@ -40,6 +40,7 @@ interface PublicLibraryRow {
 }
 
 interface DetailsRow extends PublicLibraryRow {
+  access: "private" | "public";
   current_version_id: string | null;
   projection_book_id: number | null;
   projection_version_id: string | null;
@@ -48,7 +49,6 @@ interface DetailsRow extends PublicLibraryRow {
   toc_entry_count: number | null;
   toc_preview_json: string | null;
   unavailable_reason: string | null;
-  visibility: "draft" | "private" | "public";
 }
 
 interface TocRow {
@@ -201,7 +201,7 @@ export class LibraryService {
            ON presentation.version_id = versions.id
           AND presentation.book_id = books.id
           AND presentation.config_revision = versions.config_revision
-         WHERE books.visibility = 'public'
+         WHERE books.access = 'public'
            AND books.unavailable_reason IS NULL
            AND books.deletion_requested_at IS NULL
          ORDER BY presentation.title COLLATE NOCASE, books.id
@@ -230,7 +230,7 @@ export class LibraryService {
            ON presentation.version_id = versions.id
           AND presentation.book_id = books.id
           AND presentation.config_revision = versions.config_revision
-         WHERE books.visibility = 'public'
+         WHERE books.access = 'public'
            AND books.deletion_requested_at IS NULL
            AND (
              books.unavailable_reason IS NOT NULL
@@ -267,7 +267,7 @@ export class LibraryService {
     }
     const rows = this.database
       .prepare(
-        `SELECT books.id, books.title_cache, books.visibility,
+        `SELECT books.id, books.title_cache, books.access,
                 books.alias AS mutable_alias, books.updated_at,
                 books.draft_source_id, books.draft_config_revision,
                 books.current_candidate_id, books.current_version_id,
@@ -311,7 +311,7 @@ export class LibraryService {
       title_cache: string;
       unavailable_reason: string | null;
       updated_at: number;
-      visibility: "draft" | "private" | "public";
+      access: "private" | "public";
     }[];
     const page = rows.slice(0, input.limit);
     return Object.freeze({
@@ -330,12 +330,13 @@ export class LibraryService {
               : "/manage";
           const statusLabel = row.unavailable_reason
             ? "暂不可用"
-            : row.visibility === "draft"
+            : !row.current_version_id
               ? "草稿"
-              : row.visibility === "private"
+              : row.access === "private"
                 ? "私有"
                 : "已发布";
           return Object.freeze({
+            access: row.access,
             bookId: row.id,
             currentVersionAvailable,
             deletionMutationToken: createBookDeletionToken({
@@ -352,7 +353,6 @@ export class LibraryService {
             primaryHref,
             statusLabel,
             title: row.title_cache,
-            visibility: row.visibility,
           });
         }),
       ),
@@ -367,7 +367,7 @@ export class LibraryService {
     const predicate = keyPredicate(input.bookKey);
     const row = this.database
       .prepare(
-        `SELECT books.id AS book_id, books.visibility,
+        `SELECT books.id AS book_id, books.access,
                 books.unavailable_reason, books.current_version_id,
                 versions.id AS version_id, versions.state,
                 versions.source_id, presentation.version_id AS projection_version_id,
@@ -396,9 +396,9 @@ export class LibraryService {
       .get(predicate.value) as DetailsRow | undefined;
     if (!row) return hidden();
     const access = authorizeBookResource({
+      access: row.access,
       administrator: input.administrator,
       exists: true,
-      visibility: row.visibility,
     });
     if (!access.allowed) return hidden();
     if (
@@ -415,7 +415,7 @@ export class LibraryService {
       row.first_page_id === null ||
       row.toc_entry_count === null
     ) {
-      if (row.visibility === "public" || row.current_version_id) {
+      if (row.access === "public" || row.current_version_id) {
         return unavailable();
       }
       return hidden();
@@ -448,6 +448,7 @@ export class LibraryService {
       size_bytes: number;
     }[];
     return Object.freeze({
+      access: row.access,
       ...entry,
       contributors: metadata.contributors,
       description: metadata.description,
@@ -475,7 +476,6 @@ export class LibraryService {
       ),
       tocEntryCount: row.toc_entry_count,
       tocTruncated: row.toc_entry_count > toc.length,
-      visibility: row.visibility === "public" ? "public" : "private",
     });
   }
 }

@@ -82,7 +82,7 @@ test("edits every M1 structure override and publishes the ready candidate", asyn
            JOIN original_files
              ON original_files.book_id = books.id
             AND original_files.source_id = book_versions.source_id
-         WHERE books.visibility = 'public'
+         WHERE books.access = 'public'
          ORDER BY books.id DESC LIMIT 1`,
         )
         .get() as {
@@ -159,14 +159,14 @@ test("edits every M1 structure override and publishes the ready candidate", asyn
   expect(rangeDownload.status()).toBe(206);
   expect(await rangeDownload.body()).toEqual(fullBytes.subarray(-16));
 
-  const visibility = await page.request.patch(
-    `/api/manage/books/${published.id}/visibility`,
+  const access = await page.request.patch(
+    `/api/manage/books/${published.id}/access`,
     {
-      data: { visibility: "private" },
+      data: { access: "private" },
       headers: { Origin: e2eOrigin },
     },
   );
-  expect(visibility.status()).toBe(200);
+  expect(access.status()).toBe(200);
   expect((await anonymousPage.goto(`/read/${published.id}/1`))?.status()).toBe(
     404,
   );

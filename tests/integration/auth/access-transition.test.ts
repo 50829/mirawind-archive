@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { SqliteBookAccessRepository } from "@/modules/catalog/adapters/sqlite/book-access";
+import { setBookAccess } from "@/modules/catalog/application/commands/set-book-access";
 import { normalizeSearchQuery } from "@/modules/reader/core/search-query";
 import { BookSearchRepository } from "@/modules/reader/adapters/sqlite/book-search";
-import { makeBookNonPublic } from "@/modules/publishing/adapters/sqlite/publication";
 import { PublishedBookService } from "@/modules/reader/adapters/filesystem/published-book";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
@@ -19,6 +20,29 @@ const anonymous = {
 const administrator = { allowed: true } as const;
 
 describe("immediate public-to-private transition", () => {
+  it("rejects public access before a version is published", () =>
+    withMigratedTestDatabase(({ database }) => {
+      const fixture = setupPublicationFixture(database);
+      expect(() =>
+        setBookAccess({
+          access: "public",
+          actorUserId: "admin",
+          bookId: fixture.book.id,
+          books: new SqliteBookAccessRepository(database),
+          nowMs: 10,
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: "BOOK_PUBLICATION_REQUIRED",
+          status: 409,
+        }),
+      );
+      expect(fixture.drafts.requireBook(fixture.book.id)).toMatchObject({
+        access: "private",
+        currentVersionId: null,
+      });
+    }));
+
   it("denies new anonymous read, search and original resolution without rebuilding", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const fixture = setupPublicationFixture(database);
@@ -42,14 +66,26 @@ describe("immediate public-to-private transition", () => {
           "a".repeat(64),
         );
       await publishReadyCandidateForTest({
+        access: "private",
         bookId: fixture.book.id,
         database,
         nowMs: 12,
       });
       const service = new PublishedBookService(database, dataRoot.layout);
+      expect(() =>
+        service.resolveCurrent(String(fixture.book.id), anonymous),
+      ).toThrow(expect.objectContaining({ code: "NOT_FOUND", status: 404 }));
+
+      setBookAccess({
+        access: "public",
+        actorUserId: "admin",
+        bookId: fixture.book.id,
+        books: new SqliteBookAccessRepository(database),
+        nowMs: 13,
+      });
       expect(
         service.resolveCurrent(String(fixture.book.id), anonymous),
-      ).toMatchObject({ visibility: "public" });
+      ).toMatchObject({ access: "public" });
       expect(
         service.resolveOriginal({
           administrator: anonymous,
@@ -58,12 +94,12 @@ describe("immediate public-to-private transition", () => {
         }),
       ).toMatchObject({ fileId });
 
-      makeBookNonPublic({
+      setBookAccess({
+        access: "private",
         actorUserId: "admin",
         bookId: fixture.book.id,
-        database,
-        nowMs: 13,
-        visibility: "private",
+        books: new SqliteBookAccessRepository(database),
+        nowMs: 14,
       });
       expect(() =>
         service.resolveCurrent(String(fixture.book.id), anonymous),
@@ -90,7 +126,7 @@ describe("immediate public-to-private transition", () => {
         service.resolveCurrent(String(fixture.book.id), administrator),
       ).toMatchObject({
         versionId: publicationTestVersionId,
-        visibility: "private",
+        access: "private",
       });
       expect(fixture.drafts.requireBook(fixture.book.id).currentVersionId).toBe(
         publicationTestVersionId,

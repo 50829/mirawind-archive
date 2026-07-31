@@ -17,6 +17,7 @@ export interface PublicLibraryView {
 }
 
 export interface AdministratorLibraryEntry {
+  readonly access: "private" | "public";
   readonly bookId: number;
   readonly currentVersionAvailable: boolean;
   readonly deletionMutationToken: string;
@@ -24,7 +25,6 @@ export interface AdministratorLibraryEntry {
   readonly primaryHref: string;
   readonly statusLabel: string;
   readonly title: string;
-  readonly visibility: "draft" | "private" | "public";
 }
 
 export interface AdministratorLibraryPage {
@@ -33,6 +33,7 @@ export interface AdministratorLibraryPage {
 }
 
 export interface BookDetails extends PublicLibraryEntry {
+  readonly access: "private" | "public";
   readonly contributors: readonly string[];
   readonly description: string | null;
   readonly language: string | null;
@@ -51,5 +52,4 @@ export interface BookDetails extends PublicLibraryEntry {
   }[];
   readonly tocEntryCount: number;
   readonly tocTruncated: boolean;
-  readonly visibility: "private" | "public";
 }

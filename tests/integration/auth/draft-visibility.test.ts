@@ -53,12 +53,12 @@ async function hiddenResponse(
   throw new Error("Anonymous private route unexpectedly returned a response");
 }
 
-describe("draft resource visibility", () => {
+describe("draft resource access", () => {
   it("makes existing and missing candidates, tasks, sources, diagnostics, pages and assets indistinguishable", async () => {
     const previous = Object.fromEntries(
       environmentKeys.map((key) => [key, process.env[key]]),
     );
-    const dataRoot = await createTemporaryDataRoot("draft-visibility");
+    const dataRoot = await createTemporaryDataRoot("draft-access");
     const migrated = await openMigratedTestDatabase(dataRoot);
     let importedId: string;
     let jobId: string;

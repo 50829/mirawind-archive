@@ -21,10 +21,10 @@ export const GET: APIRoute = async ({ locals, params, request }) => {
     versionId: params.versionId ?? "",
   });
   const response = immutableAssetHeaders({
+    access: asset.access,
     mediaType: asset.mediaType,
     sha256: asset.sha256,
     sizeBytes: asset.sizeBytes,
-    visibility: asset.visibility,
   });
   const notModified = conditionalNotModified(
     request,

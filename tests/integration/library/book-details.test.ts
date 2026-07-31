@@ -84,7 +84,7 @@ describe("book details service", () => {
         subtitle: "A subtitle",
         tocEntryCount: 2,
         tocTruncated: true,
-        visibility: "public",
+        access: "public",
       });
       expect(details.toc).toEqual([
         expect.objectContaining({
@@ -110,7 +110,7 @@ describe("book details service", () => {
         nowMs: 12,
       });
       database
-        .prepare("UPDATE books SET visibility = 'private' WHERE id = ?")
+        .prepare("UPDATE books SET access = 'private' WHERE id = ?")
         .run(fixture.book.id);
       const service = new LibraryService(database);
       expect(() =>
@@ -123,7 +123,7 @@ describe("book details service", () => {
         service.resolveDetails({
           administrator,
           bookKey: String(fixture.book.id),
-        }).visibility,
+        }).access,
       ).toBe("private");
     }));
 
