@@ -1,3 +1,4 @@
+import { BookOpen, Settings, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type { AdministratorLibraryEntry } from "@/modules/catalog/application/public";
@@ -8,8 +9,8 @@ interface ResponseBody {
     readonly book_id: number;
     readonly current_version_available: boolean;
     readonly deletion_mutation_token: string;
-    readonly preview_ready: boolean;
-    readonly primary_href: string;
+    readonly management_href: string;
+    readonly reading_href: string | null;
     readonly status_label: string;
     readonly title: string;
   }[];
@@ -71,8 +72,8 @@ export function AdminLibraryEnhancement() {
           bookId: entry.book_id,
           currentVersionAvailable: entry.current_version_available,
           deletionMutationToken: entry.deletion_mutation_token,
-          previewReady: entry.preview_ready,
-          primaryHref: entry.primary_href,
+          managementHref: entry.management_href,
+          readingHref: entry.reading_href,
           statusLabel: entry.status_label,
           title: entry.title,
         })),
@@ -156,22 +157,52 @@ export function AdminLibraryEnhancement() {
       ) : (
         <ul>
           {entries.map((entry) => (
-            <li key={entry.bookId}>
-              <a href={entry.primaryHref}>{entry.title}</a>
-              <span>{entry.statusLabel}</span>
-              <button
-                className="rounded-md bg-red-800 px-3 py-2 text-sm font-semibold text-white hover:bg-red-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800"
-                onClick={() => {
-                  setAcceptedTask(null);
-                  setDeleting(entry);
-                  setDeletionRequestKey(crypto.randomUUID());
-                  setConfirmationTitle("");
-                  setDeletionError("");
-                }}
-                type="button"
+            <li
+              className="grid min-h-14 grid-cols-[minmax(0,1fr)_6rem_auto] items-center gap-4 max-sm:grid-cols-[minmax(0,1fr)_auto]"
+              key={entry.bookId}
+            >
+              <a
+                className="min-w-0 [overflow-wrap:anywhere] font-semibold text-stone-900"
+                href={entry.managementHref}
               >
-                永久删除
-              </button>
+                {entry.title}
+              </a>
+              <span className="justify-self-end text-sm">
+                {entry.statusLabel}
+              </span>
+              <div className="flex items-center justify-end gap-2 max-sm:col-span-2">
+                <a
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md bg-stone-100 px-3 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-200"
+                  href={entry.managementHref}
+                >
+                  <Settings aria-hidden="true" size={17} />
+                  管理
+                </a>
+                {entry.readingHref && (
+                  <a
+                    className="inline-flex min-h-11 items-center gap-2 rounded-md bg-emerald-800 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-900"
+                    href={entry.readingHref}
+                  >
+                    <BookOpen aria-hidden="true" size={17} />
+                    阅读
+                  </a>
+                )}
+                <button
+                  aria-label={`永久删除《${entry.title}》`}
+                  className="inline-flex size-11 items-center justify-center rounded-md bg-red-800 text-white hover:bg-red-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800"
+                  onClick={() => {
+                    setAcceptedTask(null);
+                    setDeleting(entry);
+                    setDeletionRequestKey(crypto.randomUUID());
+                    setConfirmationTitle("");
+                    setDeletionError("");
+                  }}
+                  title="永久删除"
+                  type="button"
+                >
+                  <Trash2 aria-hidden="true" size={18} />
+                </button>
+              </div>
             </li>
           ))}
         </ul>

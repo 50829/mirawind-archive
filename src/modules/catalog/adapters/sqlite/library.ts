@@ -271,7 +271,7 @@ export class LibraryService {
                 books.alias AS mutable_alias, books.updated_at,
                 books.draft_source_id, books.draft_config_revision,
                 books.current_candidate_id, books.current_version_id,
-                books.unavailable_reason, candidate.state AS candidate_state,
+                books.unavailable_reason,
                 presentation.alias, presentation.first_page_id,
                 presentation.first_page_alias,
                 CASE WHEN versions.state = 'published'
@@ -283,11 +283,6 @@ export class LibraryService {
          LEFT JOIN book_versions AS versions
            ON versions.id = books.current_version_id
           AND versions.book_id = books.id
-         LEFT JOIN draft_candidates AS candidate
-           ON candidate.id = books.current_candidate_id
-          AND candidate.book_id = books.id
-          AND candidate.source_id = books.draft_source_id
-          AND candidate.config_revision = books.draft_config_revision
          LEFT JOIN book_version_presentations AS presentation
            ON presentation.version_id = versions.id
           AND presentation.book_id = books.id
@@ -307,7 +302,6 @@ export class LibraryService {
       current_version_id: string | null;
       draft_config_revision: number | null;
       draft_source_id: string | null;
-      candidate_state: string | null;
       title_cache: string;
       unavailable_reason: string | null;
       updated_at: number;
@@ -319,15 +313,12 @@ export class LibraryService {
         page.map((row) => {
           const currentVersionAvailable =
             row.current_available === 1 && row.first_page_id !== null;
-          const previewReady = row.candidate_state === "ready";
-          const primaryHref = currentVersionAvailable
+          const readingHref = currentVersionAvailable
             ? `/read/${canonicalBookKey(row.id, row.alias)}/${pageKey(
                 row.first_page_id ?? 1,
                 row.first_page_alias,
               )}`
-            : previewReady
-              ? `/manage/books/${row.id}/preview`
-              : "/manage";
+            : null;
           const statusLabel = row.unavailable_reason
             ? "暂不可用"
             : !row.current_version_id
@@ -349,8 +340,8 @@ export class LibraryService {
               title: row.title_cache,
               updatedAtMs: row.updated_at,
             }),
-            previewReady,
-            primaryHref,
+            managementHref: `/manage/books/${row.id}`,
+            readingHref,
             statusLabel,
             title: row.title_cache,
           });

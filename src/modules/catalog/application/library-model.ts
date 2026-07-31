@@ -21,8 +21,8 @@ export interface AdministratorLibraryEntry {
   readonly bookId: number;
   readonly currentVersionAvailable: boolean;
   readonly deletionMutationToken: string;
-  readonly previewReady: boolean;
-  readonly primaryHref: string;
+  readonly managementHref: string;
+  readonly readingHref: string | null;
   readonly statusLabel: string;
   readonly title: string;
 }

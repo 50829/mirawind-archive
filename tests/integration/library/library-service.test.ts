@@ -96,7 +96,8 @@ describe("library service", () => {
         expect.objectContaining({
           bookId: draft.id,
           currentVersionAvailable: false,
-          primaryHref: "/manage",
+          managementHref: `/manage/books/${draft.id}`,
+          readingHref: null,
           statusLabel: "草稿",
           title: "Draft work",
         }),

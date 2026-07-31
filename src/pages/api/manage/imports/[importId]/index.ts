@@ -74,7 +74,7 @@ export const GET: APIRoute = ({ locals, params }) => {
             (revision === null ? "unavailable" : "building"),
           url:
             previewReady && imported.bookId
-              ? `/manage/books/${imported.bookId}/preview`
+              ? `/manage/books/${imported.bookId}`
               : null,
         },
         selected_candidate_id: imported.selectedCandidateId,

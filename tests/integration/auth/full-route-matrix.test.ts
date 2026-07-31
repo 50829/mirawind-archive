@@ -160,7 +160,7 @@ const routePolicyEvidence: Readonly<Record<string, readonly string[]>> = {
   "books/[bookKey]/originals/[fileId].ts": ["applyResponsePolicy"],
   "library/index.astro": ["libraryHtmlResponse"],
   "login.astro": ["applyResponsePolicy"],
-  "manage/books/[bookId]/preview.astro": [
+  "manage/books/[bookId]/index.astro": [
     "hiddenManagementPage",
     "applyResponsePolicy",
   ],

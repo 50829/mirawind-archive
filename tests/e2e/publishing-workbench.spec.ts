@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { loginAsAdministrator } from "../helpers/e2e-login.js";
 
+const workbenchBookId = 1;
+
 function draftProjection(
   size: number,
   diagnosticSeverity: "error" | "warning" = "warning",
@@ -16,11 +18,11 @@ function draftProjection(
   return {
     access: "private" as const,
     alias: null,
-    book_id: 99,
+    book_id: workbenchBookId,
     boundaries: { body_start_block_id: structure[0]?.block_id },
     candidate: {
       attempt_id: "candidate_workbench_0000000001",
-      preview_url: "/api/manage/books/99/preview/1/pages/1",
+      preview_url: `/api/manage/books/${workbenchBookId}/preview/1/pages/1`,
       revision: 1,
       safe_error_code: null,
       semantic_digest: "b".repeat(64),
@@ -118,7 +120,7 @@ function draftAtRevision(revision: number, state: "building" | "ready") {
       ...draft.candidate,
       preview_url:
         state === "ready"
-          ? `/api/manage/books/99/preview/${revision}/pages/1`
+          ? `/api/manage/books/${workbenchBookId}/preview/${revision}/pages/1`
           : null,
       revision,
       state,
@@ -157,90 +159,109 @@ test("saves metadata and cover before publishing and changing access", async ({
   let accessPatch: Record<string, unknown> | null = null;
   let coverUploaded = false;
   let publishBody: unknown = null;
-  await page.route("**/api/manage/books/99/draft", async (route) => {
-    if (route.request().method() === "PATCH") {
-      metadataPatch = route.request().postDataJSON() as Record<string, unknown>;
-      const metadata = metadataPatch.metadata as Record<string, unknown>;
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/draft`,
+    async (route) => {
+      if (route.request().method() === "PATCH") {
+        metadataPatch = route.request().postDataJSON() as Record<
+          string,
+          unknown
+        >;
+        const metadata = metadataPatch.metadata as Record<string, unknown>;
+        draft = {
+          ...draftAtRevision(2, "ready"),
+          access: draft.access,
+          alias: (metadataPatch.alias as string | null) ?? null,
+          metadata: { ...draft.metadata, ...metadata },
+          published: draft.published,
+          title: String(metadata.title),
+        };
+        await route.fulfill({
+          body: JSON.stringify({ config_revision: 2 }),
+          contentType: "application/json",
+          headers: { ETag: '"etag-2"' },
+          status: 202,
+        });
+        return;
+      }
+      await route.fulfill({
+        body: JSON.stringify(draft),
+        contentType: "application/json",
+        headers: { ETag: `"etag-${draft.config_revision}"` },
+        status: 200,
+      });
+    },
+  );
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/draft/images`,
+    (route) =>
+      route.fulfill({
+        body: JSON.stringify({ images: [] }),
+        contentType: "application/json",
+        status: 200,
+      }),
+  );
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/draft/cover`,
+    async (route) => {
+      coverUploaded = true;
+      expect(route.request().headers()["if-match"]).toBe('"etag-2"');
+      expect(route.request().headers()["content-type"]).toContain(
+        "multipart/form-data",
+      );
       draft = {
-        ...draftAtRevision(2, "ready"),
+        ...draftAtRevision(3, "ready"),
         access: draft.access,
-        alias: (metadataPatch.alias as string | null) ?? null,
-        metadata: { ...draft.metadata, ...metadata },
+        alias: draft.alias,
+        metadata: { ...draft.metadata, cover_path: "covers/uploaded.png" },
         published: draft.published,
-        title: String(metadata.title),
+        title: draft.title,
       };
       await route.fulfill({
-        body: JSON.stringify({ config_revision: 2 }),
+        body: JSON.stringify({ config_revision: 3 }),
         contentType: "application/json",
-        headers: { ETag: '"etag-2"' },
+        headers: { ETag: '"etag-3"' },
         status: 202,
       });
-      return;
-    }
-    await route.fulfill({
-      body: JSON.stringify(draft),
-      contentType: "application/json",
-      headers: { ETag: `"etag-${draft.config_revision}"` },
-      status: 200,
-    });
-  });
-  await page.route("**/api/manage/books/99/draft/images", (route) =>
-    route.fulfill({
-      body: JSON.stringify({ images: [] }),
-      contentType: "application/json",
-      status: 200,
-    }),
+    },
   );
-  await page.route("**/api/manage/books/99/draft/cover", async (route) => {
-    coverUploaded = true;
-    expect(route.request().headers()["if-match"]).toBe('"etag-2"');
-    expect(route.request().headers()["content-type"]).toContain(
-      "multipart/form-data",
-    );
-    draft = {
-      ...draftAtRevision(3, "ready"),
-      access: draft.access,
-      alias: draft.alias,
-      metadata: { ...draft.metadata, cover_path: "covers/uploaded.png" },
-      published: draft.published,
-      title: draft.title,
-    };
-    await route.fulfill({
-      body: JSON.stringify({ config_revision: 3 }),
-      contentType: "application/json",
-      headers: { ETag: '"etag-3"' },
-      status: 202,
-    });
-  });
-  await page.route("**/api/manage/books/99/publish", async (route) => {
-    publishBody = route.request().postDataJSON();
-    expect(route.request().headers()["if-match"]).toBe('"etag-3"');
-    draft = { ...draft, candidate_published: true, published: true };
-    await route.fulfill({
-      body: JSON.stringify({ state: "published" }),
-      contentType: "application/json",
-      status: 200,
-    });
-  });
-  await page.route("**/api/manage/books/99/access", async (route) => {
-    accessPatch = route.request().postDataJSON() as Record<string, unknown>;
-    draft = { ...draft, access: "public" };
-    await route.fulfill({
-      body: JSON.stringify({ access: "public", book_id: 99 }),
-      contentType: "application/json",
-      status: 200,
-    });
-  });
-  await page.route("**/api/manage/books/99/preview/**", (route) =>
-    route.fulfill({
-      body: "<!doctype html><html lang='zh-CN'><body>Preview</body></html>",
-      contentType: "text/html",
-      status: 200,
-    }),
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/publish`,
+    async (route) => {
+      publishBody = route.request().postDataJSON();
+      expect(route.request().headers()["if-match"]).toBe('"etag-3"');
+      draft = { ...draft, candidate_published: true, published: true };
+      await route.fulfill({
+        body: JSON.stringify({ state: "published" }),
+        contentType: "application/json",
+        status: 200,
+      });
+    },
+  );
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/access`,
+    async (route) => {
+      accessPatch = route.request().postDataJSON() as Record<string, unknown>;
+      draft = { ...draft, access: "public" };
+      await route.fulfill({
+        body: JSON.stringify({ access: "public", book_id: workbenchBookId }),
+        contentType: "application/json",
+        status: 200,
+      });
+    },
+  );
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/preview/**`,
+    (route) =>
+      route.fulfill({
+        body: "<!doctype html><html lang='zh-CN'><body>Preview</body></html>",
+        contentType: "text/html",
+        status: 200,
+      }),
   );
 
   await loginAsAdministrator(page, "192.0.2.18");
-  await page.goto("/manage/books/99/preview");
+  await page.goto(`/manage/books/${workbenchBookId}`);
   await page.getByRole("button", { name: "书籍设置" }).click();
   await expect(page.getByRole("button", { name: "公开" })).toBeDisabled();
   await page.getByLabel("显示名称").fill("Edited Workbench");
@@ -287,7 +308,7 @@ test("saves metadata and cover before publishing and changing access", async ({
 
 test("blocks publication only for error diagnostics", async ({ page }) => {
   let diagnosticSeverity: "error" | "warning" = "warning";
-  await page.route("**/api/manage/books/99/draft", (route) =>
+  await page.route(`**/api/manage/books/${workbenchBookId}/draft`, (route) =>
     route.fulfill({
       body: JSON.stringify(draftProjection(20, diagnosticSeverity)),
       contentType: "application/json",
@@ -295,15 +316,17 @@ test("blocks publication only for error diagnostics", async ({ page }) => {
       status: 200,
     }),
   );
-  await page.route("**/api/manage/books/99/preview/**", (route) =>
-    route.fulfill({
-      body: "<!doctype html><html lang='en'><body>Preview</body></html>",
-      contentType: "text/html",
-      status: 200,
-    }),
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/preview/**`,
+    (route) =>
+      route.fulfill({
+        body: "<!doctype html><html lang='en'><body>Preview</body></html>",
+        contentType: "text/html",
+        status: 200,
+      }),
   );
   await loginAsAdministrator(page, "192.0.2.17");
-  await page.goto("/manage/books/99/preview");
+  await page.goto(`/manage/books/${workbenchBookId}`);
 
   const publish = page.getByRole("button", { name: "发布当前修订" });
   await expect(publish).toBeEnabled();
@@ -317,7 +340,7 @@ test("keeps representative and stress structure DOM bounded", async ({
   page,
 }) => {
   let size = 20;
-  await page.route("**/api/manage/books/99/draft", (route) =>
+  await page.route(`**/api/manage/books/${workbenchBookId}/draft`, (route) =>
     route.fulfill({
       body: JSON.stringify(draftProjection(size)),
       contentType: "application/json",
@@ -325,18 +348,20 @@ test("keeps representative and stress structure DOM bounded", async ({
       status: 200,
     }),
   );
-  await page.route("**/api/manage/books/99/preview/**", (route) =>
-    route.fulfill({
-      body: "<!doctype html><html lang='en'><body>Preview</body></html>",
-      contentType: "text/html",
-      status: 200,
-    }),
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/preview/**`,
+    (route) =>
+      route.fulfill({
+        body: "<!doctype html><html lang='en'><body>Preview</body></html>",
+        contentType: "text/html",
+        status: 200,
+      }),
   );
   await loginAsAdministrator(page, "192.0.2.14");
 
   for (const representativeSize of [20, 250, 501, 2_000]) {
     size = representativeSize;
-    await page.goto(`/manage/books/99/preview?size=${size}`);
+    await page.goto(`/manage/books/${workbenchBookId}?size=${size}`);
     await expect(
       page.getByRole("heading", { name: `Workbench ${size}` }),
     ).toBeVisible();
@@ -367,7 +392,7 @@ test("keeps representative and stress structure DOM bounded", async ({
   }
 
   size = 20_000;
-  await page.goto(`/manage/books/99/preview?size=${size}`);
+  await page.goto(`/manage/books/${workbenchBookId}?size=${size}`);
   await expect(
     page.getByRole("heading", { name: `Workbench ${size}` }),
   ).toBeVisible();
@@ -381,7 +406,7 @@ test("keeps representative and stress structure DOM bounded", async ({
 test("locates diagnostics and disables reprocessing while edits are dirty", async ({
   page,
 }) => {
-  await page.route("**/api/manage/books/99/draft", (route) => {
+  await page.route(`**/api/manage/books/${workbenchBookId}/draft`, (route) => {
     return route.fulfill({
       body: JSON.stringify(draftProjection(20)),
       contentType: "application/json",
@@ -389,15 +414,17 @@ test("locates diagnostics and disables reprocessing while edits are dirty", asyn
       status: 200,
     });
   });
-  await page.route("**/api/manage/books/99/preview/**", (route) =>
-    route.fulfill({
-      body: "<!doctype html><html lang='en'><body>Preview</body></html>",
-      contentType: "text/html",
-      status: 200,
-    }),
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/preview/**`,
+    (route) =>
+      route.fulfill({
+        body: "<!doctype html><html lang='en'><body>Preview</body></html>",
+        contentType: "text/html",
+        status: 200,
+      }),
   );
   await loginAsAdministrator(page, "192.0.2.16");
-  await page.goto("/manage/books/99/preview");
+  await page.goto(`/manage/books/${workbenchBookId}`);
 
   await page.getByRole("button", { name: "定位结构" }).click();
   await expect(
@@ -420,7 +447,7 @@ test("restores focus after each mobile workbench detail dialog", async ({
   page,
 }) => {
   await page.setViewportSize({ height: 800, width: 390 });
-  await page.route("**/api/manage/books/99/draft", (route) =>
+  await page.route(`**/api/manage/books/${workbenchBookId}/draft`, (route) =>
     route.fulfill({
       body: JSON.stringify(draftProjection(20)),
       contentType: "application/json",
@@ -428,15 +455,17 @@ test("restores focus after each mobile workbench detail dialog", async ({
       status: 200,
     }),
   );
-  await page.route("**/api/manage/books/99/preview/**", (route) =>
-    route.fulfill({
-      body: "<!doctype html><html lang='en'><body>Preview</body></html>",
-      contentType: "text/html",
-      status: 200,
-    }),
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/preview/**`,
+    (route) =>
+      route.fulfill({
+        body: "<!doctype html><html lang='en'><body>Preview</body></html>",
+        contentType: "text/html",
+        status: 200,
+      }),
   );
   await loginAsAdministrator(page, "192.0.2.15");
-  await page.goto("/manage/books/99/preview");
+  await page.goto(`/manage/books/${workbenchBookId}`);
   await page.getByRole("button", { name: "结构", exact: true }).click();
 
   const currentItem = page.getByRole("button", { name: "当前项" });
@@ -474,7 +503,7 @@ test("edits a selected preview block and keeps the last preview while rebuilding
   let buildingResponsePending = false;
   let patchBody: unknown;
   let patchEtag = "";
-  await page.route("**/api/manage/books/99/draft", (route) => {
+  await page.route(`**/api/manage/books/${workbenchBookId}/draft`, (route) => {
     if (buildingResponsePending) {
       buildingResponsePending = false;
       return route.fulfill({
@@ -492,7 +521,7 @@ test("edits a selected preview block and keeps the last preview while rebuilding
     });
   });
   await page.route(
-    `**/api/manage/books/99/draft/blocks/${editableBlockId}`,
+    `**/api/manage/books/${workbenchBookId}/draft/blocks/${editableBlockId}`,
     async (route) => {
       if (route.request().method() === "GET") {
         return route.fulfill({
@@ -518,19 +547,24 @@ test("edits a selected preview block and keeps the last preview while rebuilding
       });
     },
   );
-  await page.route("**/api/manage/books/99/preview/**", (route) => {
-    const nextRevision = route.request().url().includes("/preview/2/") ? 2 : 1;
-    return route.fulfill({
-      body: editablePreviewHtml(
-        nextRevision,
-        nextRevision === 1 ? "Original paragraph" : "Updated paragraph",
-      ),
-      contentType: "text/html",
-      status: 200,
-    });
-  });
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/preview/**`,
+    (route) => {
+      const nextRevision = route.request().url().includes("/preview/2/")
+        ? 2
+        : 1;
+      return route.fulfill({
+        body: editablePreviewHtml(
+          nextRevision,
+          nextRevision === 1 ? "Original paragraph" : "Updated paragraph",
+        ),
+        contentType: "text/html",
+        status: 200,
+      });
+    },
+  );
   await loginAsAdministrator(page, "192.0.2.18");
-  await page.goto("/manage/books/99/preview");
+  await page.goto(`/manage/books/${workbenchBookId}`);
 
   const preview = page.frameLocator("iframe");
   await preview.getByText("Original paragraph").click();
@@ -553,7 +587,7 @@ test("keeps local block Markdown after an If-Match conflict", async ({
   page,
 }) => {
   let currentMarkdown = "Server paragraph";
-  await page.route("**/api/manage/books/99/draft", (route) =>
+  await page.route(`**/api/manage/books/${workbenchBookId}/draft`, (route) =>
     route.fulfill({
       body: JSON.stringify(draftAtRevision(1, "ready")),
       contentType: "application/json",
@@ -562,7 +596,7 @@ test("keeps local block Markdown after an If-Match conflict", async ({
     }),
   );
   await page.route(
-    `**/api/manage/books/99/draft/blocks/${editableBlockId}`,
+    `**/api/manage/books/${workbenchBookId}/draft/blocks/${editableBlockId}`,
     (route) => {
       if (route.request().method() === "PATCH") {
         currentMarkdown = "Concurrent server paragraph";
@@ -580,15 +614,17 @@ test("keeps local block Markdown after an If-Match conflict", async ({
       });
     },
   );
-  await page.route("**/api/manage/books/99/preview/**", (route) =>
-    route.fulfill({
-      body: editablePreviewHtml(1, "Server paragraph"),
-      contentType: "text/html",
-      status: 200,
-    }),
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/preview/**`,
+    (route) =>
+      route.fulfill({
+        body: editablePreviewHtml(1, "Server paragraph"),
+        contentType: "text/html",
+        status: 200,
+      }),
   );
   await loginAsAdministrator(page, "192.0.2.19");
-  await page.goto("/manage/books/99/preview");
+  await page.goto(`/manage/books/${workbenchBookId}`);
 
   await page.frameLocator("iframe").getByText("Server paragraph").click();
   const dialog = page.getByRole("dialog", { name: "编辑段落" });

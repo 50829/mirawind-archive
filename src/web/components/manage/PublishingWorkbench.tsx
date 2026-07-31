@@ -509,9 +509,9 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
       <header className="preview-header sticky top-0 z-10 mb-4 grid min-h-18 grid-cols-[auto_minmax(12rem,1fr)_auto_auto_auto_auto] items-center gap-3 rounded-lg border border-stone-300 bg-white px-6 py-3 max-[850px]:grid-cols-[auto_minmax(0,1fr)_auto]">
         <a
           className="workbench-back font-semibold text-emerald-800 hover:text-emerald-900"
-          href="/manage"
+          href="/library"
         >
-          返回
+          返回书库
         </a>
         <div className="workbench-title min-w-0">
           <h1 className="truncate text-base font-bold">{draft.title}</h1>

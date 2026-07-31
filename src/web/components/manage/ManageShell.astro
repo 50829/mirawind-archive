@@ -1,11 +1,12 @@
 ---
 interface Props {
-  readonly currentSection: "import" | "security" | "tasks";
+  readonly currentSection: "import" | "library" | "security" | "tasks";
   readonly wide?: boolean;
 }
 
 const { currentSection, wide = false } = Astro.props;
 const sections = [
+  { href: "/library", id: "library", label: "书库" },
   { href: "/manage", id: "import", label: "导入" },
   { href: "/manage/tasks", id: "tasks", label: "任务" },
   { href: "/manage/security", id: "security", label: "安全" },

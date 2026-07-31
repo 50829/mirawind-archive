@@ -112,7 +112,7 @@ test("keeps upload progress honest across retry, acceptance and abort", async ({
           preview: {
             revision: 1,
             state: ready ? "ready" : "building",
-            url: ready ? "/manage/books/99/preview" : null,
+            url: ready ? "/manage/books/99" : null,
           },
           state: ready ? "draft_ready" : "analyzing",
         }),
