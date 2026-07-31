@@ -28,7 +28,7 @@
 - [x] T015 [US3] Add preview block selection, Markdown dialog and revised save/conflict behavior.
 - [x] T016 [US4] Add metadata/cover management, separate access API and server-selected publication.
 - [x] T017 [US4] Add management/publishing routes and aligned library management links.
-- [ ] T018 Verify upload/task progress in the full Web+worker local stack.
+- [x] T018 Verify upload/task progress in the full Web+worker local stack.
 
 ## Phase 5: Closure
 
