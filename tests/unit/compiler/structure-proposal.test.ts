@@ -717,7 +717,7 @@ describe("default document structure proposal", () => {
     });
   });
 
-  it("keeps unlisted appendix children out of the proposed hierarchy", () => {
+  it("keeps appendix descendants in their continuous hierarchy", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(
         [
@@ -758,9 +758,9 @@ describe("default document structure proposal", () => {
       })),
     ).toEqual([
       { include_in_toc: true, level: 1 },
-      { include_in_toc: false, level: 1 },
-      { include_in_toc: false, level: 1 },
-      { include_in_toc: false, level: 1 },
+      { include_in_toc: true, level: 2 },
+      { include_in_toc: true, level: 3 },
+      { include_in_toc: true, level: 2 },
       { include_in_toc: true, level: 1 },
     ]);
   });

@@ -238,7 +238,7 @@ describe("prepare_draft candidate handoff", () => {
           profile: "zh-smart-v1",
         }),
       });
-      expect(prepared.artifact.structure).toHaveLength(9);
+      expect(prepared.artifact.structure).toHaveLength(6);
 
       const finalized = await finalizePreparedDraft({
         artifact: prepared.artifact,

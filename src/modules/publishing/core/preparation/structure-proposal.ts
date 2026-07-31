@@ -577,7 +577,7 @@ function inferStructureLevels(
       !evidence.printedHeadingIds.has(heading.blockId) &&
       alphabeticAppendixSectionTitle.test(title)
     ) {
-      structuralEvidence[index] = false;
+      structuralEvidence[index] = true;
       return evidence.contextualNumberedLevels[index] ?? 2;
     }
     const numbered = inferPrintedReferenceLevel(heading.sourceTitle);
@@ -661,16 +661,19 @@ function createInitialStructureNodes(
         evidenceIndex.hasPrintedHierarchy &&
         !evidenceIndex.printedHeadingIds.has(heading.blockId) &&
         optionalBackmatterTitle.test(title);
+      const appendixDescendant =
+        currentTopLevelRole === "appendix" && displayLevel > 1;
       const includeInToc =
         !coverMetadata &&
-        !localOrdinal &&
-        !unmatchedAlphabeticAppendixSection &&
+        (!localOrdinal || appendixDescendant) &&
+        (!unmatchedAlphabeticAppendixSection || appendixDescendant) &&
         !unmatchedOptionalBackmatter &&
         !nonNavigationalLocalTitle.test(title) &&
         ((!evidenceIndex.hasPrintedHierarchy &&
           evidenceIndex.markdownLevelsAreUseful) ||
           !evidenceIndex.hasAnyNumberedEvidence ||
           evidenceIndex.printedHeadingIds.has(heading.blockId) ||
+          appendixDescendant ||
           (!localPart && explicitLevel !== undefined) ||
           frontmatterTitle.test(title) ||
           appendixTitle.test(title) ||
@@ -725,43 +728,6 @@ function createInitialStructureNodes(
       });
     }),
   );
-}
-
-function suppressUnlistedAppendixChildren(
-  headings: readonly NormalizedHeading[],
-  nodes: readonly StructureNodeState[],
-  evidenceIndex: StructureEvidenceIndex,
-): readonly StructureNodeState[] {
-  const output = nodes.slice();
-  let suppressChildren = false;
-  let appendixLevel = 1;
-  for (const [index, heading] of headings.entries()) {
-    const node = output[index];
-    if (!node) continue;
-    const printedLevel = evidenceIndex.printedLevels.get(heading.blockId);
-    const printedRole = evidenceIndex.printedRoles.get(heading.blockId);
-    const headingEvidence = inferPrintedHeadingEvidence(heading.sourceTitle);
-    if (printedLevel !== undefined) {
-      suppressChildren = printedLevel === 1 && printedRole === "appendix";
-      appendixLevel = printedLevel;
-      continue;
-    }
-    if (!suppressChildren) continue;
-    if (headingEvidence?.kind === "appendix") {
-      suppressChildren = false;
-      continue;
-    }
-    if (backmatterTitle.test(heading.sourceTitle.trim().normalize("NFKC"))) {
-      suppressChildren = false;
-      continue;
-    }
-    output[index] = Object.freeze({
-      ...node,
-      display_level: appendixLevel,
-      include_in_toc: false,
-    });
-  }
-  return Object.freeze(output);
 }
 
 function repairDetachedPartLabels(
@@ -1084,7 +1050,6 @@ export function proposeDocumentStructure(
   const levels = inferStructureLevels(document.headings, evidence);
   let nodes = createInitialStructureNodes(document.headings, levels, evidence);
 
-  nodes = suppressUnlistedAppendixChildren(document.headings, nodes, evidence);
   const repairedPartLabels = repairDetachedPartLabels(
     document.headings,
     nodes,

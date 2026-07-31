@@ -188,9 +188,8 @@ export async function analyzeDraftContents(input: {
       : [],
   );
   const proposal = await profilePipelineStage("structure_proposal", () =>
-    proposeDocumentStructure(input.normalized, {
+    proposeDocumentStructure(activeDocument, {
       printedEntries,
-      sourceRegions,
     }),
   );
   return Object.freeze({
