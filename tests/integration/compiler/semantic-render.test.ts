@@ -135,6 +135,32 @@ describe("published semantic document rendering", () => {
     ]);
   });
 
+  it("renders formulae inside imported HTML table cells", async () => {
+    const document = normalized(
+      [
+        "<table><tbody><tr>",
+        "<td>Cost $x^2$</td>",
+        "<td>$$y+1$$</td>",
+        String.raw`<td>escaped \$z\$ and malformed $q</td>`,
+        "</tr></tbody></table>",
+      ].join(""),
+    );
+    const rendered = await renderSemanticDocument({
+      document,
+      headingLinkIndex: createHeadingLinkIndex(document, new Map()),
+      publishedResourceUrl: () => {
+        throw new Error("No resource expected");
+      },
+      resourceResolution: { diagnostics: [], references: [], resources: [] },
+    });
+
+    expect(rendered.html.match(/class="katex"/gu)).toHaveLength(2);
+    expect(rendered.html).toContain("katex-display");
+    expect(rendered.html).not.toContain("$x^2$");
+    expect(rendered.html).toContain("escaped \\$z\\$ and malformed $q");
+    expect(rendered.diagnostics).toEqual([]);
+  });
+
   it("keeps generated math bound to its source through raw HTML normalization", async () => {
     const document = normalized(
       [
@@ -176,6 +202,10 @@ describe("published semantic document rendering", () => {
         "```unknown-language",
         "<script>plain & safe</script>",
         "```",
+        "",
+        "```",
+        "plain block",
+        "```",
       ].join("\n"),
     );
     const rendered = await renderSemanticDocument({
@@ -199,10 +229,44 @@ describe("published semantic document rendering", () => {
     expect(rendered.html).not.toContain(" style=");
     expect(rendered.css).toMatch(/\.mw-shiki-[A-Za-z0-9_-]+\{/u);
     expect(rendered.html).toContain('data-code-language="plain"');
+    expect(rendered.html.match(/class="code-frame"/gu)).toHaveLength(3);
+    expect(rendered.html.match(/data-copy-code/gu)).toHaveLength(3);
+    expect(rendered.html).toContain("plain block");
     expect(rendered.html).not.toContain("<script>");
     expect(rendered.html).toMatch(/plain (?:&#x26;|&amp;) safe/u);
     expect(rendered.diagnostics).toEqual([
       expect.objectContaining({ code: "CODE_LANGUAGE_UNSUPPORTED" }),
+    ]);
+  });
+
+  it("marks valid Mermaid for lazy rendering and keeps invalid source readable", async () => {
+    const document = normalized(
+      [
+        "```mermaid",
+        "flowchart LR",
+        "  Input --> Output",
+        "```",
+        "",
+        "```mermaid",
+        "flowchart broken",
+        "```",
+      ].join("\n"),
+    );
+    const rendered = await renderSemanticDocument({
+      document,
+      headingLinkIndex: createHeadingLinkIndex(document, new Map()),
+      publishedResourceUrl: () => {
+        throw new Error("No resource expected");
+      },
+      resourceResolution: { diagnostics: [], references: [], resources: [] },
+    });
+
+    expect(rendered.html.match(/data-mermaid-diagram/gu)).toHaveLength(1);
+    expect(rendered.html).toContain("Input --> Output");
+    expect(rendered.html).toContain('class="code-frame"');
+    expect(rendered.html).toContain("flowchart broken");
+    expect(rendered.diagnostics).toEqual([
+      expect.objectContaining({ code: "MERMAID_RENDER_INVALID" }),
     ]);
   });
 

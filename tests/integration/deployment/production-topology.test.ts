@@ -37,10 +37,10 @@ describe("production renderer and style asset closure", () => {
     expect(packageJson.scripts.start).not.toContain("prepare:");
     expect(packageJson.scripts.worker).not.toContain("prepare:");
     expect(rendererStylesheetUrl).toBe(
-      "/reader-assets/renderers/semantic-html-v5-katex-0.18.1/katex.css",
+      "/reader-assets/renderers/semantic-html-v6-katex-0.18.1/katex.css",
     );
     expect(readerStylesheetUrl).toBe(
-      "/reader-assets/styles/mirawind-reader-v2-tailwind-4.3.3.css",
+      "/reader-assets/styles/mirawind-reader-v3-tailwind-4.3.3.css",
     );
   });
 

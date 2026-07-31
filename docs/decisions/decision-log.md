@@ -1148,6 +1148,9 @@
   改变图书的 `private | public` 访问状态。
 - 表示：正文标题、全书目录、本页提纲、面包屑和搜索共用一份编译期标题表示。预览和发布
   继续共用 ReaderShell；管理预览只通过类型化 block 选择消息支持编辑。
+- 身份：准备、编译、预览、renderer 和 Reader 分别提升为 `prepare-draft-v5`、`compiler-v6`、
+  `draft-preview-v6`、`semantic-html-v6-katex-0.18.1` 和
+  `mirawind-reader-v3-tailwind-4.3.3`。
 - 切换：本轮更新唯一数据库基线并清空本地测试数据。旧 schema、旧路由和旧运行时代码直接
   删除，不提供迁移、fallback、双写或“旧代码不存在”测试。本决策替代 D-045、D-047、
   D-048、D-049、D-101、D-104、D-117 和 D-119 中与上述模型冲突的条款。

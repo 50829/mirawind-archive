@@ -188,7 +188,7 @@ export class VersionRepository {
           input.compilerVersion,
           input.rendererVersion,
           input.previewVersion ?? "draft-preview-v5",
-          input.readerVersion ?? "mirawind-reader-v2-tailwind-4.3.3",
+          input.readerVersion ?? "mirawind-reader-v3-tailwind-4.3.3",
           input.blockingDiagnosticCount ?? 0,
           input.completeAtMs,
           input.createdByJobId,

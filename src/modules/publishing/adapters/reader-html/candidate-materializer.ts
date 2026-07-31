@@ -24,6 +24,7 @@ import { renderReaderShell } from "@/web/features/reader/render";
 const nonBlockingRenderDiagnosticCodes = new Set([
   "CODE_LANGUAGE_UNSUPPORTED",
   "MATH_RENDER_FAILED",
+  "MERMAID_RENDER_INVALID",
 ]);
 
 interface NavigationLink {

@@ -190,6 +190,34 @@
     @apply font-serif text-base leading-loose;
   }
 
+  .reader-document p {
+    @apply my-5;
+  }
+
+  .reader-document :is(ul, ol) {
+    @apply my-5 pl-7;
+  }
+
+  .reader-document ul {
+    @apply list-disc;
+  }
+
+  .reader-document ol {
+    @apply list-decimal;
+  }
+
+  .reader-document li {
+    @apply my-2 pl-1;
+  }
+
+  .reader-document li > p {
+    @apply my-1;
+  }
+
+  .reader-document blockquote {
+    @apply my-6 border-l-4 border-stone-300 pl-4 text-stone-700;
+  }
+
   .reader-document :is(h1, h2, h3, h4) {
     @apply text-stone-900;
     overflow-wrap: anywhere;
@@ -222,6 +250,79 @@
   .reader-document th,
   .reader-document td {
     @apply border border-stone-200 p-2;
+  }
+
+  .reader-document :not(pre) > code {
+    @apply rounded-sm bg-stone-100 px-1.5 py-0.5 font-mono text-sm;
+    overflow-wrap: anywhere;
+  }
+
+  .reader-document .code-frame {
+    @apply my-7 overflow-hidden rounded-md border border-stone-200 bg-stone-50 font-sans;
+  }
+
+  .reader-document .code-toolbar {
+    @apply flex min-h-10 items-center justify-between gap-3 border-b border-stone-200 px-3 py-1.5 text-xs text-stone-500;
+  }
+
+  .reader-document .code-language {
+    @apply truncate font-mono;
+  }
+
+  .reader-document .code-copy-button {
+    @apply min-h-8 rounded-sm border border-stone-300 bg-white px-2.5 py-1 font-sans text-xs text-stone-700;
+  }
+
+  .reader-document .code-copy-button:hover {
+    @apply border-emerald-600 text-emerald-800;
+  }
+
+  .reader-document .code-copy-button[data-copy-state="complete"] {
+    @apply border-emerald-600 text-emerald-800;
+  }
+
+  .reader-document .code-copy-button[data-copy-state="failed"] {
+    @apply border-red-600 text-red-700;
+  }
+
+  .reader-document .code-frame pre {
+    @apply m-0 max-w-full overflow-x-auto rounded-none border-0 bg-stone-50 p-4 font-mono text-sm leading-relaxed;
+  }
+
+  .reader-document .mermaid-frame {
+    @apply my-7 max-w-full overflow-hidden rounded-md border border-stone-200 bg-white;
+  }
+
+  .reader-document .mermaid-source {
+    @apply m-0 max-w-full overflow-x-auto border-0 bg-stone-50 p-4 font-mono text-sm leading-relaxed;
+  }
+
+  .reader-document .mermaid-output {
+    @apply max-w-full overflow-x-auto p-4;
+  }
+
+  .reader-document .mermaid-output svg {
+    @apply mx-auto block h-auto max-w-full;
+  }
+
+  .reader-document .mermaid-status {
+    @apply m-0 px-4 py-3 text-sm text-stone-600;
+  }
+
+  .reader-document .mermaid-status:empty {
+    @apply hidden;
+  }
+
+  .reader-document .mermaid-frame[data-mermaid-state="failed"] {
+    @apply border-red-300;
+  }
+
+  .reader-document .mermaid-frame[data-mermaid-state="failed"] .mermaid-status {
+    @apply border-t border-red-200 text-red-700;
+  }
+
+  .reader-document .katex-display {
+    @apply max-w-full overflow-x-auto overflow-y-hidden py-1;
   }
 
   .reader-document [id] {
@@ -349,6 +450,10 @@
 
   .reader-outline a {
     @apply min-h-11;
+  }
+
+  .reader-document .code-copy-button {
+    @apply min-h-11 min-w-11;
   }
 
   .reader-topbar {

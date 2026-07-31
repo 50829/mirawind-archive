@@ -54,7 +54,7 @@ function draftProjection(
       })),
       is_stale: false,
       pages: [{ page_id: 1, title: "Preview page" }],
-      renderer_version: "semantic-html-v5-katex-0.18.1",
+      renderer_version: "semantic-html-v6-katex-0.18.1",
       semantic_digest: "b".repeat(64),
       source_regions: [],
       source_sha256: "c".repeat(64),

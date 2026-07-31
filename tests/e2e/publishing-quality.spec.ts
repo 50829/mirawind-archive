@@ -90,7 +90,7 @@ function expectRendererClosure(
       expect.objectContaining({
         status: 200,
         url: expect.stringContaining(
-          "/reader-assets/renderers/semantic-html-v5-katex-0.18.1/katex.css",
+          "/reader-assets/renderers/semantic-html-v6-katex-0.18.1/katex.css",
         ),
       }),
       expect.objectContaining({
@@ -164,7 +164,7 @@ test("closes typography, formula and printed contents preview-to-publication beh
   );
 
   const rendererStylesheet =
-    "/reader-assets/renderers/semantic-html-v5-katex-0.18.1/katex.css";
+    "/reader-assets/renderers/semantic-html-v6-katex-0.18.1/katex.css";
   const rendererResponse = await page.request.get(rendererStylesheet);
   expect(rendererResponse.headers()["cache-control"]).toBe(
     "public, max-age=31536000, immutable",

@@ -146,7 +146,7 @@ export function setupPublicationFixture(
         predecessorVersionId: null,
         presentation: presentationForTest(book.id),
         presentationWriter: new BookPresentationRepository(database),
-        rendererVersion: "semantic-html-v5-katex-0.18.1",
+        rendererVersion: "semantic-html-v6-katex-0.18.1",
         semanticDigest: hash,
         sourceId: publicationTestSourceId,
         spool: spool(book.id, publicationTestVersionId),

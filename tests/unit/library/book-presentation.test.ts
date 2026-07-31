@@ -74,7 +74,7 @@ function manifest(tocSize = 1, includeCover = true) {
     book_id: 1,
     compiler: {
       name: "mirawind-book-compiler",
-      renderer_version: "semantic-html-v5-katex-0.18.1",
+      renderer_version: "semantic-html-v6-katex-0.18.1",
       text_normalization_version: 1,
       version: "compiler-v5",
     },

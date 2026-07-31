@@ -6,6 +6,7 @@ import {
 import {
   acceptedReaderAssetPath as acceptAssetPath,
   readerAssetIdentity,
+  readerMermaidScriptUrl,
   readerScriptUrl,
   readerStylesheetUrl,
 } from "@/modules/reader/core/asset-policy";
@@ -30,6 +31,7 @@ export {
   buildReaderNavigationTree,
   readerBreadcrumbs,
   readerAssetIdentity,
+  readerMermaidScriptUrl,
   readerScriptUrl,
   readerStylesheetUrl,
 };

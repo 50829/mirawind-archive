@@ -1,8 +1,9 @@
 import {
   readerAssetIdentity,
+  readerMermaidScriptUrl,
   readerScriptUrl,
   readerStylesheetUrl,
 } from "@/modules/reader/application/public";
 
 export const readerStylesheetIdentity = readerAssetIdentity;
-export { readerScriptUrl, readerStylesheetUrl };
+export { readerMermaidScriptUrl, readerScriptUrl, readerStylesheetUrl };

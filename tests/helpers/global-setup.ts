@@ -117,6 +117,18 @@ async function seedPublishedLibraryBook(input: {
     "",
     "A seeded public book for the complete library and reading journey.",
     "",
+    "- A visible list item",
+    "- Another list item",
+    "",
+    "```text",
+    "const readerFixture = true;",
+    "```",
+    "",
+    "```mermaid",
+    "flowchart LR",
+    "  Source --> Reader",
+    "```",
+    "",
     ...Array.from(
       { length: 12 },
       (_, index) =>

@@ -62,6 +62,7 @@ const loadedLanguages = [
   "typescript",
   "yaml",
 ] as const;
+const maximumMermaidSourceLength = 50_000;
 
 let highlighterPromise: Promise<HighlighterGeneric<string, string>> | undefined;
 
@@ -73,24 +74,123 @@ function highlighter(): Promise<HighlighterGeneric<string, string>> {
   return highlighterPromise;
 }
 
-function plainTree(source: string, blockId?: string): HastNode {
+function plainPre(source: string, language = "plain"): HastNode {
   return {
     children: [
       {
         children: [{ type: "text", value: source }],
         properties: {
           className: ["code-plain"],
-          dataCodeLanguage: "plain",
+          dataCodeLanguage: language,
         },
         tagName: "code",
         type: "element",
       },
     ],
+    properties: { className: ["code-block", "code-plain"] },
+    tagName: "pre",
+    type: "element",
+  };
+}
+
+function mermaidTree(source: string, blockId?: string): HastNode {
+  return {
+    children: [
+      {
+        children: [
+          {
+            children: [{ type: "text", value: source }],
+            properties: {
+              className: ["language-mermaid"],
+              dataCodeLanguage: "mermaid",
+            },
+            tagName: "code",
+            type: "element",
+          },
+        ],
+        properties: {
+          className: ["mermaid-source"],
+          dataMermaidSource: "",
+        },
+        tagName: "pre",
+        type: "element",
+      },
+      {
+        children: [],
+        properties: {
+          ariaLive: "polite",
+          className: ["mermaid-status"],
+          dataMermaidStatus: "",
+        },
+        tagName: "p",
+        type: "element",
+      },
+    ],
     properties: {
-      className: ["code-block", "code-plain"],
+      className: ["mermaid-frame"],
+      dataMermaidDiagram: "",
       ...(blockId ? { dataBlockId: blockId } : {}),
     },
-    tagName: "pre",
+    tagName: "div",
+    type: "element",
+  };
+}
+
+async function validMermaidSource(source: string): Promise<boolean> {
+  if (source.length === 0 || source.length > maximumMermaidSourceLength) {
+    return false;
+  }
+  try {
+    const { default: mermaid } = await import("mermaid");
+    return Boolean(await mermaid.parse(source, { suppressErrors: true }));
+  } catch {
+    return false;
+  }
+}
+
+function codeFrame(input: {
+  readonly blockId?: string;
+  readonly language: string;
+  readonly pre: HastNode;
+}): HastNode {
+  return {
+    children: [
+      {
+        children: [
+          {
+            children: [
+              {
+                type: "text",
+                value: input.language === "plain" ? "纯文本" : input.language,
+              },
+            ],
+            properties: { className: ["code-language"] },
+            tagName: "span",
+            type: "element",
+          },
+          {
+            children: [{ type: "text", value: "复制" }],
+            properties: {
+              ariaLabel: "复制代码",
+              className: ["code-copy-button"],
+              dataCopyCode: "",
+              type: "button",
+            },
+            tagName: "button",
+            type: "element",
+          },
+        ],
+        properties: { className: ["code-toolbar"] },
+        tagName: "div",
+        type: "element",
+      },
+      input.pre,
+    ],
+    properties: {
+      className: ["code-frame"],
+      ...(input.blockId ? { dataBlockId: input.blockId } : {}),
+    },
+    tagName: "div",
     type: "element",
   };
 }
@@ -154,6 +254,30 @@ export async function renderCode(input: {
   readonly source: string;
 }): Promise<CodeRenderResult> {
   const requested = input.language?.trim().toLowerCase() ?? "";
+  if (requested === "mermaid") {
+    if (await validMermaidSource(input.source)) {
+      return Object.freeze({
+        css: "",
+        language: "mermaid",
+        tree: mermaidTree(input.source, input.blockId),
+      });
+    }
+    return Object.freeze({
+      css: "",
+      diagnostic: createSafeDiagnostic({
+        ...(input.blockId ? { blockId: input.blockId } : {}),
+        code: "MERMAID_RENDER_INVALID",
+        message:
+          "An invalid or oversized Mermaid diagram was rendered as escaped source text.",
+      }),
+      language: "mermaid",
+      tree: codeFrame({
+        ...(input.blockId ? { blockId: input.blockId } : {}),
+        language: "mermaid",
+        pre: plainPre(input.source, "mermaid"),
+      }),
+    });
+  }
   const language = languageAliases.get(requested);
   if (!language || language === "text") {
     const diagnostic =
@@ -169,7 +293,11 @@ export async function renderCode(input: {
       css: "",
       ...(diagnostic ? { diagnostic } : {}),
       language: "plain",
-      tree: plainTree(input.source, input.blockId),
+      tree: codeFrame({
+        ...(input.blockId ? { blockId: input.blockId } : {}),
+        language: "plain",
+        pre: plainPre(input.source),
+      }),
     });
   }
 
@@ -194,17 +322,16 @@ export async function renderCode(input: {
       dataCodeLanguage: language,
     };
   }
-  if (pre && input.blockId) {
-    pre.properties = {
-      ...pre.properties,
-      dataBlockId: input.blockId,
-    };
-  }
+  if (!pre) throw new Error("CODE_RENDER_PRE_MISSING");
   return Object.freeze({
     css:
       canonicalCss(styleTransformer.getClassRegistry()) +
       extractRemainingStyles(tree),
     language,
-    tree,
+    tree: codeFrame({
+      ...(input.blockId ? { blockId: input.blockId } : {}),
+      language,
+      pre,
+    }),
   });
 }

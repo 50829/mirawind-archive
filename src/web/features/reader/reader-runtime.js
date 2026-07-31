@@ -146,6 +146,80 @@
   window.addEventListener("scroll", scheduleOutlineLocation, { passive: true });
   scheduleOutlineLocation();
 
+  const mermaidFrames = document.querySelectorAll("[data-mermaid-diagram]");
+  if (mermaidFrames.length > 0) {
+    const moduleUrl =
+      readerRoot instanceof HTMLElement
+        ? readerRoot.dataset.readerMermaidScript
+        : undefined;
+    if (moduleUrl) {
+      import(moduleUrl)
+        .then(({ renderMermaidDiagrams }) => renderMermaidDiagrams(document))
+        .catch(() => {
+          for (const frame of mermaidFrames) {
+            if (!(frame instanceof HTMLElement)) continue;
+            frame.dataset.mermaidState = "failed";
+            const status = frame.querySelector("[data-mermaid-status]");
+            if (status instanceof HTMLElement) {
+              status.textContent = "图表无法渲染，已保留源码。";
+            }
+          }
+        });
+    }
+  }
+
+  const fallbackCopy = (value) => {
+    const buffer = document.createElement("textarea");
+    buffer.className = "visually-hidden";
+    buffer.readOnly = true;
+    buffer.value = value;
+    document.body.append(buffer);
+    try {
+      buffer.select();
+      return document.execCommand("copy");
+    } catch {
+      return false;
+    } finally {
+      buffer.remove();
+    }
+  };
+  const copyCode = async (value) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+      return fallbackCopy(value);
+    } catch {
+      return fallbackCopy(value);
+    }
+  };
+  for (const button of document.querySelectorAll("[data-copy-code]")) {
+    if (!(button instanceof HTMLButtonElement)) continue;
+    button.addEventListener("click", async () => {
+      const frame = button.closest(".code-frame");
+      const code = frame?.querySelector("pre code");
+      if (!(code instanceof HTMLElement)) return;
+      const value = code.textContent || "";
+      const copied = await copyCode(value);
+      button.focus({ preventScroll: true });
+      if (!copied) {
+        button.dataset.copyState = "failed";
+        button.textContent = "重试复制";
+        button.setAttribute("aria-label", "复制失败，重试复制代码");
+        return;
+      }
+      button.dataset.copyState = "complete";
+      button.textContent = "已复制";
+      button.setAttribute("aria-label", "代码已复制");
+      window.setTimeout(() => {
+        delete button.dataset.copyState;
+        button.textContent = "复制";
+        button.setAttribute("aria-label", "复制代码");
+      }, 1_600);
+    });
+  }
+
   document.addEventListener("click", (event) => {
     if (
       !previewMode ||

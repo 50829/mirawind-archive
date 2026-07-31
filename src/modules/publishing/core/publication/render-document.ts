@@ -3,6 +3,8 @@ import { randomBytes } from "node:crypto";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
+import remarkMath from "remark-math";
+import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 
@@ -310,6 +312,97 @@ function classNames(node: TreeNode): readonly unknown[] {
     : [];
 }
 
+const importedTableMathParser = unified().use(remarkParse).use(remarkMath);
+
+interface ImportedMathMatch {
+  readonly displayMode: boolean;
+  readonly end: number;
+  readonly source: string;
+  readonly start: number;
+}
+
+function importedMathMatches(value: string): readonly ImportedMathMatch[] {
+  const tree = importedTableMathParser.parse(value) as TreeNode;
+  const matches: ImportedMathMatch[] = [];
+  const visit = (node: TreeNode): void => {
+    if (node.type === "inlineMath" || node.type === "math") {
+      const position = node.position as
+        | {
+            readonly end?: { readonly offset?: number };
+            readonly start?: { readonly offset?: number };
+          }
+        | undefined;
+      const start = position?.start?.offset;
+      const end = position?.end?.offset;
+      if (
+        typeof start === "number" &&
+        typeof end === "number" &&
+        start >= 0 &&
+        end > start &&
+        end <= value.length &&
+        typeof node.value === "string"
+      ) {
+        matches.push({
+          displayMode:
+            node.type === "math" || value.slice(start, start + 2) === "$$",
+          end,
+          source: node.value,
+          start,
+        });
+      }
+      return;
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(tree);
+  return matches.sort((left, right) => left.start - right.start);
+}
+
+function importedTableMath(value: string): readonly TreeNode[] {
+  if (!value.includes("$")) return [{ type: "text", value }];
+  const matches = importedMathMatches(value);
+  if (matches.length === 0) return [{ type: "text", value }];
+  const output: TreeNode[] = [];
+  let cursor = 0;
+  for (const match of matches) {
+    if (match.start > cursor) {
+      output.push({ type: "text", value: value.slice(cursor, match.start) });
+    }
+    output.push({
+      children: [{ type: "text", value: match.source }],
+      properties: {
+        className: [match.displayMode ? "math-display" : "math-inline"],
+      },
+      tagName: "code",
+      type: "element",
+    });
+    cursor = match.end;
+  }
+  if (cursor < value.length) {
+    output.push({ type: "text", value: value.slice(cursor) });
+  }
+  return output;
+}
+
+function restoreImportedTableMath(tree: TreeNode): void {
+  const visit = (node: TreeNode, insideTable: boolean): void => {
+    const isElement = node.type === "element";
+    if (isElement && (node.tagName === "code" || node.tagName === "pre")) {
+      return;
+    }
+    const tableScope = insideTable || (isElement && node.tagName === "table");
+    if (!node.children) return;
+    node.children = node.children.flatMap((child) => {
+      if (tableScope && child.type === "text" && child.value) {
+        return importedTableMath(child.value);
+      }
+      visit(child, tableScope);
+      return [child];
+    });
+  };
+  visit(tree, false);
+}
+
 function renderMathNodes(
   tree: TreeNode,
   sourceByMarker: ReadonlyMap<string, MathSource>,
@@ -433,16 +526,15 @@ async function highlightCodeBlocks(
           if (
             code?.type === "element" &&
             code.tagName === "code" &&
-            languageClass &&
             languageClass !== "language-math"
           ) {
             const blockId = codeBlockIds[codeBlockIndex++];
-            const source = (code.children ?? [])
-              .map((part) => (part.type === "text" ? (part.value ?? "") : ""))
-              .join("");
+            const source = textContent(code);
             const rendered = await renderCode({
               ...(blockId ? { blockId } : {}),
-              language: languageClass.slice("language-".length),
+              ...(languageClass
+                ? { language: languageClass.slice("language-".length) }
+                : {}),
               source,
             });
             node.children[index] = rendered.tree as TreeNode;
@@ -587,6 +679,7 @@ export async function renderSemanticDocument(
     })
     .use(rehypeSanitize, importedHtmlSanitizationSchema);
   const transformed = (await processor.run(tree as never)) as TreeNode;
+  restoreImportedTableMath(transformed);
   renderMathNodes(transformed, rendererState._mathSourceByMarker, diagnostics);
   restoreStableHeadingIds(transformed);
   repairFootnoteLinks(

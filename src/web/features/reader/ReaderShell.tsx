@@ -5,7 +5,7 @@ import {
   type ReaderPageModel,
 } from "@/modules/reader/application/public";
 import { TableOfContents } from "@/web/features/reader/TableOfContents";
-import { readerScriptUrl } from "@/styles/assets";
+import { readerMermaidScriptUrl, readerScriptUrl } from "@/styles/assets";
 
 function PageOutline(props: {
   readonly currentHeadingId: string | null;
@@ -58,6 +58,7 @@ export function ReaderShell(props: ReaderPageModel) {
         data-preview-revision={
           props.mode === "preview" ? props.previewRevision : undefined
         }
+        data-reader-mermaid-script={readerMermaidScriptUrl}
         data-reader-mode={props.mode ?? "published"}
         data-reader-page-id={props.currentPageId}
         data-reader-page-owner={props.pageOwnerHeadingId ?? undefined}

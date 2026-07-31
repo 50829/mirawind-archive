@@ -3,8 +3,8 @@ import { isOpaqueId } from "@/domain/ids";
 export const candidateBuildIdentities = Object.freeze({
   compiler: "compiler-v5",
   preview: "draft-preview-v5",
-  reader: "mirawind-reader-v2-tailwind-4.3.3",
-  renderer: "semantic-html-v5-katex-0.18.1",
+  reader: "mirawind-reader-v3-tailwind-4.3.3",
+  renderer: "semantic-html-v6-katex-0.18.1",
 } as const);
 
 export const candidateBuildPhases = Object.freeze([

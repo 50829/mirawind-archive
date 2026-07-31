@@ -193,6 +193,24 @@ test("discovers details, restores context and completes the reader loop", async 
     }
   }
   await expect(page.getByRole("main")).toContainText("A seeded public book");
+  await expect(page.locator(".reader-document ul").first()).toHaveCSS(
+    "list-style-type",
+    "disc",
+  );
+  const paragraphs = page.locator(".reader-document > p");
+  await expect(paragraphs.nth(1)).toHaveCSS("margin-top", "20px");
+  if (javascriptEnabled && !mobile) {
+    await page
+      .context()
+      .grantPermissions(["clipboard-read", "clipboard-write"]);
+    const copyButton = page.locator("[data-copy-code]").first();
+    await copyButton.click();
+    await expect(copyButton).toHaveText("已复制");
+    await expect(page.locator("[data-mermaid-diagram] svg")).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      "const readerFixture = true;\n",
+    );
+  }
   const chapterHeading = page.locator(".reader-document h1").first();
   const sectionHeading = page.locator(".reader-document h2").first();
   await expect(chapterHeading).toBeVisible();
