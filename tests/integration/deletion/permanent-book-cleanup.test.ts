@@ -98,10 +98,10 @@ describe("permanent book cleanup", () => {
       database
         .prepare(
           `INSERT INTO imports (
-            id, state, upload_rel_path, upload_size_bytes, upload_sha256,
+            id, original_name, state, upload_rel_path, upload_size_bytes, upload_sha256,
             selected_candidate_id, book_id, safe_error_code,
             created_at, updated_at, expires_at
-          ) VALUES (?, 'draft_ready', ?, 3, ?, NULL, ?, NULL, 1000, 1000, 9000)`,
+          ) VALUES (?, 'fixture.zip', 'draft_ready', ?, 3, ?, NULL, ?, NULL, 1000, 1000, 9000)`,
         )
         .run(
           importId,
@@ -183,10 +183,10 @@ describe("permanent book cleanup", () => {
       database
         .prepare(
           `INSERT INTO imports (
-            id, state, upload_rel_path, upload_size_bytes, upload_sha256,
+            id, original_name, state, upload_rel_path, upload_size_bytes, upload_sha256,
             selected_candidate_id, book_id, safe_error_code,
             created_at, updated_at, expires_at
-          ) VALUES (?, 'draft_ready', ?, 3, ?, NULL, ?, NULL, 1000, 1000, 9000)`,
+          ) VALUES (?, 'fixture.zip', 'draft_ready', ?, 3, ?, NULL, ?, NULL, 1000, 1000, 9000)`,
         )
         .run(
           importId,

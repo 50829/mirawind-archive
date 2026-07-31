@@ -45,6 +45,7 @@ describe("explicit source typography reprocessing", () => {
         expiresAtMs: Number.MAX_SAFE_INTEGER,
         id: "imp_reprocess_initial_0001",
         nowMs: 2,
+        originalName: "fixture.zip",
         uploadRelativePath:
           "tmp/uploads/imp_reprocess_initial_0001/original.zip",
         uploadSha256: "a".repeat(64),

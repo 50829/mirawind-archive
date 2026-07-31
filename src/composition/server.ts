@@ -17,7 +17,10 @@ import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/d
 import { CandidatePublicationRepository } from "@/modules/publishing/adapters/sqlite/candidate-publication";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
-import { serializeJobStatus } from "@/modules/publishing/adapters/sqlite/job-status";
+import {
+  serializeJobStatus,
+  type JobSubject,
+} from "@/modules/publishing/adapters/sqlite/job-status";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SqliteBookPublishingCleanup } from "@/modules/publishing/adapters/sqlite/book-cleanup";
 import { makeBookNonPublic } from "@/modules/publishing/adapters/sqlite/publication";
@@ -42,6 +45,17 @@ export function createPublishingServer(database: Database.Database) {
   const imports = new ImportRepository(database);
   const jobs = new JobRepository(database);
   const sources = new SourceRepository(database);
+  const jobSubject = (
+    job: NonNullable<ReturnType<JobRepository["get"]>>,
+  ): JobSubject => {
+    const book = job.bookId === null ? null : drafts.findBook(job.bookId);
+    if (book) return Object.freeze({ kind: "book", label: book.title });
+    const imported = job.importId === null ? null : imports.find(job.importId);
+    if (imported) {
+      return Object.freeze({ kind: "import", label: imported.originalName });
+    }
+    return Object.freeze({ kind: "system", label: "系统维护" });
+  };
   return Object.freeze({
     cancelJob: (jobId: string, nowMs: number) => {
       const job = jobs.get(jobId);
@@ -139,7 +153,7 @@ export function createPublishingServer(database: Database.Database) {
     storeImport: (layout: StorageLayout) =>
       new ImportUploadService(database, layout),
     serializeJobStatus: (job: NonNullable<ReturnType<JobRepository["get"]>>) =>
-      serializeJobStatus(job),
+      serializeJobStatus(job, jobSubject(job)),
   });
 }
 

@@ -10,3 +10,8 @@
   A minimal private no-store capability response preserves identical public HTML while avoiding
   the routine protected-API `401`. Making the protected API anonymous or varying public HTML
   would weaken the current boundary.
+- **Import feedback**: The browser currently discards upload identity after `202`, while queued
+  imports have no stored original name and job cards expose only internal identifiers. Preserve a
+  cleaned basename on the private import record, derive job subjects at the composition boundary,
+  and calculate percentages only from valid progress totals. This avoids inventing book metadata
+  or fake progress while making the existing queue understandable.

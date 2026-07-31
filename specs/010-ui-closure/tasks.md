@@ -49,3 +49,16 @@
 ## Order
 
 US1 and US2 may be implemented together. US3 and US4 are independent. T012–T013 follow all four stories.
+
+## Phase 6: Import And Task Feedback
+
+**Goal**: Keep an accepted upload visible and make background work understandable without job IDs.
+
+**Independent test**: A controlled upload shows one filename, preserves source/stage after `202`, renders honest progress, and produces task cards led by operation and book/ZIP identity.
+
+- [x] T014 [US5] Add failing storage, private projection, and browser assertions in `tests/integration/storage/multipart-import.test.ts`, `tests/e2e/import-upload.spec.ts`, and `tests/e2e/worker-recovery.spec.ts`
+- [x] T015 [US5] Persist the cleaned ZIP display name through `src/http/multipart/import-form.ts`, `src/modules/publishing/adapters/filesystem/import-upload.ts`, `src/modules/publishing/adapters/sqlite/imports.ts`, and `src/platform/sqlite/migrations/0001_clean_slate.sql`
+- [x] T016 [US5] Add private import/task subjects at the composition and API boundary in `src/composition/server.ts`, `src/modules/publishing/adapters/sqlite/job-status.ts`, and the management API routes
+- [x] T017 [US5] Implement single filename presentation and continuous honest progress in `src/web/components/import/ImportUploader.tsx`
+- [x] T018 [US5] Implement human-readable task cards and determinate progress in `src/web/components/import/TaskMonitor.tsx`
+- [x] T019 [US5] Run focused integration/E2E feedback loops, format, lint, typecheck, build, and Spec Kit converge

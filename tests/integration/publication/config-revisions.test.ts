@@ -106,6 +106,7 @@ async function fixture(
     expiresAtMs: 1_000_000,
     id: "imp_config_revision_test_0001",
     nowMs: 2,
+    originalName: "fixture.zip",
     uploadRelativePath: "tmp/import.zip",
     uploadSha256: "a".repeat(64),
     uploadSizeBytes: 1,

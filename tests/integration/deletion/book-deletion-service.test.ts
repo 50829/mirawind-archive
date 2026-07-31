@@ -99,9 +99,12 @@ describe("permanent book deletion acceptance", () => {
         state: "queued",
       });
       if (!cleanupJob) throw new Error("Expected deletion cleanup job");
-      expect(serializeJobStatus(cleanupJob).kind).toBe(
-        "permanent_book_deletion",
-      );
+      expect(
+        serializeJobStatus(cleanupJob, {
+          kind: "book",
+          label: "Delete me",
+        }).kind,
+      ).toBe("permanent_book_deletion");
       expect(database.prepare("SELECT * FROM book_deletions").all()).toEqual([
         expect.objectContaining({
           book_id: book.id,
@@ -221,10 +224,10 @@ describe("permanent book deletion acceptance", () => {
       database
         .prepare(
           `INSERT INTO imports (
-            id, state, upload_rel_path, upload_size_bytes, upload_sha256,
+            id, original_name, state, upload_rel_path, upload_size_bytes, upload_sha256,
             selected_candidate_id, book_id, safe_error_code,
             created_at, updated_at, expires_at
-          ) VALUES (?, 'uploaded', ?, 3, ?, NULL, ?, NULL, 1000, 1000, 9000)`,
+          ) VALUES (?, 'fixture.zip', 'uploaded', ?, 3, ?, NULL, ?, NULL, 1000, 1000, 9000)`,
         )
         .run(
           importId,

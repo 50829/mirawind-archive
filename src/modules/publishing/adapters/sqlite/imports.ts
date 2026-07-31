@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 
+import { hasControlCharacters } from "@/domain/text";
 import type {
   CandidateDiagnostic,
   MarkdownCandidate,
@@ -24,6 +25,7 @@ interface ImportRow {
   created_at: number;
   expires_at: number;
   id: string;
+  original_name: string;
   safe_error_code: string | null;
   selected_candidate_id: string | null;
   state: ImportState;
@@ -48,6 +50,7 @@ export interface ImportRecord {
   readonly createdAtMs: number;
   readonly expiresAtMs: number;
   readonly id: string;
+  readonly originalName: string;
   readonly safeErrorCode: string | null;
   readonly selectedCandidateId: string | null;
   readonly state: ImportState;
@@ -81,6 +84,7 @@ function mapImport(row: ImportRow): ImportRecord {
     createdAtMs: row.created_at,
     expiresAtMs: row.expires_at,
     id: row.id,
+    originalName: row.original_name,
     safeErrorCode: row.safe_error_code,
     selectedCandidateId: row.selected_candidate_id,
     state: row.state,
@@ -123,22 +127,31 @@ export class ImportRepository {
     readonly expiresAtMs: number;
     readonly id?: string;
     readonly nowMs: number;
+    readonly originalName: string;
     readonly uploadRelativePath: string;
     readonly uploadSha256: string;
     readonly uploadSizeBytes: number;
   }): ImportRecord {
     validateSha256(input.uploadSha256);
+    if (
+      [...input.originalName].length < 1 ||
+      [...input.originalName].length > 255 ||
+      hasControlCharacters(input.originalName)
+    ) {
+      throw new Error("IMPORT_ORIGINAL_NAME_INVALID");
+    }
     const id = input.id ?? createOpaqueId("import");
     this.database
       .prepare(
         `INSERT INTO imports (
-          id, state, upload_rel_path, upload_size_bytes, upload_sha256,
+          id, original_name, state, upload_rel_path, upload_size_bytes, upload_sha256,
           selected_candidate_id, book_id, safe_error_code,
           created_at, updated_at, expires_at
-        ) VALUES (?, 'uploaded', ?, ?, ?, NULL, ?, NULL, ?, ?, ?)`,
+        ) VALUES (?, ?, 'uploaded', ?, ?, ?, NULL, ?, NULL, ?, ?, ?)`,
       )
       .run(
         id,
+        input.originalName,
         input.uploadRelativePath,
         input.uploadSizeBytes,
         input.uploadSha256,

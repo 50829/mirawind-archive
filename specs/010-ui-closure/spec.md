@@ -35,6 +35,13 @@ An anonymous library load does not predictably call a protected management API a
 `401`. An administrator still receives the private management enhancement, while public HTML,
 ETag, and cache behavior remain independent of session state.
 
+### 5. Follow an import from file selection to completion (P1)
+
+An administrator sees the selected ZIP name once, then keeps a continuous view of upload,
+server acceptance, queued work, worker progress, failure, and completion. The task list names
+the affected book or ZIP and uses plain-language stages, so internal identifiers are never
+required to understand or recover work.
+
 ## Requirements
 
 - **FR-001**: Shared ReaderShell CSS MUST give `h1` through `h4` a restrained, continuous
@@ -50,8 +57,8 @@ ETag, and cache behavior remain independent of session state.
   remain bounded on wider screens; existing route/history/focus/cache behavior MUST remain.
 - **FR-007**: `/manage`, `/manage/tasks`, `/manage/security`, and the publishing workbench MUST
   use one shared responsive Astro shell with exactly one current primary section.
-- **FR-008**: Existing import progress, tasks, Passkey actions, workbench behavior, failures,
-  and quiet-success behavior MUST remain unchanged.
+- **FR-008**: Existing Passkey actions, workbench behavior, failures, and quiet-success behavior
+  MUST remain unchanged.
 - **FR-009**: Anonymous `/library` hydration MUST NOT make the protected management-library
   request; administrators MUST still load that projection after an authorization-checked,
   private, non-cacheable capability decision.
@@ -59,6 +66,16 @@ ETag, and cache behavior remain independent of session state.
   content MUST remain independent of session state.
 - **FR-011**: The implementation MUST use the existing Tailwind palette and components and
   MUST NOT introduce a second shell, client router, global store, UI kit, schema, or service.
+- **FR-012**: File selection MUST present one accessible control and display the selected ZIP
+  name exactly once; choosing another file replaces it.
+- **FR-013**: The import view MUST remain associated with the accepted upload and continuously
+  show upload bytes, server acceptance, queue state, worker phase, and terminal outcome.
+- **FR-014**: A known progress total MUST produce a bounded integer percentage and progress bar;
+  an unknown total MUST show an explicit indeterminate state instead of `0%` or fake progress.
+- **FR-015**: Each task MUST lead with a human-readable operation and affected book or ZIP.
+  Internal job kind, phase, and identifier MAY remain as secondary troubleshooting details.
+- **FR-016**: The private task/import projection MAY retain the cleaned ZIP display name, but it
+  MUST NOT expose it publicly, treat it as book metadata, or log it as task telemetry.
 
 ## Acceptance
 
@@ -74,9 +91,14 @@ ETag, and cache behavior remain independent of session state.
   cacheable HTML and validators.
 - Existing focused reader, detail, library, authentication, deletion, and publishing tests
   remain green.
+- After an upload is accepted, its ZIP identity and current stage remain visible without a page
+  change; all task cards are understandable without reading an internal identifier.
+- Determinate progress is an integer from 0 through 100 and never decreases within one phase;
+  queued and otherwise indeterminate work is named without a misleading percentage.
 
 ## Out of Scope
 
-- Publishing formats, KaTeX output, database schema, immutable versions, M2/M3 features, EPUB,
-  metadata, visibility, folders, batch management, or reading state.
+- Publishing formats, KaTeX output, immutable versions, M2/M3 features, EPUB, metadata,
+  visibility, folders, batch management, or reading state. The only storage change is the
+  private import ZIP display name required to identify queued work.
 - Homepage, login, library-card, or broad brand redesign; dark mode or new UI infrastructure.

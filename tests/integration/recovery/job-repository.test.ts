@@ -193,12 +193,6 @@ describe("durable job repository", () => {
         jobId: job.id,
         leaseOwner: "worker-a",
         nowMs: 14_000,
-        progress: {
-          completed: 20,
-          processed_bytes: null,
-          total: 20,
-          unit: "items",
-        },
       }),
     ).toMatchObject({
       finishedAtMs: 14_000,

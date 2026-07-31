@@ -62,6 +62,7 @@ describe("ready-version and search index transaction", () => {
         expiresAtMs: 10_000,
         id: "imp_search_index_test_0001",
         nowMs: 2,
+        originalName: "fixture.zip",
         uploadRelativePath: "tmp/import.zip",
         uploadSha256: hash,
         uploadSizeBytes: 1,

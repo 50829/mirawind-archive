@@ -99,6 +99,7 @@ async function seedPublishedLibraryBook(input: {
     expiresAtMs: nowMs + 86_400_000,
     id: "imp_e2e_library_seed_000001",
     nowMs: nowMs + 1,
+    originalName: "fixture.zip",
     uploadRelativePath: "tmp/e2e-library-seed.zip",
     uploadSha256: "a".repeat(64),
     uploadSizeBytes: 1,

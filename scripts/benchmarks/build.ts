@@ -13,7 +13,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type Database from "better-sqlite3";
@@ -581,6 +581,7 @@ async function benchmarkFixture(
       bytes: createReadStream(fixture.path),
       expiresAtMs: m1ImportExpiryMs,
       idempotencyKey: idempotencyKey("benchmark-upload", fixture),
+      originalName: basename(fixture.path),
     });
     const uploadMs =
       Math.round((performance.now() - uploadStartedAt) * 1_000) / 1_000;

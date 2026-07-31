@@ -115,9 +115,18 @@ describe("import and draft-preview OpenAPI contract", () => {
     const imported = at(document, "components", "schemas", "Import");
     expect(imported).toMatchObject({
       additionalProperties: false,
-      required: expect.arrayContaining(["current_job", "preview"]),
+      required: expect.arrayContaining([
+        "current_job",
+        "preview",
+        "source_name",
+      ]),
     });
     expect(at(imported, "properties")).not.toHaveProperty("current_job_id");
+    expect(at(imported, "properties", "source_name")).toMatchObject({
+      maxLength: 255,
+      minLength: 1,
+      type: "string",
+    });
     expect(at(imported, "properties", "preview")).toMatchObject({
       additionalProperties: false,
       required: ["state", "revision", "url"],

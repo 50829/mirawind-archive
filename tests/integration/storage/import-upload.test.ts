@@ -21,6 +21,7 @@ describe("durable import upload service", () => {
         expiresAtMs: 20_000,
         idempotencyKey: "upload-key-00000001",
         nowMs: 10,
+        originalName: "test.zip",
       });
       const finalPath = resolve(
         dataRoot.layout.root,
@@ -53,6 +54,7 @@ describe("durable import upload service", () => {
         expiresAtMs: 20_000,
         idempotencyKey: "same-upload-key-0001",
         nowMs: 10,
+        originalName: "first.zip",
       });
       const forbiddenBody: AsyncIterable<Uint8Array> = {
         [Symbol.asyncIterator]() {
@@ -68,6 +70,7 @@ describe("durable import upload service", () => {
         expiresAtMs: 30_000,
         idempotencyKey: "same-upload-key-0001",
         nowMs: 20,
+        originalName: "first.zip",
       });
 
       expect(repeated).toEqual(first);
@@ -88,6 +91,7 @@ describe("durable import upload service", () => {
           idempotencyKey: "oversize-key-000001",
           maximumBytes: 5,
           nowMs: 10,
+          originalName: "oversize.zip",
         }),
       ).rejects.toMatchObject({ code: "UPLOAD_SIZE_LIMIT", status: 413 });
       expect(await readdir(dataRoot.layout.uploadDirectory)).toEqual([]);

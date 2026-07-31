@@ -169,6 +169,7 @@ export async function queueSourceReprocess(input: {
       expiresAtMs: retainedImportExpiry,
       id: importId,
       nowMs: input.nowMs,
+      originalName: original.originalName,
       uploadRelativePath,
       uploadSha256: copied.sha256,
       uploadSizeBytes: copied.size,

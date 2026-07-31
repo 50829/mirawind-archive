@@ -37,6 +37,7 @@ describe("streaming multipart import form", () => {
       expect(result.import).toMatchObject({
         bookId: book.id,
         expiresAtMs: m1ImportExpiryMs,
+        originalName: "upload.zip",
         state: "uploaded",
         uploadSizeBytes: 11,
       });

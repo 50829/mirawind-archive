@@ -49,6 +49,7 @@ CREATE TABLE books (
 
 CREATE TABLE imports (
   id TEXT PRIMARY KEY CHECK (id GLOB 'imp_*'),
+  original_name TEXT NOT NULL CHECK (length(original_name) BETWEEN 1 AND 255),
   state TEXT NOT NULL CHECK (
     state IN (
       'uploaded',

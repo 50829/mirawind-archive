@@ -1,4 +1,5 @@
 import { Readable } from "node:stream";
+import { basename } from "node:path";
 
 import Busboy, {
   type BusboyFileStream,
@@ -8,6 +9,7 @@ import type Database from "better-sqlite3";
 
 import { createPublishingServer } from "@/composition/server";
 import { SafeApplicationError } from "@/domain/errors";
+import { hasControlCharacters } from "@/domain/text";
 import {
   importUploadIdempotencyOperation,
   m1ImportExpiryMs,
@@ -21,6 +23,18 @@ type ImportUploadResult = Awaited<ReturnType<ImportStore["store"]>>;
 
 function multipartError(message = "The multipart upload is invalid.") {
   return new SafeApplicationError("INVALID_MULTIPART", message, 400);
+}
+
+function cleanedUploadName(filename: string): string {
+  const name = basename(filename.replaceAll("\\", "/")).normalize("NFC").trim();
+  if (
+    [...name].length < 1 ||
+    [...name].length > 255 ||
+    hasControlCharacters(name)
+  ) {
+    throw multipartError("The ZIP filename is invalid.");
+  }
+  return name;
 }
 
 async function* fileBytes(stream: BusboyFileStream): AsyncIterable<Uint8Array> {
@@ -102,7 +116,7 @@ export async function storeMultipartImport(input: {
     const fail = (error: unknown) => {
       parsingError ??= error;
     };
-    parser.on("file", (fieldName, stream, _filename, _encoding, mimeType) => {
+    parser.on("file", (fieldName, stream, filename, _encoding, mimeType) => {
       if (
         fileSeen ||
         fieldName !== "file" ||
@@ -113,12 +127,21 @@ export async function storeMultipartImport(input: {
         return;
       }
       fileSeen = true;
+      let originalName: string;
+      try {
+        originalName = cleanedUploadName(filename);
+      } catch (error) {
+        fail(error);
+        stream.resume();
+        return;
+      }
       fileResult = publishing.storeImport(input.layout).store({
         bookId: targetBook,
         bytes: fileBytes(stream),
         expiresAtMs: m1ImportExpiryMs,
         idempotencyKey: input.idempotencyKey,
         nowMs: Date.now(),
+        originalName,
         signal: input.request.signal,
       });
       void fileResult.catch(fail);

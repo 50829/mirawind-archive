@@ -4,15 +4,16 @@
 
 ## Summary
 
-Make four focused changes: add ReaderShell heading styles, finish the existing book-details
-presentation, wrap management routes in one Astro shell, and gate the protected library
-enhancement behind a minimal private capability check. Publishing, storage, authorization,
-KaTeX, and public cache semantics remain unchanged.
+Make five focused changes: add ReaderShell heading styles, finish the existing book-details
+presentation, wrap management routes in one Astro shell, gate the protected library
+enhancement behind a minimal private capability check, and repair the import/task feedback
+loop. Publishing formats, authorization, KaTeX, and public cache semantics remain unchanged.
 
 ## Technical Context
 
 **Stack**: TypeScript 6, Astro 7, React 19, Tailwind CSS 4, Node.js 24
-**Storage**: Existing SQLite and publication files; no changes
+**Storage**: Current clean SQLite baseline adds one private import ZIP display-name field;
+publication files are unchanged
 **Tests**: Existing Vitest and Playwright suites plus focused behavior assertions
 **Performance**: Preserve the 300 ms uncached reader target; anonymous library hydration has
 zero expected management `4xx`; detail TOC DOM is capped at 16 rows
@@ -20,13 +21,16 @@ zero expected management `4xx`; detail TOC DOM is capped at 16 rows
 ## Constitution Check
 
 - Authoritative Markdown, `book.yaml`, manifests, catalog data, and immutable output are not
-  modified. No schema transition applies.
+  modified. Per D-120, the current clean database baseline advances directly; no compatibility
+  migration or parallel schema is retained.
 - Publication transactions, worker behavior, resource authorization, and reader request work
   are unchanged.
 - The only new response is a minimal session capability boolean using the existing private,
   no-store response policy. Actual management data remains fully protected.
 - Existing representative reader/library/auth/cache tests remain required; focused browser
   checks cover layout, focus, and request behavior.
+- The cleaned ZIP display name is private management context only. It is neither authoritative
+  publishing metadata nor a public/cacheable value.
 - No new service, process, database, router, state store, or UI kit is introduced.
 
 **Result**: PASS before and after design.
@@ -61,6 +65,16 @@ zero expected management `4xx`; detail TOC DOM is capped at 16 rows
 - Run format, lint, typecheck, focused tests, build, and Playwright viewport/focus/network checks.
 - Update the UI audit and run Spec Kit converge.
 
+### 5. Import and task feedback
+
+- Persist the cleaned multipart ZIP display name on the import record in the current clean
+  baseline and carry it through private import/job projections.
+- Replace the native duplicate filename presentation with one accessible file-selection row.
+- Keep accepted-upload context visible while polling and render determinate percentages only
+  when a valid total exists.
+- Present operation, source/book, translated phase, status, and progress before internal IDs on
+  task cards.
+
 ## Files
 
 ```text
@@ -71,6 +85,9 @@ src/pages/manage/{index,tasks,security}.astro
 src/pages/manage/books/[bookId]/preview.astro
 src/web/components/library/{BookDetails,AdminLibraryEnhancement}.tsx
 src/web/components/manage/ManageShell.astro
+src/web/components/import/{ImportUploader,TaskMonitor}.tsx
+src/modules/publishing/adapters/{filesystem,sqlite}/
+src/platform/sqlite/migrations/0001_clean_slate.sql
 ```
 
 No complexity exception is required.

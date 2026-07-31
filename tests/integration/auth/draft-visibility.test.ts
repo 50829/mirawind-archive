@@ -75,6 +75,7 @@ describe("draft resource visibility", () => {
         expiresAtMs: m1ImportExpiryMs,
         id: "imp_0123456789abcdefghij",
         nowMs: 1,
+        originalName: "fixture.zip",
         uploadRelativePath: "tmp/uploads/private/original.zip",
         uploadSha256: "a".repeat(64),
         uploadSizeBytes: 1,

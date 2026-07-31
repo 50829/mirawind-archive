@@ -38,7 +38,19 @@ describe("two real worker connections sharing one SQLite queue", () => {
       kind: "reclaim_versions",
       nowMs: 2_000,
     });
-    expect(serializeJobStatus(secondJob).kind).toBe("reclaim");
+    expect(
+      serializeJobStatus(
+        {
+          ...secondJob,
+          progress: { ...secondJob.progress, completed: 0, total: 1 },
+          state: "succeeded",
+        },
+        { kind: "system", label: "系统维护" },
+      ),
+    ).toMatchObject({
+      kind: "reclaim",
+      progress: { completed: 1, total: 1 },
+    });
 
     const claimed = firstWorker.claimNext({
       leaseOwner: "worker-a",

@@ -36,6 +36,7 @@ export interface StoreImportUploadOptions {
   readonly idempotencyKey: string;
   readonly maximumBytes?: number;
   readonly nowMs?: number;
+  readonly originalName: string;
   readonly signal?: AbortSignal;
 }
 
@@ -164,6 +165,7 @@ export class ImportUploadService {
           expiresAtMs: options.expiresAtMs,
           id: importId,
           nowMs,
+          originalName: options.originalName,
           uploadRelativePath: storageRelativePath(this.layout.root, finalPath),
           uploadSha256: written.sha256,
           uploadSizeBytes: written.sizeBytes,

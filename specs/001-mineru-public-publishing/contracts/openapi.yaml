@@ -1060,12 +1060,14 @@ components:
           state,
           candidates,
           current_job,
+          source_name,
           preview,
           created_at,
           updated_at,
         ]
       properties:
         import_id: { type: string, pattern: "^imp_[A-Za-z0-9_-]{16,80}$" }
+        source_name: { type: string, minLength: 1, maxLength: 255 }
         state:
           type: string
           enum:
@@ -1286,6 +1288,7 @@ components:
           created_at,
           started_at,
           finished_at,
+          subject,
         ]
       properties:
         job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
@@ -1295,8 +1298,7 @@ components:
             [
               analyze_import,
               prepare_draft,
-              build_preview,
-              build_publish,
+              build_candidate,
               verify_version,
               reconcile,
               reclaim,
@@ -1337,6 +1339,13 @@ components:
         created_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }
         finished_at: { type: [string, "null"], format: date-time }
+        subject:
+          type: object
+          additionalProperties: false
+          required: [kind, label]
+          properties:
+            kind: { type: string, enum: [book, import, system] }
+            label: { type: string, minLength: 1, maxLength: 500 }
     SearchResponse:
       type: object
       additionalProperties: false

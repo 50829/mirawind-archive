@@ -10,7 +10,7 @@ const migrationDefinitions = [
   {
     baselineIdentity: "mirawind-clean-slate-maintenance-v1",
     checksum:
-      "787819cd9b312af5376b5bc8cabf2757db2655ac3059322b916730b9cc163413",
+      "956a38fb7132c5df7a37e13ea9c0fcb400e5a4cdc99eb9214e77bcc2866b6f65",
     file: "0001_clean_slate.sql",
     name: "clean_slate_maintenance",
     version: 1,

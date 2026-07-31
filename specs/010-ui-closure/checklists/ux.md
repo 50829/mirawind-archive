@@ -21,3 +21,12 @@
 ## Notes
 
 - Standard-depth author/reviewer checklist; no unresolved requirement gap found.
+
+## Import And Task Feedback
+
+- [x] CHK009 Is the selected-file presentation specified as exactly one accessible identity? [Clarity, Spec §FR-012]
+- [x] CHK010 Are upload, acceptance, queue, worker, and terminal states all covered as one journey? [Completeness, Spec §FR-013]
+- [x] CHK011 Does the specification distinguish determinate from indeterminate progress without inventing completion? [Consistency, Spec §FR-014]
+- [x] CHK012 Is the task subject fallback order defined before a book title exists? [Coverage, Spec §FR-015–FR-016]
+- [x] CHK013 Are privacy and authority boundaries for the ZIP display name explicit? [Security, Spec §FR-016]
+- [x] CHK014 Are failure, retry, cancellation, and quiet-success behaviors preserved? [Regression, Spec §FR-008]

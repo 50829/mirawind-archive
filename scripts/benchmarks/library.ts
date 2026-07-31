@@ -89,9 +89,9 @@ function seedBooks(database: Database.Database, count: number): void {
   );
   const insertImport = database.prepare(
     `INSERT INTO imports (
-       id, state, upload_rel_path, upload_size_bytes, upload_sha256,
+       id, original_name, state, upload_rel_path, upload_size_bytes, upload_sha256,
        book_id, created_at, updated_at, expires_at
-     ) VALUES (?, 'draft_ready', ?, 1, ?, ?, 1, 1, 9999999999999)`,
+     ) VALUES (?, 'benchmark.zip', 'draft_ready', ?, 1, ?, ?, 1, 1, 9999999999999)`,
   );
   const insertSource = database.prepare(
     `INSERT INTO source_snapshots (

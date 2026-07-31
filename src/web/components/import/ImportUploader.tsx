@@ -1,4 +1,5 @@
 import { type ComponentProps, useEffect, useRef, useState } from "react";
+import { FileArchive, Upload, X } from "lucide-react";
 
 import type { JobProgress } from "@/entrypoints/worker/protocol";
 import {
@@ -14,6 +15,11 @@ import {
   CandidateReview,
   type CandidateView,
 } from "@/web/components/import/CandidateReview";
+import {
+  jobProgressDetail,
+  jobProgressPercent,
+  jobProgressSummary,
+} from "@/web/components/import/job-presentation";
 
 type FormSubmitEvent = Parameters<
   NonNullable<ComponentProps<"form">["onSubmit"]>
@@ -32,6 +38,10 @@ interface JobView {
   readonly phase: string;
   readonly progress: JobProgress;
   readonly state: JobState;
+  readonly subject: {
+    readonly kind: "book" | "import" | "system";
+    readonly label: string;
+  };
 }
 
 interface ImportView {
@@ -45,6 +55,7 @@ interface ImportView {
     readonly state: "building" | "failed" | "ready" | "unavailable";
     readonly url: string | null;
   };
+  readonly source_name: string;
   readonly state: string;
 }
 
@@ -142,6 +153,14 @@ export function ImportUploader() {
   const fileInput = useRef<HTMLInputElement>(null);
   const idempotencyKey = useRef(crypto.randomUUID());
   const uploadRequest = useRef<XMLHttpRequest | null>(null);
+
+  useEffect(() => {
+    const selected = fileInput.current?.files?.[0];
+    if (!selected) return;
+    setFile(selected);
+    idempotencyKey.current = crypto.randomUUID();
+    setUploadBytes({ loaded: 0, total: selected.size });
+  }, []);
 
   async function refresh(importId: string) {
     const response = await fetch(`/api/manage/imports/${importId}`, {
@@ -272,6 +291,12 @@ export function ImportUploader() {
           Math.floor((uploadBytes.loaded / uploadBytes.total) * 100),
         )
       : 0;
+  const backgroundPercent = importView?.current_job
+    ? jobProgressPercent(
+        importView.current_job.state,
+        importView.current_job.progress,
+      )
+    : null;
 
   return (
     <div className="import-workspace grid gap-6 min-[761px]:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
@@ -290,12 +315,30 @@ export function ImportUploader() {
             个文件或目录条目。符号链接、特殊文件、越界路径和不完整压缩包会被拒绝。
           </p>
         </details>
-        <label className={manageFieldLabel}>
-          MinerU ZIP
+        <div className={manageFieldLabel}>
+          <span>MinerU ZIP</span>
+          <div className="flex min-h-11 items-center gap-3 rounded-md border border-stone-400 bg-white p-1.5">
+            <label
+              className={`${manageSecondaryButton} shrink-0 cursor-pointer`}
+              htmlFor="mineru-zip"
+            >
+              <FileArchive aria-hidden="true" size={18} />
+              选择 ZIP
+            </label>
+            <span
+              className="min-w-0 truncate text-sm text-stone-700"
+              id="mineru-zip-name"
+            >
+              {file?.name ?? "未选择文件"}
+            </span>
+          </div>
           <input
             accept=".zip,application/zip"
-            className={manageField}
+            aria-describedby="mineru-zip-name"
+            aria-label="MinerU ZIP"
+            className="sr-only"
             disabled={uploadState !== "idle"}
+            id="mineru-zip"
             name="file"
             onChange={(event) => {
               const next = event.currentTarget.files?.[0] ?? null;
@@ -308,7 +351,7 @@ export function ImportUploader() {
             required
             type="file"
           />
-        </label>
+        </div>
         <label className={manageFieldLabel}>
           重新导入到已有书籍（可选）
           <select
@@ -331,6 +374,7 @@ export function ImportUploader() {
             disabled={!file || busy}
             type="submit"
           >
+            <Upload aria-hidden="true" size={18} />
             {uploadState === "uploading" ? "上传中" : "上传并分析"}
           </button>
           {uploadState !== "idle" && (
@@ -339,6 +383,7 @@ export function ImportUploader() {
               onClick={() => uploadRequest.current?.abort()}
               type="button"
             >
+              <X aria-hidden="true" size={18} />
               取消
             </button>
           )}
@@ -388,6 +433,16 @@ export function ImportUploader() {
           </p>
         ) : (
           <>
+            <div className="mt-4 flex min-w-0 items-center gap-2">
+              <FileArchive
+                aria-hidden="true"
+                className="shrink-0 text-emerald-800"
+                size={20}
+              />
+              <strong className="truncate text-stone-900">
+                {importView.source_name}
+              </strong>
+            </div>
             {importView.error_code && (
               <p className="diagnostic mt-4 text-red-800">
                 {importView.error_code}
@@ -395,14 +450,29 @@ export function ImportUploader() {
             )}
             {importView.current_job && (
               <div className="job-progress mt-4">
-                <p>
-                  {importView.current_job.phase} ·{" "}
-                  {importView.current_job.progress.completed}
-                  {importView.current_job.progress.total === null
-                    ? ""
-                    : ` / ${importView.current_job.progress.total}`}{" "}
-                  {importView.current_job.progress.unit}
+                <div
+                  aria-label={
+                    backgroundPercent === null
+                      ? "后台处理进度未知"
+                      : `后台处理进度 ${backgroundPercent}%`
+                  }
+                >
+                  <progress
+                    className="h-2 w-full accent-emerald-700"
+                    max={100}
+                    {...(backgroundPercent === null
+                      ? {}
+                      : { value: backgroundPercent })}
+                  />
+                </div>
+                <p className="mt-2 font-medium text-stone-800">
+                  {jobProgressSummary(importView.current_job)}
                 </p>
+                {jobProgressDetail(importView.current_job.progress) && (
+                  <p className="mt-1 text-sm text-stone-600">
+                    {jobProgressDetail(importView.current_job.progress)}
+                  </p>
+                )}
                 {importView.current_job.error_class && (
                   <p className="diagnostic text-red-800">
                     {importView.current_job.error_class} ·{" "}

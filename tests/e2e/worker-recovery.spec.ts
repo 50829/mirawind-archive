@@ -97,6 +97,10 @@ test("shows, cancels, retries and recovers durable work without changing publica
   const queuedCard = page.locator(".task-card").filter({
     hasText: queued.id,
   });
+  await expect(
+    queuedCard.getByRole("heading", { name: "存储协调" }),
+  ).toBeVisible();
+  await expect(queuedCard.getByText("系统维护", { exact: true })).toBeVisible();
   await expect(queuedCard).toContainText("排队中");
   await queuedCard.getByRole("button", { name: "请求取消" }).click();
   await expect(queuedCard).toContainText("已取消");
@@ -171,11 +175,9 @@ test("shows, cancels, retries and recovers durable work without changing publica
     }
     expect(pointerSnapshot()).toEqual(before);
     await page.reload();
-    await expect(
-      page.locator(".task-card").filter({
-        has: page.getByText(expired.id, { exact: true }),
-      }),
-    ).toContainText("已中断");
+    await expect(page.locator(`[data-job-id="${expired.id}"]`)).toContainText(
+      "已中断",
+    );
     const health = await page.request.get("/api/manage/health");
     expect(health.status()).toBe(200);
     expect(health.headers()["cache-control"]).toBe("private, no-store");

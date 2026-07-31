@@ -66,6 +66,7 @@ export const GET: APIRoute = ({ locals, params }) => {
           : null,
         error_code: imported.safeErrorCode,
         import_id: imported.id,
+        source_name: imported.originalName,
         preview: {
           revision,
           state:

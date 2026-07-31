@@ -1,4 +1,11 @@
 import { useMemo, useState } from "react";
+import {
+  BookOpen,
+  FileArchive,
+  RotateCcw,
+  Wrench,
+  XCircle,
+} from "lucide-react";
 
 import { usePolling } from "@/web/components/manage/use-polling";
 import {
@@ -7,6 +14,13 @@ import {
   manageQuietText,
 } from "@/web/components/ui/manage-classes";
 import type { JobProgress } from "@/entrypoints/worker/protocol";
+import {
+  jobOperationLabel,
+  jobPhaseLabel,
+  jobProgressDetail,
+  jobProgressPercent,
+  jobProgressSummary,
+} from "@/web/components/import/job-presentation";
 
 type JobState =
   "canceled" | "failed" | "interrupted" | "queued" | "running" | "succeeded";
@@ -26,6 +40,10 @@ export interface TaskView {
   readonly retry_of_job_id: string | null;
   readonly started_at: string | null;
   readonly state: JobState;
+  readonly subject: {
+    readonly kind: "book" | "import" | "system";
+    readonly label: string;
+  };
 }
 
 const terminalStates = new Set<JobState>([
@@ -48,6 +66,23 @@ function newestFirst(jobs: readonly TaskView[]): readonly TaskView[] {
   return [...jobs].sort(
     (left, right) => Date.parse(right.created_at) - Date.parse(left.created_at),
   );
+}
+
+function stateClass(state: JobState): string {
+  if (state === "failed") return "bg-red-100 text-red-900";
+  if (state === "interrupted" || state === "canceled") {
+    return "bg-stone-200 text-stone-800";
+  }
+  if (state === "queued") return "bg-amber-100 text-amber-900";
+  return "bg-emerald-100 text-emerald-900";
+}
+
+function SubjectIcon(props: { readonly kind: TaskView["subject"]["kind"] }) {
+  if (props.kind === "book") return <BookOpen aria-hidden="true" size={18} />;
+  if (props.kind === "import") {
+    return <FileArchive aria-hidden="true" size={18} />;
+  }
+  return <Wrench aria-hidden="true" size={18} />;
 }
 
 export function TaskMonitor(props: {
@@ -148,90 +183,121 @@ export function TaskMonitor(props: {
         <p className={`empty mt-6 ${manageQuietText}`}>暂时没有后台任务。</p>
       ) : (
         <ol className="task-list mt-6 grid list-none gap-4 p-0">
-          {jobs.map((job) => (
-            <li className={`task-card ${managePanel}`} key={job.job_id}>
-              <div className="task-heading flex items-center justify-between gap-4">
-                <div>
-                  <strong>{job.kind}</strong>
-                  <code className="mt-1 block text-sm text-stone-600">
-                    {job.job_id}
-                  </code>
-                </div>
-                <span
-                  className="rounded-full bg-emerald-100 px-3 py-1.5 text-sm"
-                  data-state={job.state}
-                >
-                  {stateLabels[job.state]}
-                </span>
-              </div>
-              <dl className="task-facts mt-4 grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-3">
-                <div>
-                  <dt className="text-sm text-stone-600">阶段</dt>
-                  <dd className="mt-1">{job.phase}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-stone-600">尝试</dt>
-                  <dd className="mt-1">
-                    第 {job.attempt} 次
-                    {job.retry_of_job_id && <> · 接续 {job.retry_of_job_id}</>}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-stone-600">创建</dt>
-                  <dd className="mt-1">
-                    {new Date(job.created_at).toLocaleString("zh-CN")}
-                  </dd>
-                </div>
-              </dl>
-              <dl className="task-progress mt-4 grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-3">
-                <div>
-                  <dt className="text-sm text-stone-600">进度</dt>
-                  <dd className="mt-1">
-                    {job.progress.completed}
-                    {job.progress.total === null
-                      ? ""
-                      : ` / ${job.progress.total}`}{" "}
-                    {job.progress.unit}
-                  </dd>
-                </div>
-                {job.progress.processed_bytes !== null && (
-                  <div>
-                    <dt className="text-sm text-stone-600">已处理字节</dt>
-                    <dd className="mt-1">
-                      {job.progress.processed_bytes.toLocaleString()}
-                    </dd>
+          {jobs.map((job) => {
+            const percent = jobProgressPercent(job.state, job.progress);
+            const detail = jobProgressDetail(job.progress);
+            return (
+              <li
+                className={`task-card ${managePanel}`}
+                data-job-id={job.job_id}
+                key={job.job_id}
+              >
+                <div className="task-heading flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-bold text-stone-900">
+                      {jobOperationLabel(job.kind)}
+                    </h2>
+                    <p className="mt-1 flex min-w-0 items-center gap-2 text-stone-700">
+                      <SubjectIcon kind={job.subject.kind} />
+                      <span className="truncate">{job.subject.label}</span>
+                    </p>
                   </div>
-                )}
-              </dl>
-              {job.error_class && (
-                <p className="task-error mt-4 text-red-800">
-                  {job.error_class} · {job.error_code ?? "UNKNOWN_FAILURE"}
+                  <span
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-sm ${stateClass(job.state)}`}
+                    data-state={job.state}
+                  >
+                    {stateLabels[job.state]}
+                  </span>
+                </div>
+
+                <div
+                  aria-label={
+                    percent === null ? "任务进度未知" : `任务进度 ${percent}%`
+                  }
+                  className="mt-4"
+                >
+                  <progress
+                    className="h-2 w-full accent-emerald-700"
+                    max={100}
+                    {...(percent === null ? {} : { value: percent })}
+                  />
+                  <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2">
+                    <strong className="text-stone-800">
+                      {jobProgressSummary(job)}
+                    </strong>
+                    {detail && (
+                      <span className="text-sm text-stone-600">{detail}</span>
+                    )}
+                  </div>
+                </div>
+
+                <p className="mt-3 text-sm text-stone-600">
+                  第 {job.attempt} 次 ·{" "}
+                  {new Date(job.created_at).toLocaleString("zh-CN")}
                 </p>
-              )}
-              <div className="task-actions mt-4 flex items-center justify-end gap-2">
-                {!terminalStates.has(job.state) && (
-                  <button
-                    className={managePrimaryButton}
-                    disabled={busyId === job.job_id}
-                    onClick={() => void mutate(job, "cancel")}
-                    type="button"
-                  >
-                    请求取消
-                  </button>
+                {job.error_class && (
+                  <p className="task-error mt-3 text-red-800">
+                    {job.error_class} · {job.error_code ?? "UNKNOWN_FAILURE"}
+                  </p>
                 )}
-                {["canceled", "failed", "interrupted"].includes(job.state) && (
-                  <button
-                    className={managePrimaryButton}
-                    disabled={busyId === job.job_id}
-                    onClick={() => void mutate(job, "retry")}
-                    type="button"
-                  >
-                    显式重试
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
+
+                <details className="mt-3 border-t border-stone-200 pt-3 text-sm text-stone-600">
+                  <summary className="cursor-pointer font-medium text-stone-700">
+                    技术详情
+                  </summary>
+                  <dl className="mt-2 grid gap-1">
+                    <div>
+                      <dt className="inline">阶段：</dt>
+                      <dd className="inline">
+                        {jobPhaseLabel(job.phase)} ({job.phase})
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="inline">任务：</dt>
+                      <dd className="inline">
+                        <code>{job.job_id}</code>
+                      </dd>
+                    </div>
+                    {job.retry_of_job_id && (
+                      <div>
+                        <dt className="inline">接续：</dt>
+                        <dd className="inline">
+                          <code>{job.retry_of_job_id}</code>
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                </details>
+
+                <div className="task-actions mt-4 flex items-center justify-end gap-2">
+                  {!terminalStates.has(job.state) && (
+                    <button
+                      className={managePrimaryButton}
+                      disabled={busyId === job.job_id}
+                      onClick={() => void mutate(job, "cancel")}
+                      type="button"
+                    >
+                      <XCircle aria-hidden="true" size={18} />
+                      请求取消
+                    </button>
+                  )}
+                  {["canceled", "failed", "interrupted"].includes(
+                    job.state,
+                  ) && (
+                    <button
+                      className={managePrimaryButton}
+                      disabled={busyId === job.job_id}
+                      onClick={() => void mutate(job, "retry")}
+                      type="button"
+                    >
+                      <RotateCcw aria-hidden="true" size={18} />
+                      显式重试
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ol>
       )}
     </section>

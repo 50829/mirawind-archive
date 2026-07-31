@@ -5,6 +5,7 @@ import { loginAsAdministrator } from "../helpers/e2e-login.js";
 test("keeps upload progress honest across retry, acceptance and abort", async ({
   page,
 }) => {
+  let importStatusRequests = 0;
   await page.addInitScript(() => {
     type ProgressHandler = ((event: ProgressEvent) => void) | null;
     type TestWindow = Window & {
@@ -78,8 +79,10 @@ test("keeps upload progress honest across retry, acceptance and abort", async ({
   });
   await page.route(
     "**/api/manage/imports/imp_controlled_upload_0001",
-    (route) =>
-      route.fulfill({
+    (route) => {
+      importStatusRequests += 1;
+      const ready = importStatusRequests > 1;
+      return route.fulfill({
         body: JSON.stringify({
           book_id: 99,
           candidates: [],
@@ -89,28 +92,34 @@ test("keeps upload progress honest across retry, acceptance and abort", async ({
             error_class: null,
             error_code: null,
             job_id: "job_controlled_candidate_0001",
-            kind: "build_candidate",
-            phase: "complete",
+            kind: ready ? "build_candidate" : "analyze_import",
+            phase: ready ? "complete" : "identify_document",
             progress: {
               completed: 1,
               processed_bytes: null,
-              total: 1,
+              total: ready ? 1 : 4,
               unit: "steps",
             },
-            state: "succeeded",
+            state: ready ? "succeeded" : "running",
+            subject: {
+              kind: "import",
+              label: "controlled.zip",
+            },
           },
           error_code: null,
           import_id: "imp_controlled_upload_0001",
+          source_name: "controlled.zip",
           preview: {
             revision: 1,
-            state: "ready",
-            url: "/manage/books/99/preview",
+            state: ready ? "ready" : "building",
+            url: ready ? "/manage/books/99/preview" : null,
           },
-          state: "draft_ready",
+          state: ready ? "draft_ready" : "analyzing",
         }),
         contentType: "application/json",
         status: 200,
-      }),
+      });
+    },
   );
 
   await loginAsAdministrator(page, "192.0.2.16");
@@ -147,6 +156,9 @@ test("keeps upload progress honest across retry, acceptance and abort", async ({
 
   await page.getByRole("button", { name: "上传并分析" }).click();
   await expect(page.getByText("正在安全保存并排队")).toBeVisible();
+  await expect(page.getByText("controlled.zip", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("后台处理进度 25%")).toBeVisible();
+  await expect(page.getByText("识别正文 · 25%", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("link", { name: "打开出版工作台" }),
   ).toBeVisible();

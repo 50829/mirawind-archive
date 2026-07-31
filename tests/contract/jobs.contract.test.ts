@@ -65,8 +65,17 @@ describe("durable job operation contract", () => {
     expect(at(retry, "responses")).toHaveProperty("409");
     const jobSchema = at(document, "components", "schemas", "Job");
     expect(jobSchema.required).toEqual(
-      expect.arrayContaining(["attempt", "retry_of_job_id"]),
+      expect.arrayContaining(["attempt", "retry_of_job_id", "subject"]),
     );
     expect(at(jobSchema, "properties")).toHaveProperty("retry_of_job_id");
+    expect(at(jobSchema, "properties", "subject")).toMatchObject({
+      additionalProperties: false,
+      required: ["kind", "label"],
+    });
+    const kinds = at(jobSchema, "properties", "kind").enum;
+    expect(kinds).toEqual(expect.arrayContaining(["build_candidate"]));
+    expect(kinds).not.toEqual(
+      expect.arrayContaining(["build_preview", "build_publish"]),
+    );
   });
 });

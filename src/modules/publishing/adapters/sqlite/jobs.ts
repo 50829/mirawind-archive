@@ -426,11 +426,20 @@ export class JobRepository {
     readonly progress?: JobProgress;
     readonly versionId?: string;
   }): JobRecord {
+    const currentProgress =
+      input.progress ?? this.getRequired(input.jobId).progress;
+    const progress =
+      currentProgress.total === null
+        ? currentProgress
+        : Object.freeze({
+            ...currentProgress,
+            completed: currentProgress.total,
+          });
     return this.completeOwned({
       ...input,
       nextState: "succeeded",
       phase: "complete",
-      progress: input.progress ?? this.getRequired(input.jobId).progress,
+      progress,
     });
   }
 

@@ -87,6 +87,7 @@ export function setupPublicationFixture(
     expiresAtMs: 10_000,
     id: "imp_candidate_publish_test_0001",
     nowMs: 2,
+    originalName: "fixture.zip",
     uploadRelativePath: "tmp/import.zip",
     uploadSha256: hash,
     uploadSizeBytes: 1,
