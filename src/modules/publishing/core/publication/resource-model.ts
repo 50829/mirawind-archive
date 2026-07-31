@@ -24,6 +24,7 @@ export interface ResourceResolution {
 }
 
 export interface ResolveDocumentResourcesOptions {
+  readonly additionalImagePaths?: readonly string[];
   readonly document: ParsedDocument;
   readonly idFactory?: () => string;
   readonly markdownPath: string;

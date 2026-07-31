@@ -26,7 +26,7 @@
 - [x] T013 [US3] Add block GET/PATCH, stable identity remap and immutable rebuild workflow.
 - [x] T014 [US3] Replace role fields with boundaries and diagnostics with executable typed targets.
 - [x] T015 [US3] Add preview block selection, Markdown dialog and revised save/conflict behavior.
-- [ ] T016 [US4] Add metadata/cover management, separate access API and server-selected publication.
+- [x] T016 [US4] Add metadata/cover management, separate access API and server-selected publication.
 - [ ] T017 [US4] Add management/publishing routes and aligned library management links.
 - [ ] T018 Verify upload/task progress in the full Web+worker local stack.
 

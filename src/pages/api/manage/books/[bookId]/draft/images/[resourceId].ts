@@ -1,0 +1,62 @@
+import type { APIRoute } from "astro";
+
+import {
+  createPublishingArtifactServer,
+  createPublishingServer,
+} from "@/composition/server";
+import { getRuntimeStorageLayout } from "@/composition/storage";
+import { SafeApplicationError } from "@/domain/errors";
+import { isOpaqueId } from "@/domain/ids";
+import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
+import { applyResponsePolicy } from "@/http/cache/policies";
+
+export const prerender = false;
+
+function positiveInteger(value: string | undefined): number | null {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null;
+}
+
+export const GET: APIRoute = async ({ locals, params }) => {
+  const { database } = requireRuntimeAdministrator(locals.session, {
+    hideExistence: true,
+  });
+  const bookId = positiveInteger(params.bookId);
+  const resourceId = params.resourceId;
+  if (!bookId || !resourceId || !isOpaqueId("resource", resourceId)) {
+    throw new SafeApplicationError(
+      "NOT_FOUND",
+      "The image was not found.",
+      404,
+    );
+  }
+  const publishing = createPublishingServer(database);
+  const book = publishing.findBook(bookId);
+  const candidate = publishing.findCurrentCandidate(bookId);
+  if (
+    !book?.draftConfigRevision ||
+    !candidate?.versionId ||
+    candidate.configRevision !== book.draftConfigRevision ||
+    candidate.state !== "ready"
+  ) {
+    throw new SafeApplicationError(
+      "NOT_FOUND",
+      "The image was not found.",
+      404,
+    );
+  }
+  const resource = await createPublishingArtifactServer(
+    await getRuntimeStorageLayout(),
+  ).readPreviewResource({
+    bookId,
+    resourceId,
+    versionId: candidate.versionId,
+    versionRelativePath: `books/${bookId}/versions/${candidate.versionId}`,
+  });
+  const headers = new Headers({
+    "Content-Type": resource.mediaType,
+    "X-Content-Type-Options": "nosniff",
+  });
+  applyResponsePolicy(headers, "draft");
+  return new Response(resource.body, { headers });
+};

@@ -13,6 +13,7 @@ import {
 import { usePolling } from "@/web/components/manage/use-polling";
 
 import { DiagnosticsPanel } from "@/web/components/manage/DiagnosticsPanel";
+import { BookSettingsDialog } from "@/web/components/manage/BookSettingsDialog";
 import { PublishPanel } from "@/web/components/manage/PublishPanel";
 import {
   StructureEditor,
@@ -505,7 +506,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     preview?.config_revision === draft.config_revision;
   return (
     <div className="preview-workspace" data-mobile-mode={mobileMode}>
-      <header className="preview-header sticky top-0 z-10 mb-4 grid min-h-18 grid-cols-[auto_minmax(12rem,1fr)_auto_auto_auto] items-center gap-3 rounded-lg border border-stone-300 bg-white px-6 py-3 max-[850px]:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <header className="preview-header sticky top-0 z-10 mb-4 grid min-h-18 grid-cols-[auto_minmax(12rem,1fr)_auto_auto_auto_auto] items-center gap-3 rounded-lg border border-stone-300 bg-white px-6 py-3 max-[850px]:grid-cols-[auto_minmax(0,1fr)_auto]">
         <a
           className="workbench-back font-semibold text-emerald-800 hover:text-emerald-900"
           href="/manage"
@@ -559,6 +560,21 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             </button>
           </>
         )}
+        <BookSettingsDialog
+          disabled={
+            editorState.dirty ||
+            editorState.saving ||
+            editorState.conflict ||
+            blockDirty ||
+            Boolean(blockEditor?.saving || blockEditor?.conflict) ||
+            candidateState === "building"
+          }
+          draft={draft}
+          etag={etag}
+          onChanged={async () => {
+            await refresh();
+          }}
+        />
         <button
           className={`${manageSecondaryButton} whitespace-nowrap max-[850px]:row-start-2`}
           disabled={
@@ -583,9 +599,12 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             blockingDiagnostics.length > 0
           }
           bookId={draft.book_id}
-          candidateVersionId={draft.candidate?.version_id ?? null}
+          candidatePublished={draft.candidate_published}
           compact
-          configRevision={draft.config_revision}
+          etag={etag}
+          onPublished={async () => {
+            await refresh();
+          }}
           previewReady={previewReady}
           previewStale={preview?.is_stale ?? false}
         />

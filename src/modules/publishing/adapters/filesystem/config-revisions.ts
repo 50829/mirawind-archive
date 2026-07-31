@@ -225,7 +225,7 @@ function parseDraftPatch(value: unknown): {
     exactKeys(metadata, [
       "authors",
       "contributors",
-      "cover_resource_id",
+      "cover_path",
       "description",
       "edition",
       "isbn_10",

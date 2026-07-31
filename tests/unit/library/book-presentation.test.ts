@@ -9,7 +9,7 @@ function blockId(index: number): string {
   return `blk_${String(index).padStart(20, "0")}`;
 }
 
-function config(coverResourceId: string | null = resourceId) {
+function config(coverPath: string | null = "cover.png") {
   return {
     alias: "example-book",
     book_id: 1,
@@ -18,7 +18,7 @@ function config(coverResourceId: string | null = resourceId) {
       description: "A bounded description.",
       language: "zh-CN",
       title: "Example Book",
-      ...(coverResourceId ? { cover_resource_id: coverResourceId } : {}),
+      ...(coverPath ? { cover_path: coverPath } : {}),
     },
     publishing: {
       code: { line_numbers: false },

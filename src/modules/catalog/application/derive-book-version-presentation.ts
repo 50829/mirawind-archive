@@ -113,17 +113,23 @@ export function deriveBookVersionPresentation(input: {
   if (Buffer.byteLength(tocPreviewJson, "utf8") > maximumTocPreviewBytes) {
     throw new Error("PRESENTATION_TOC_LIMIT");
   }
-  const configuredCover =
-    typeof metadataSource.cover_resource_id === "string"
-      ? metadataSource.cover_resource_id
+  const configuredCoverPath =
+    typeof metadataSource.cover_path === "string"
+      ? `source/${metadataSource.cover_path}`
       : null;
-  const resources = manifest.resources as Readonly<Record<string, unknown>>;
+  const resources = manifest.resources as Readonly<
+    Record<string, { readonly source_path?: unknown }>
+  >;
+  const configuredCover = configuredCoverPath
+    ? (Object.entries(resources).find(
+        ([, resource]) => resource.source_path === configuredCoverPath,
+      )?.[0] ?? null)
+    : null;
   const projection = Object.freeze({
     alias: typeof parsedConfig.alias === "string" ? parsedConfig.alias : null,
     bookId: Number(parsedConfig.book_id),
     configRevision: Number(parsedConfig.revision),
-    coverResourceId:
-      configuredCover && resources[configuredCover] ? configuredCover : null,
+    coverResourceId: configuredCover,
     firstPageAlias:
       typeof firstPage.alias === "string" ? firstPage.alias : null,
     firstPageId: firstPage.page_id,

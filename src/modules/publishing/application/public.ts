@@ -17,6 +17,7 @@ import {
   m1ImportExpiryMs,
   maximumUploadBytes,
 } from "@/modules/publishing/application/import-upload-policy";
+import { maximumCoverUploadBytes } from "@/modules/publishing/application/cover-upload-policy";
 import { m1PublishPolicy } from "@/modules/publishing/application/publish-policy";
 import {
   candidateBuildIdentities,
@@ -70,6 +71,7 @@ export {
   jobKinds,
   m1ImportExpiryMs,
   m1PublishPolicy,
+  maximumCoverUploadBytes,
   maximumUploadBytes,
   parseBuildCandidateCommand,
   parseCandidateBuildArtifact,

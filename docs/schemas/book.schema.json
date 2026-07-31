@@ -86,7 +86,7 @@
         "edition": { "type": "string", "maxLength": 100 },
         "isbn_10": { "type": "string", "pattern": "^[0-9]{9}[0-9X]$" },
         "isbn_13": { "type": "string", "pattern": "^[0-9]{13}$" },
-        "cover_resource_id": { "$ref": "#/$defs/resourceId" }
+        "cover_path": { "$ref": "#/$defs/relativePath" }
       }
     },
     "source": {

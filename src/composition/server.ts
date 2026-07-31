@@ -17,6 +17,7 @@ import {
   patchDraftBlock,
 } from "@/modules/publishing/adapters/filesystem/draft-blocks";
 import { DraftArtifactReader } from "@/modules/publishing/adapters/filesystem/draft-artifacts";
+import { uploadDraftCover } from "@/modules/publishing/adapters/filesystem/draft-cover";
 import { ImportUploadService } from "@/modules/publishing/adapters/filesystem/import-upload";
 import { queueSourceReprocess } from "@/modules/publishing/adapters/filesystem/source-reprocess";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
@@ -219,4 +220,5 @@ export const publishingServerActions = Object.freeze({
   patchDraftBlock,
   patchDraftConfig,
   queueSourceReprocess,
+  uploadDraftCover,
 });

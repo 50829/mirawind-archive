@@ -14,6 +14,7 @@ function draftProjection(
     title_markdown: `Structure item ${index + 1}`,
   }));
   return {
+    access: "private" as const,
     alias: null,
     book_id: 99,
     boundaries: { body_start_block_id: structure[0]?.block_id },
@@ -26,6 +27,7 @@ function draftProjection(
       state: "ready",
       version_id: "ver_workbench_000000000001",
     },
+    candidate_published: false,
     config_revision: 1,
     diagnostics: [
       {
@@ -74,6 +76,7 @@ function draftProjection(
       },
     },
     metadata: { title: `Workbench ${size}` },
+    published: false,
     structure,
     title: `Workbench ${size}`,
   };
@@ -134,6 +137,153 @@ function draftAtRevision(revision: number, state: "building" | "ready") {
         : null,
   };
 }
+
+type MutableDraftProjection = Omit<
+  ReturnType<typeof draftAtRevision>,
+  "access" | "alias" | "candidate_published" | "metadata" | "published"
+> & {
+  access: "private" | "public";
+  alias: string | null;
+  candidate_published: boolean;
+  metadata: Record<string, unknown>;
+  published: boolean;
+};
+
+test("saves metadata and cover before publishing and changing access", async ({
+  page,
+}) => {
+  let draft: MutableDraftProjection = draftAtRevision(1, "ready");
+  let metadataPatch: Record<string, unknown> | null = null;
+  let accessPatch: Record<string, unknown> | null = null;
+  let coverUploaded = false;
+  let publishBody: unknown = null;
+  await page.route("**/api/manage/books/99/draft", async (route) => {
+    if (route.request().method() === "PATCH") {
+      metadataPatch = route.request().postDataJSON() as Record<string, unknown>;
+      const metadata = metadataPatch.metadata as Record<string, unknown>;
+      draft = {
+        ...draftAtRevision(2, "ready"),
+        access: draft.access,
+        alias: (metadataPatch.alias as string | null) ?? null,
+        metadata: { ...draft.metadata, ...metadata },
+        published: draft.published,
+        title: String(metadata.title),
+      };
+      await route.fulfill({
+        body: JSON.stringify({ config_revision: 2 }),
+        contentType: "application/json",
+        headers: { ETag: '"etag-2"' },
+        status: 202,
+      });
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify(draft),
+      contentType: "application/json",
+      headers: { ETag: `"etag-${draft.config_revision}"` },
+      status: 200,
+    });
+  });
+  await page.route("**/api/manage/books/99/draft/images", (route) =>
+    route.fulfill({
+      body: JSON.stringify({ images: [] }),
+      contentType: "application/json",
+      status: 200,
+    }),
+  );
+  await page.route("**/api/manage/books/99/draft/cover", async (route) => {
+    coverUploaded = true;
+    expect(route.request().headers()["if-match"]).toBe('"etag-2"');
+    expect(route.request().headers()["content-type"]).toContain(
+      "multipart/form-data",
+    );
+    draft = {
+      ...draftAtRevision(3, "ready"),
+      access: draft.access,
+      alias: draft.alias,
+      metadata: { ...draft.metadata, cover_path: "covers/uploaded.png" },
+      published: draft.published,
+      title: draft.title,
+    };
+    await route.fulfill({
+      body: JSON.stringify({ config_revision: 3 }),
+      contentType: "application/json",
+      headers: { ETag: '"etag-3"' },
+      status: 202,
+    });
+  });
+  await page.route("**/api/manage/books/99/publish", async (route) => {
+    publishBody = route.request().postDataJSON();
+    expect(route.request().headers()["if-match"]).toBe('"etag-3"');
+    draft = { ...draft, candidate_published: true, published: true };
+    await route.fulfill({
+      body: JSON.stringify({ state: "published" }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/manage/books/99/access", async (route) => {
+    accessPatch = route.request().postDataJSON() as Record<string, unknown>;
+    draft = { ...draft, access: "public" };
+    await route.fulfill({
+      body: JSON.stringify({ access: "public", book_id: 99 }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/manage/books/99/preview/**", (route) =>
+    route.fulfill({
+      body: "<!doctype html><html lang='zh-CN'><body>Preview</body></html>",
+      contentType: "text/html",
+      status: 200,
+    }),
+  );
+
+  await loginAsAdministrator(page, "192.0.2.18");
+  await page.goto("/manage/books/99/preview");
+  await page.getByRole("button", { name: "书籍设置" }).click();
+  await expect(page.getByRole("button", { name: "公开" })).toBeDisabled();
+  await page.getByLabel("显示名称").fill("Edited Workbench");
+  await page.getByLabel("路由别名").fill("edited-workbench");
+  await page.getByLabel("作者或整理者").fill("Author One\nAuthor Two");
+  await page.getByLabel("简介").fill("Edited description");
+  await page.getByRole("button", { name: "保存设置并更新预览" }).click();
+  await expect(page.getByRole("dialog", { name: "书籍设置" })).toBeHidden();
+  expect(metadataPatch).toMatchObject({
+    alias: "edited-workbench",
+    changes: [],
+    metadata: {
+      authors: ["Author One", "Author Two"],
+      description: "Edited description",
+      title: "Edited Workbench",
+    },
+  });
+
+  await page.getByRole("button", { name: "书籍设置" }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "上传封面" }).click();
+  await (
+    await chooser
+  ).setFiles({
+    buffer: Buffer.from([1, 2, 3]),
+    mimeType: "image/png",
+    name: "cover.png",
+  });
+  await expect(page.getByRole("dialog", { name: "书籍设置" })).toBeHidden();
+  expect(coverUploaded).toBe(true);
+
+  await page.getByRole("button", { name: "发布当前修订" }).click();
+  await expect(page.getByRole("link", { name: "开始阅读" })).toBeVisible();
+  expect(publishBody).toEqual({});
+
+  await page.getByRole("button", { name: "书籍设置" }).click();
+  await page.getByRole("button", { name: "公开" }).click();
+  await expect(page.getByRole("button", { name: "公开" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  expect(accessPatch).toEqual({ access: "public" });
+});
 
 test("blocks publication only for error diagnostics", async ({ page }) => {
   let diagnosticSeverity: "error" | "warning" = "warning";

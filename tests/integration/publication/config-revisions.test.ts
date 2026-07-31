@@ -3,6 +3,7 @@ import { link, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
+import sharp from "sharp";
 import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +25,7 @@ import {
   getDraftBlock,
   patchDraftBlock,
 } from "@/modules/publishing/adapters/filesystem/draft-blocks";
+import { uploadDraftCover } from "@/modules/publishing/adapters/filesystem/draft-cover";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
@@ -168,6 +170,71 @@ async function fixture(
 }
 
 describe("atomic draft configuration revisions", () => {
+  it("adds an uploaded cover through a new immutable source revision", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const setup = await fixture(database, dataRoot.layout);
+      const bytes = await sharp({
+        create: {
+          background: { alpha: 1, b: 32, g: 96, r: 16 },
+          channels: 4,
+          height: 1,
+          width: 1,
+        },
+      })
+        .png()
+        .toBuffer();
+      const result = await uploadDraftCover({
+        bookId: setup.book.id,
+        bytes,
+        database,
+        expectedEtag: setup.currentEtag,
+        filename: "cover.png",
+        layout: dataRoot.layout,
+        nowMs: 10,
+      });
+      const drafts = new DraftRepository(database);
+      const book = drafts.requireBook(setup.book.id);
+      const source = new SourceRepository(database).requireSnapshot(
+        book.draftSourceId ?? "",
+      );
+      const nextConfig = parseBookConfigYaml(
+        await readFile(
+          resolve(
+            dataRoot.layout.root,
+            drafts.requireConfig(setup.book.id, 2).yamlRelativePath,
+          ),
+          "utf8",
+        ),
+      );
+
+      expect(result).toMatchObject({ revision: 2 });
+      expect(nextConfig.metadata).toMatchObject({
+        cover_path: result.coverPath,
+      });
+      expect(source).toMatchObject({
+        mainMarkdownSha256: setup.markdownHash,
+        origin: "edit",
+        parentSourceId: "src_config_revision_test_0001",
+      });
+      expect(
+        new SourceRepository(database).bindingsForSource(source.id),
+      ).toEqual([
+        expect.objectContaining({
+          logicalPath: result.coverPath,
+          sha256: sha256(bytes),
+        }),
+      ]);
+      expect(
+        await readFile(
+          resolve(
+            dataRoot.layout.root,
+            source.sourceRootRelativePath,
+            result.coverPath,
+          ),
+        ),
+      ).toEqual(bytes);
+    }));
+
   it("creates an immutable source revision and reuses bound assets for a block edit", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const setup = await fixture(database, dataRoot.layout);

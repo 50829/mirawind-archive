@@ -32,7 +32,15 @@ import {
 
 export const maximumDraftSourceBytes = 256 * 1024 * 1024;
 
-export interface CurrentDraftBlockContext {
+export interface CurrentDraftContext {
+  readonly book: ReturnType<DraftRepository["requireBook"]>;
+  readonly config: Readonly<Record<string, unknown>>;
+  readonly configRecord: ReturnType<DraftRepository["requireConfig"]>;
+  readonly markdown: string;
+  readonly source: ReturnType<SourceRepository["requireSnapshot"]>;
+}
+
+export interface CurrentDraftBlockContext extends CurrentDraftContext {
   readonly block: {
     readonly block_id: string;
     readonly end_offset: number;
@@ -40,11 +48,6 @@ export interface CurrentDraftBlockContext {
     readonly start_offset: number;
     readonly text_fingerprint: string;
   };
-  readonly book: ReturnType<DraftRepository["requireBook"]>;
-  readonly config: Readonly<Record<string, unknown>>;
-  readonly configRecord: ReturnType<DraftRepository["requireConfig"]>;
-  readonly markdown: string;
-  readonly source: ReturnType<SourceRepository["requireSnapshot"]>;
 }
 
 export function draftSourceSha256(value: string | Uint8Array): string {
@@ -65,12 +68,11 @@ export function draftSourceConfig(
   return config.source as Readonly<Record<string, unknown>>;
 }
 
-export async function readCurrentDraftBlock(input: {
-  readonly blockId: string;
+export async function readCurrentDraft(input: {
   readonly bookId: number;
   readonly database: Database.Database;
   readonly layout: StorageLayout;
-}): Promise<CurrentDraftBlockContext> {
+}): Promise<CurrentDraftContext> {
   const drafts = new DraftRepository(input.database);
   const book = drafts.findBook(input.bookId);
   if (!book?.draftConfigRevision || !book.draftSourceId) {
@@ -121,7 +123,24 @@ export async function readCurrentDraftBlock(input: {
   if (draftSourceSha256(markdown) !== source.mainMarkdownSha256) {
     throw new Error("DRAFT_SOURCE_HASH_MISMATCH");
   }
-  const blocks = sourceValue.blocks as CurrentDraftBlockContext["block"][];
+  return Object.freeze({
+    book,
+    config,
+    configRecord,
+    markdown,
+    source,
+  });
+}
+
+export async function readCurrentDraftBlock(input: {
+  readonly blockId: string;
+  readonly bookId: number;
+  readonly database: Database.Database;
+  readonly layout: StorageLayout;
+}): Promise<CurrentDraftBlockContext> {
+  const current = await readCurrentDraft(input);
+  const blocks = draftSourceConfig(current.config)
+    .blocks as CurrentDraftBlockContext["block"][];
   const block = blocks.find((item) => item.block_id === input.blockId);
   if (!block || block.kind === "heading") {
     throw new SafeApplicationError(
@@ -130,14 +149,7 @@ export async function readCurrentDraftBlock(input: {
       404,
     );
   }
-  return Object.freeze({
-    block,
-    book,
-    config,
-    configRecord,
-    markdown,
-    source,
-  });
+  return Object.freeze({ ...current, block });
 }
 
 async function syncDirectory(path: string): Promise<void> {
@@ -158,7 +170,11 @@ async function lockDirectories(path: string): Promise<void> {
 }
 
 export async function materializeEditedDraftSource(input: {
-  readonly bindings: ReturnType<SourceRepository["bindingsForSource"]>;
+  readonly bindings: readonly {
+    readonly id: string;
+    readonly logicalPath: string;
+    readonly storageRelativePath: string;
+  }[];
   readonly finalRoot: string;
   readonly layout: StorageLayout;
   readonly mainMarkdownPath: string;

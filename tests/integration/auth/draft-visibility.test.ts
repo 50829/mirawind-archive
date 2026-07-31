@@ -14,6 +14,8 @@ import { m1ImportExpiryMs } from "@/modules/publishing/application/public";
 import { resetRuntimeStorageForTests } from "@/composition/storage";
 
 import { GET as getDraft } from "../../../src/pages/api/manage/books/[bookId]/draft.js";
+import { GET as getDraftImage } from "../../../src/pages/api/manage/books/[bookId]/draft/images/[resourceId].js";
+import { GET as getDraftImages } from "../../../src/pages/api/manage/books/[bookId]/draft/images/index.js";
 import { GET as getPreviewAsset } from "../../../src/pages/api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].js";
 import { GET as getPreviewPage } from "../../../src/pages/api/manage/books/[bookId]/preview/[configRevision]/pages/[pageId].js";
 import { GET as getImport } from "../../../src/pages/api/manage/imports/[importId]/index.js";
@@ -128,6 +130,24 @@ describe("draft resource access", () => {
           `/api/manage/books/${bookId}/draft`,
           { bookId: String(bookId) },
           { bookId: "987654" },
+        ],
+        [
+          getDraftImages as RouteHandler,
+          `/api/manage/books/${bookId}/draft/images`,
+          { bookId: String(bookId) },
+          { bookId: "987654" },
+        ],
+        [
+          getDraftImage as RouteHandler,
+          `/api/manage/books/${bookId}/draft/images/res_0123456789abcdefghij`,
+          {
+            bookId: String(bookId),
+            resourceId: "res_0123456789abcdefghij",
+          },
+          {
+            bookId: "987654",
+            resourceId: "res_missing0123456789abc",
+          },
         ],
         [
           getPreviewPage as RouteHandler,

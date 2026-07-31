@@ -253,6 +253,16 @@ export async function assembleCandidate(
       "resource_resolution",
       () =>
         resolveDocumentResources({
+          additionalImagePaths:
+            typeof (config.metadata as Readonly<Record<string, unknown>>)
+              .cover_path === "string"
+              ? [
+                  String(
+                    (config.metadata as Readonly<Record<string, unknown>>)
+                      .cover_path,
+                  ),
+                ]
+              : [],
           document,
           idFactory: () =>
             opaqueBuildId("res", input.versionId, ++resourceOrdinal),

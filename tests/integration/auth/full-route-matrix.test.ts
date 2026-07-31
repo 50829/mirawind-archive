@@ -119,6 +119,20 @@ const routePolicyEvidence: Readonly<Record<string, readonly string[]>> = {
     "requireMutationOrigin",
     "applyResponsePolicy",
   ],
+  "api/manage/books/[bookId]/draft/cover.ts": [
+    "requireRuntimeAdministrator",
+    "requireMutationOrigin",
+    'applyResponsePolicy(headers, "private-api")',
+  ],
+  "api/manage/books/[bookId]/draft/images/[resourceId].ts": [
+    "requireRuntimeAdministrator",
+    "X-Content-Type-Options",
+    'applyResponsePolicy(headers, "draft")',
+  ],
+  "api/manage/books/[bookId]/draft/images/index.ts": [
+    "requireRuntimeAdministrator",
+    'applyResponsePolicy(headers, "private-api")',
+  ],
   "api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].ts": [
     "applyResponsePolicy",
   ],

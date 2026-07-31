@@ -69,13 +69,18 @@ export const GET: APIRoute = async ({ locals, params }) => {
   applyResponsePolicy(headers, "draft");
   return Response.json(
     {
+      access: book.access,
       book_id: book.id,
       candidate,
+      candidate_published:
+        candidate?.version_id !== null &&
+        candidate?.version_id === book.currentVersionId,
       alias: configValue.alias ?? null,
       boundaries: configValue.boundaries,
       config_revision: config.revision,
       diagnostics,
       metadata: configValue.metadata,
+      published: book.currentVersionId !== null,
       preview:
         previewModel === null
           ? null

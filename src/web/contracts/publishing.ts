@@ -29,6 +29,7 @@ export interface TypographySummary {
 }
 
 export interface DraftView {
+  readonly access: "private" | "public";
   readonly alias: string | null;
   readonly boundaries: {
     readonly appendix_start_block_id?: string;
@@ -37,9 +38,11 @@ export interface DraftView {
   };
   readonly book_id: number;
   readonly candidate: CurrentDraftCandidateProjection | null;
+  readonly candidate_published: boolean;
   readonly config_revision: number;
   readonly diagnostics: readonly PreviewDiagnostic[];
   readonly metadata: Readonly<Record<string, unknown>>;
+  readonly published: boolean;
   readonly preview: {
     readonly boundaries: DraftView["boundaries"];
     readonly compiler_version: string;

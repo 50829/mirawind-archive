@@ -151,6 +151,30 @@ describe("transient Markdown document parsing", () => {
 });
 
 describe("contained document resources and sanitized preview", () => {
+  it("resolves configured cover paths from the source root", async () => {
+    const root = await fixture({
+      "book/covers/cover.png": Uint8Array.from([1, 2, 3]),
+      "book/text/chapter.md": "# Book",
+    });
+    const markdownPath = resolve(root, "book/text/chapter.md");
+    const resolution = await resolveDocumentResources({
+      additionalImagePaths: ["covers/cover.png"],
+      document: parseMarkdownDocument("# Book"),
+      idFactory: () => "res_cover_test_0000000001",
+      markdownPath,
+      resourceRoot: resolve(root, "book"),
+    });
+
+    expect(resolution.resources).toEqual([
+      expect.objectContaining({
+        id: "res_cover_test_0000000001",
+        relativePath: "covers/cover.png",
+      }),
+    ]);
+    expect(resolution.references).toEqual([]);
+    expect(resolution.diagnostics).toEqual([]);
+  });
+
   it("maps contained resources once and reports missing, remote and cross-root references", async () => {
     const root = await fixture({
       "book/chapter.md": [

@@ -8,43 +8,44 @@ import {
 export function PublishPanel(props: {
   readonly blocked?: boolean;
   readonly bookId: number;
-  readonly candidateVersionId: string | null;
+  readonly candidatePublished: boolean;
   readonly compact?: boolean;
-  readonly configRevision: number;
+  readonly etag: string;
+  readonly onPublished: () => Promise<void>;
   readonly previewReady: boolean;
   readonly previewStale: boolean;
 }) {
   const [message, setMessage] = useState("");
-  const [published, setPublished] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function publish() {
-    if (!props.candidateVersionId) return;
     setSubmitting(true);
     setMessage("");
     try {
       const response = await fetch(
         `/api/manage/books/${props.bookId}/publish`,
         {
-          body: JSON.stringify({
-            expected_candidate_version_id: props.candidateVersionId,
-            expected_config_revision: props.configRevision,
-          }),
+          body: JSON.stringify({}),
           cache: "no-store",
           credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "If-Match": props.etag,
+          },
           method: "POST",
         },
       );
       if (!response.ok) {
         setMessage(
-          response.status === 409
-            ? "当前候选已过期或存在阻断问题。"
-            : "无法发布，请稍后重试。",
+          response.status === 412
+            ? "草稿已更新，请重新载入后再发布。"
+            : response.status === 409
+              ? "当前候选已过期或存在阻断问题。"
+              : "无法发布，请稍后重试。",
         );
         return;
       }
-      setPublished(true);
+      await props.onPublished();
     } catch {
       setMessage("无法发布，请检查网络后重试。");
     } finally {
@@ -54,11 +55,11 @@ export function PublishPanel(props: {
 
   const canPublish =
     props.previewReady &&
-    props.candidateVersionId !== null &&
+    Boolean(props.etag) &&
     !props.previewStale &&
     !props.blocked &&
     !submitting &&
-    !published;
+    !props.candidatePublished;
 
   return (
     <section
@@ -75,9 +76,13 @@ export function PublishPanel(props: {
         onClick={() => void publish()}
         type="button"
       >
-        {submitting ? "正在发布" : published ? "已发布" : "发布当前修订"}
+        {submitting
+          ? "正在发布"
+          : props.candidatePublished
+            ? "已发布"
+            : "发布当前修订"}
       </button>
-      {published && (
+      {props.candidatePublished && (
         <a
           className="font-semibold text-emerald-800 hover:text-emerald-900"
           href={`/read/${props.bookId}`}

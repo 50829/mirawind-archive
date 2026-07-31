@@ -46,6 +46,72 @@ export class DraftArtifactReader {
     ) as Record<string, unknown>;
   }
 
+  async listCandidateImages(input: {
+    readonly bookId: number;
+    readonly versionId: string;
+    readonly versionRelativePath: string;
+  }): Promise<
+    readonly {
+      readonly height: number;
+      readonly mediaType: string;
+      readonly path: string;
+      readonly resourceId: string;
+      readonly sizeBytes: number;
+      readonly width: number;
+    }[]
+  > {
+    try {
+      const manifestPath = await resolveContainedPath(
+        this.layout.root,
+        `${input.versionRelativePath}/document-manifest.json`,
+      );
+      const manifest = validateDocumentManifest(
+        JSON.parse(await readFile(manifestPath, "utf8")) as unknown,
+      );
+      if (
+        manifest.book_id !== input.bookId ||
+        manifest.version_id !== input.versionId
+      ) {
+        return hidden("The draft images were not found.");
+      }
+      const resources = manifest.resources as Readonly<
+        Record<
+          string,
+          {
+            readonly height?: number;
+            readonly media_type: string;
+            readonly size: number;
+            readonly source_path: string;
+            readonly width?: number;
+          }
+        >
+      >;
+      return Object.freeze(
+        Object.entries(resources).flatMap(([resourceId, resource]) => {
+          if (
+            !resource.source_path.startsWith("source/") ||
+            resource.height === undefined ||
+            resource.width === undefined
+          ) {
+            return [];
+          }
+          return [
+            Object.freeze({
+              height: resource.height,
+              mediaType: resource.media_type,
+              path: resource.source_path.slice("source/".length),
+              resourceId,
+              sizeBytes: resource.size,
+              width: resource.width,
+            }),
+          ];
+        }),
+      );
+    } catch {
+      return hidden("The draft images were not found.");
+    }
+  }
+
   async readDiagnostics(
     relativePath: string,
   ): Promise<readonly SafeDiagnostic[]> {

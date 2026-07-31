@@ -120,7 +120,24 @@ export async function resolveDocumentResources(
   const diagnostics: SafeDiagnostic[] = [];
   const references: ResourceReference[] = [];
 
-  for (const reference of collectImageUrls(options.document)) {
+  const requests: {
+    readonly baseDirectory: string;
+    readonly createReference: boolean;
+    readonly position?: SourcePosition;
+    readonly url: string;
+  }[] = [
+    ...collectImageUrls(options.document).map((reference) => ({
+      ...reference,
+      baseDirectory: markdownDirectory,
+      createReference: true,
+    })),
+    ...(options.additionalImagePaths ?? []).map((url) => ({
+      baseDirectory: root,
+      createReference: false,
+      url,
+    })),
+  ];
+  for (const reference of requests) {
     const decoded = decodeLocalUrl(reference.url);
     if (!decoded) {
       diagnostics.push(
@@ -131,7 +148,7 @@ export async function resolveDocumentResources(
       );
       continue;
     }
-    const lexicalPath = path.resolve(markdownDirectory, decoded);
+    const lexicalPath = path.resolve(reference.baseDirectory, decoded);
     if (!containedRelativePath(root, lexicalPath)) {
       diagnostics.push(
         safeDiagnostic(
@@ -183,13 +200,15 @@ export async function resolveDocumentResources(
       });
       resourcesByPath.set(resolvedPath, resource);
     }
-    references.push(
-      Object.freeze({
-        originalUrl: reference.url,
-        ...(reference.position ? { position: reference.position } : {}),
-        resourceId: resource.id,
-      }),
-    );
+    if (reference.createReference) {
+      references.push(
+        Object.freeze({
+          originalUrl: reference.url,
+          ...(reference.position ? { position: reference.position } : {}),
+          resourceId: resource.id,
+        }),
+      );
+    }
   }
 
   return Object.freeze({
