@@ -75,6 +75,7 @@ describe("ready-version and search index transaction", () => {
         mainMarkdownPath: "book.md",
         mainMarkdownSha256: hash,
         nowMs: 3,
+        origin: "import",
         sourceRootRelativePath: "books/1/draft/sources/source",
       });
       drafts.addConfigRevision({

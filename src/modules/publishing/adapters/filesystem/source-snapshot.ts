@@ -3,6 +3,7 @@ import {
   chmod,
   constants,
   lstat,
+  link,
   mkdir,
   open,
   readdir,
@@ -51,6 +52,14 @@ export interface CreateSourceSnapshotOptions {
   readonly originalArchivePath: string;
   readonly originalName: string;
   readonly resourceRelativePaths: readonly string[];
+}
+
+interface StagedSourceAsset {
+  readonly id: string;
+  readonly logicalPath: string;
+  readonly sha256: string;
+  readonly sizeBytes: number;
+  readonly stagingPath: string;
 }
 
 function relativeStoragePath(root: string, target: string): string {
@@ -123,8 +132,15 @@ async function copySourceClosure(
   targetRoot: string,
   mainSourcePath: string,
   resourceRelativePaths: readonly string[],
-): Promise<{ readonly mainMarkdownSha256: string }> {
-  const resourcePaths: string[] = [];
+  stagingAssetRoot: string,
+): Promise<{
+  readonly assets: readonly StagedSourceAsset[];
+  readonly mainMarkdownSha256: string;
+}> {
+  const resourcePaths: {
+    readonly absolute: string;
+    readonly logical: string;
+  }[] = [];
   const seenResourcePaths = new Set<string>();
   for (const relativePath of resourceRelativePaths) {
     const lexicalPath = await resolveContainedPath(sourceRoot, relativePath);
@@ -149,27 +165,35 @@ async function copySourceClosure(
       throw new Error("SNAPSHOT_RESOURCE_PATH_INVALID");
     }
     seenResourcePaths.add(resourcePath);
-    resourcePaths.push(resourcePath);
+    resourcePaths.push({
+      absolute: resourcePath,
+      logical: relation.split(sep).join("/"),
+    });
   }
-  const sources = [mainSourcePath, ...resourcePaths].sort((left, right) =>
-    Buffer.from(relative(sourceRoot, left)).compare(
-      Buffer.from(relative(sourceRoot, right)),
-    ),
+  resourcePaths.sort((left, right) =>
+    Buffer.from(left.logical).compare(Buffer.from(right.logical)),
   );
   const directories = new Set<string>([targetRoot]);
-  let mainMarkdownSha256: string | undefined;
   await mkdir(targetRoot, { mode: 0o700 });
-  for (const source of sources) {
-    const sourceRelativePath = relative(sourceRoot, source);
-    if (
-      !sourceRelativePath ||
-      sourceRelativePath === ".." ||
-      sourceRelativePath.startsWith(`..${sep}`) ||
-      isAbsolute(sourceRelativePath)
-    ) {
-      throw new Error("SNAPSHOT_SOURCE_PATH_INVALID");
-    }
-    const target = resolve(targetRoot, sourceRelativePath);
+  await mkdir(stagingAssetRoot, { mode: 0o700 });
+  const mainRelativePath = relative(sourceRoot, mainSourcePath);
+  if (
+    !mainRelativePath ||
+    mainRelativePath === ".." ||
+    mainRelativePath.startsWith(`..${sep}`) ||
+    isAbsolute(mainRelativePath)
+  ) {
+    throw new Error("SNAPSHOT_SOURCE_PATH_INVALID");
+  }
+  const mainTarget = resolve(targetRoot, mainRelativePath);
+  await mkdir(dirname(mainTarget), { mode: 0o700, recursive: true });
+  const main = await copyRegularFile(mainSourcePath, mainTarget);
+  const assets: StagedSourceAsset[] = [];
+  for (const resource of resourcePaths) {
+    const id = createOpaqueId("sourceAsset");
+    const stagingPath = resolve(stagingAssetRoot, id);
+    const copied = await copyRegularFile(resource.absolute, stagingPath);
+    const target = resolve(targetRoot, resource.logical);
     const targetDirectory = dirname(target);
     await mkdir(targetDirectory, { mode: 0o700, recursive: true });
     for (
@@ -179,16 +203,27 @@ async function copySourceClosure(
     ) {
       directories.add(directory);
     }
-    const copied = await copyRegularFile(source, target);
-    if (source === mainSourcePath) mainMarkdownSha256 = copied.sha256;
+    await link(stagingPath, target);
+    assets.push(
+      Object.freeze({
+        id,
+        logicalPath: resource.logical,
+        sha256: copied.sha256,
+        sizeBytes: copied.sizeBytes,
+        stagingPath,
+      }),
+    );
   }
   for (const directory of [...directories].sort(
     (left, right) => right.length - left.length,
   )) {
     await syncDirectory(directory);
   }
-  if (!mainMarkdownSha256) throw new Error("SNAPSHOT_MAIN_MARKDOWN_MISSING");
-  return Object.freeze({ mainMarkdownSha256 });
+  await syncDirectory(stagingAssetRoot);
+  return Object.freeze({
+    assets: Object.freeze(assets),
+    mainMarkdownSha256: main.sha256,
+  });
 }
 
 async function lockTreeDirectories(path: string): Promise<void> {
@@ -273,11 +308,14 @@ export class SourceSnapshotService {
     );
     const stagingRoot = resolve(bookDraftRoot, `.snapshot-${sourceId}.part`);
     const stagedSource = resolve(stagingRoot, "source");
+    const stagedAssets = resolve(stagingRoot, "assets");
     const stagedOriginal = resolve(stagingRoot, "original.zip");
     const finalSource = resolve(bookDraftRoot, "sources", sourceId);
     const finalOriginal = resolve(bookDraftRoot, "originals", originalId);
+    const finalAssetRoot = resolve(bookDraftRoot, "assets");
     let sourceRenamed = false;
     let originalRenamed = false;
+    const finalizedAssets: string[] = [];
     try {
       await mkdir(bookDraftRoot, { mode: 0o700, recursive: true });
       await mkdir(stagingRoot, { mode: 0o700, recursive: false });
@@ -286,6 +324,7 @@ export class SourceSnapshotService {
         stagedSource,
         mainSourcePath,
         options.resourceRelativePaths,
+        stagedAssets,
       );
       const copiedOriginal = await copyRegularFile(
         options.originalArchivePath,
@@ -294,6 +333,12 @@ export class SourceSnapshotService {
       await syncDirectory(stagingRoot);
       await mkdir(dirname(finalSource), { mode: 0o700, recursive: true });
       await mkdir(dirname(finalOriginal), { mode: 0o700, recursive: true });
+      await mkdir(finalAssetRoot, { mode: 0o700, recursive: true });
+      for (const asset of copiedSource.assets) {
+        const finalAsset = resolve(finalAssetRoot, asset.id);
+        await rename(asset.stagingPath, finalAsset);
+        finalizedAssets.push(finalAsset);
+      }
       await rename(stagedSource, finalSource);
       sourceRenamed = true;
       await rename(stagedOriginal, finalOriginal);
@@ -301,6 +346,7 @@ export class SourceSnapshotService {
       await lockTreeDirectories(finalSource);
       await syncDirectory(dirname(finalSource));
       await syncDirectory(dirname(finalOriginal));
+      await syncDirectory(finalAssetRoot);
 
       const result = withImmediateTransaction(this.database, () => {
         const source = this.sources.createSnapshot({
@@ -311,11 +357,30 @@ export class SourceSnapshotService {
           mainMarkdownPath: basename(mainSourcePath),
           mainMarkdownSha256: copiedSource.mainMarkdownSha256,
           nowMs: options.nowMs ?? Date.now(),
+          origin: "import",
           sourceRootRelativePath: relativeStoragePath(
             this.layout.root,
             finalSource,
           ),
         });
+        for (const asset of copiedSource.assets) {
+          this.sources.registerAsset({
+            bookId: options.bookId,
+            id: asset.id,
+            nowMs: options.nowMs ?? Date.now(),
+            sha256: asset.sha256,
+            sizeBytes: asset.sizeBytes,
+            storageRelativePath: relativeStoragePath(
+              this.layout.root,
+              resolve(finalAssetRoot, asset.id),
+            ),
+          });
+          this.sources.bindAsset({
+            assetId: asset.id,
+            logicalPath: asset.logicalPath,
+            sourceId,
+          });
+        }
         const original = this.sources.registerOriginal({
           bookId: options.bookId,
           id: originalId,
@@ -359,9 +424,16 @@ export class SourceSnapshotService {
               }),
             ]
           : []),
+        ...finalizedAssets.map((target) =>
+          removeExactContainedTree({
+            root: this.layout.root,
+            target,
+          }),
+        ),
       ]);
       await rmdir(dirname(finalSource)).catch(() => undefined);
       await rmdir(dirname(finalOriginal)).catch(() => undefined);
+      await rmdir(finalAssetRoot).catch(() => undefined);
       await rmdir(bookDraftRoot).catch(() => undefined);
       throw error;
     }

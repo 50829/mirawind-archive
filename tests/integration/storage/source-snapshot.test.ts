@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { SourceSnapshotService } from "@/modules/publishing/adapters/filesystem/source-snapshot";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
@@ -96,6 +97,20 @@ describe("immutable accepted source snapshots", () => {
       );
       expect(await readFile(resolve(sourceRoot, "images/a.png"), "utf8")).toBe(
         "image",
+      );
+      const [binding] = new SourceRepository(database).bindingsForSource(
+        snapshot.source.id,
+      );
+      expect(binding).toMatchObject({ logicalPath: "images/a.png" });
+      expect((await stat(resolve(sourceRoot, "images/a.png"))).ino).toBe(
+        (
+          await stat(
+            resolve(
+              dataRoot.layout.root,
+              binding?.storageRelativePath ?? "missing",
+            ),
+          )
+        ).ino,
       );
       expect((await readdir(sourceRoot)).sort()).toEqual(["book.md", "images"]);
       expect(await readdir(resolve(sourceRoot, "images"))).toEqual(["a.png"]);

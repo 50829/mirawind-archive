@@ -10,7 +10,7 @@ const migrationDefinitions = [
   {
     baselineIdentity: "mirawind-publishing-editor-v1",
     checksum:
-      "419f227261f5e27d15df2c202de2d77cc3b85fc2c07b406648c5a470b013b59c",
+      "d4eb299eb8fe745294cb0639c59c679802bef1eedf455c4d440a82cd10e771ca",
     file: "0001_clean_slate.sql",
     name: "publishing_editor_clean_slate",
     version: 1,

@@ -162,6 +162,9 @@ export class SqliteBookPublishingCleanup
     this.database
       .prepare("DELETE FROM source_snapshots WHERE book_id = ?")
       .run(input.bookId);
+    this.database
+      .prepare("DELETE FROM source_assets WHERE book_id = ?")
+      .run(input.bookId);
     if (importIds.length > 0) {
       this.database
         .prepare(`DELETE FROM imports WHERE id IN (${placeholders})`)

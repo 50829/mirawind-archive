@@ -80,6 +80,7 @@ describe("publishing storage reconciliation", () => {
         mainMarkdownPath: "book.md",
         mainMarkdownSha256: hash,
         nowMs: 3,
+        origin: "import",
         sourceRootRelativePath: knownSource,
       });
       sources.registerOriginal({

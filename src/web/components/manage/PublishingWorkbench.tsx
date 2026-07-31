@@ -1,4 +1,4 @@
-import { CircleAlert, Save, X } from "lucide-react";
+import { CircleAlert, FilePenLine, RotateCcw, Save, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -35,9 +35,11 @@ const terminalJobStates = new Set<RecoveryJob["state"]>([
 type PreviewFrameMessageType =
   | "mirawind-preview-location"
   | "mirawind-preview-navigate"
-  | "mirawind-preview-ready";
+  | "mirawind-preview-ready"
+  | "mirawind-preview-select-block";
 
 interface PreviewFrameMessage {
+  readonly block_id?: string;
   readonly fragment: string | null;
   readonly page_id: number;
   readonly revision: number;
@@ -54,7 +56,8 @@ function previewFrameMessage(
   if (
     candidate.type !== "mirawind-preview-location" &&
     candidate.type !== "mirawind-preview-navigate" &&
-    candidate.type !== "mirawind-preview-ready"
+    candidate.type !== "mirawind-preview-ready" &&
+    candidate.type !== "mirawind-preview-select-block"
   ) {
     return null;
   }
@@ -73,11 +76,50 @@ function previewFrameMessage(
   ) {
     return null;
   }
+  if (
+    candidate.type === "mirawind-preview-select-block" &&
+    (typeof candidate.block_id !== "string" ||
+      !/^blk_[A-Za-z0-9_-]{16,80}$/u.test(candidate.block_id))
+  ) {
+    return null;
+  }
   return candidate as unknown as PreviewFrameMessage;
 }
 
+interface DraftBlockEditor {
+  readonly acceptedMarkdown: string;
+  readonly blockId: string;
+  readonly conflict: boolean;
+  readonly error: string;
+  readonly etag: string;
+  readonly kind: string;
+  readonly loading: boolean;
+  readonly markdown: string;
+  readonly saving: boolean;
+}
+
+interface DraftBlockResponse {
+  readonly block_id: string;
+  readonly kind: string;
+  readonly markdown: string;
+}
+
+const blockKindLabels: Readonly<Record<string, string>> = Object.freeze({
+  blockquote: "引用",
+  code: "代码块",
+  footnoteDefinition: "脚注",
+  image: "图片",
+  listItem: "列表项",
+  math: "公式",
+  paragraph: "段落",
+  semanticContainer: "教材内容块",
+  table: "表格",
+});
+
 export function PublishingWorkbench(props: { readonly bookId: number }) {
   const [draft, setDraft] = useState<DraftView | null>(null);
+  const [displayedPreview, setDisplayedPreview] =
+    useState<DraftView["preview"]>(null);
   const [message, setMessage] = useState("");
   const [etag, setEtag] = useState("");
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
@@ -99,10 +141,12 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     dirty: false,
     saving: false,
   });
+  const [blockEditor, setBlockEditor] = useState<DraftBlockEditor | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const editorRef = useRef<StructureEditorHandle>(null);
   const diagnosticsDialog = useRef<HTMLDialogElement>(null);
   const diagnosticsDialogTrigger = useRef<HTMLButtonElement>(null);
+  const blockDialog = useRef<HTMLDialogElement>(null);
   const updateEditorState = useCallback((next: StructureEditorState) => {
     setEditorState((current) =>
       current.conflict === next.conflict &&
@@ -122,11 +166,121 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     const next = (await response.json()) as DraftView;
     setEtag(response.headers.get("etag") ?? "");
     setDraft(next);
-    setSelectedPage(
-      (current) => current ?? next.preview?.pages.at(0)?.page_id ?? null,
-    );
+    if (next.preview) {
+      setDisplayedPreview(next.preview);
+      setSelectedPage((current) =>
+        next.preview?.pages.some((page) => page.page_id === current)
+          ? current
+          : (next.preview?.pages.at(0)?.page_id ?? null),
+      );
+    }
     return next;
   }, [props.bookId]);
+
+  const preview = draft?.preview ?? displayedPreview;
+  const previewIsCurrent = Boolean(
+    draft?.preview && draft.preview.config_revision === draft.config_revision,
+  );
+
+  const loadBlock = useCallback(
+    async (blockId: string) => {
+      if (!draft || !previewIsCurrent || draft.candidate?.state !== "ready") {
+        setMessage("当前预览正在更新，完成后才能编辑正文。");
+        return;
+      }
+      setBlockEditor({
+        acceptedMarkdown: "",
+        blockId,
+        conflict: false,
+        error: "",
+        etag: "",
+        kind: "",
+        loading: true,
+        markdown: "",
+        saving: false,
+      });
+      if (!blockDialog.current?.open) blockDialog.current?.showModal();
+      try {
+        const response = await fetch(
+          `/api/manage/books/${draft.book_id}/draft/blocks/${blockId}`,
+          { cache: "no-store", credentials: "same-origin" },
+        );
+        if (!response.ok) throw new Error("DRAFT_BLOCK_LOAD_FAILED");
+        const value = (await response.json()) as DraftBlockResponse;
+        const responseEtag = response.headers.get("etag");
+        if (value.block_id !== blockId) throw new Error("DRAFT_BLOCK_MISMATCH");
+        if (!responseEtag) throw new Error("DRAFT_BLOCK_ETAG_MISSING");
+        setBlockEditor({
+          acceptedMarkdown: value.markdown,
+          blockId,
+          conflict: false,
+          error: "",
+          etag: responseEtag,
+          kind: value.kind,
+          loading: false,
+          markdown: value.markdown,
+          saving: false,
+        });
+      } catch {
+        setBlockEditor((current) =>
+          current?.blockId === blockId
+            ? {
+                ...current,
+                error: "无法读取这段正文。",
+                loading: false,
+              }
+            : current,
+        );
+      }
+    },
+    [draft, previewIsCurrent],
+  );
+
+  const reloadBlock = useCallback(async () => {
+    if (!blockEditor) return;
+    const blockId = blockEditor.blockId;
+    setBlockEditor((current) =>
+      current
+        ? { ...current, error: "", loading: true, saving: false }
+        : current,
+    );
+    try {
+      const [response] = await Promise.all([
+        fetch(`/api/manage/books/${props.bookId}/draft/blocks/${blockId}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+        refresh(),
+      ]);
+      if (!response.ok) throw new Error("DRAFT_BLOCK_RELOAD_FAILED");
+      const value = (await response.json()) as DraftBlockResponse;
+      const responseEtag = response.headers.get("etag");
+      if (value.block_id !== blockId || !responseEtag) {
+        throw new Error("DRAFT_BLOCK_RELOAD_MISMATCH");
+      }
+      setBlockEditor({
+        acceptedMarkdown: value.markdown,
+        blockId,
+        conflict: false,
+        error: "",
+        etag: responseEtag,
+        kind: value.kind,
+        loading: false,
+        markdown: value.markdown,
+        saving: false,
+      });
+    } catch {
+      setBlockEditor((current) =>
+        current?.blockId === blockId
+          ? {
+              ...current,
+              error: "无法重新载入当前正文，本地内容仍保留。",
+              loading: false,
+            }
+          : current,
+      );
+    }
+  }, [blockEditor, props.bookId, refresh]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -176,7 +330,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   );
 
   useEffect(() => {
-    const preview = draft?.preview;
     if (!preview) return;
     const receivePreviewMessage = (event: MessageEvent<unknown>) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
@@ -195,10 +348,16 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         setSelectedFragment(received.fragment);
         setNavigationSerial((value) => value + 1);
       }
+      if (
+        received.type === "mirawind-preview-select-block" &&
+        received.block_id
+      ) {
+        void loadBlock(received.block_id);
+      }
     };
     window.addEventListener("message", receivePreviewMessage);
     return () => window.removeEventListener("message", receivePreviewMessage);
-  }, [draft?.preview]);
+  }, [loadBlock, preview]);
 
   const pageForBlock = useCallback(
     (blockId: string) =>
@@ -275,6 +434,78 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     [activateDiagnostic, draft, editorState, refresh],
   );
 
+  const saveBlock = useCallback(async () => {
+    if (
+      !draft ||
+      !blockEditor ||
+      blockEditor.loading ||
+      blockEditor.saving ||
+      blockEditor.conflict ||
+      blockEditor.markdown === blockEditor.acceptedMarkdown ||
+      draft.candidate?.state !== "ready"
+    ) {
+      return;
+    }
+    setBlockEditor((current) =>
+      current ? { ...current, error: "", saving: true } : current,
+    );
+    try {
+      const response = await fetch(
+        `/api/manage/books/${draft.book_id}/draft/blocks/${blockEditor.blockId}`,
+        {
+          body: JSON.stringify({ markdown: blockEditor.markdown }),
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "If-Match": blockEditor.etag,
+          },
+          method: "PATCH",
+        },
+      );
+      if (response.status === 412) {
+        setBlockEditor((current) =>
+          current
+            ? {
+                ...current,
+                conflict: true,
+                error:
+                  "草稿已在其他页面更新。本地正文仍保留，请重新载入后再编辑。",
+                saving: false,
+              }
+            : current,
+        );
+        return;
+      }
+      if (!response.ok) {
+        setBlockEditor((current) =>
+          current
+            ? {
+                ...current,
+                error: "正文未保存，请检查 Markdown 后重试。",
+                saving: false,
+              }
+            : current,
+        );
+        return;
+      }
+      blockDialog.current?.close();
+      setBlockEditor(null);
+      setMessage("");
+      await refresh();
+    } catch {
+      setBlockEditor((current) =>
+        current
+          ? {
+              ...current,
+              error: "正文保存失败，请稍后重试。",
+              saving: false,
+            }
+          : current,
+      );
+    }
+  }, [blockEditor, draft, refresh]);
+
   if (!draft) {
     return (
       <p className={`${managePanel} mt-4`} role="status">
@@ -283,7 +514,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     );
   }
 
-  const preview = draft.preview;
   const pageId = preview?.pages.some((page) => page.page_id === selectedPage)
     ? selectedPage
     : (preview?.pages.at(0)?.page_id ?? null);
@@ -294,6 +524,9 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   const previewReady =
     candidateState === "ready" &&
     preview?.config_revision === draft.config_revision;
+  const blockDirty = Boolean(
+    blockEditor && blockEditor.markdown !== blockEditor.acceptedMarkdown,
+  );
   return (
     <div className="preview-workspace" data-mobile-mode={mobileMode}>
       <header className="preview-header sticky top-0 z-10 mb-4 grid min-h-18 grid-cols-[auto_minmax(12rem,1fr)_auto_auto_auto] items-center gap-3 rounded-lg border border-stone-300 bg-white px-6 py-3 max-[850px]:grid-cols-[auto_minmax(0,1fr)_auto]">
@@ -315,7 +548,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
               预览构建失败
             </p>
           )}
-          {editorState.dirty && (
+          {(editorState.dirty || blockDirty) && (
             <p className="text-xs text-amber-800" role="status">
               本地修改尚未反映
             </p>
@@ -356,6 +589,8 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             !editorState.dirty ||
             editorState.saving ||
             editorState.conflict ||
+            blockDirty ||
+            blockEditor?.saving ||
             candidateState === "building"
           }
           onClick={() => editorRef.current?.save()}
@@ -365,7 +600,12 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           {editorState.saving ? "正在保存" : "保存并更新预览"}
         </button>
         <PublishPanel
-          blocked={editorState.dirty || blockingDiagnostics.length > 0}
+          blocked={
+            editorState.dirty ||
+            blockDirty ||
+            Boolean(blockEditor?.saving || blockEditor?.conflict) ||
+            blockingDiagnostics.length > 0
+          }
           bookId={draft.book_id}
           candidateVersionId={draft.candidate?.version_id ?? null}
           compact
@@ -434,7 +674,11 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
               }}
               onStateChange={updateEditorState}
               revision={draft.config_revision}
-              saveDisabled={candidateState === "building"}
+              saveDisabled={
+                candidateState === "building" ||
+                blockDirty ||
+                Boolean(blockEditor?.saving || blockEditor?.conflict)
+              }
               structure={draft.structure}
               typography={preview?.typography}
             />
@@ -449,7 +693,11 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
               onRecover={recoverDiagnostic}
               pageForBlock={pageForBlock}
               recoveryDisabled={
-                editorState.dirty || editorState.conflict || editorState.saving
+                editorState.dirty ||
+                editorState.conflict ||
+                editorState.saving ||
+                blockDirty ||
+                Boolean(blockEditor?.saving || blockEditor?.conflict)
               }
             />
           </div>
@@ -537,12 +785,109 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
               onRecover={recoverDiagnostic}
               pageForBlock={pageForBlock}
               recoveryDisabled={
-                editorState.dirty || editorState.conflict || editorState.saving
+                editorState.dirty ||
+                editorState.conflict ||
+                editorState.saving ||
+                blockDirty ||
+                Boolean(blockEditor?.saving || blockEditor?.conflict)
               }
             />
           </div>
         </dialog>
       )}
+
+      <dialog
+        aria-labelledby="draft-block-editor-title"
+        className={`workbench-mobile-dialog ${manageDialog} w-[min(48rem,calc(100vw-2rem))]`}
+        onCancel={(event) => {
+          if (blockEditor?.saving) event.preventDefault();
+        }}
+        onClose={() => {
+          setBlockEditor(null);
+          iframeRef.current?.focus();
+        }}
+        ref={blockDialog}
+      >
+        <header className={manageDialogHeader}>
+          <span id="draft-block-editor-title">
+            编辑{blockKindLabels[blockEditor?.kind ?? ""] ?? "正文"}
+          </span>
+          <button
+            aria-label="关闭正文编辑"
+            className={manageDialogClose}
+            disabled={blockEditor?.saving}
+            onClick={() => blockDialog.current?.close()}
+            title="关闭"
+            type="button"
+          >
+            <X aria-hidden="true" size={20} />
+          </button>
+        </header>
+        <div className="workbench-dialog-body grid gap-4 p-4">
+          {blockEditor?.loading ? (
+            <p role="status">正在读取正文…</p>
+          ) : blockEditor ? (
+            <>
+              <label className="grid gap-2 font-semibold">
+                Markdown
+                <textarea
+                  autoFocus
+                  className="min-h-80 w-full resize-y rounded-md border border-stone-300 bg-white p-3 font-mono text-sm leading-6 text-stone-900 focus-visible:border-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+                  onChange={(event) => {
+                    const markdown = event.currentTarget.value;
+                    setBlockEditor((current) =>
+                      current ? { ...current, markdown } : current,
+                    );
+                  }}
+                  spellCheck={false}
+                  value={blockEditor.markdown}
+                />
+              </label>
+              {blockEditor.error && (
+                <p className="text-sm text-red-800" role="alert">
+                  {blockEditor.error}
+                </p>
+              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                {blockEditor.conflict && (
+                  <button
+                    className={manageSecondaryButton}
+                    disabled={blockEditor.loading}
+                    onClick={() => void reloadBlock()}
+                    type="button"
+                  >
+                    <RotateCcw aria-hidden="true" size={18} />
+                    放弃本地修改并重新载入
+                  </button>
+                )}
+                <button
+                  className={manageQuietButton}
+                  disabled={blockEditor.saving}
+                  onClick={() => blockDialog.current?.close()}
+                  type="button"
+                >
+                  取消
+                </button>
+                <button
+                  className={manageSecondaryButton}
+                  disabled={
+                    blockEditor.loading ||
+                    blockEditor.saving ||
+                    blockEditor.conflict ||
+                    blockEditor.markdown === blockEditor.acceptedMarkdown ||
+                    candidateState !== "ready"
+                  }
+                  onClick={() => void saveBlock()}
+                  type="button"
+                >
+                  <FilePenLine aria-hidden="true" size={18} />
+                  {blockEditor.saving ? "正在保存" : "保存正文并更新预览"}
+                </button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </dialog>
     </div>
   );
 }

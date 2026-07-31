@@ -100,6 +100,7 @@ export function setupPublicationFixture(
     mainMarkdownPath: "book.md",
     mainMarkdownSha256: hash,
     nowMs: 3,
+    origin: "import",
     sourceRootRelativePath: "books/1/draft/sources/source",
   });
   drafts.addConfigRevision({

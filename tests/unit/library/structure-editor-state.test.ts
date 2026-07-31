@@ -38,6 +38,35 @@ describe("publishing workbench local edit retention", () => {
     ]);
   });
 
+  it("keeps unsaved edits when an unrelated source revision arrives", () => {
+    const previous: readonly EditableStructureNode[] = [
+      {
+        block_id: "blk_structure_editor_state_0003",
+        display_level: 1,
+        include_in_toc: true,
+        starts_page: true,
+        title_markdown: "Server title",
+      },
+    ];
+    const server = previous.map((node) => ({
+      ...node,
+      source_number: "Chapter 1",
+    }));
+    const local = previous.map((node) => ({
+      ...node,
+      display_level: 2,
+      title_markdown: "Unsaved title",
+    }));
+
+    expect(mergeAcceptedNodes(server, previous, local)).toEqual([
+      expect.objectContaining({
+        display_level: 2,
+        source_number: "Chapter 1",
+        title_markdown: "Unsaved title",
+      }),
+    ]);
+  });
+
   it("changes only the selected heading level", () => {
     expect(
       changeDisplayLevel(

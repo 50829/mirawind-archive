@@ -221,7 +221,7 @@ export async function finalizePreparedDraft(input: {
     layoutSource: input.artifact.layoutSource,
     pdfDiagnostics: input.artifact.pdfDiagnostics,
     sourceId: snapshot.source.id,
-    sourceSha256: input.artifact.analysisSourceSha256,
+    sourceSha256: snapshot.source.mainMarkdownSha256,
     typographyRiskSummaries: input.artifact.typographyRiskSummaries,
     typographyRiskSummariesTruncated:
       input.artifact.typographyRiskSummariesTruncated,

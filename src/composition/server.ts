@@ -10,6 +10,10 @@ import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
 import { deleteFinalPasskey } from "@/modules/identity/adapters/sqlite/final-passkey";
 import { InstallationRepository } from "@/modules/identity/adapters/sqlite/installation";
 import { patchDraftConfig } from "@/modules/publishing/adapters/filesystem/config-revisions";
+import {
+  getDraftBlock,
+  patchDraftBlock,
+} from "@/modules/publishing/adapters/filesystem/draft-blocks";
 import { DraftArtifactReader } from "@/modules/publishing/adapters/filesystem/draft-artifacts";
 import { ImportUploadService } from "@/modules/publishing/adapters/filesystem/import-upload";
 import { queueSourceReprocess } from "@/modules/publishing/adapters/filesystem/source-reprocess";
@@ -207,7 +211,9 @@ export function createIdentityServer(database: Database.Database) {
 }
 
 export const publishingServerActions = Object.freeze({
+  getDraftBlock,
   makeBookNonPublic,
+  patchDraftBlock,
   patchDraftConfig,
   queueSourceReprocess,
 });

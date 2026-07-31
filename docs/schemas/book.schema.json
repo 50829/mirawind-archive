@@ -198,7 +198,18 @@
       "required": ["typography", "content_cleanup"],
       "properties": {
         "typography": { "$ref": "#/$defs/typographyProvenance" },
-        "content_cleanup": { "$ref": "#/$defs/contentCleanupProvenance" }
+        "content_cleanup": { "$ref": "#/$defs/contentCleanupProvenance" },
+        "source_edit": { "$ref": "#/$defs/sourceEditProvenance" }
+      }
+    },
+    "sourceEditProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_id", "input_sha256", "output_sha256"],
+      "properties": {
+        "block_id": { "$ref": "#/$defs/blockId" },
+        "input_sha256": { "$ref": "#/$defs/sha256" },
+        "output_sha256": { "$ref": "#/$defs/sha256" }
       }
     },
     "typographyProvenance": {
@@ -295,7 +306,7 @@
   },
   "x-semantic-validations": [
     "book_id must match the owning book and revision must increase",
-    "typography output must equal content cleanup input and cleanup output must equal main Markdown",
+    "typography output must equal content cleanup input; cleanup or latest source edit output must equal main Markdown",
     "source block identities must be unique and match every parsed active block in source order",
     "structure must reference every active heading exactly once in source order",
     "title_markdown must contain inline Markdown only",

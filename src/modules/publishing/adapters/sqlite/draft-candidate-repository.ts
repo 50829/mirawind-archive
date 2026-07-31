@@ -398,7 +398,7 @@ export class DraftCandidateRepository {
     readonly expectedRevision: number;
     readonly expectedSourceId: string;
     readonly expectedYamlSha256: string;
-    readonly importId: string;
+    readonly importId?: string;
     readonly newSourceId: string;
     readonly nowMs: number;
     readonly revision: number;
@@ -407,10 +407,28 @@ export class DraftCandidateRepository {
     readonly yamlRelativePath: string;
     readonly yamlSha256: string;
   }): DraftCandidateRecord {
-    return withImmediateTransaction(this.database, () => {
-      const current = this.database
-        .prepare(
-          `SELECT books.draft_config_revision AS revision,
+    return withImmediateTransaction(this.database, () =>
+      this.replaceSourceConfigAndCreateInCurrentTransaction(input),
+    );
+  }
+
+  replaceSourceConfigAndCreateInCurrentTransaction(input: {
+    readonly bookId: number;
+    readonly expectedRevision: number;
+    readonly expectedSourceId: string;
+    readonly expectedYamlSha256: string;
+    readonly importId?: string;
+    readonly newSourceId: string;
+    readonly nowMs: number;
+    readonly revision: number;
+    readonly schemaVersion: number;
+    readonly title: string;
+    readonly yamlRelativePath: string;
+    readonly yamlSha256: string;
+  }): DraftCandidateRecord {
+    const current = this.database
+      .prepare(
+        `SELECT books.draft_config_revision AS revision,
                   books.draft_source_id AS source_id,
                   config_revisions.yaml_sha256 AS yaml_sha256
            FROM books
@@ -418,60 +436,58 @@ export class DraftCandidateRepository {
              ON config_revisions.book_id = books.id
             AND config_revisions.revision = books.draft_config_revision
            WHERE books.id = ? AND books.deletion_requested_at IS NULL`,
-        )
-        .get(input.bookId) as
-        | { revision: number; source_id: string; yaml_sha256: string }
-        | undefined;
-      if (
-        !current ||
-        input.revision !== input.expectedRevision + 1 ||
-        current.revision !== input.expectedRevision ||
-        current.source_id !== input.expectedSourceId ||
-        current.yaml_sha256 !== input.expectedYamlSha256
-      ) {
-        throw new Error("CONFIG_REVISION_CONFLICT");
-      }
-      this.database
-        .prepare(
-          `INSERT INTO config_revisions (
+      )
+      .get(input.bookId) as
+      { revision: number; source_id: string; yaml_sha256: string } | undefined;
+    if (
+      !current ||
+      input.revision !== input.expectedRevision + 1 ||
+      current.revision !== input.expectedRevision ||
+      current.source_id !== input.expectedSourceId ||
+      current.yaml_sha256 !== input.expectedYamlSha256
+    ) {
+      throw new Error("CONFIG_REVISION_CONFLICT");
+    }
+    this.database
+      .prepare(
+        `INSERT INTO config_revisions (
             book_id, revision, source_id, schema_version,
             yaml_rel_path, yaml_sha256, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          input.bookId,
-          input.revision,
-          input.newSourceId,
-          input.schemaVersion,
-          input.yamlRelativePath,
-          input.yamlSha256,
-          input.nowMs,
-        );
-      const changed = this.database
-        .prepare(
-          `UPDATE books
+      )
+      .run(
+        input.bookId,
+        input.revision,
+        input.newSourceId,
+        input.schemaVersion,
+        input.yamlRelativePath,
+        input.yamlSha256,
+        input.nowMs,
+      );
+    const changed = this.database
+      .prepare(
+        `UPDATE books
            SET draft_source_id = ?, draft_config_revision = ?,
                title_cache = ?, updated_at = ?
            WHERE id = ? AND draft_config_revision = ? AND draft_source_id = ?
              AND deletion_requested_at IS NULL`,
-        )
-        .run(
-          input.newSourceId,
-          input.revision,
-          input.title,
-          input.nowMs,
-          input.bookId,
-          input.expectedRevision,
-          input.expectedSourceId,
-        );
-      if (changed.changes !== 1) throw new Error("CONFIG_REVISION_CONFLICT");
-      return this.createForCurrentRevisionInTransaction({
-        bookId: input.bookId,
-        configRevision: input.revision,
-        importId: input.importId,
-        nowMs: input.nowMs,
-        sourceId: input.newSourceId,
-      });
+      )
+      .run(
+        input.newSourceId,
+        input.revision,
+        input.title,
+        input.nowMs,
+        input.bookId,
+        input.expectedRevision,
+        input.expectedSourceId,
+      );
+    if (changed.changes !== 1) throw new Error("CONFIG_REVISION_CONFLICT");
+    return this.createForCurrentRevisionInTransaction({
+      bookId: input.bookId,
+      configRevision: input.revision,
+      ...(input.importId ? { importId: input.importId } : {}),
+      nowMs: input.nowMs,
+      sourceId: input.newSourceId,
     });
   }
 

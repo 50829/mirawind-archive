@@ -187,6 +187,10 @@ function validateVersionFourSemantics(config: Record<string, unknown>): void {
         readonly input_sha256: string;
         readonly output_sha256: string;
       };
+      readonly source_edit?: {
+        readonly input_sha256: string;
+        readonly output_sha256: string;
+      };
       readonly typography: {
         readonly output_sha256: string;
       };
@@ -195,8 +199,11 @@ function validateVersionFourSemantics(config: Record<string, unknown>): void {
   if (
     source.preprocessing.typography.output_sha256 !==
       source.preprocessing.content_cleanup.input_sha256 ||
-    source.preprocessing.content_cleanup.output_sha256 !==
-      source.main_markdown_sha256
+    (source.preprocessing.source_edit
+      ? source.preprocessing.source_edit.output_sha256 !==
+        source.main_markdown_sha256
+      : source.preprocessing.content_cleanup.output_sha256 !==
+        source.main_markdown_sha256)
   ) {
     semanticFailure("/source/preprocessing");
   }

@@ -232,6 +232,39 @@
     ) {
       return;
     }
+    const origin = event.target instanceof Element ? event.target : null;
+    if (
+      !origin ||
+      origin.closest(
+        "a, button, input, select, textarea, summary, [data-reader-interactive]",
+      )
+    ) {
+      return;
+    }
+    const block = origin.closest("[data-block-id]");
+    if (!(block instanceof HTMLElement) || /^H[1-4]$/u.test(block.tagName)) {
+      return;
+    }
+    const blockId = block.dataset.blockId || "";
+    if (!/^blk_[A-Za-z0-9_-]{16,80}$/u.test(blockId)) return;
+    previewMessage("mirawind-preview-select-block", {
+      block_id: blockId,
+      fragment: blockId,
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (
+      !previewMode ||
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey
+    ) {
+      return;
+    }
     const target =
       event.target instanceof Element ? event.target.closest("a[href]") : null;
     if (!(target instanceof HTMLAnchorElement)) return;

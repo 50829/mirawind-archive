@@ -160,6 +160,7 @@ async function seedPublishedLibraryBook(input: {
     mainMarkdownPath: "book.md",
     mainMarkdownSha256: markdownSha256,
     nowMs: nowMs + 2,
+    origin: "import",
     sourceRootRelativePath: `books/${book.id}/draft/sources/${sourceId}`,
   });
   const headingIds = [

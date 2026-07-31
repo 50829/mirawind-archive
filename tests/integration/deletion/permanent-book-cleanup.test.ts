@@ -199,8 +199,8 @@ describe("permanent book cleanup", () => {
           `INSERT INTO source_snapshots (
             id, book_id, main_markdown_path, main_markdown_sha256,
             source_root_rel_path, analysis_version,
-            created_from_import_id, created_at
-          ) VALUES (?, ?, 'main.md', ?, ?, 'fixture-v1', ?, 1100)`,
+            origin, parent_source_id, created_from_import_id, created_at
+          ) VALUES (?, ?, 'main.md', ?, ?, 'fixture-v1', 'import', NULL, ?, 1100)`,
         )
         .run(
           sourceId,

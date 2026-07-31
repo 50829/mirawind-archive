@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
@@ -20,6 +20,10 @@ import {
   patchDraftConfig,
   replaceDraftConfig,
 } from "@/modules/publishing/adapters/filesystem/config-revisions";
+import {
+  getDraftBlock,
+  patchDraftBlock,
+} from "@/modules/publishing/adapters/filesystem/draft-blocks";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
@@ -101,6 +105,7 @@ async function fixture(
     mainMarkdownPath: "book.md",
     mainMarkdownSha256: markdownHash,
     nowMs: 3,
+    origin: "import",
     sourceRootRelativePath: `books/${book.id}/draft/sources/src_config_revision_test_0001`,
   });
   const initial = config({
@@ -163,6 +168,126 @@ async function fixture(
 }
 
 describe("atomic draft configuration revisions", () => {
+  it("creates an immutable source revision and reuses bound assets for a block edit", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const setup = await fixture(database, dataRoot.layout);
+      const sources = new SourceRepository(database);
+      const assetId = "asset_config_revision_0001";
+      const assetRelativePath = `books/${setup.book.id}/draft/assets/${assetId}`;
+      const assetPath = resolve(dataRoot.layout.root, assetRelativePath);
+      await mkdir(resolve(assetPath, ".."), { mode: 0o700, recursive: true });
+      await writeFile(assetPath, "asset bytes", { mode: 0o400 });
+      sources.registerAsset({
+        bookId: setup.book.id,
+        id: assetId,
+        nowMs: 5,
+        sha256: sha256("asset bytes"),
+        sizeBytes: 11,
+        storageRelativePath: assetRelativePath,
+      });
+      sources.bindAsset({
+        assetId,
+        logicalPath: "images/example.bin",
+        sourceId: "src_config_revision_test_0001",
+      });
+      const originalResourcePath = resolve(
+        dataRoot.layout.bookDirectory,
+        String(setup.book.id),
+        "draft",
+        "sources",
+        "src_config_revision_test_0001",
+        "images",
+        "example.bin",
+      );
+      await mkdir(resolve(originalResourcePath, ".."), {
+        mode: 0o700,
+        recursive: true,
+      });
+      await link(assetPath, originalResourcePath);
+
+      const blockId = "blk_config_revision_content_0001";
+      const current = await getDraftBlock({
+        blockId,
+        bookId: setup.book.id,
+        database,
+        layout: dataRoot.layout,
+      });
+      expect(current).toMatchObject({
+        block_id: blockId,
+        kind: "paragraph",
+        markdown: "Body.",
+      });
+
+      const result = await patchDraftBlock({
+        blockId,
+        bookId: setup.book.id,
+        database,
+        expectedEtag: current.etag,
+        layout: dataRoot.layout,
+        nowMs: 10,
+        patch: { markdown: "Edited body with `token`." },
+      });
+      const book = new DraftRepository(database).requireBook(setup.book.id);
+      const editedSource = sources.requireSnapshot(book.draftSourceId ?? "");
+      const editedRoot = resolve(
+        dataRoot.layout.root,
+        editedSource.sourceRootRelativePath,
+      );
+      const editedConfig = parseBookConfigYaml(
+        await readFile(
+          resolve(
+            dataRoot.layout.root,
+            new DraftRepository(database).requireConfig(setup.book.id, 2)
+              .yamlRelativePath,
+          ),
+          "utf8",
+        ),
+      );
+
+      expect(result).toMatchObject({
+        revision: 2,
+        selectedBlockId: blockId,
+      });
+      expect(editedSource).toMatchObject({
+        origin: "edit",
+        parentSourceId: "src_config_revision_test_0001",
+      });
+      expect(await readFile(resolve(editedRoot, "book.md"), "utf8")).toBe(
+        "# Source heading\n\nEdited body with `token`.",
+      );
+      expect(
+        (editedConfig.source as Record<string, unknown>).preprocessing,
+      ).toMatchObject({
+        source_edit: {
+          block_id: blockId,
+          input_sha256: setup.markdownHash,
+          output_sha256: editedSource.mainMarkdownSha256,
+        },
+      });
+      expect(sources.bindingsForSource(editedSource.id)).toEqual([
+        expect.objectContaining({
+          id: assetId,
+          logicalPath: "images/example.bin",
+        }),
+      ]);
+      expect((await stat(resolve(editedRoot, "images/example.bin"))).ino).toBe(
+        (await stat(assetPath)).ino,
+      );
+      expect(
+        await readFile(
+          resolve(
+            dataRoot.layout.bookDirectory,
+            String(setup.book.id),
+            "draft",
+            "sources",
+            "src_config_revision_test_0001",
+            "book.md",
+          ),
+          "utf8",
+        ),
+      ).toBe(sourceMarkdown);
+    }));
+
   it("merges a strict block patch without accepting unknown fields", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const setup = await fixture(database, dataRoot.layout);

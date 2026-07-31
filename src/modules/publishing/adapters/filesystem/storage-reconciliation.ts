@@ -269,6 +269,13 @@ async function reconcileDraftOrphans(input: {
         .all() as { storage_rel_path: string }[]
     ).map((row) => row.storage_rel_path),
   );
+  const assetPaths = new Set(
+    (
+      input.database
+        .prepare("SELECT storage_rel_path FROM source_assets")
+        .all() as { storage_rel_path: string }[]
+    ).map((row) => row.storage_rel_path),
+  );
   const configurations = input.database
     .prepare(
       "SELECT book_id, revision, source_id, yaml_rel_path FROM config_revisions",
@@ -317,6 +324,7 @@ async function reconcileDraftOrphans(input: {
     for (const [directoryName, known] of [
       ["sources", sourcePaths],
       ["originals", originalPaths],
+      ["assets", assetPaths],
     ] as const) {
       const directory = resolve(draftRoot, directoryName);
       if (!(await existsAsDirectory(directory))) continue;

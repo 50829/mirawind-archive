@@ -117,6 +117,10 @@ export const StructureEditor = forwardRef<
     readonly boundaries: ContentBoundaries;
     readonly nodes: readonly StructureNode[];
   } | null>(null);
+  const serverSnapshot = useRef({
+    boundaries: props.boundaries,
+    nodes: props.structure,
+  });
   const selectedDialog = useRef<HTMLDialogElement>(null);
   const selectedDialogTrigger = useRef<HTMLButtonElement>(null);
   const sourceDialog = useRef<HTMLDialogElement>(null);
@@ -174,21 +178,23 @@ export const StructureEditor = forwardRef<
   useEffect(() => {
     if (props.revision === lastRevision.current) return;
     const accepted = acceptedSnapshot.current;
-    if (accepted) {
-      setNodes((current) =>
-        mergeAcceptedNodes(props.structure, accepted.nodes, current),
-      );
-      setBoundaries((current) =>
-        JSON.stringify(current) === JSON.stringify(accepted.boundaries)
-          ? props.boundaries
-          : current,
-      );
-    } else {
-      setNodes(props.structure);
-      setBoundaries(props.boundaries);
-    }
+    const previous = accepted ?? serverSnapshot.current;
+    setNodes((current) =>
+      mergeAcceptedNodes(props.structure, previous.nodes, current),
+    );
+    setBoundaries((current) =>
+      JSON.stringify(current) === JSON.stringify(previous.boundaries)
+        ? props.boundaries
+        : current,
+    );
     acceptedSnapshot.current = null;
+    serverSnapshot.current = {
+      boundaries: props.boundaries,
+      nodes: props.structure,
+    };
     lastRevision.current = props.revision;
+    setConflict(false);
+    setStatus("");
   }, [props.boundaries, props.revision, props.structure]);
 
   useEffect(() => {
@@ -461,6 +467,19 @@ export const StructureEditor = forwardRef<
     }
   }
 
+  async function discardAndReload() {
+    acceptedSnapshot.current = null;
+    setNodes(props.structure);
+    setBoundaries(props.boundaries);
+    setConflict(false);
+    setStatus("");
+    try {
+      await props.onSaved();
+    } catch {
+      setStatus("重新载入草稿失败，请稍后重试。");
+    }
+  }
+
   useImperativeHandle(ref, () => ({
     save() {
       void save();
@@ -647,11 +666,11 @@ export const StructureEditor = forwardRef<
         {status && (
           <button
             className={manageQuietButton}
-            onClick={() => void props.onSaved()}
+            onClick={() => void discardAndReload()}
             type="button"
           >
             <RotateCcw aria-hidden="true" size={18} />
-            重新载入
+            放弃本地修改并重新载入
           </button>
         )}
       </div>

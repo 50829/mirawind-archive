@@ -107,13 +107,19 @@ export async function queueSourceReprocess(input: {
     preconditionFailed();
   }
   const source = sources.findSnapshot(book.draftSourceId);
-  const original = sources.findMineruOriginal(input.bookId, book.draftSourceId);
+  const importSource = source ? sources.findImportOrigin(source.id) : null;
+  const original = importSource
+    ? sources.findMineruOriginal(input.bookId, importSource.id)
+    : null;
   if (
     !source ||
+    !importSource ||
     !original ||
     source.bookId !== input.bookId ||
+    importSource.bookId !== input.bookId ||
     original.bookId !== input.bookId ||
-    original.sourceId !== source.id ||
+    original.sourceId !== importSource.id ||
+    !importSource.createdFromImportId ||
     original.role !== "mineru_zip"
   ) {
     sourceUnavailable();
@@ -129,7 +135,7 @@ export async function queueSourceReprocess(input: {
   if (existing?.importId) {
     return Object.freeze({ importId: existing.importId, job: existing });
   }
-  const sourceImport = imports.find(source.createdFromImportId);
+  const sourceImport = imports.find(importSource.createdFromImportId);
   const selected =
     sourceImport?.selectedCandidateId === null ||
     sourceImport?.selectedCandidateId === undefined

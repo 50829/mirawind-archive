@@ -72,6 +72,62 @@ function draftProjection(
   };
 }
 
+const editableBlockId = "blk_workbench_paragraph_000001";
+
+function editablePreviewHtml(revision: number, markdown: string): string {
+  return `<!doctype html>
+    <html lang="zh-CN">
+      <body>
+        <p data-block-id="${editableBlockId}">${markdown}</p>
+        <script>
+          parent.postMessage({
+            fragment: null,
+            page_id: 1,
+            revision: ${revision},
+            type: "mirawind-preview-ready"
+          }, "*");
+          document.querySelector("[data-block-id]").addEventListener("click", () => {
+            parent.postMessage({
+              block_id: "${editableBlockId}",
+              fragment: "${editableBlockId}",
+              page_id: 1,
+              revision: ${revision},
+              type: "mirawind-preview-select-block"
+            }, "*");
+          });
+        </script>
+      </body>
+    </html>`;
+}
+
+function draftAtRevision(revision: number, state: "building" | "ready") {
+  const draft = draftProjection(20);
+  return {
+    ...draft,
+    candidate: {
+      ...draft.candidate,
+      preview_url:
+        state === "ready"
+          ? `/api/manage/books/99/preview/${revision}/pages/1`
+          : null,
+      revision,
+      state,
+      version_id:
+        state === "ready"
+          ? `ver_workbench_${String(revision).padStart(18, "0")}`
+          : null,
+    },
+    config_revision: revision,
+    preview:
+      state === "ready"
+        ? {
+            ...draft.preview,
+            config_revision: revision,
+          }
+        : null,
+  };
+}
+
 test("blocks publication only for error diagnostics", async ({ page }) => {
   let diagnosticSeverity: "error" | "warning" = "warning";
   await page.route("**/api/manage/books/99/draft", (route) =>
@@ -197,7 +253,7 @@ test("locates diagnostics and preserves dirty edits during recovery", async ({
     /#blk_workbench_0000000000000000$/u,
   );
 
-  const title = page.getByRole("textbox", { name: "显示标题" });
+  const title = page.getByRole("textbox", { name: "标题" });
   await title.fill("Unsaved local title");
   await page.getByRole("button", { name: "重新载入" }).click();
   await expect.poll(() => draftRequests).toBeGreaterThan(1);
@@ -256,4 +312,139 @@ test("restores focus after each mobile workbench detail dialog", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "关闭问题列表" }).click();
   await expect(diagnostics).toBeFocused();
+});
+
+test("edits a selected preview block and keeps the last preview while rebuilding", async ({
+  page,
+}) => {
+  let revision = 1;
+  let buildingResponsePending = false;
+  let patchBody: unknown;
+  let patchEtag = "";
+  await page.route("**/api/manage/books/99/draft", (route) => {
+    if (buildingResponsePending) {
+      buildingResponsePending = false;
+      return route.fulfill({
+        body: JSON.stringify(draftAtRevision(2, "building")),
+        contentType: "application/json",
+        headers: { ETag: '"draft-two"' },
+        status: 200,
+      });
+    }
+    return route.fulfill({
+      body: JSON.stringify(draftAtRevision(revision, "ready")),
+      contentType: "application/json",
+      headers: { ETag: `"draft-${revision}"` },
+      status: 200,
+    });
+  });
+  await page.route(
+    `**/api/manage/books/99/draft/blocks/${editableBlockId}`,
+    async (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          body: JSON.stringify({
+            block_id: editableBlockId,
+            kind: "paragraph",
+            markdown: "Original paragraph",
+          }),
+          contentType: "application/json",
+          headers: { ETag: '"block-one"' },
+          status: 200,
+        });
+      }
+      patchBody = route.request().postDataJSON();
+      patchEtag = route.request().headers()["if-match"] ?? "";
+      revision = 2;
+      buildingResponsePending = true;
+      return route.fulfill({
+        body: JSON.stringify({ config_revision: 2 }),
+        contentType: "application/json",
+        headers: { ETag: '"block-two"' },
+        status: 202,
+      });
+    },
+  );
+  await page.route("**/api/manage/books/99/preview/**", (route) => {
+    const nextRevision = route.request().url().includes("/preview/2/") ? 2 : 1;
+    return route.fulfill({
+      body: editablePreviewHtml(
+        nextRevision,
+        nextRevision === 1 ? "Original paragraph" : "Updated paragraph",
+      ),
+      contentType: "text/html",
+      status: 200,
+    });
+  });
+  await loginAsAdministrator(page, "192.0.2.18");
+  await page.goto("/manage/books/99/preview");
+
+  const preview = page.frameLocator("iframe");
+  await preview.getByText("Original paragraph").click();
+  const dialog = page.getByRole("dialog", { name: "编辑段落" });
+  const markdown = dialog.getByRole("textbox", { name: "Markdown" });
+  await expect(markdown).toHaveValue("Original paragraph");
+  await markdown.fill("Updated paragraph");
+  await dialog.getByRole("button", { name: "保存正文并更新预览" }).click();
+
+  expect(patchBody).toEqual({ markdown: "Updated paragraph" });
+  expect(patchEtag).toBe('"block-one"');
+  await expect(page.getByText("正在构建预览")).toBeVisible();
+  await expect(preview.getByText("Original paragraph")).toBeVisible();
+  await expect(preview.getByText("Updated paragraph")).toBeVisible({
+    timeout: 3_000,
+  });
+});
+
+test("keeps local block Markdown after an If-Match conflict", async ({
+  page,
+}) => {
+  let currentMarkdown = "Server paragraph";
+  await page.route("**/api/manage/books/99/draft", (route) =>
+    route.fulfill({
+      body: JSON.stringify(draftAtRevision(1, "ready")),
+      contentType: "application/json",
+      headers: { ETag: '"draft-one"' },
+      status: 200,
+    }),
+  );
+  await page.route(
+    `**/api/manage/books/99/draft/blocks/${editableBlockId}`,
+    (route) => {
+      if (route.request().method() === "PATCH") {
+        currentMarkdown = "Concurrent server paragraph";
+        return route.fulfill({ status: 412 });
+      }
+      return route.fulfill({
+        body: JSON.stringify({
+          block_id: editableBlockId,
+          kind: "paragraph",
+          markdown: currentMarkdown,
+        }),
+        contentType: "application/json",
+        headers: { ETag: '"block-current"' },
+        status: 200,
+      });
+    },
+  );
+  await page.route("**/api/manage/books/99/preview/**", (route) =>
+    route.fulfill({
+      body: editablePreviewHtml(1, "Server paragraph"),
+      contentType: "text/html",
+      status: 200,
+    }),
+  );
+  await loginAsAdministrator(page, "192.0.2.19");
+  await page.goto("/manage/books/99/preview");
+
+  await page.frameLocator("iframe").getByText("Server paragraph").click();
+  const dialog = page.getByRole("dialog", { name: "编辑段落" });
+  const markdown = dialog.getByRole("textbox", { name: "Markdown" });
+  await markdown.fill("Unsaved local paragraph");
+  await dialog.getByRole("button", { name: "保存正文并更新预览" }).click();
+  await expect(markdown).toHaveValue("Unsaved local paragraph");
+  await expect(dialog.getByRole("alert")).toContainText("本地正文仍保留");
+
+  await dialog.getByRole("button", { name: "放弃本地修改并重新载入" }).click();
+  await expect(markdown).toHaveValue("Concurrent server paragraph");
 });

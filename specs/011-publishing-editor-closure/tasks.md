@@ -3,15 +3,15 @@
 ## Phase 1: Clean Model
 
 - [x] T001 Update the single SQLite baseline, v4/v3 schemas, identities and strict parsers.
-- [ ] T002 Add immutable source edit revisions and reusable asset bindings without changing deletion guarantees.
+- [x] T002 Add immutable source edit revisions and reusable asset bindings without changing deletion guarantees.
 - [x] T003 Replace config/source DTOs and focused schema/transaction evidence.
 
 ## Phase 2: Preparation And Structure
 
 - [x] T004 [US1] Introduce `PreparedDocument` and make production structure consume only `active`.
-- [ ] T005 [US1] Split printed-contents detection into typed semantic, extraction, alignment and decision stages.
+- [x] T005 [US1] Split printed-contents detection into typed semantic, extraction, alignment and decision stages.
 - [x] T006 [US1] Remove printed TOC/helper blocks and implement protected `zh-smart-v2` cleanup.
-- [ ] T007 [US1] Replace mutable structure passes with hierarchy, boundary, TOC, pagination and validation passes.
+- [x] T007 [US1] Replace mutable structure passes with hierarchy, boundary, TOC, pagination and validation passes.
 - [ ] T008 [US1] Prove CSAPP, appendix and active-only behavior plus 3-5 representative books.
 
 ## Phase 3: Compiler And Reader
@@ -23,9 +23,9 @@
 
 ## Phase 4: Workbench And Catalog
 
-- [ ] T013 [US3] Add block GET/PATCH, stable identity remap and immutable rebuild workflow.
+- [x] T013 [US3] Add block GET/PATCH, stable identity remap and immutable rebuild workflow.
 - [ ] T014 [US3] Replace role fields with boundaries and diagnostics with executable typed targets.
-- [ ] T015 [US3] Add preview block selection, Markdown dialog and revised save/conflict behavior.
+- [x] T015 [US3] Add preview block selection, Markdown dialog and revised save/conflict behavior.
 - [ ] T016 [US4] Add metadata/cover management, separate access API and server-selected publication.
 - [ ] T017 [US4] Add management/publishing routes and aligned library management links.
 - [ ] T018 Verify upload/task progress in the full Web+worker local stack.

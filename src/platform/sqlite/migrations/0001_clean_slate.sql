@@ -86,10 +86,34 @@ CREATE TABLE source_snapshots (
   main_markdown_sha256 TEXT NOT NULL CHECK (length(main_markdown_sha256) = 64),
   source_root_rel_path TEXT NOT NULL,
   analysis_version TEXT NOT NULL CHECK (length(analysis_version) <= 100),
-  created_from_import_id TEXT NOT NULL REFERENCES imports(id) ON DELETE RESTRICT,
+  origin TEXT NOT NULL CHECK (origin IN ('import', 'edit')),
+  parent_source_id TEXT REFERENCES source_snapshots(id) ON DELETE CASCADE,
+  created_from_import_id TEXT REFERENCES imports(id) ON DELETE RESTRICT,
+  created_at INTEGER NOT NULL,
+  CHECK (
+    (origin = 'import' AND parent_source_id IS NULL AND created_from_import_id IS NOT NULL)
+    OR
+    (origin = 'edit' AND parent_source_id IS NOT NULL AND created_from_import_id IS NULL)
+  ),
+  UNIQUE (book_id, id)
+) STRICT;
+
+CREATE TABLE source_assets (
+  id TEXT PRIMARY KEY CHECK (id GLOB 'asset_*'),
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  storage_rel_path TEXT NOT NULL UNIQUE,
+  size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 0 AND 2147483648),
+  sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
   created_at INTEGER NOT NULL,
   UNIQUE (book_id, id)
 ) STRICT;
+
+CREATE TABLE source_asset_bindings (
+  source_id TEXT NOT NULL REFERENCES source_snapshots(id) ON DELETE CASCADE,
+  logical_path TEXT NOT NULL,
+  asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
+  PRIMARY KEY (source_id, logical_path)
+) STRICT, WITHOUT ROWID;
 
 CREATE TABLE config_revisions (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
@@ -332,6 +356,8 @@ CREATE UNIQUE INDEX one_ready_version_per_book
 CREATE INDEX draft_candidates_book_revision
   ON draft_candidates(book_id, config_revision, created_at);
 CREATE INDEX source_snapshots_book ON source_snapshots(book_id, created_at);
+CREATE INDEX source_assets_book ON source_assets(book_id, created_at);
+CREATE INDEX source_asset_bindings_asset ON source_asset_bindings(asset_id);
 CREATE INDEX config_revisions_source ON config_revisions(source_id);
 CREATE INDEX imports_state_expiry ON imports(state, expires_at);
 CREATE INDEX import_candidates_import_score

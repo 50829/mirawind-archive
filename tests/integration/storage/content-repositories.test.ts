@@ -121,6 +121,7 @@ describe("M1 import, source and draft repositories", () => {
         mainMarkdownPath: "book.md",
         mainMarkdownSha256: sha256,
         nowMs: 3,
+        origin: "import",
         sourceRootRelativePath: "books/1/sources/src_abcdefghijklmnop",
       });
       const original = sources.registerOriginal({
