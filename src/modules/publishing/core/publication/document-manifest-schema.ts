@@ -104,7 +104,7 @@ export function validateDocumentManifest(
   if (!validateManifestSchema(manifest)) {
     throw new PublicationSchemaValidationError(
       "DOCUMENT_MANIFEST_INVALID",
-      "The document manifest does not match schema version 1.",
+      "The document manifest does not match schema version 3.",
       validateManifestSchema.errors,
     );
   }
@@ -179,7 +179,7 @@ export function validateVersionMarker(
   if (!validateMarkerSchema(marker)) {
     throw new PublicationSchemaValidationError(
       "VERSION_MARKER_INVALID",
-      "The version marker does not match schema version 1.",
+      "The version marker does not match schema version 3.",
       validateMarkerSchema.errors,
     );
   }

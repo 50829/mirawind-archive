@@ -10,7 +10,7 @@ import {
 } from "../helpers/global-setup.js";
 import { loginAsAdministrator } from "../helpers/e2e-login.js";
 
-test("edits every M1 structure override and publishes the ready candidate", async ({
+test("edits structure boundaries and publishes the ready candidate", async ({
   browser,
   page,
 }) => {
@@ -34,27 +34,37 @@ test("edits every M1 structure override and publishes the ready candidate", asyn
       .click();
   };
   const selectedEditor = page.locator(".desktop-node-editor");
-  await selectStructure("Front");
-  await selectedEditor.getByLabel("内容角色").selectOption("frontmatter");
+  const setBoundary = async (label: "正文" | "附录" | "后置内容") => {
+    const button = selectedEditor
+      .getByRole("group", { name: "内容范围起点" })
+      .getByText(label, { exact: true })
+      .locator("..")
+      .getByRole("button");
+    if ((await button.getAttribute("aria-pressed")) !== "true") {
+      await button.click();
+    }
+  };
   await selectStructure("Main");
-  await selectedEditor.getByLabel("显示标题").fill("Published Main");
-  await selectedEditor.getByLabel("内容角色").selectOption("body");
+  await selectedEditor
+    .getByLabel("标题", { exact: true })
+    .fill("Published Main");
+  await setBoundary("正文");
   await selectStructure("Details");
   await selectedEditor.getByLabel("显示层级").selectOption("3");
   await selectedEditor.getByLabel("显示在目录").uncheck();
   await selectedEditor.getByLabel("从此标题开始新页面").check();
   await selectStructure("Appendix");
-  await selectedEditor.getByLabel("内容角色").selectOption("appendix");
+  await setBoundary("附录");
   await selectStructure("Back");
-  await selectedEditor.getByLabel("内容角色").selectOption("backmatter");
-  await page.getByRole("button", { name: "保存并重建" }).click();
+  await setBoundary("后置内容");
+  await page.getByRole("button", { name: "保存并更新预览" }).click();
   await expect(
-    page.getByText("修改未保存，请检查层级、角色和诊断信息。"),
+    page.getByText("修改未保存，请检查标题、层级、内容范围和诊断信息。"),
   ).toBeVisible();
 
   await selectStructure("Details");
   await selectedEditor.getByLabel("显示层级").selectOption("2");
-  await page.getByRole("button", { name: "保存并重建" }).click();
+  await page.getByRole("button", { name: "保存并更新预览" }).click();
   await expect(page.getByText("正在构建预览")).toBeVisible();
   await expect(page.getByRole("button", { name: "发布当前修订" })).toBeEnabled({
     timeout: 30_000,
@@ -82,7 +92,7 @@ test("edits every M1 structure override and publishes the ready candidate", asyn
            JOIN original_files
              ON original_files.book_id = books.id
             AND original_files.source_id = book_versions.source_id
-         WHERE books.access = 'public'
+         WHERE books.current_version_id IS NOT NULL
          ORDER BY books.id DESC LIMIT 1`,
         )
         .get() as {
@@ -94,6 +104,14 @@ test("edits every M1 structure override and publishes the ready candidate", asyn
       database.close();
     }
   })();
+  const makePublic = await page.request.patch(
+    `/api/manage/books/${published.id}/access`,
+    {
+      data: { access: "public" },
+      headers: { Origin: e2eOrigin },
+    },
+  );
+  expect(makePublic.status()).toBe(200);
   const anonymous = await browser.newContext({ baseURL: e2eOrigin });
   const anonymousPage = await anonymous.newPage();
   const readingResponse = await anonymousPage.goto(`/read/${published.id}`);
@@ -159,14 +177,14 @@ test("edits every M1 structure override and publishes the ready candidate", asyn
   expect(rangeDownload.status()).toBe(206);
   expect(await rangeDownload.body()).toEqual(fullBytes.subarray(-16));
 
-  const access = await page.request.patch(
+  const makePrivate = await page.request.patch(
     `/api/manage/books/${published.id}/access`,
     {
       data: { access: "private" },
       headers: { Origin: e2eOrigin },
     },
   );
-  expect(access.status()).toBe(200);
+  expect(makePrivate.status()).toBe(200);
   expect((await anonymousPage.goto(`/read/${published.id}/1`))?.status()).toBe(
     404,
   );
