@@ -244,6 +244,7 @@ export async function materializeCandidatePages(input: {
     nextOrdinal: 0,
   };
   let searchFtsRowCount = 0;
+  let precedingTocHeadingId: string | null = null;
 
   try {
     await manifestSpool.open();
@@ -260,14 +261,21 @@ export async function materializeCandidatePages(input: {
       const { ordinal, page } = rendered;
       const nextPage = compiled.pages[ordinal + 1];
       const previousPage = compiled.pages[ordinal - 1];
-      const outline = (headingsByPageId.get(page.pageId) ?? [])
-        .filter((heading) => heading.include_in_toc)
-        .map((heading) => ({
-          blockId: heading.block_id,
-          href: `#${heading.block_id}`,
-          level: heading.display_level,
-          title: heading.label,
-        }));
+      const pageHeadings = headingsByPageId.get(page.pageId) ?? [];
+      const pageTocHeadings = pageHeadings.filter(
+        (heading) => heading.include_in_toc,
+      );
+      const pageOwnerHeadingId = pageHeadings.at(0)?.block_id ?? null;
+      const currentTocHeadingId =
+        pageTocHeadings.at(0)?.block_id ?? precedingTocHeadingId;
+      const outline = pageHeadings.map((heading) => ({
+        blockId: heading.block_id,
+        href: `#${heading.block_id}`,
+        level: heading.display_level,
+        title: heading.label,
+      }));
+      precedingTocHeadingId =
+        pageTocHeadings.at(-1)?.block_id ?? precedingTocHeadingId;
       const materializedBody = materializeRouteNeutralHtmlVariants({
         html: rendered.html,
         preview: {
@@ -293,9 +301,10 @@ export async function materializeCandidatePages(input: {
       const common = {
         bookKey,
         bookTitle: compiled.bookTitle,
-        currentHeadingId: outline.at(0)?.blockId ?? null,
+        currentTocHeadingId,
         currentPageId: page.pageId,
         outline,
+        pageOwnerHeadingId,
       };
       const previewHtml = renderReaderHtmlDocument({
         body: renderReaderShell({

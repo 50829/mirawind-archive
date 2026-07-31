@@ -64,7 +64,7 @@
       restoreFocus.get(dialog)?.focus({ preventScroll: true });
     });
   }
-  const breakpoint = window.matchMedia("(min-width: 48.001rem)");
+  const breakpoint = window.matchMedia("(min-width: 56.001rem)");
   const closeAtDesktop = () => {
     if (!breakpoint.matches) return;
     for (const dialog of document.querySelectorAll("[data-reader-drawer]")) {
@@ -160,17 +160,28 @@
     }
     const target =
       event.target instanceof Element ? event.target.closest("a[href]") : null;
-    if (!(target instanceof HTMLAnchorElement) || target.target) return;
+    if (!(target instanceof HTMLAnchorElement)) return;
     const url = new URL(target.href, window.location.href);
     const match = url.pathname.match(
       /^\/api\/manage\/books\/[1-9]\d*\/preview\/([1-9]\d*)\/pages\/([1-9]\d*)$/u,
     );
-    if (!match || Number(match[1]) !== previewRevision) return;
+    if (match && Number(match[1]) === previewRevision) {
+      event.preventDefault();
+      previewMessage("mirawind-preview-navigate", {
+        fragment: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
+        page_id: Number(match[2]),
+      });
+      return;
+    }
+    if (
+      url.origin === window.location.origin &&
+      url.pathname === window.location.pathname &&
+      url.search === window.location.search &&
+      url.hash
+    ) {
+      return;
+    }
     event.preventDefault();
-    previewMessage("mirawind-preview-navigate", {
-      fragment: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,
-      page_id: Number(match[2]),
-    });
   });
 
   document.addEventListener("keydown", (event) => {

@@ -167,7 +167,7 @@ test("discovers details, restores context and completes the reader loop", async 
     const currentBranch = toc.locator("details").first();
     await expect(currentBranch).toHaveAttribute("open", "");
     await expect(
-      toc.getByRole("link", { name: "1.1. Overview" }),
+      toc.getByRole("link", { name: "1.1 Overview" }),
     ).toHaveAttribute(
       "href",
       "/read/e2e-library-book/1#blk_e2e_library_overview_0001",
@@ -176,6 +176,7 @@ test("discovers details, restores context and completes the reader loop", async 
       const toggle = currentBranch.locator("summary");
       await toggle.click();
       await expect(currentBranch).not.toHaveAttribute("open", "");
+      await expect(toc.getByRole("link", { name: "1 Opening" })).toBeVisible();
       await toggle.click();
       await expect(currentBranch).toHaveAttribute("open", "");
 
@@ -183,7 +184,7 @@ test("discovers details, restores context and completes the reader loop", async 
         .getByRole("navigation", { name: "本页提纲" })
         .first();
       const overviewOutline = outline.getByRole("link", {
-        name: "1.1. Overview",
+        name: "1.1 Overview",
       });
       await page
         .locator("#blk_e2e_library_overview_0001")
@@ -255,6 +256,26 @@ test("discovers details, restores context and completes the reader loop", async 
   }
   await page.getByRole("link", { name: "返回书库" }).click();
   await expect(page).toHaveURL(/\/library$/u);
+});
+
+test("keeps the page outline beside content until the drawer breakpoint", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-chromium");
+  await page.setViewportSize({ height: 800, width: 1024 });
+  await page.goto("/read/e2e-library-book/1");
+  const main = page.getByRole("main");
+  const outline = page.getByRole("navigation", { name: "本页提纲" }).first();
+  await expect(outline).toBeVisible();
+  const [mainBox, outlineBox] = await Promise.all([
+    main.boundingBox(),
+    outline.boundingBox(),
+  ]);
+  expect(outlineBox?.x).toBeGreaterThan((mainBox?.x ?? 0) + 1);
+
+  await page.setViewportSize({ height: 800, width: 768 });
+  await expect(outline).toBeHidden();
+  await expect(page.getByRole("button", { name: "本文" })).toBeVisible();
 });
 
 test("keeps hidden and unavailable identities out of public discovery", async ({

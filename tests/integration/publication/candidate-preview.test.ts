@@ -49,10 +49,10 @@ function compiledFixture() {
       },
     },
     source_regions: [],
-    structure: headingIds.map((blockId) => ({
+    structure: headingIds.map((blockId, index) => ({
       block_id: blockId,
       display_level: 1,
-      include_in_toc: true,
+      include_in_toc: index === 0,
       role: "body",
       starts_page: true,
     })),
@@ -128,9 +128,18 @@ describe("candidate preview materialization", () => {
         resolve(candidateDirectory, "published/pages/1.html"),
         "utf8",
       );
+      const secondPreview = await readFile(
+        resolve(candidateDirectory, "preview/pages/2.html"),
+        "utf8",
+      );
       expect(normalizedArticle(preview)).toBe(normalizedArticle(published));
       expect(preview).toContain(">1 First</a>");
       expect(preview).not.toContain(">1. First</a>");
+      expect(secondPreview).toContain(
+        `data-reader-page-owner="${headingIds[1]}"`,
+      );
+      expect(secondPreview).toContain(">2 Second</a>");
+      expect(secondPreview).toContain(`data-outline-link="${headingIds[1]}"`);
       expect(preview).toContain('data-reader-mode="preview"');
       expect(preview).not.toContain('rel="canonical"');
       expect(preview).not.toContain("reader-book-search");

@@ -12,7 +12,7 @@ const props = {
   bodyHtml: '<h1 id="blk_test">Chapter</h1>',
   bookKey: "current-book",
   bookTitle: "Current Book",
-  currentHeadingId: "blk_test",
+  currentTocHeadingId: "blk_test",
   currentPageId: 1,
   firstPageHref: "/read/current-book/1",
   nextHref: "/read/current-book/2",
@@ -27,6 +27,7 @@ const props = {
       title: "1. Chapter",
     },
   ],
+  pageOwnerHeadingId: "blk_test",
   toc: [
     {
       blockId: "blk_test",
@@ -128,6 +129,9 @@ describe("reader interaction", () => {
     );
     expect(html).toContain('<main class="reader-main" id="main-content">');
     expect(html).toContain("<details open");
+    expect(html.indexOf('class="reader-toc-link"')).toBeLessThan(
+      html.indexOf("<details open"),
+    );
     expect(html).toContain('href="/read/current-book/1#blk_model"');
     expect(html).toContain('data-outline-link="blk_test"');
     expect(html).toContain('aria-current="location"');

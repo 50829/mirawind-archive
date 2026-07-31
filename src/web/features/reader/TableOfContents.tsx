@@ -39,11 +39,11 @@ function TocNode(props: {
   }
   return (
     <li className={`reader-toc-item reader-toc-level-${props.node.level}`}>
+      {link}
       <details open={containsHeading(props.node, props.currentHeadingId)}>
         <summary aria-label={`展开或折叠：${props.node.title}`}>
           <span aria-hidden="true">›</span>
         </summary>
-        {link}
         <ol>
           {props.node.children.map((child) => (
             <TocNode

@@ -11,7 +11,7 @@ export interface ReaderPageModel {
   readonly bodyHtml: string;
   readonly bookKey: string;
   readonly bookTitle: string;
-  readonly currentHeadingId: string | null;
+  readonly currentTocHeadingId: string | null;
   readonly currentPageId: number;
   readonly firstPageHref: string;
   readonly mode?: "preview" | "published";
@@ -21,6 +21,7 @@ export interface ReaderPageModel {
     readonly label: string;
   }[];
   readonly outline: readonly ReaderOutlineLink[];
+  readonly pageOwnerHeadingId: string | null;
   readonly previousHref: string | null;
   readonly previewRevision?: number;
   readonly toc: readonly ReaderTocLink[];

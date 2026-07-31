@@ -8,18 +8,19 @@ import { TableOfContents } from "@/web/features/reader/TableOfContents";
 import { readerScriptUrl } from "@/styles/assets";
 
 function PageOutline(props: {
+  readonly currentHeadingId: string | null;
   readonly outline: readonly ReaderOutlineLink[];
   readonly showHeading?: boolean;
 }) {
-  const baseLevel = Math.min(
-    ...props.outline.map((heading) => heading.level),
-    1,
-  );
+  const baseLevel =
+    props.outline.length > 0
+      ? Math.min(...props.outline.map((heading) => heading.level))
+      : 1;
   return (
     <nav aria-label="本页提纲" className="reader-outline">
       {props.showHeading !== false && <h2>本页提纲</h2>}
       <ol>
-        {props.outline.map((heading, index) => (
+        {props.outline.map((heading) => (
           <li
             key={heading.blockId}
             style={{
@@ -27,7 +28,11 @@ function PageOutline(props: {
             }}
           >
             <a
-              aria-current={index === 0 ? "location" : undefined}
+              aria-current={
+                heading.blockId === props.currentHeadingId
+                  ? "location"
+                  : undefined
+              }
               data-outline-link={heading.blockId}
               href={heading.href}
             >
@@ -41,7 +46,7 @@ function PageOutline(props: {
 }
 
 export function ReaderShell(props: ReaderPageModel) {
-  const breadcrumbs = readerBreadcrumbs(props.toc, props.currentHeadingId);
+  const breadcrumbs = readerBreadcrumbs(props.toc, props.currentTocHeadingId);
   const published = props.mode !== "preview";
   return (
     <>
@@ -55,10 +60,15 @@ export function ReaderShell(props: ReaderPageModel) {
         }
         data-reader-mode={props.mode ?? "published"}
         data-reader-page-id={props.currentPageId}
+        data-reader-page-owner={props.pageOwnerHeadingId ?? undefined}
       >
-        <a className="reader-library-link" href="/library">
-          返回书库
-        </a>
+        {published ? (
+          <a className="reader-library-link" href="/library">
+            返回书库
+          </a>
+        ) : (
+          <span className="reader-library-link">草稿预览</span>
+        )}
         <nav aria-label="当前位置" className="reader-breadcrumb">
           <a className="reader-book-title" href={props.firstPageHref}>
             {props.bookTitle}
@@ -119,7 +129,7 @@ export function ReaderShell(props: ReaderPageModel) {
       </nav>
       <div className="reader-layout">
         <TableOfContents
-          currentHeadingId={props.currentHeadingId}
+          currentHeadingId={props.currentTocHeadingId}
           currentPageId={props.currentPageId}
           toc={props.toc}
         />
@@ -145,7 +155,10 @@ export function ReaderShell(props: ReaderPageModel) {
             )}
           </nav>
         </main>
-        <PageOutline outline={props.outline} />
+        <PageOutline
+          currentHeadingId={props.pageOwnerHeadingId}
+          outline={props.outline}
+        />
       </div>
       <dialog
         aria-labelledby="reader-mobile-toc-heading"
@@ -159,7 +172,7 @@ export function ReaderShell(props: ReaderPageModel) {
           </form>
         </div>
         <TableOfContents
-          currentHeadingId={props.currentHeadingId}
+          currentHeadingId={props.currentTocHeadingId}
           currentPageId={props.currentPageId}
           showHeading={false}
           toc={props.toc}
@@ -176,7 +189,11 @@ export function ReaderShell(props: ReaderPageModel) {
             <button type="submit">关闭</button>
           </form>
         </div>
-        <PageOutline outline={props.outline} showHeading={false} />
+        <PageOutline
+          currentHeadingId={props.pageOwnerHeadingId}
+          outline={props.outline}
+          showHeading={false}
+        />
       </dialog>
       {published && (
         <>
