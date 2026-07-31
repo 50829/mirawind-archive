@@ -44,7 +44,7 @@ export interface ValidatedConfiguredHeading {
   readonly alias?: string;
   readonly block_id: string;
   readonly display_level: number;
-  readonly display_title: string;
+  readonly display_title?: string;
   readonly include_in_toc: boolean;
   readonly role: ContentRole;
   readonly source_level: number;
@@ -195,7 +195,9 @@ export function validateDocumentConfig(input: {
           ...(configured.alias ? { alias: configured.alias } : {}),
           block_id: configured.block_id,
           display_level: configured.display_level,
-          display_title: configured.display_title ?? source.sourceTitle,
+          ...(configured.display_title === undefined
+            ? {}
+            : { display_title: configured.display_title }),
           include_in_toc: configured.include_in_toc,
           role: inheritedRole,
           source_level: source.level,

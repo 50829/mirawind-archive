@@ -78,7 +78,7 @@ export function buildSearchRowsForBlocks(input: {
     if (!block) throw new Error("SEARCH_BLOCK_RANGE_INVALID");
     if (block.type === "heading" && block.blockId) {
       currentHeading =
-        input.book.headingByBlockId.get(block.blockId)?.display_title ??
+        input.book.headingByBlockId.get(block.blockId)?.label ??
         block.visibleText ??
         "";
     }
@@ -89,7 +89,13 @@ export function buildSearchRowsForBlocks(input: {
       Object.freeze({
         authors,
         blockId: block.blockId,
-        body: normalize(block.visibleText ?? ""),
+        body: normalize(
+          block.type === "heading" && block.blockId
+            ? (input.book.headingByBlockId.get(block.blockId)?.label ??
+                block.visibleText ??
+                "")
+            : (block.visibleText ?? ""),
+        ),
         bookId: input.bookId,
         heading: normalize(currentHeading),
         kind: block.type,
@@ -149,7 +155,7 @@ export function buildSearchShortRows(input: {
         blockId: heading.block_id,
         bookId: input.bookId,
         kind: "heading",
-        normalizedText: normalize(heading.display_title),
+        normalizedText: normalize(heading.label),
         ordinal: shortRows.length,
         pageId,
         versionId: input.versionId,

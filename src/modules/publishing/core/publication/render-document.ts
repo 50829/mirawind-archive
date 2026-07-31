@@ -12,6 +12,7 @@ import type {
   TransientDocumentNode,
 } from "@/modules/publishing/core/preparation/document-model";
 import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
+import type { HeadingPresentation } from "@/modules/publishing/core/publication/heading-presentation";
 import {
   resolveHeadingLinkTarget,
   type HeadingLinkIndex,
@@ -49,11 +50,10 @@ interface MathSource {
   readonly source: string;
 }
 
-export interface HeadingRenderOverride {
-  readonly displayLevel: number;
-  readonly displayTitle: string;
-  readonly number?: string | null;
-}
+type RenderHeadingPresentation = Pick<
+  HeadingPresentation,
+  "display_level" | "number" | "titleChildren"
+>;
 
 export interface SemanticRenderResult {
   readonly css: string;
@@ -65,7 +65,10 @@ export interface RenderSemanticDocumentOptions {
   readonly document: NormalizedDocument;
   readonly headingHref?: (blockId: string) => string;
   readonly headingLinkIndex: HeadingLinkIndex;
-  readonly headingOverrides?: ReadonlyMap<string, HeadingRenderOverride>;
+  readonly headingPresentations?: ReadonlyMap<
+    string,
+    RenderHeadingPresentation
+  >;
   readonly publishedResourceUrl: (resourceId: string) => string;
   readonly resourceResolution: ResourceResolution;
 }
@@ -123,8 +126,8 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
     }
 
     if (node.type === "heading" && node.blockId) {
-      const override = options.headingOverrides?.get(node.blockId);
-      const depth = override?.displayLevel ?? node.depth;
+      const presentation = options.headingPresentations?.get(node.blockId);
+      const depth = presentation?.display_level ?? node.depth;
       if (depth !== undefined) output.depth = depth;
       output.data = {
         hProperties: {
@@ -132,12 +135,14 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
           id: node.blockId,
         },
       };
-      if (override) {
+      if (presentation) {
         output.children = [
-          ...(override.number
+          ...(presentation.number
             ? [
                 {
-                  children: [{ type: "text", value: `${override.number} ` }],
+                  children: [
+                    { type: "text", value: `${presentation.number} ` },
+                  ],
                   data: {
                     hName: "span",
                     hProperties: { className: ["heading-number"] },
@@ -146,7 +151,7 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
                 },
               ]
             : []),
-          { type: "text", value: override.displayTitle },
+          ...presentation.titleChildren.map(clone),
         ];
       }
     } else if (node.type === "inlineMath" && node.value !== undefined) {

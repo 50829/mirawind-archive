@@ -19,8 +19,8 @@ const maximumConcurrentPages = 4;
 
 export interface RenderPageInput extends RenderSemanticDocumentOptions {
   readonly headingHref: (blockId: string) => string;
-  readonly headingOverrides: NonNullable<
-    RenderSemanticDocumentOptions["headingOverrides"]
+  readonly headingPresentations: NonNullable<
+    RenderSemanticDocumentOptions["headingPresentations"]
   >;
   readonly page: PagePlan;
 }
@@ -64,7 +64,7 @@ export async function* renderPages(input: {
         document: options.document,
         headingHref: options.headingHref,
         headingLinkIndex: options.headingLinkIndex,
-        headingOverrides: options.headingOverrides,
+        headingPresentations: options.headingPresentations,
         publishedResourceUrl: options.publishedResourceUrl,
         resourceResolution: options.resourceResolution,
       }));
@@ -84,7 +84,7 @@ export async function* renderPages(input: {
           document: documentForPage(input.book, page),
           headingHref: routeLinks.headingHref,
           headingLinkIndex: input.book.headingLinkIndex,
-          headingOverrides: input.book.headingOverrides,
+          headingPresentations: input.book.headingByBlockId,
           page,
           publishedResourceUrl: routeLinks.resourceUrl,
           resourceResolution: input.resourceResolution,

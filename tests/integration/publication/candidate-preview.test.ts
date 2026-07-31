@@ -129,6 +129,8 @@ describe("candidate preview materialization", () => {
         "utf8",
       );
       expect(normalizedArticle(preview)).toBe(normalizedArticle(published));
+      expect(preview).toContain(">1 First</a>");
+      expect(preview).not.toContain(">1. First</a>");
       expect(preview).toContain('data-reader-mode="preview"');
       expect(preview).not.toContain('rel="canonical"');
       expect(preview).not.toContain("reader-book-search");

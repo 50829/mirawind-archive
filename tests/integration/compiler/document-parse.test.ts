@@ -217,15 +217,20 @@ describe("contained document resources and sanitized preview", () => {
     const rendered = await renderSemanticDocument({
       document,
       headingLinkIndex: createHeadingLinkIndex(document, new Map()),
-      headingOverrides: new Map(
-        document.headings.map((heading) => [
-          heading.blockId,
-          {
-            displayLevel: heading.level,
-            displayTitle: heading.sourceTitle,
-            number: null,
-          },
-        ]),
+      headingPresentations: new Map(
+        document.headings.map((heading) => {
+          const node = document.blocks.find(
+            (block) => block.blockId === heading.blockId,
+          );
+          return [
+            heading.blockId,
+            {
+              display_level: heading.level,
+              number: null,
+              titleChildren: node?.children ?? [],
+            },
+          ];
+        }),
       ),
       publishedResourceUrl: (resourceId) =>
         `/api/manage/books/book_test/preview/7/assets/${resourceId}`,

@@ -16,7 +16,7 @@
 
 ## Phase 3: Compiler And Reader
 
-- [ ] T009 [US2] Compile one rich heading label for body, TOC, outline, breadcrumbs, page metadata and search.
+- [x] T009 [US2] Compile one rich heading label for body, TOC, outline, breadcrumbs, page metadata and search.
 - [ ] T010 [US2] Repair raw-table math, all code blocks, copy controls, Mermaid and prose/list overflow styles.
 - [ ] T011 [US2] Replace TOC folding, Reader page identity, responsive outline and focus behavior.
 - [ ] T012 [US2] Add focused semantic, interaction, responsive and accessibility evidence.

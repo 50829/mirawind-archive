@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import {
   createHeadingLinkIndex,
   type CompiledBook,
-  type HeadingOverride,
   type PageMetadata,
   type PagePlan,
 } from "@/modules/publishing/core/publication/compiled-book";
@@ -14,9 +13,9 @@ import {
 } from "@/modules/publishing/core/publication/manifest";
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import {
-  numberConfiguredHeadings,
-  type NumberedHeading,
-} from "@/modules/publishing/core/publication/numbering";
+  presentConfiguredHeadings,
+  type HeadingPresentation,
+} from "@/modules/publishing/core/publication/heading-presentation";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { applySourceRegions } from "@/modules/publishing/core/preparation/source-regions";
 import type {
@@ -63,7 +62,7 @@ function configuredRegions(
 function createPagePlans(input: {
   readonly bookTitle: string;
   readonly document: NormalizedDocument;
-  readonly headings: readonly NumberedHeading[];
+  readonly headings: readonly HeadingPresentation[];
 }): {
   readonly metadataById: ReadonlyMap<number, PageMetadata>;
   readonly pages: readonly PagePlan[];
@@ -143,7 +142,7 @@ function createPagePlans(input: {
       pageId,
       Object.freeze({
         ...(configuredHeading?.alias ? { alias: configuredHeading.alias } : {}),
-        title: configuredHeading?.display_title ?? input.bookTitle,
+        title: configuredHeading?.label ?? input.bookTitle,
       }),
     );
   }
@@ -178,6 +177,7 @@ function semanticPayload(input: {
       display_title: heading.display_title,
       include_in_toc: heading.include_in_toc,
       number: heading.number,
+      source_number: heading.sourceNumber,
       role: heading.role,
       starts_page: heading.starts_page,
     })),
@@ -256,10 +256,11 @@ export function compileBook(input: {
   });
   const publishing = config.publishing as Readonly<Record<string, unknown>>;
   const numbering = publishing.numbering as Readonly<Record<string, unknown>>;
-  const headings = numberConfiguredHeadings(
-    validated.headings,
-    numbering.mode === "preserve" ? "preserve" : "normalized",
-  );
+  const headings = presentConfiguredHeadings({
+    document: applied.document,
+    headings: validated.headings,
+    mode: numbering.mode === "preserve" ? "source" : "generated",
+  });
   const bookTitle = String(config.title);
   const { metadataById, pages } = createPagePlans({
     bookTitle,
@@ -279,19 +280,9 @@ export function compileBook(input: {
   const headingByBlockId = new Map(
     headings.map((heading) => [heading.block_id, heading]),
   );
-  const headingOverrides = new Map<string, HeadingOverride>(
-    headings.map((heading) => [
-      heading.block_id,
-      Object.freeze({
-        displayLevel: heading.display_level,
-        displayTitle: heading.display_title,
-        number: heading.number,
-      }),
-    ]),
-  );
   const headingLinkIndex = createHeadingLinkIndex(
     applied.document,
-    headingOverrides,
+    headingByBlockId,
   );
   const pageById = new Map(pages.map((page) => [page.pageId, page]));
   const pageByBlockId = new Map<string, PagePlan>();
@@ -323,9 +314,11 @@ export function compileBook(input: {
     document: applied.document,
     excludedBlockIds: applied.excludedBlockIds,
     fullDocument,
-    headingByBlockId: headingByBlockId as ReadonlyMap<string, NumberedHeading>,
+    headingByBlockId: headingByBlockId as ReadonlyMap<
+      string,
+      HeadingPresentation
+    >,
     headingLinkIndex,
-    headingOverrides: headingOverrides as ReadonlyMap<string, HeadingOverride>,
     headings,
     pageByBlockId: pageByBlockId as ReadonlyMap<string, PagePlan>,
     pageByHeadingId: pageByHeadingId as ReadonlyMap<string, PagePlan>,

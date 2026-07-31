@@ -3,7 +3,7 @@ import type {
   NormalizedDocument,
   SemanticCompilationIdentity,
 } from "@/modules/publishing/core/preparation/document-model";
-import type { NumberedHeading } from "@/modules/publishing/core/publication/numbering";
+import type { HeadingPresentation } from "@/modules/publishing/core/publication/heading-presentation";
 import type { ValidatedDocumentConfig } from "@/modules/publishing/core/publication/validate-config";
 
 export interface PageRange {
@@ -23,12 +23,6 @@ export interface PageMetadata {
   readonly title: string;
 }
 
-export interface HeadingOverride {
-  readonly displayLevel: number;
-  readonly displayTitle: string;
-  readonly number: string | null;
-}
-
 export interface HeadingLinkIndex {
   readonly blockIdBySlug: ReadonlyMap<string, string>;
   readonly blockIds: ReadonlySet<string>;
@@ -46,16 +40,16 @@ function headingSlug(value: string): string {
 
 export function createHeadingLinkIndex(
   document: NormalizedDocument,
-  overrides: ReadonlyMap<string, Pick<HeadingOverride, "displayTitle">>,
+  presentations: ReadonlyMap<string, HeadingPresentation>,
 ): HeadingLinkIndex {
   const blockIds = new Set<string>();
   const blockIdBySlug = new Map<string, string>();
   for (const heading of document.headings) {
     blockIds.add(heading.blockId);
-    const override = overrides.get(heading.blockId);
+    const presentation = presentations.get(heading.blockId);
     for (const title of [
       heading.sourceTitle,
-      ...(override ? [override.displayTitle] : []),
+      ...(presentation ? [presentation.display_title, presentation.label] : []),
     ]) {
       const slug = headingSlug(title);
       if (slug && !blockIdBySlug.has(slug)) {
@@ -83,10 +77,9 @@ export interface CompiledBook {
   readonly document: NormalizedDocument;
   readonly excludedBlockIds: ReadonlySet<string>;
   readonly fullDocument: NormalizedDocument;
-  readonly headingByBlockId: ReadonlyMap<string, NumberedHeading>;
+  readonly headingByBlockId: ReadonlyMap<string, HeadingPresentation>;
   readonly headingLinkIndex: HeadingLinkIndex;
-  readonly headingOverrides: ReadonlyMap<string, HeadingOverride>;
-  readonly headings: readonly NumberedHeading[];
+  readonly headings: readonly HeadingPresentation[];
   readonly identity: SemanticCompilationIdentity;
   readonly pageByBlockId: ReadonlyMap<string, PagePlan>;
   readonly pageByHeadingId: ReadonlyMap<string, PagePlan>;

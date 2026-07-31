@@ -55,16 +55,20 @@ describe("published semantic document rendering", () => {
         },
       ],
     };
-    const headingOverrides = new Map([
+    const headingPresentations = new Map([
       [
         document.headings[0]?.blockId ?? "",
-        { displayLevel: 1, displayTitle: "Published heading" },
+        {
+          display_level: 1,
+          number: null,
+          titleChildren: [{ type: "text", value: "Published heading" }],
+        },
       ],
     ]);
     const rendered = await renderSemanticDocument({
       document,
-      headingLinkIndex: createHeadingLinkIndex(document, headingOverrides),
-      headingOverrides,
+      headingLinkIndex: createHeadingLinkIndex(document, new Map()),
+      headingPresentations,
       publishedResourceUrl: (resourceId) =>
         `/books/1/versions/ver_test/resources/${resourceId}`,
       resourceResolution: resolution,

@@ -108,14 +108,6 @@ class JsonLineSpool {
   }
 }
 
-function displayHeadingTitle(
-  heading: CompiledBook["headings"][number],
-): string {
-  return heading.number
-    ? `${heading.number}. ${heading.display_title}`
-    : heading.display_title;
-}
-
 function assertNonBlockingDiagnostics(
   diagnostics: readonly SafeDiagnostic[],
 ): void {
@@ -199,7 +191,7 @@ export async function materializeCandidatePages(input: {
           blockId: heading.block_id,
           level: heading.display_level,
           pageId: page.pageId,
-          title: displayHeadingTitle(heading),
+          title: heading.label,
         }),
       );
     }
@@ -274,7 +266,7 @@ export async function materializeCandidatePages(input: {
           blockId: heading.block_id,
           href: `#${heading.block_id}`,
           level: heading.display_level,
-          title: displayHeadingTitle(heading),
+          title: heading.label,
         }));
       const materializedBody = materializeRouteNeutralHtmlVariants({
         html: rendered.html,

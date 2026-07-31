@@ -7,6 +7,7 @@ import {
   canonicalJson,
 } from "@/modules/publishing/core/publication/manifest";
 import { compileBook } from "@/modules/publishing/core/publication/compile-book";
+import { buildSearchSpool } from "@/modules/publishing/core/publication/search-model";
 import {
   documentForPage,
   pageBlockIds,
@@ -100,8 +101,8 @@ describe("deterministic publication pages and manifest", () => {
     expect(book.pages).toHaveLength(3);
     expect(book.pages.map((page) => pageMetadata(book, page).title)).toEqual([
       "Introduction",
-      "Chapter",
-      "Appendix",
+      "1 Chapter",
+      "A Appendix",
     ]);
     expect(book.pages.map(pageOutputPath)).toEqual([
       "published/pages/1.html",
@@ -126,7 +127,7 @@ describe("deterministic publication pages and manifest", () => {
         renderSemanticDocument({
           document: documentForPage(book, page),
           headingLinkIndex: book.headingLinkIndex,
-          headingOverrides: book.headingOverrides,
+          headingPresentations: book.headingByBlockId,
           publishedResourceUrl: () => {
             throw new Error("No resource expected");
           },
@@ -166,6 +167,109 @@ describe("deterministic publication pages and manifest", () => {
     expect(manifest.toc).toHaveLength(3);
     expect(canonicalJson(manifest)).toBe(canonicalJson(manifest));
     expect(canonicalJson(manifest).endsWith("\n")).toBe(true);
+  });
+
+  it("uses one rich heading presentation across rendered and derived outputs", async () => {
+    const source = "# 4.4.4 **Virtual memory** $x^2$\n\nBody.\n";
+    const sourceHash = createHash("sha256").update(source).digest("hex");
+    const blockId = "blk_heading_presentation_0001";
+    const config = {
+      book_id: 1,
+      publishing: {
+        code: { line_numbers: false },
+        numbering: { mode: "normalized" },
+      },
+      revision: 1,
+      schema_version: 3,
+      source: {
+        main_markdown: "book.md",
+        main_markdown_sha256: sourceHash,
+        original_files: [],
+        preprocessing: {
+          typography: {
+            input_sha256: sourceHash,
+            output_sha256: sourceHash,
+            profile: "verbatim-v1",
+            protected_nodes: 0,
+            punctuation_converted: 0,
+            spaces_normalized: 0,
+          },
+        },
+      },
+      source_regions: [],
+      structure: [
+        {
+          block_id: blockId,
+          display_level: 1,
+          include_in_toc: true,
+          role: "body",
+          starts_page: true,
+        },
+      ],
+      title: "Systems",
+    };
+    const book = compileBook({
+      config,
+      configSha256: "e".repeat(64),
+      markdownBytes: source,
+    });
+    const page = book.pages[0];
+    if (!page) throw new Error("heading presentation page is missing");
+    const rendered = await renderSemanticDocument({
+      document: documentForPage(book, page),
+      headingLinkIndex: book.headingLinkIndex,
+      headingPresentations: book.headingByBlockId,
+      publishedResourceUrl: () => {
+        throw new Error("No resource expected");
+      },
+      resourceResolution: { diagnostics: [], references: [], resources: [] },
+    });
+    const manifest = buildDocumentManifest({
+      book,
+      bookId: 1,
+      configRevision: 1,
+      createdAt: "2026-07-31T00:00:00.000Z",
+      mainMarkdownOutputPath: "source/book.md",
+      resourceReferences: [],
+      resources: [],
+      sourceFiles: [
+        {
+          path: "source/book.md",
+          sha256: sourceHash,
+          size: Buffer.byteLength(source),
+        },
+      ],
+      versionId,
+    });
+    const search = buildSearchSpool({
+      authors: [],
+      book,
+      bookId: 1,
+      title: "Systems",
+      versionId,
+    });
+
+    expect(book.headings[0]).toMatchObject({
+      display_title: "Virtual memory x^2",
+      label: "1 Virtual memory x^2",
+      number: "1",
+      sourceNumber: "4.4.4",
+    });
+    expect(pageMetadata(book, page).title).toBe("1 Virtual memory x^2");
+    expect(rendered.html).toContain('<span class="heading-number">1 ');
+    expect(rendered.html).toContain("<strong>Virtual memory</strong>");
+    expect(rendered.html).toContain('class="katex"');
+    expect(rendered.html).not.toContain("4.4.4");
+    expect(manifest.toc).toEqual([
+      expect.objectContaining({
+        block_id: blockId,
+        number: "1",
+        title: "Virtual memory x^2",
+      }),
+    ]);
+    expect(
+      search.shortRows.find((row) => row.kind === "heading")?.normalizedText,
+    ).toBe("1 Virtual memory x^2");
   });
 
   it("assigns deduplicated resource IDs by exact source position", () => {
