@@ -9,5 +9,8 @@
 - `POST /api/manage/books/:id/publish`: empty command with `If-Match`; server promotes current ready candidate.
 - `PATCH /api/manage/books/:id/access`: `{ "access": "private" | "public" }`; public requires a version.
 
+Diagnostics expose only executable targets: `{ kind: "select_structure" | "edit_block", blockId, pageId }`
+or `{ kind: "reprocess_verbatim" }`. Evidence-only locations do not imply an action.
+
 Unknown fields are rejected. Every response is authenticated, no-index and `private, no-store`; inaccessible
 books and preview resources retain hidden 404 behavior.

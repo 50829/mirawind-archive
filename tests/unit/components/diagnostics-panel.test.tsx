@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DiagnosticsPanel } from "@/web/components/manage/DiagnosticsPanel";
 
 describe("workbench diagnostics", () => {
-  it("renders typed locations and only non-adjudicating recoveries", () => {
+  it("does not render an action for informational evidence locations", () => {
     const html = renderToStaticMarkup(
       <DiagnosticsPanel
         diagnostics={[
@@ -18,23 +18,43 @@ describe("workbench diagnostics", () => {
             },
             message: "Bounded OCR evidence was insufficient.",
             phase: "ocr",
-            recovery: ["reload", "reprocess_verbatim"],
             severity: "warning",
           },
         ]}
-        onActivate={() => undefined}
-        onRecover={() => undefined}
-        recoveryDisabled
+        onTarget={() => undefined}
       />,
     );
 
     expect(html).toContain("原 PDF 第 3 页");
     expect(html).toContain("源字节 20-40");
     expect(html).toContain("区域 region_abcdefghijklmnop");
-    expect(html).toContain("定位");
-    expect(html).toContain("重新载入");
+    expect(html).not.toContain("<button");
+  });
+
+  it("renders only explicit executable targets", () => {
+    const html = renderToStaticMarkup(
+      <DiagnosticsPanel
+        diagnostics={[
+          {
+            code: "MATH_RENDER_FAILED",
+            message: "The formula remains editable source.",
+            targets: [
+              {
+                blockId: "blk_abcdefghijklmnop",
+                kind: "edit_block",
+                pageId: 3,
+              },
+              { kind: "reprocess_verbatim" },
+            ],
+          },
+        ]}
+        onTarget={() => undefined}
+        reprocessDisabled
+      />,
+    );
+
+    expect(html).toContain("编辑正文");
     expect(html).toContain("按原文重新处理");
-    expect(html).not.toContain("启用源区域");
     expect(html).toMatch(/disabled=""[^>]*>[^<]*(?:<[^>]+>)*按原文重新处理/u);
   });
 });

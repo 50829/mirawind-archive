@@ -1,6 +1,7 @@
 import { CircleAlert, FilePenLine, RotateCcw, Save, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { DiagnosticTarget } from "@/domain/errors";
 import {
   manageDialog,
   manageDialogClose,
@@ -20,7 +21,6 @@ import {
 } from "@/web/components/manage/StructureEditor";
 import type {
   DraftView,
-  PreviewDiagnostic,
   PreviewPage,
   RecoveryJob,
 } from "@/web/contracts/publishing";
@@ -125,8 +125,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   const [selectedFragment, setSelectedFragment] = useState<string | null>(null);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
-  const [activeDiagnostic, setActiveDiagnostic] =
-    useState<PreviewDiagnostic | null>(null);
   const [reprocessJob, setReprocessJob] = useState<RecoveryJob | null>(null);
   const [frameReady, setFrameReady] = useState(false);
   const [navigationSerial, setNavigationSerial] = useState(0);
@@ -142,6 +140,9 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     saving: false,
   });
   const [blockEditor, setBlockEditor] = useState<DraftBlockEditor | null>(null);
+  const blockDirty = Boolean(
+    blockEditor && blockEditor.markdown !== blockEditor.acceptedMarkdown,
+  );
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const editorRef = useRef<StructureEditorHandle>(null);
   const diagnosticsDialog = useRef<HTMLDialogElement>(null);
@@ -359,79 +360,57 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     return () => window.removeEventListener("message", receivePreviewMessage);
   }, [loadBlock, preview]);
 
-  const pageForBlock = useCallback(
-    (blockId: string) =>
-      draft?.preview?.headings.find((heading) => heading.block_id === blockId)
-        ?.page_id ?? null,
-    [draft?.preview],
-  );
-  const activateDiagnostic = useCallback(
-    (diagnostic: PreviewDiagnostic) => {
-      const blockId = diagnostic.location?.blockId ?? diagnostic.blockId;
+  const activateDiagnosticTarget = useCallback(
+    async (target: DiagnosticTarget) => {
       diagnosticsDialog.current?.close();
-      setActiveDiagnostic(diagnostic);
-      if (!blockId) {
-        setMobileMode("structure");
+      if (target.kind === "reprocess_verbatim") {
+        setMessage("");
+        if (
+          !draft ||
+          editorState.dirty ||
+          editorState.conflict ||
+          editorState.saving ||
+          blockDirty ||
+          blockEditor?.saving ||
+          blockEditor?.conflict
+        ) {
+          setMessage("本地修改或冲突尚未处理，不能开始重新处理。");
+          return;
+        }
+        try {
+          const response = await fetch(
+            `/api/manage/books/${draft.book_id}/reprocess`,
+            {
+              body: JSON.stringify({
+                expected_config_revision: draft.config_revision,
+                profile: "verbatim-v1",
+              }),
+              cache: "no-store",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              method: "POST",
+            },
+          );
+          if (!response.ok) throw new Error("REPROCESS_FAILED");
+          setReprocessJob((await response.json()) as RecoveryJob);
+        } catch {
+          setMessage("无法开始按原文重新处理。");
+        }
         return;
       }
-      const diagnosticPage = pageForBlock(blockId);
-      setFocusedBlockId(blockId);
-      setMobileMode("structure");
-      if (diagnosticPage === null) return;
       setFrameReady(false);
-      setSelectedPage(diagnosticPage);
-      setSelectedFragment(blockId);
+      setSelectedPage(target.pageId);
+      setSelectedFragment(target.blockId);
       setNavigationSerial((value) => value + 1);
-      setMobileMode("preview");
-    },
-    [pageForBlock],
-  );
-
-  const recoverDiagnostic = useCallback(
-    async (
-      action: NonNullable<PreviewDiagnostic["recovery"]>[number],
-      diagnostic: PreviewDiagnostic,
-    ) => {
-      if (action === "select_structure") {
-        activateDiagnostic(diagnostic);
-        return;
-      }
-      setMessage("");
-      if (action === "reload") {
-        await refresh().catch(() => setMessage("重新载入草稿失败。"));
-        return;
-      }
-      if (
-        !draft ||
-        editorState.dirty ||
-        editorState.conflict ||
-        editorState.saving
-      ) {
-        setMessage("本地修改或冲突尚未处理，不能开始重新处理。");
-        return;
-      }
-      try {
-        const response = await fetch(
-          `/api/manage/books/${draft.book_id}/reprocess`,
-          {
-            body: JSON.stringify({
-              expected_config_revision: draft.config_revision,
-              profile: "verbatim-v1",
-            }),
-            cache: "no-store",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            method: "POST",
-          },
-        );
-        if (!response.ok) throw new Error("REPROCESS_FAILED");
-        const queued = (await response.json()) as RecoveryJob;
-        setReprocessJob(queued);
-      } catch {
-        setMessage("无法开始按原文重新处理。");
+      if (target.kind === "select_structure") {
+        setFocusedBlockId(target.blockId);
+        setMobileMode("structure");
+      } else {
+        setMobileMode("preview");
+        await loadBlock(target.blockId);
       }
     },
-    [activateDiagnostic, draft, editorState, refresh],
+    [blockDirty, blockEditor, draft, editorState, loadBlock],
   );
 
   const saveBlock = useCallback(async () => {
@@ -524,9 +503,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   const previewReady =
     candidateState === "ready" &&
     preview?.config_revision === draft.config_revision;
-  const blockDirty = Boolean(
-    blockEditor && blockEditor.markdown !== blockEditor.acceptedMarkdown,
-  );
   return (
     <div className="preview-workspace" data-mobile-mode={mobileMode}>
       <header className="preview-header sticky top-0 z-10 mb-4 grid min-h-18 grid-cols-[auto_minmax(12rem,1fr)_auto_auto_auto] items-center gap-3 rounded-lg border border-stone-300 bg-white px-6 py-3 max-[850px]:grid-cols-[auto_minmax(0,1fr)_auto]">
@@ -646,21 +622,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           <h2 className="sr-only" id="structure-title">
             出版结构
           </h2>
-          {activeDiagnostic?.location && (
-            <p
-              className="mb-3 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900"
-              role="status"
-            >
-              {activeDiagnostic.location.regionId
-                ? `区域 ${activeDiagnostic.location.regionId}`
-                : activeDiagnostic.location.pageIndex !== undefined
-                  ? `原 PDF 第 ${activeDiagnostic.location.pageIndex + 1} 页`
-                  : activeDiagnostic.location.startByte !== undefined &&
-                      activeDiagnostic.location.endByte !== undefined
-                    ? `源字节 ${activeDiagnostic.location.startByte}-${activeDiagnostic.location.endByte}`
-                    : activeDiagnostic.code}
-            </p>
-          )}
           {etag && (
             <StructureEditor
               ref={editorRef}
@@ -689,10 +650,8 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           >
             <DiagnosticsPanel
               diagnostics={draft.diagnostics}
-              onActivate={activateDiagnostic}
-              onRecover={recoverDiagnostic}
-              pageForBlock={pageForBlock}
-              recoveryDisabled={
+              onTarget={(target) => void activateDiagnosticTarget(target)}
+              reprocessDisabled={
                 editorState.dirty ||
                 editorState.conflict ||
                 editorState.saving ||
@@ -781,10 +740,8 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           <div className="workbench-dialog-body p-4 max-[850px]:min-h-[calc(100dvh-3.5rem)] max-[850px]:overflow-auto">
             <DiagnosticsPanel
               diagnostics={draft.diagnostics}
-              onActivate={activateDiagnostic}
-              onRecover={recoverDiagnostic}
-              pageForBlock={pageForBlock}
-              recoveryDisabled={
+              onTarget={(target) => void activateDiagnosticTarget(target)}
+              reprocessDisabled={
                 editorState.dirty ||
                 editorState.conflict ||
                 editorState.saving ||

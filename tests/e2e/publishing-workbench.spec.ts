@@ -38,8 +38,15 @@ function draftProjection(
           startByte: 20,
         },
         message: "Locatable test diagnostic",
-        recovery: ["select_structure", "reload", "reprocess_verbatim"],
         severity: diagnosticSeverity,
+        targets: [
+          {
+            blockId: structure[0]?.block_id,
+            kind: "select_structure",
+            pageId: 1,
+          },
+          { kind: "reprocess_verbatim" },
+        ],
       },
     ],
     preview: {
@@ -221,12 +228,10 @@ test("keeps representative and stress structure DOM bounded", async ({
   await expect(page.getByRole("heading", { name: "准备一本书" })).toBeVisible();
 });
 
-test("locates diagnostics and preserves dirty edits during recovery", async ({
+test("locates diagnostics and disables reprocessing while edits are dirty", async ({
   page,
 }) => {
-  let draftRequests = 0;
   await page.route("**/api/manage/books/99/draft", (route) => {
-    draftRequests += 1;
     return route.fulfill({
       body: JSON.stringify(draftProjection(20)),
       contentType: "application/json",
@@ -244,7 +249,7 @@ test("locates diagnostics and preserves dirty edits during recovery", async ({
   await loginAsAdministrator(page, "192.0.2.16");
   await page.goto("/manage/books/99/preview");
 
-  await page.getByRole("button", { name: "定位" }).click();
+  await page.getByRole("button", { name: "定位结构" }).click();
   await expect(
     page.locator(".structure-tree [aria-current=true]"),
   ).toContainText("Structure item 1");
@@ -255,8 +260,6 @@ test("locates diagnostics and preserves dirty edits during recovery", async ({
 
   const title = page.getByRole("textbox", { name: "标题" });
   await title.fill("Unsaved local title");
-  await page.getByRole("button", { name: "重新载入" }).click();
-  await expect.poll(() => draftRequests).toBeGreaterThan(1);
   await expect(title).toHaveValue("Unsaved local title");
   await expect(
     page.getByRole("button", { name: "按原文重新处理" }),

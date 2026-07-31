@@ -18,7 +18,6 @@ export function printedContentsDiagnostics(
         message:
           "The layout companion could not be used completely; accepted Markdown was retained.",
         phase: "contents",
-        recovery: Object.freeze(["reload"]),
         severity: "warning",
       }),
     ),
@@ -33,7 +32,6 @@ export function printedContentsDiagnostics(
         message:
           "PDF evidence was unavailable or insufficient; no uncertain structure was promoted.",
         phase: "ocr",
-        recovery: Object.freeze(["reload"]),
         severity: "warning",
       }),
     ),
@@ -71,9 +69,6 @@ export function printedContentsDiagnostics(
                 : "The automatic printed contents evidence was insufficient for a definite proposal.",
           path: diagnostic.path,
           phase: diagnostic.code.includes("MATCH") ? "matching" : "contents",
-          recovery: Object.freeze([
-            diagnostic.block_id ? "select_structure" : "reload",
-          ]),
           severity:
             diagnostic.code === "PRINTED_TOC_LOW_COVERAGE" ||
             diagnostic.code === "PRINTED_TOC_RICH_CONTENT"
@@ -94,8 +89,8 @@ export function printedContentsDiagnostics(
         message:
           "Typography changed a mixed source range; reprocess from retained input to restore verbatim bytes.",
         phase: "typography",
-        recovery: Object.freeze(["reprocess_verbatim"]),
         severity: "warning",
+        targets: Object.freeze([{ kind: "reprocess_verbatim" }]),
       }),
     ),
   ]);

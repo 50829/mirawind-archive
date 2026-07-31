@@ -1,6 +1,7 @@
-import { LocateFixed, RefreshCw, RotateCcw } from "lucide-react";
+import { FilePenLine, LocateFixed, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import type { DiagnosticTarget } from "@/domain/errors";
 import {
   manageField,
   manageFieldLabel,
@@ -9,24 +10,28 @@ import {
 } from "@/web/components/ui/manage-classes";
 import type { PreviewDiagnostic } from "@/web/contracts/publishing";
 
-const recoveryLabels = {
-  reload: "重新载入",
-  reprocess_verbatim: "按原文重新处理",
-  select_structure: "定位结构",
-} as const;
+function targetPage(diagnostic: PreviewDiagnostic): number | null {
+  const target = diagnostic.targets?.find(
+    (
+      candidate,
+    ): candidate is Extract<
+      DiagnosticTarget,
+      { kind: "edit_block" | "select_structure" }
+    > =>
+      candidate.kind === "edit_block" || candidate.kind === "select_structure",
+  );
+  return target?.pageId ?? null;
+}
 
 export function DiagnosticsPanel(props: {
   readonly diagnostics: readonly PreviewDiagnostic[];
-  readonly onActivate?: (diagnostic: PreviewDiagnostic) => void;
-  readonly onRecover?: (
-    action: NonNullable<PreviewDiagnostic["recovery"]>[number],
+  readonly onTarget?: (
+    target: DiagnosticTarget,
     diagnostic: PreviewDiagnostic,
   ) => void;
-  readonly pageForBlock?: (blockId: string) => number | null;
-  readonly recoveryDisabled?: boolean;
+  readonly reprocessDisabled?: boolean;
 }) {
   const diagnostics = props.diagnostics;
-  const pageForBlock = props.pageForBlock;
   const [severity, setSeverity] = useState<
     "all" | "error" | "info" | "warning"
   >("all");
@@ -36,29 +41,18 @@ export function DiagnosticsPanel(props: {
       [
         ...new Set(
           diagnostics.flatMap((diagnostic) => {
-            const page =
-              (diagnostic.location?.blockId ?? diagnostic.blockId) &&
-              pageForBlock
-                ? pageForBlock(
-                    diagnostic.location?.blockId ?? diagnostic.blockId ?? "",
-                  )
-                : null;
+            const page = targetPage(diagnostic);
             return page === null ? [] : [page];
           }),
         ),
       ].sort((left, right) => left - right),
-    [diagnostics, pageForBlock],
+    [diagnostics],
   );
   const filtered = diagnostics.filter((diagnostic) => {
     const diagnosticSeverity = diagnostic.severity ?? "warning";
     if (severity !== "all" && severity !== diagnosticSeverity) return false;
     if (pageId === "all") return true;
-    return Boolean(
-      (diagnostic.location?.blockId ?? diagnostic.blockId) &&
-      pageForBlock?.(
-        diagnostic.location?.blockId ?? diagnostic.blockId ?? "",
-      ) === pageId,
-    );
+    return targetPage(diagnostic) === pageId;
   });
   return (
     <section
@@ -147,41 +141,32 @@ export function DiagnosticsPanel(props: {
                   </p>
                 ) : null}
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {(diagnostic.location || diagnostic.blockId) &&
-                  props.onActivate ? (
-                    <button
-                      className={manageQuietButton}
-                      onClick={() => props.onActivate?.(diagnostic)}
-                      type="button"
-                    >
-                      <LocateFixed aria-hidden="true" size={16} />
-                      定位
-                    </button>
-                  ) : null}
-                  {props.onRecover
-                    ? diagnostic.recovery
-                        ?.filter((action) => action !== "select_structure")
-                        .map((action) => (
-                          <button
-                            className={manageQuietButton}
-                            disabled={
-                              props.recoveryDisabled &&
-                              action === "reprocess_verbatim"
-                            }
-                            key={action}
-                            onClick={() =>
-                              props.onRecover?.(action, diagnostic)
-                            }
-                            type="button"
-                          >
-                            {action === "reload" ? (
-                              <RefreshCw aria-hidden="true" size={16} />
-                            ) : (
-                              <RotateCcw aria-hidden="true" size={16} />
-                            )}
-                            {recoveryLabels[action]}
-                          </button>
-                        ))
+                  {props.onTarget
+                    ? diagnostic.targets?.map((target) => (
+                        <button
+                          className={manageQuietButton}
+                          disabled={
+                            props.reprocessDisabled &&
+                            target.kind === "reprocess_verbatim"
+                          }
+                          key={`${target.kind}:${"blockId" in target ? target.blockId : "book"}`}
+                          onClick={() => props.onTarget?.(target, diagnostic)}
+                          type="button"
+                        >
+                          {target.kind === "select_structure" ? (
+                            <LocateFixed aria-hidden="true" size={16} />
+                          ) : target.kind === "edit_block" ? (
+                            <FilePenLine aria-hidden="true" size={16} />
+                          ) : (
+                            <RotateCcw aria-hidden="true" size={16} />
+                          )}
+                          {target.kind === "select_structure"
+                            ? "定位结构"
+                            : target.kind === "edit_block"
+                              ? "编辑正文"
+                              : "按原文重新处理"}
+                        </button>
+                      ))
                     : null}
                 </div>
               </li>

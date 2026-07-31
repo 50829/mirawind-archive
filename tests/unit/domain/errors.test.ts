@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createSafeDiagnostic } from "@/domain/errors";
 
 describe("safe locatable diagnostics", () => {
-  it("retains bounded evidence, location and valid recovery actions", () => {
+  it("retains bounded evidence, location and executable targets", () => {
     const diagnostic = createSafeDiagnostic({
       code: "PRINTED_TOC_UNMATCHED_ENTRY",
       confidence: "low",
@@ -17,15 +17,29 @@ describe("safe locatable diagnostics", () => {
       },
       message: "No unique body heading was found.",
       phase: "matching",
-      recovery: ["select_structure", "reload"],
       severity: "warning",
+      targets: [
+        {
+          blockId: "blk_abcdefghijklmnop",
+          kind: "select_structure",
+          pageId: 4,
+        },
+        { kind: "reprocess_verbatim" },
+      ],
     });
 
     expect(diagnostic).toMatchObject({
       confidence: "low",
       location: { endByte: 20, pageIndex: 3, startByte: 10 },
       phase: "matching",
-      recovery: ["select_structure", "reload"],
+      targets: [
+        {
+          blockId: "blk_abcdefghijklmnop",
+          kind: "select_structure",
+          pageId: 4,
+        },
+        { kind: "reprocess_verbatim" },
+      ],
     });
     expect(diagnostic.evidence?.[1]).toHaveLength(200);
     expect(diagnostic.location?.blockId).toBe("blk_abcdefghijklmnop");
@@ -44,22 +58,49 @@ describe("safe locatable diagnostics", () => {
       },
       message: "Invalid evidence.",
       phase: "unknown" as "contents",
-      recovery: ["unknown" as "reload"],
+      targets: [
+        {
+          blockId: "private body text",
+          kind: "edit_block",
+          pageId: 0,
+        },
+      ],
     });
 
     expect(diagnostic.confidence).toBeUndefined();
     expect(diagnostic.phase).toBeUndefined();
-    expect(diagnostic.recovery).toBeUndefined();
+    expect(diagnostic.targets).toBeUndefined();
     expect(diagnostic.location).toBeUndefined();
   });
 
-  it("drops manual structure adjudication actions", () => {
+  it("drops unknown target kinds", () => {
     const diagnostic = createSafeDiagnostic({
       code: "PRINTED_TOC_LOW_CONFIDENCE",
       message: "The automatic evidence was insufficient.",
-      recovery: ["enable_region" as "reload"],
+      targets: [
+        {
+          blockId: "blk_abcdefghijklmnop",
+          kind: "enable_region",
+          pageId: 1,
+        } as never,
+      ],
     });
 
-    expect(diagnostic.recovery).toBeUndefined();
+    expect(diagnostic.targets).toBeUndefined();
+  });
+
+  it("deduplicates executable targets", () => {
+    const target = {
+      blockId: "blk_abcdefghijklmnop",
+      kind: "edit_block" as const,
+      pageId: 2,
+    };
+    const diagnostic = createSafeDiagnostic({
+      code: "MATH_RENDER_FAILED",
+      message: "The formula remains editable source.",
+      targets: [target, target],
+    });
+
+    expect(diagnostic.targets).toEqual([target]);
   });
 });

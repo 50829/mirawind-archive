@@ -2,7 +2,7 @@ import { createHash, type Hash } from "node:crypto";
 import { chmod, mkdir, open, rm, type FileHandle } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import type { SafeDiagnostic } from "@/domain/errors";
+import { createSafeDiagnostic, type SafeDiagnostic } from "@/domain/errors";
 import {
   buildSearchRowsForBlocks,
   buildSearchShortRows,
@@ -121,6 +121,29 @@ function assertNonBlockingDiagnostics(
   }
 }
 
+function diagnosticWithBlockTarget(input: {
+  readonly diagnostic: SafeDiagnostic;
+  readonly headingIds: ReadonlySet<string>;
+  readonly pageId: number | null;
+}): SafeDiagnostic {
+  const blockId =
+    input.diagnostic.location?.blockId ?? input.diagnostic.blockId ?? null;
+  if (!blockId || input.pageId === null) return input.diagnostic;
+  return createSafeDiagnostic({
+    ...input.diagnostic,
+    targets: Object.freeze([
+      ...(input.diagnostic.targets ?? []),
+      {
+        blockId,
+        kind: input.headingIds.has(blockId)
+          ? ("select_structure" as const)
+          : ("edit_block" as const),
+        pageId: input.pageId,
+      },
+    ]),
+  });
+}
+
 export interface CandidateMaterializationResult {
   readonly diagnostics: readonly SafeDiagnostic[];
   readonly manifestPageCount: number;
@@ -174,6 +197,9 @@ export async function materializeCandidatePages(input: {
     relativePath: "derived/search-rows.ndjson",
   });
   const pageByHeading = new Map<string, number>();
+  const headingIds = new Set(
+    compiled.headings.map((heading) => heading.block_id),
+  );
   const headingsByPageId = new Map<
     number,
     CompiledBook["headings"][number][]
@@ -238,7 +264,16 @@ export async function materializeCandidatePages(input: {
   const diagnostics: SafeDiagnostic[] = [
     ...(input.preparationDiagnostics ?? []),
     ...input.resourceResolution.diagnostics,
-  ];
+  ].map((diagnostic) => {
+    const blockId = diagnostic.location?.blockId ?? diagnostic.blockId;
+    return diagnosticWithBlockTarget({
+      diagnostic,
+      headingIds,
+      pageId: blockId
+        ? (compiled.pageByBlockId.get(blockId)?.pageId ?? null)
+        : null,
+    });
+  });
   const styles = new Set<string>();
   let searchCursor: SearchRowCursor = {
     currentHeading: "",
@@ -256,8 +291,15 @@ export async function materializeCandidatePages(input: {
       resourceResolution: input.resourceResolution,
       ...(input.signal ? { signal: input.signal } : {}),
     })) {
-      assertNonBlockingDiagnostics(rendered.diagnostics);
-      diagnostics.push(...rendered.diagnostics);
+      const renderedDiagnostics = rendered.diagnostics.map((diagnostic) =>
+        diagnosticWithBlockTarget({
+          diagnostic,
+          headingIds,
+          pageId: rendered.page.pageId,
+        }),
+      );
+      assertNonBlockingDiagnostics(renderedDiagnostics);
+      diagnostics.push(...renderedDiagnostics);
       if (rendered.css) styles.add(rendered.css);
       const { ordinal, page } = rendered;
       const nextPage = compiled.pages[ordinal + 1];

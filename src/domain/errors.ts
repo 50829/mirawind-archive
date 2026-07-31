@@ -12,6 +12,16 @@ export class SafeApplicationError extends Error {
   }
 }
 
+export type DiagnosticTarget =
+  | {
+      readonly blockId: string;
+      readonly kind: "edit_block" | "select_structure";
+      readonly pageId: number;
+    }
+  | {
+      readonly kind: "reprocess_verbatim";
+    };
+
 export function safeErrorCode(error: unknown): string {
   return error instanceof SafeApplicationError
     ? error.code
@@ -40,10 +50,8 @@ export interface SafeDiagnostic {
     | "splitting"
     | "structure"
     | "typography";
-  readonly recovery?: readonly (
-    "reload" | "reprocess_verbatim" | "select_structure"
-  )[];
   readonly severity?: "error" | "info" | "warning";
+  readonly targets?: readonly DiagnosticTarget[];
 }
 
 export function createSafeDiagnostic(input: SafeDiagnostic): SafeDiagnostic {
@@ -66,11 +74,36 @@ export function createSafeDiagnostic(input: SafeDiagnostic): SafeDiagnostic {
   ].includes(String(input.phase))
     ? input.phase
     : undefined;
-  const recovery = (input.recovery ?? [])
-    .filter((value) =>
-      ["reload", "reprocess_verbatim", "select_structure"].includes(value),
-    )
-    .slice(0, 4);
+  const targets: DiagnosticTarget[] = [];
+  const seenTargets = new Set<string>();
+  for (const target of input.targets ?? []) {
+    if (target.kind === "reprocess_verbatim") {
+      if (!seenTargets.has(target.kind)) {
+        seenTargets.add(target.kind);
+        targets.push(Object.freeze({ kind: target.kind }));
+      }
+      continue;
+    }
+    if (target.kind !== "edit_block" && target.kind !== "select_structure") {
+      continue;
+    }
+    if (
+      isOpaqueId("block", target.blockId) &&
+      Number.isSafeInteger(target.pageId) &&
+      target.pageId > 0
+    ) {
+      const key = `${target.kind}:${target.blockId}:${target.pageId}`;
+      if (seenTargets.has(key)) continue;
+      seenTargets.add(key);
+      targets.push(
+        Object.freeze({
+          blockId: target.blockId,
+          kind: target.kind,
+          pageId: target.pageId,
+        }),
+      );
+    }
+  }
   const location = input.location;
   const validRange =
     location?.startByte !== undefined &&
@@ -118,7 +151,9 @@ export function createSafeDiagnostic(input: SafeDiagnostic): SafeDiagnostic {
     message: input.message.slice(0, 500),
     ...(input.path ? { path: input.path.slice(0, 500) } : {}),
     ...(phase ? { phase } : {}),
-    ...(recovery.length > 0 ? { recovery: Object.freeze(recovery) } : {}),
     ...(input.severity ? { severity: input.severity } : {}),
+    ...(targets.length > 0
+      ? { targets: Object.freeze(targets.slice(0, 4)) }
+      : {}),
   });
 }
