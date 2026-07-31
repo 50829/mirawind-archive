@@ -18,7 +18,11 @@ import {
   supplementalPdfPageIndices,
   type PrintedContentsCandidate,
 } from "../../src/modules/publishing/core/preparation/printed-contents.js";
-import { prepareActiveDocument } from "../../src/modules/publishing/core/preparation/prepared-document.js";
+import {
+  firstActiveHeadingAfterSourceRegion,
+  prepareActiveDocument,
+  type PreparedDocument,
+} from "../../src/modules/publishing/core/preparation/prepared-document.js";
 import { SourceTextIndex } from "../../src/modules/publishing/core/preparation/source-text-index.js";
 import {
   proposeDocumentStructure,
@@ -529,15 +533,25 @@ function regionsFor(input: {
 }
 
 function rawHeadingAccounting(input: {
-  readonly activeDocument: NormalizedDocument;
   readonly originalDocument: NormalizedDocument;
   readonly pack: MineruReferencePack;
+  readonly preparedDocument: PreparedDocument;
   readonly projections: readonly CandidateProjection[];
   readonly regions: readonly ReferenceContentsRegion[];
 }): readonly ReferenceHeadingAccounting[] {
   const markdown = input.pack.markdown_documents[0];
   if (!markdown) throw new Error("OBSERVED_REFERENCE_MARKDOWN_MISSING");
-  const proposal = proposeDocumentStructure(input.activeDocument, {
+  const canonicalRegion = input.projections.find(
+    (projection) => projection.candidate.canonical,
+  )?.candidate.proposedRegion;
+  const bodySearchStartBlockId = canonicalRegion
+    ? firstActiveHeadingAfterSourceRegion({
+        preparedDocument: input.preparedDocument,
+        region: canonicalRegion,
+      })
+    : undefined;
+  const proposal = proposeDocumentStructure(input.preparedDocument.active, {
+    ...(bodySearchStartBlockId ? { bodySearchStartBlockId } : {}),
     printedEntries: input.projections.flatMap((projection) =>
       projection.candidate.canonical
         ? projection.candidate.logicalEntries.map((entry) => ({
@@ -807,12 +821,12 @@ export async function observeRealMineruFixture(input: {
       ? [projection.candidate.proposedRegion]
       : [],
   );
-  const activeDocument = prepareActiveDocument({
+  const preparedDocument = prepareActiveDocument({
     document: originalDocument,
     mainMarkdownPath: basename(markdown.relative_path),
     mainMarkdownSha256: typography.provenance.output_sha256,
     regions: sourceRegions,
-  }).active;
+  });
   const regions = regionsFor({ pack: input.pack, projections });
   return Object.freeze({
     archive_sha256: input.pack.archive_sha256,
@@ -833,9 +847,9 @@ export async function observeRealMineruFixture(input: {
     }),
     protected_ranges: observedProtectedRanges(rawSource, typography.markdown),
     raw_heading_accounting: rawHeadingAccounting({
-      activeDocument,
       originalDocument,
       pack: input.pack,
+      preparedDocument,
       projections,
       regions,
     }),

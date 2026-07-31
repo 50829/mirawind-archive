@@ -8,6 +8,7 @@ import type {
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { applySourceRegions } from "@/modules/publishing/core/preparation/source-regions";
+import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
 
 export interface PreparedDocument {
   readonly active: NormalizedDocument;
@@ -22,6 +23,24 @@ export interface ContentCleanupProvenance {
   readonly input_sha256: string;
   readonly output_sha256: string;
   readonly printed_toc_regions_removed: number;
+}
+
+export function firstActiveHeadingAfterSourceRegion(input: {
+  readonly preparedDocument: PreparedDocument;
+  readonly region: ConfirmedSourceRegion;
+}): string | undefined {
+  const activeHeadingIds = new Set(
+    input.preparedDocument.active.headings.map((heading) => heading.blockId),
+  );
+  const sourceIndex = new SourceTextIndex(input.preparedDocument.full.source);
+  return input.preparedDocument.full.headings.find((heading) => {
+    const start = heading.position?.start.offset;
+    return (
+      start !== undefined &&
+      activeHeadingIds.has(heading.blockId) &&
+      sourceIndex.byteOffsetAt(start) >= input.region.range.end_byte
+    );
+  })?.blockId;
 }
 
 interface ExistingBlockIdentity {

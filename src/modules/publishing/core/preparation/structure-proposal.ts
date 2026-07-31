@@ -54,8 +54,12 @@ const ornamentalPartMarker =
   /^p\s*a\s*r\s*t\s*(?:[0-9ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)$/iu;
 const sectionRangeReferenceTitle =
   /^\d+(?:\s*\.\s*\d+)+(?:\s*[-~～—]\s*\d+(?:\s*\.\s*\d+)*)?\s*节$/u;
-const alphabeticAppendixSectionTitle =
-  /^[A-Z]\.\d+(?:\.\d+){0,2}(?=\s|、|:|：)/iu;
+function alphabeticAppendixSectionLevel(value: string): number | undefined {
+  const number = /^[A-Z]\s*\.\s*(\d+(?:\s*\.\s*\d+){0,2})(?=\s|、|:|：)/iu.exec(
+    value,
+  )?.[1];
+  return number ? Math.min(4, number.split(/\s*\.\s*/u).length + 1) : undefined;
+}
 
 function localOrdinalTitle(value: string): boolean {
   if (
@@ -325,6 +329,7 @@ interface PrintedStructureEntry {
 }
 
 interface StructureProposalOptions {
+  readonly bodySearchStartBlockId?: string;
   readonly printedEntries?: readonly PrintedStructureEntry[];
 }
 
@@ -335,6 +340,8 @@ type PrintedHeadingKind = NonNullable<
 interface StructureEvidenceIndex {
   readonly contextualNumberedLevels: readonly number[];
   readonly coverBoundaryIndex: number;
+  readonly firstBodyUnitIndex: number;
+  readonly globalAppendixIndexes: ReadonlySet<number>;
   readonly hasAnyNumberedEvidence: boolean;
   readonly hasPrintedHierarchy: boolean;
   readonly headingGaps: ReturnType<typeof indexHeadingGaps>;
@@ -401,6 +408,14 @@ function indexPrintedStructureEvidence(
     if (kind) printedKinds.set(entry.bodyHeadingBlockId, kind);
     else printedKinds.delete(entry.bodyHeadingBlockId);
   }
+  const globalAppendixIndexes = new Set<number>();
+  let insideGlobalAppendix = false;
+  for (const [index, heading] of document.headings.entries()) {
+    const printedRole = printedRoles.get(heading.blockId);
+    if (printedRole === "appendix") insideGlobalAppendix = true;
+    else if (printedRole !== undefined) insideGlobalAppendix = false;
+    if (insideGlobalAppendix) globalAppendixIndexes.add(index);
+  }
   const printedHeadingIds = new Set(printedLevels.keys());
   const hasPrintedHierarchy = printedHeadingIds.size > 0;
   const localPartIndexes = new Set(
@@ -411,6 +426,10 @@ function indexPrintedStructureEvidence(
         : [],
     ),
   );
+  const headingGaps = indexHeadingGaps(
+    document.headings,
+    document.root.children ?? [],
+  );
   const hasAnyNumberedEvidence =
     printedHeadingIds.size > 0 ||
     document.headings.some(
@@ -418,11 +437,51 @@ function indexPrintedStructureEvidence(
         !localPartIndexes.has(index) &&
         inferPrintedHeadingEvidence(heading.sourceTitle) !== undefined,
     );
-  const firstBodyUnitIndex = document.headings.findIndex((heading, index) => {
-    if (localPartIndexes.has(index)) return false;
-    const kind = inferPrintedHeadingEvidence(heading.sourceTitle)?.kind;
-    return kind === "chapter" || kind === "part";
+  const bodySearchStartIndex = options.bodySearchStartBlockId
+    ? document.headings.findIndex(
+        (heading) => heading.blockId === options.bodySearchStartBlockId,
+      )
+    : 0;
+  if (bodySearchStartIndex < 0) {
+    throw new Error("DOCUMENT_STRUCTURE_BODY_SEARCH_START_MISSING");
+  }
+  const firstAppendixIndex = document.headings.findIndex((heading, index) => {
+    if (index < bodySearchStartIndex) return false;
+    const role =
+      printedRoles.get(heading.blockId) ?? proposedRole(heading.sourceTitle);
+    return role === "appendix";
   });
+  const semanticBodyUnitIndex = document.headings.findIndex(
+    (heading, index) => {
+      if (index < bodySearchStartIndex) return false;
+      if (localPartIndexes.has(index)) return false;
+      if (firstAppendixIndex >= 0 && index >= firstAppendixIndex) return false;
+      const kind =
+        printedKinds.get(heading.blockId) ??
+        inferPrintedHeadingEvidence(heading.sourceTitle)?.kind;
+      return kind === "chapter" || kind === "decimal" || kind === "part";
+    },
+  );
+  const hasDetachedBodyLabelPrefix =
+    options.bodySearchStartBlockId !== undefined &&
+    semanticBodyUnitIndex > bodySearchStartIndex &&
+    semanticBodyUnitIndex <= bodySearchStartIndex + 3 &&
+    document.headings
+      .slice(bodySearchStartIndex, semanticBodyUnitIndex)
+      .every((heading, offset) => {
+        const index = bodySearchStartIndex + offset;
+        return (
+          /^(?:part|\d{1,3})$/iu.test(heading.sourceTitle.trim()) &&
+          !(headingGaps.gaps[index + 1]?.hasText ?? true)
+        );
+      });
+  const firstBodyUnitIndex = hasDetachedBodyLabelPrefix
+    ? bodySearchStartIndex
+    : semanticBodyUnitIndex >= 0
+      ? semanticBodyUnitIndex
+      : options.bodySearchStartBlockId
+        ? bodySearchStartIndex
+        : -1;
   const firstFrontmatterIndex = document.headings.findIndex((heading) =>
     frontmatterTitle.test(heading.sourceTitle.trim().normalize("NFKC")),
   );
@@ -463,12 +522,11 @@ function indexPrintedStructureEvidence(
   return Object.freeze({
     contextualNumberedLevels,
     coverBoundaryIndex,
+    firstBodyUnitIndex,
+    globalAppendixIndexes,
     hasAnyNumberedEvidence,
     hasPrintedHierarchy,
-    headingGaps: indexHeadingGaps(
-      document.headings,
-      document.root.children ?? [],
-    ),
+    headingGaps,
     localBackmatterIndexes,
     localPartIndexes,
     markdownLevelsAreUseful,
@@ -505,13 +563,15 @@ function inferStructureLevels(
       structuralEvidence[index] = false;
       return evidence.contextualNumberedLevels[index] ?? 2;
     }
+    const appendixSectionLevel = alphabeticAppendixSectionLevel(title);
     if (
       evidence.hasPrintedHierarchy &&
+      evidence.globalAppendixIndexes.has(index) &&
       !evidence.printedHeadingIds.has(heading.blockId) &&
-      alphabeticAppendixSectionTitle.test(title)
+      appendixSectionLevel !== undefined
     ) {
       structuralEvidence[index] = true;
-      return evidence.contextualNumberedLevels[index] ?? 2;
+      return appendixSectionLevel;
     }
     const numbered = inferPrintedReferenceLevel(heading.sourceTitle);
     if (numbered) {
@@ -567,9 +627,13 @@ function createInitialStructureNodes(
   levels: readonly number[],
   evidenceIndex: StructureEvidenceIndex,
 ): readonly StructureNodeState[] {
-  let currentTopLevelRole: ContentRole = "body";
+  let currentTopLevelRole: ContentRole =
+    evidenceIndex.firstBodyUnitIndex > 0 ? "frontmatter" : "body";
   return Object.freeze(
     headings.map((heading, index) => {
+      if (index === evidenceIndex.firstBodyUnitIndex) {
+        currentTopLevelRole = "body";
+      }
       const displayLevel = levels[index] ?? 1;
       const title = heading.sourceTitle.trim().normalize("NFKC");
       const explicitLevel = inferPrintedReferenceLevel(title);
@@ -589,24 +653,21 @@ function createInitialStructureNodes(
       const unmatchedAlphabeticAppendixSection =
         evidenceIndex.hasPrintedHierarchy &&
         !evidenceIndex.printedHeadingIds.has(heading.blockId) &&
-        alphabeticAppendixSectionTitle.test(title);
+        alphabeticAppendixSectionLevel(title) !== undefined;
       const unmatchedOptionalBackmatter =
         evidenceIndex.hasPrintedHierarchy &&
         !evidenceIndex.printedHeadingIds.has(heading.blockId) &&
         optionalBackmatterTitle.test(title);
-      const appendixDescendant =
-        currentTopLevelRole === "appendix" && displayLevel > 1;
       const includeInToc =
         !coverMetadata &&
-        (!localOrdinal || appendixDescendant) &&
-        (!unmatchedAlphabeticAppendixSection || appendixDescendant) &&
+        !localOrdinal &&
+        !unmatchedAlphabeticAppendixSection &&
         !unmatchedOptionalBackmatter &&
         !nonNavigationalLocalTitle.test(title) &&
         ((!evidenceIndex.hasPrintedHierarchy &&
           evidenceIndex.markdownLevelsAreUseful) ||
           !evidenceIndex.hasAnyNumberedEvidence ||
           evidenceIndex.printedHeadingIds.has(heading.blockId) ||
-          appendixDescendant ||
           (!localPart && explicitLevel !== undefined) ||
           frontmatterTitle.test(title) ||
           appendixTitle.test(title) ||
@@ -641,7 +702,11 @@ function createInitialStructureNodes(
           headingEvidence?.kind === "chapter"
         ) {
           currentTopLevelRole = "body";
-        } else if (currentTopLevelRole === "frontmatter") {
+        } else if (
+          currentTopLevelRole === "frontmatter" &&
+          (evidenceIndex.firstBodyUnitIndex < 0 ||
+            index >= evidenceIndex.firstBodyUnitIndex)
+        ) {
           currentTopLevelRole = "body";
         }
         role = currentTopLevelRole;
@@ -971,6 +1036,7 @@ function finalizeStructureNodes(
 function portableProposal(
   document: NormalizedDocument,
   nodes: readonly StructureNodeState[],
+  evidenceIndex: StructureEvidenceIndex,
 ): StructureProposal {
   const roles: ContentRole[] = [];
   let inheritedRole: ContentRole = "body";
@@ -978,7 +1044,10 @@ function portableProposal(
     if (node.role) inheritedRole = node.role;
     roles.push(inheritedRole);
   }
-  const firstBodyIndex = roles.indexOf("body");
+  const firstBodyIndex =
+    evidenceIndex.firstBodyUnitIndex >= 0
+      ? evidenceIndex.firstBodyUnitIndex
+      : roles.indexOf("body");
   const bodyIndex = firstBodyIndex < 0 ? 0 : firstBodyIndex;
   const lastBodyIndex = roles.lastIndexOf("body");
   const appendixIndex = roles.findIndex(
@@ -1064,5 +1133,6 @@ export function proposeDocumentStructure(
       detachedNumericChapterMarkerIndexes,
       evidence,
     ),
+    evidence,
   );
 }

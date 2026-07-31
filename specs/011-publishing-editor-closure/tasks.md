@@ -12,7 +12,7 @@
 - [x] T005 [US1] Split printed-contents detection into typed semantic, extraction, alignment and decision stages.
 - [x] T006 [US1] Remove printed TOC/helper blocks and implement protected `zh-smart-v2` cleanup.
 - [x] T007 [US1] Replace mutable structure passes with hierarchy, boundary, TOC, pagination and validation passes.
-- [ ] T008 [US1] Prove CSAPP, appendix and active-only behavior plus 3-5 representative books.
+- [x] T008 [US1] Prove CSAPP, appendix and active-only behavior plus 3-5 representative books.
 
 ## Phase 3: Compiler And Reader
 

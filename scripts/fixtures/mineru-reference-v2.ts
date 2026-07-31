@@ -702,6 +702,21 @@ export function parseMineruReferenceV2(value: unknown): MineruReferenceV2 {
   ) {
     throw new Error("reference heading anchors must be unique");
   }
+  const roleOrder = new Map([
+    ["frontmatter", 0],
+    ["body", 1],
+    ["appendix", 2],
+    ["backmatter", 3],
+  ] as const);
+  let previousRoleOrder = 0;
+  for (const heading of accounting) {
+    if (heading.disposition.kind !== "expected_body") continue;
+    const currentRoleOrder = roleOrder.get(heading.disposition.role) ?? 0;
+    if (currentRoleOrder < previousRoleOrder) {
+      throw new Error("reference heading roles must follow linear boundaries");
+    }
+    previousRoleOrder = currentRoleOrder;
+  }
   const regionByKey = new Map(
     regions.map((region) => [region.region_key, region] as const),
   );

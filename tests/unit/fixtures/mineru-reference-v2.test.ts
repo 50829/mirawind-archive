@@ -212,6 +212,29 @@ describe("MinerU reference v2", () => {
     ).toThrow(/unknown excluded region/);
   });
 
+  it("rejects heading roles that move backward across linear boundaries", () => {
+    const body = reference().raw_heading_accounting[1];
+    if (!body || body.disposition.kind !== "expected_body") {
+      throw new Error("missing body heading");
+    }
+
+    expect(() =>
+      parseMineruReferenceV2({
+        ...reference(),
+        raw_heading_accounting: [
+          ...reference().raw_heading_accounting,
+          {
+            anchor: anchor(13, "late frontmatter"),
+            disposition: {
+              ...body.disposition,
+              role: "frontmatter",
+            },
+          },
+        ],
+      }),
+    ).toThrow(/roles must follow linear boundaries/);
+  });
+
   it("rejects invalid ranges, pages and matched entry anchors", () => {
     expect(() =>
       parseMineruReferenceV2({

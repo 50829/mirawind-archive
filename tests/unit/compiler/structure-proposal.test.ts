@@ -66,6 +66,31 @@ describe("default document structure proposal", () => {
       { include_in_toc: true, level: 1 },
       { include_in_toc: true, level: 1 },
     ]);
+    expect(proposalRoles(proposeDocumentStructure(document))).toEqual([
+      "frontmatter",
+      "frontmatter",
+      "frontmatter",
+      "frontmatter",
+      "body",
+    ]);
+  });
+
+  it("starts the body at a numbered section when its chapter heading is missing", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument(
+        "# Book Title\n\n## Chapter 1 Overview\n\n## Preface\n\nText\n\n## 1.1 Opening\n\nBody\n\n## Chapter 2 Next\n",
+      ),
+    );
+    const firstBodySection = document.headings[3];
+    if (!firstBodySection) throw new Error("missing first body section");
+
+    expect(
+      proposalRoles(
+        proposeDocumentStructure(document, {
+          bodySearchStartBlockId: firstBodySection.blockId,
+        }),
+      ),
+    ).toEqual(["frontmatter", "frontmatter", "frontmatter", "body", "body"]);
   });
 
   it("carries appendix and backmatter roles through unnumbered units", () => {
@@ -665,9 +690,9 @@ describe("default document structure proposal", () => {
       })),
     ).toEqual([
       { include_in_toc: true, level: 1 },
-      { include_in_toc: true, level: 2 },
-      { include_in_toc: true, level: 3 },
-      { include_in_toc: true, level: 2 },
+      { include_in_toc: false, level: 2 },
+      { include_in_toc: false, level: 3 },
+      { include_in_toc: false, level: 2 },
       { include_in_toc: true, level: 1 },
     ]);
   });

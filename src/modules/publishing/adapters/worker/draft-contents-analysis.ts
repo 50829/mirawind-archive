@@ -13,6 +13,7 @@ import {
   supplementalPdfPageIndices,
 } from "@/modules/publishing/core/preparation/printed-contents";
 import {
+  firstActiveHeadingAfterSourceRegion,
   prepareActiveDocument,
   type PreparedDocument,
 } from "@/modules/publishing/core/preparation/prepared-document";
@@ -195,8 +196,18 @@ export async function analyzeDraftContents(input: {
         )
       : [],
   );
+  const canonicalRegion = printedContents.candidates.find(
+    (candidate) => candidate.canonical,
+  )?.proposedRegion;
+  const bodySearchStartBlockId = canonicalRegion
+    ? firstActiveHeadingAfterSourceRegion({
+        preparedDocument,
+        region: canonicalRegion,
+      })
+    : undefined;
   const proposal = await profilePipelineStage("structure_proposal", () =>
     proposeDocumentStructure(preparedDocument.active, {
+      ...(bodySearchStartBlockId ? { bodySearchStartBlockId } : {}),
       printedEntries,
     }),
   );

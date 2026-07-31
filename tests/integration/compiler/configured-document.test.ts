@@ -13,7 +13,10 @@ import {
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { detectPrintedContents } from "@/modules/publishing/core/preparation/printed-contents";
-import { prepareActiveDocument } from "@/modules/publishing/core/preparation/prepared-document";
+import {
+  firstActiveHeadingAfterSourceRegion,
+  prepareActiveDocument,
+} from "@/modules/publishing/core/preparation/prepared-document";
 import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
 import { buildSearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { createBookConfigV4 } from "../../helpers/book-config";
@@ -63,7 +66,21 @@ describe("configured document preparation", () => {
           }))
         : [],
     );
+    const canonicalRegion = regions.find((region) =>
+      detection.candidates.some(
+        (candidate) =>
+          candidate.canonical &&
+          candidate.proposedRegion?.region_id === region.region_id,
+      ),
+    );
+    const bodySearchStartBlockId = canonicalRegion
+      ? firstActiveHeadingAfterSourceRegion({
+          preparedDocument: prepared,
+          region: canonicalRegion,
+        })
+      : undefined;
     const proposal = proposeDocumentStructure(prepared.active, {
+      ...(bodySearchStartBlockId ? { bodySearchStartBlockId } : {}),
       printedEntries,
     });
     const activeSha256 = sha256(prepared.activeMarkdown);
