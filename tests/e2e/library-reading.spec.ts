@@ -45,7 +45,13 @@ test("discovers details, restores context and completes the reader loop", async 
 }, testInfo) => {
   const javascriptEnabled = testInfo.project.name !== "library-no-javascript";
   const mobile = testInfo.project.name === "library-mobile";
+  const managementRequests: string[] = [];
   if (javascriptEnabled) {
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.startsWith("/api/manage/")) {
+        managementRequests.push(request.url());
+      }
+    });
     await page.addInitScript(() => {
       window.addEventListener("DOMContentLoaded", () => {
         document.body.style.minHeight = "2400px";
@@ -60,6 +66,26 @@ test("discovers details, restores context and completes the reader loop", async 
   await expect(
     page.getByRole("heading", { name: "E2E Library Book" }),
   ).toBeVisible();
+  if (javascriptEnabled) {
+    const capability = await page.request.get(
+      "/api/library/management-capability",
+    );
+    expect(capability.status()).toBe(200);
+    expect(capability.headers()["cache-control"]).toBe("private, no-store");
+    expect(await capability.json()).toEqual({ management_available: false });
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          performance
+            .getEntriesByType("resource")
+            .some((entry) =>
+              entry.name.includes("/api/library/management-capability"),
+            ),
+        ),
+      )
+      .toBe(true);
+    expect(managementRequests).toEqual([]);
+  }
   await expect(
     page.getByRole("link", { name: "开始阅读《E2E Library Book》" }),
   ).toHaveAttribute("href", "/read/e2e-library-book/1");
@@ -88,11 +114,18 @@ test("discovers details, restores context and completes the reader loop", async 
     : 0;
   const dialog = page.getByRole("dialog", { name: "E2E Library Book" });
   await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".book-details-cover")).toBeVisible();
   await expect(dialog.getByRole("link", { name: "开始阅读" })).toHaveAttribute(
     "href",
     "/read/e2e-library-book/1",
   );
   await expect(dialog.getByRole("heading", { name: "目录" })).toBeVisible();
+  if (mobile) {
+    const box = await dialog.boundingBox();
+    const viewport = page.viewportSize();
+    expect(box?.width).toBe(viewport?.width);
+    expect(box?.height).toBe(viewport?.height);
+  }
   if (javascriptEnabled) await expectNoSeriousAccessibilityFindings(page);
 
   await dialog.getByRole("link", { name: "关闭图书详情" }).click();
@@ -159,6 +192,17 @@ test("discovers details, restores context and completes the reader loop", async 
     }
   }
   await expect(page.getByRole("main")).toContainText("A seeded public book");
+  const chapterHeading = page.locator(".reader-document h1").first();
+  const sectionHeading = page.locator(".reader-document h2").first();
+  await expect(chapterHeading).toBeVisible();
+  await expect(sectionHeading).toBeVisible();
+  const [chapterFontSize, sectionFontSize] = await Promise.all([
+    chapterHeading.evaluate((element) => getComputedStyle(element).fontSize),
+    sectionHeading.evaluate((element) => getComputedStyle(element).fontSize),
+  ]);
+  expect(Number.parseFloat(chapterFontSize)).toBeGreaterThan(
+    Number.parseFloat(sectionFontSize),
+  );
   if (javascriptEnabled) {
     await expectNoSeriousAccessibilityFindings(page);
     if (mobile) {

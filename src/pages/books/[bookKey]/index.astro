@@ -155,7 +155,7 @@ const canonical = new URL(`/books/${details.bookKey}`, Astro.url);
     padding: 0;
     overflow: auto;
     border: 0;
-    border-radius: 1.15rem;
+    border-radius: 0.5rem;
     color: var(--color-stone-800);
     background: var(--color-white);
     box-shadow: 0 2rem 6rem
@@ -168,7 +168,34 @@ const canonical = new URL(`/books/${details.bookKey}`, Astro.url);
   :global(.book-details) {
     padding: clamp(1.25rem, 5vw, 3.5rem);
   }
-  :global(.book-details > header) {
+  :global(.book-details-intro) {
+    display: grid;
+    grid-template-columns: 10rem minmax(0, 1fr);
+    gap: 2rem;
+  }
+  :global(.book-details-cover) {
+    display: grid;
+    width: 10rem;
+    aspect-ratio: 2 / 3;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--color-stone-300);
+    border-radius: 0.25rem;
+    color: var(--color-amber-100);
+    background: var(--color-emerald-950);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 3rem;
+  }
+  :global(.book-details-cover > *) {
+    grid-area: 1 / 1;
+  }
+  :global(.book-details-cover img) {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  :global(.book-details-intro > header) {
     display: flex;
     align-items: start;
     justify-content: space-between;
@@ -179,7 +206,7 @@ const canonical = new URL(`/books/${details.bookKey}`, Astro.url);
     margin: 0.2rem 0 0;
     overflow-wrap: anywhere;
     font-family: Georgia, "Times New Roman", serif;
-    font-size: clamp(2.3rem, 7vw, 4.6rem);
+    font-size: 3rem;
     font-weight: 500;
     line-height: 1;
   }
@@ -217,7 +244,7 @@ const canonical = new URL(`/books/${details.bookKey}`, Astro.url);
   }
   :global(.details-description) {
     max-width: 70ch;
-    var(--color-white)-space: pre-line;
+    white-space: pre-line;
     line-height: 1.75;
   }
   :global(.details-metadata) {
@@ -252,13 +279,44 @@ const canonical = new URL(`/books/${details.bookKey}`, Astro.url);
     display: flex;
     gap: 0.6rem;
   }
+  :global(.details-full-toc) {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    margin-top: 0.75rem;
+    color: var(--color-emerald-800);
+    font-weight: 600;
+  }
   :global(.details-downloads li) {
     display: grid;
     gap: 0.2rem;
   }
   @media (max-width: 35rem) {
-    :global(.book-details > header) {
+    :global(.book-details-dialog) {
+      width: 100vw;
+      max-width: none;
+      height: 100dvh;
+      max-height: none;
+      margin: 0;
+      border-radius: 0;
+    }
+    :global(.book-details) {
+      min-height: 100%;
+      padding: 1rem;
+    }
+    :global(.book-details-intro) {
+      grid-template-columns: 5rem minmax(0, 1fr);
+      gap: 1rem;
+    }
+    :global(.book-details-cover) {
+      width: 5rem;
+      font-size: 2rem;
+    }
+    :global(.book-details-intro > header) {
       display: block;
+    }
+    :global(.book-details h1) {
+      font-size: 2rem;
     }
     :global(.details-close) {
       display: inline-flex;

@@ -1,5 +1,6 @@
 ---
 import { PublishingWorkbench } from "@/web/components/manage/PublishingWorkbench";
+import ManageShell from "@/web/components/manage/ManageShell.astro";
 import { hiddenManagementPage } from "@/http/authorization/manage-page";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
@@ -31,8 +32,8 @@ applyResponsePolicy(Astro.response.headers, "manage");
     <title>结构预览 · Mirawind</title>
   </head>
   <body class="m-0 bg-stone-100 font-sans text-stone-800">
-    <main class="mx-auto w-[min(90rem,calc(100vw-2rem))] pb-16">
+    <ManageShell currentSection="import" wide>
       <PublishingWorkbench bookId={bookId} client:load />
-    </main>
+    </ManageShell>
   </body>
 </html>

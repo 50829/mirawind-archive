@@ -91,5 +91,8 @@ describe("global Tailwind style system", () => {
     );
     expect(css).toContain(".reader-layout");
     expect(css).toContain("var(--color-emerald-800)");
+    for (const level of ["h1", "h2", "h3", "h4"] as const) {
+      expect(css).toContain(`.reader-document ${level}`);
+    }
   });
 });

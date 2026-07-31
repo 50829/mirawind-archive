@@ -55,6 +55,38 @@ describe("book details interaction", () => {
     expect(html).toContain('href="/read/a-book/1"');
     expect(html).toContain("Source.zip");
     expect(html).toContain("1.2 KB");
+    expect(html.indexOf("Source.zip")).toBeLessThan(
+      html.indexOf('id="details-toc-heading"'),
+    );
+    expect(html).toContain("book-details-cover");
+    expect(html).toContain(">A</span>");
+  });
+
+  it("renders an authorized cover and caps a long directory preview", () => {
+    const html = renderToStaticMarkup(
+      <BookDetails
+        closeHref="/library"
+        details={{
+          ...details,
+          coverUrl: "/books/a-book/assets/ver_details_component_0001/cover",
+          toc: Array.from({ length: 20 }, (_, index) => ({
+            href: `/read/a-book/${index + 1}`,
+            level: (index % 4) + 1,
+            number: String(index + 1),
+            title: `Section ${index + 1}`,
+          })),
+          tocEntryCount: 20,
+          tocTruncated: false,
+        }}
+      />,
+    );
+    expect(html).toContain(
+      'src="/books/a-book/assets/ver_details_component_0001/cover"',
+    );
+    expect(html.match(/>Section [0-9]+<\/a>/gu)).toHaveLength(16);
+    expect(html).toContain("显示前 16 / 20 项");
+    expect(html).toContain("在阅读器中查看完整目录");
+    expect(html).not.toContain("Section 17");
   });
 
   it("creates and accepts only fresh same-origin library context", () => {

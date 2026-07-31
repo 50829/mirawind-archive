@@ -66,13 +66,19 @@ describe("library HTTP contract", () => {
   });
 
   it("declares canonical, noindex and private boundaries in route sources", async () => {
-    const [library, details, privateApi] = await Promise.all([
+    const [library, details, privateApi, capability] = await Promise.all([
       readFile(`${projectRoot}src/pages/library/index.astro`, "utf8"),
       readFile(`${projectRoot}src/pages/books/[bookKey]/index.astro`, "utf8"),
       readFile(`${projectRoot}src/pages/api/manage/library.ts`, "utf8"),
+      readFile(
+        `${projectRoot}src/pages/api/library/management-capability.ts`,
+        "utf8",
+      ),
     ]);
     expect(library).toContain('rel="canonical"');
     expect(details).toContain('rel="canonical"');
     expect(privateApi).toContain('"private-api"');
+    expect(capability).toContain('"private-api"');
+    expect(capability).toContain("management_available: decision.allowed");
   });
 });

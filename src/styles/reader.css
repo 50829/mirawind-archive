@@ -195,6 +195,27 @@
     @apply font-serif text-base leading-loose;
   }
 
+  .reader-document :is(h1, h2, h3, h4) {
+    @apply text-stone-900;
+    overflow-wrap: anywhere;
+  }
+
+  .reader-document h1 {
+    @apply mt-12 mb-5 text-3xl leading-tight font-bold;
+  }
+
+  .reader-document h2 {
+    @apply mt-10 mb-4 border-b border-stone-200 pb-2 text-2xl leading-snug font-bold;
+  }
+
+  .reader-document h3 {
+    @apply mt-8 mb-3 text-xl leading-snug font-semibold text-emerald-900;
+  }
+
+  .reader-document h4 {
+    @apply mt-6 mb-2 text-lg leading-normal font-semibold text-stone-700;
+  }
+
   .reader-document img {
     @apply h-auto max-w-full;
   }

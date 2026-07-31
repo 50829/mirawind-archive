@@ -16,6 +16,10 @@ interface ResponseBody {
   readonly next_cursor: string | null;
 }
 
+interface ManagementCapability {
+  readonly management_available: boolean;
+}
+
 export function AdminLibraryEnhancement() {
   const [entries, setEntries] = useState<
     readonly AdministratorLibraryEntry[] | null
@@ -31,6 +35,20 @@ export function AdminLibraryEnhancement() {
   useEffect(() => {
     const controller = new AbortController();
     const load = async () => {
+      const capabilityResponse = await fetch(
+        "/api/library/management-capability",
+        {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        },
+      );
+      if (!capabilityResponse.ok) return;
+      const capability =
+        (await capabilityResponse.json()) as ManagementCapability;
+      if (capability.management_available !== true) return;
+
       const collected: ResponseBody["entries"][number][] = [];
       let cursor: string | null = null;
       for (let page = 0; page < 50; page += 1) {

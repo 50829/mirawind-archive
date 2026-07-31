@@ -1,0 +1,61 @@
+---
+interface Props {
+  readonly currentSection: "import" | "security" | "tasks";
+  readonly wide?: boolean;
+}
+
+const { currentSection, wide = false } = Astro.props;
+const sections = [
+  { href: "/manage", id: "import", label: "导入" },
+  { href: "/manage/tasks", id: "tasks", label: "任务" },
+  { href: "/manage/security", id: "security", label: "安全" },
+] as const;
+---
+
+<a
+  class="fixed top-2 left-2 z-50 -translate-y-24 rounded-sm bg-white px-4 py-3 font-semibold text-emerald-800 shadow-lg focus:translate-y-0"
+  href="#manage-content">跳到主要内容</a
+>
+<header class="border-b border-stone-300 bg-white">
+  <div
+    class="mx-auto flex w-[min(72rem,calc(100vw-2rem))] flex-wrap items-center justify-between gap-x-8 gap-y-3 py-4"
+  >
+    <a
+      class="flex min-h-11 items-center gap-2 font-bold text-stone-900 no-underline"
+      href="/manage"
+    >
+      <span class="text-sm">MIRAWIND</span>
+      <span class="text-sm font-medium text-stone-500">管理</span>
+    </a>
+    <nav aria-label="管理导航">
+      <ul class="m-0 flex list-none flex-wrap gap-1 p-0">
+        {
+          sections.map((section) => (
+            <li>
+              <a
+                aria-current={
+                  currentSection === section.id ? "page" : undefined
+                }
+                class="flex min-h-11 items-center rounded-md px-3 py-2 font-medium text-stone-600 no-underline hover:bg-stone-100 hover:text-stone-900 aria-[current=page]:bg-emerald-50 aria-[current=page]:text-emerald-800"
+                href={section.href}
+              >
+                {section.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </div>
+</header>
+<main
+  class:list={[
+    "mx-auto py-8 pb-16 max-[480px]:py-6",
+    wide
+      ? "w-[min(90rem,calc(100vw-2rem))]"
+      : "w-[min(72rem,calc(100vw-2rem))]",
+  ]}
+  id="manage-content"
+>
+  <slot />
+</main>

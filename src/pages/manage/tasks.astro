@@ -3,6 +3,7 @@ import {
   TaskMonitor,
   type TaskView,
 } from "@/web/components/import/TaskMonitor";
+import ManageShell from "@/web/components/manage/ManageShell.astro";
 import { createPublishingServer } from "@/composition/server";
 import {
   hiddenManagementPage,
@@ -46,14 +47,8 @@ const initialJobs = publishing
     <title>后台任务 · Mirawind</title>
   </head>
   <body class="m-0 bg-stone-100 font-sans text-stone-800">
-    <main class="mx-auto w-[min(72rem,calc(100vw-2rem))] py-8 pb-16">
-      <nav aria-label="管理导航" class="mb-8">
-        <a
-          class="font-semibold text-emerald-800 hover:text-emerald-900"
-          href="/manage">返回导入</a
-        >
-      </nav>
+    <ManageShell currentSection="tasks">
       <TaskMonitor client:load initialJobs={initialJobs} />
-    </main>
+    </ManageShell>
   </body>
 </html>

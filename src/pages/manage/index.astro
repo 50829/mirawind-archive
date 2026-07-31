@@ -1,5 +1,6 @@
 ---
 import { ImportUploader } from "@/web/components/import/ImportUploader";
+import ManageShell from "@/web/components/manage/ManageShell.astro";
 import {
   hiddenManagementPage,
   redirectToAdministratorLogin,
@@ -34,19 +35,8 @@ applyResponsePolicy(Astro.response.headers, "manage");
     <title>导入书籍 · Mirawind</title>
   </head>
   <body class="m-0 bg-stone-100 font-sans text-stone-800">
-    <main class="mx-auto w-[min(66rem,calc(100vw-2rem))] py-16">
+    <ManageShell currentSection="import">
       <ImportUploader client:load />
-      <p class="mt-6 text-sm text-stone-600">
-        <a
-          class="font-medium text-emerald-800 hover:text-emerald-900"
-          href="/manage/tasks">后台任务</a
-        >
-        ·
-        <a
-          class="font-medium text-emerald-800 hover:text-emerald-900"
-          href="/manage/security">Passkey 安全设置</a
-        >
-      </p>
-    </main>
+    </ManageShell>
   </body>
 </html>
