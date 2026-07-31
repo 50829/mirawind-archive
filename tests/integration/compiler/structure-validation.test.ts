@@ -1,90 +1,70 @@
+import { createHash } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import {
   type ConfigSemanticDiagnostic,
   ConfigSemanticValidationError,
   validateDocumentConfig,
 } from "@/modules/publishing/core/publication/validate-config";
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import {
+  createBookConfigV4,
+  structureForDocument,
+  type TestStructureNode,
+} from "../../helpers/book-config";
 
-const document = normalizeDocumentBlocks(
-  parseMarkdownDocument(
-    [
-      "# Part one",
-      "",
-      "Opening body.",
-      "",
-      "## Chapter one",
-      "",
-      "### Topic",
-      "",
-      "# Appendix",
-      "",
-      "## Tables",
-    ].join("\n"),
-  ),
-  {
-    idFactory: (() => {
-      let index = 0;
-      return () => `blk_0123456789abcdef${++index}`;
-    })(),
-  },
-);
-
-interface TestStructureNode {
-  alias?: string;
-  block_id: string;
-  display_level: number;
-  display_title?: string;
-  include_in_toc: boolean;
-  role?: string;
-  starts_page: boolean;
-}
+const markdown = [
+  "# Part one",
+  "",
+  "Opening body.",
+  "",
+  "## Chapter one",
+  "",
+  "### Topic",
+  "",
+  "# Appendix",
+  "",
+  "## Tables",
+].join("\n");
+const sourceSha256 = createHash("sha256").update(markdown).digest("hex");
+const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown), {
+  idFactory: (() => {
+    let index = 0;
+    return () => `blk_0123456789abcdef${++index}`;
+  })(),
+});
 
 function structure(): TestStructureNode[] {
   const levels = [1, 2, 3, 1, 2] as const;
-  return document.headings.map((heading, index) => ({
-    block_id: heading.blockId,
+  return structureForDocument(document).map((node, index) => ({
+    ...node,
     display_level: levels[index] ?? 1,
-    include_in_toc: true,
-    ...(index === 0
-      ? { role: "body" }
-      : index === 3
-        ? { role: "appendix" }
-        : {}),
     starts_page: index === 0 || index === 3,
   }));
 }
 
-function config(nodes: readonly TestStructureNode[] = structure()) {
-  return {
-    book_id: 1,
-    publishing: {
-      code: { line_numbers: false },
-      numbering: { mode: "normalized" },
-    },
+function config(
+  nodes: readonly TestStructureNode[] = structure(),
+  boundaries: Readonly<{
+    appendix_start_block_id?: string;
+    backmatter_start_block_id?: string;
+    body_start_block_id: string;
+  }> = {
+    appendix_start_block_id: document.headings[3]?.blockId ?? "",
+    body_start_block_id: document.headings[0]?.blockId ?? "",
+  },
+) {
+  return createBookConfigV4({
+    boundaries,
+    document,
+    numbering: "generated",
     revision: 2,
-    schema_version: 3,
-    source: {
-      main_markdown: "main.md",
-      main_markdown_sha256: "a".repeat(64),
-      original_files: [],
-      preprocessing: {
-        typography: {
-          input_sha256: "a".repeat(64),
-          output_sha256: "a".repeat(64),
-          profile: "verbatim-v1",
-          protected_nodes: 0,
-          punctuation_converted: 0,
-          spaces_normalized: 0,
-        },
-      },
-    },
-    source_regions: [],
+    sourceSha256,
     structure: nodes,
     title: "Configured book",
-  };
+  });
 }
 
 function nodeAt(
@@ -120,12 +100,12 @@ function hasDiagnostic(
 }
 
 describe("book structure semantic validation", () => {
-  it("applies TOC-only exclusion and display titles without removing or reordering body headings", () => {
+  it("applies rich heading labels and TOC visibility without changing source order", () => {
     const nodes = structure();
     nodes[1] = {
       ...nodeAt(nodes, 1),
-      display_title: "Renamed chapter",
       include_in_toc: false,
+      title_markdown: "Renamed *chapter*",
     };
     const originalRoot = document.root;
     const result = validateDocumentConfig({
@@ -137,25 +117,29 @@ describe("book structure semantic validation", () => {
       document.headings.map((heading) => heading.blockId),
     );
     expect(result.headings[1]).toMatchObject({
-      display_title: "Renamed chapter",
       include_in_toc: false,
       source_title: "Chapter one",
+      title_markdown: "Renamed *chapter*",
     });
-    expect(result.headings).toHaveLength(document.headings.length);
     expect(document.root).toBe(originalRoot);
   });
 
-  it("inherits one of four roles from top-level headings", () => {
+  it("derives frontmatter, body, appendix and backmatter from ordered boundaries", () => {
     const result = validateDocumentConfig({
-      config: config(),
+      config: config(structure(), {
+        appendix_start_block_id: document.headings[3]?.blockId ?? "",
+        backmatter_start_block_id: document.headings[4]?.blockId ?? "",
+        body_start_block_id: document.headings[1]?.blockId ?? "",
+      }),
       document,
     });
+
     expect(result.headings.map((heading) => heading.role)).toEqual([
-      "body",
+      "frontmatter",
       "body",
       "body",
       "appendix",
-      "appendix",
+      "backmatter",
     ]);
   });
 
@@ -171,102 +155,37 @@ describe("book structure semantic validation", () => {
     );
   });
 
-  it("allows nested headings to start an inherited role boundary", () => {
-    const nestedRole = structure();
-    nestedRole[1] = {
-      ...nodeAt(nestedRole, 1),
-      display_level: 1,
-      role: "appendix",
-    };
-    nestedRole[2] = {
-      ...nodeAt(nestedRole, 2),
-      display_level: 2,
-      role: "body",
-    };
-    nestedRole[3] = {
-      ...nodeAt(nestedRole, 3),
-      display_level: 3,
-    };
-    delete nestedRole[3].role;
-    nestedRole[4] = {
-      ...nodeAt(nestedRole, 4),
-      display_level: 4,
-    };
-
-    const result = validateDocumentConfig({
-      config: config(nestedRole),
-      document,
-    });
-
-    expect(result.headings.map((heading) => heading.role)).toEqual([
-      "body",
-      "appendix",
-      "body",
-      "body",
-      "body",
-    ]);
-  });
-
-  it("rejects heading reorder, non-heading page starts and missing heading entries", () => {
-    const reordered = structure();
-    [reordered[1], reordered[2]] = [nodeAt(reordered, 2), nodeAt(reordered, 1)];
-    hasDiagnostic(
-      semanticDiagnostics(() =>
-        validateDocumentConfig({ config: config(reordered), document }),
-      ),
-      "HEADING_ORDER_CHANGED",
-      reordered[1]?.block_id,
-    );
-
-    const paragraphId = document.blocks.find(
-      (block) => block.type === "paragraph",
-    )?.blockId;
-    if (!paragraphId) throw new Error("Paragraph fixture block is missing");
-    const nonHeading = structure();
-    nonHeading[1] = {
-      ...nodeAt(nonHeading, 1),
-      block_id: paragraphId,
-      starts_page: true,
-    };
-    hasDiagnostic(
-      semanticDiagnostics(() =>
-        validateDocumentConfig({ config: config(nonHeading), document }),
-      ),
-      "HEADING_REQUIRED",
-      paragraphId,
+  it("rejects a config whose stable block identities do not match Markdown", () => {
+    const changedDocument = normalizeDocumentBlocks(
+      parseMarkdownDocument(markdown.replace("Opening body.", "Changed body.")),
+      {
+        idFactory: (() => {
+          let index = 0;
+          return () => `blk_0123456789abcdef${++index}`;
+        })(),
+      },
     );
 
     hasDiagnostic(
       semanticDiagnostics(() =>
-        validateDocumentConfig({
-          config: config(structure().slice(0, -1)),
-          document,
-        }),
+        validateDocumentConfig({ config: config(), document: changedDocument }),
       ),
-      "HEADING_SET_MISMATCH",
+      "BLOCK_IDENTITY_MISMATCH",
     );
   });
 
-  it("requires page aliases to be unique and attached to page starts", () => {
+  it("rejects duplicate aliases and aliases on headings that do not start pages", () => {
     const duplicate = structure();
     duplicate[0] = { ...nodeAt(duplicate, 0), alias: "same-page" };
     duplicate[3] = { ...nodeAt(duplicate, 3), alias: "same-page" };
-    hasDiagnostic(
-      semanticDiagnostics(() =>
-        validateDocumentConfig({ config: config(duplicate), document }),
-      ),
-      "PAGE_ALIAS_DUPLICATE",
-      document.headings[3]?.blockId,
-    );
+    expect(() =>
+      validateDocumentConfig({ config: config(duplicate), document }),
+    ).toThrow("The book configuration violates a semantic constraint.");
 
     const notPage = structure();
     notPage[1] = { ...nodeAt(notPage, 1), alias: "chapter-one" };
-    hasDiagnostic(
-      semanticDiagnostics(() =>
-        validateDocumentConfig({ config: config(notPage), document }),
-      ),
-      "PAGE_ALIAS_REQUIRES_START",
-      document.headings[1]?.blockId,
-    );
+    expect(() =>
+      validateDocumentConfig({ config: config(notPage), document }),
+    ).toThrow("The book configuration violates a semantic constraint.");
   });
 });

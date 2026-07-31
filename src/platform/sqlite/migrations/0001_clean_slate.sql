@@ -1,11 +1,11 @@
 CREATE TABLE database_baseline (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   identity TEXT NOT NULL UNIQUE
-    CHECK (identity = 'mirawind-clean-slate-maintenance-v1')
+    CHECK (identity = 'mirawind-publishing-editor-v1')
 ) STRICT;
 
 INSERT INTO database_baseline (id, identity)
-VALUES (1, 'mirawind-clean-slate-maintenance-v1');
+VALUES (1, 'mirawind-publishing-editor-v1');
 
 CREATE TABLE installation (
   id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -95,7 +95,7 @@ CREATE TABLE config_revisions (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   revision INTEGER NOT NULL CHECK (revision >= 1),
   source_id TEXT NOT NULL REFERENCES source_snapshots(id) ON DELETE RESTRICT,
-  schema_version INTEGER NOT NULL CHECK (schema_version = 3),
+  schema_version INTEGER NOT NULL CHECK (schema_version = 4),
   yaml_rel_path TEXT NOT NULL,
   yaml_sha256 TEXT NOT NULL CHECK (length(yaml_sha256) = 64),
   created_at INTEGER NOT NULL,
@@ -208,7 +208,7 @@ CREATE TABLE book_versions (
     state IN ('ready', 'published', 'superseded', 'discarded', 'corrupt')
   ),
   version_rel_path TEXT NOT NULL UNIQUE,
-  manifest_schema_version INTEGER NOT NULL CHECK (manifest_schema_version = 2),
+  manifest_schema_version INTEGER NOT NULL CHECK (manifest_schema_version = 3),
   manifest_sha256 TEXT NOT NULL CHECK (length(manifest_sha256) = 64),
   version_marker_sha256 TEXT NOT NULL CHECK (length(version_marker_sha256) = 64),
   semantic_digest TEXT NOT NULL CHECK (length(semantic_digest) = 64),
@@ -481,7 +481,7 @@ CREATE TABLE book_version_presentations (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   config_revision INTEGER NOT NULL CHECK (config_revision >= 1),
   projection_schema_version INTEGER NOT NULL
-    CHECK (projection_schema_version = 1),
+    CHECK (projection_schema_version = 2),
   alias TEXT CHECK (
     alias IS NULL OR (
       length(alias) BETWEEN 1 AND 120

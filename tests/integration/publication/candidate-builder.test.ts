@@ -23,6 +23,8 @@ import {
   type CandidateRegistrationCrashPoint,
 } from "@/modules/publishing/adapters/sqlite/candidate-registration";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import type { CandidateTreeCrashPoint } from "@/modules/publishing/application/candidate-durability";
 import {
   candidateBuildIdentities,
@@ -44,6 +46,7 @@ import {
   publicationTestLeaseOwner,
   setupPublicationFixture,
 } from "../../helpers/publication.js";
+import { createBookConfigV4 } from "../../helpers/book-config";
 
 const bookId = 9;
 const configRevision = 3;
@@ -102,6 +105,14 @@ async function writeCandidateInput(
       : []),
   ].join("\n");
   const markdownSha256 = sha256(markdown);
+  let headingOrdinal = 0;
+  let contentOrdinal = 0;
+  const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown), {
+    idFactory: (node) =>
+      node.type === "heading"
+        ? (headingIds[headingOrdinal++] ?? "blk_candidate_builder_overflow")
+        : `blk_candidate_builder_content_${String(++contentOrdinal).padStart(4, "0")}`,
+  });
   const sourceRoot = resolve(dataRoot.path, command.sourceRootRelativePath);
   const configPath = resolve(dataRoot.path, command.configRelativePath);
   const originalId = "file_candidate_builder_0001";
@@ -140,40 +151,16 @@ async function writeCandidateInput(
   await writeFile(
     configPath,
     stringify(
-      {
-        book_id: command.bookId,
+      createBookConfigV4({
+        bookId: command.bookId,
+        document,
         metadata: { authors: ["Fixture Author"], language: "en" },
-        publishing: {
-          code: { line_numbers: false },
-          numbering: { mode: "normalized" },
-        },
+        numbering: "generated",
+        originalFiles,
         revision: command.configRevision,
-        schema_version: 3,
-        source: {
-          main_markdown: "book.md",
-          main_markdown_sha256: markdownSha256,
-          original_files: originalFiles,
-          preprocessing: {
-            typography: {
-              input_sha256: markdownSha256,
-              output_sha256: markdownSha256,
-              profile: "verbatim-v1",
-              protected_nodes: 2,
-              punctuation_converted: 0,
-              spaces_normalized: 0,
-            },
-          },
-        },
-        source_regions: [],
-        structure: headingIds.map((blockId) => ({
-          block_id: blockId,
-          display_level: 1,
-          include_in_toc: true,
-          role: "body",
-          starts_page: true,
-        })),
+        sourceSha256: markdownSha256,
         title: "Candidate Builder Fixture",
-      },
+      }),
       { lineWidth: 0 },
     ),
     { mode: 0o400 },

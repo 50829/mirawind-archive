@@ -187,7 +187,7 @@ export class VersionRepository {
           input.semanticDigest ?? input.manifestSha256,
           input.compilerVersion,
           input.rendererVersion,
-          input.previewVersion ?? "draft-preview-v5",
+          input.previewVersion ?? "draft-preview-v6",
           input.readerVersion ?? "mirawind-reader-v3-tailwind-4.3.3",
           input.blockingDiagnosticCount ?? 0,
           input.completeAtMs,

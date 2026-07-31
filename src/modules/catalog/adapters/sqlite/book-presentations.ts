@@ -49,7 +49,7 @@ interface CandidateRow {
 }
 
 function mapPresentation(row: PresentationRow): BookVersionPresentation {
-  if (row.projection_schema_version !== 1) {
+  if (row.projection_schema_version !== 2) {
     throw new Error("PRESENTATION_SCHEMA_VERSION_UNSUPPORTED");
   }
   return Object.freeze({
@@ -61,7 +61,7 @@ function mapPresentation(row: PresentationRow): BookVersionPresentation {
     firstPageAlias: row.first_page_alias,
     firstPageId: row.first_page_id,
     metadataJson: row.metadata_json,
-    projectionSchemaVersion: 1,
+    projectionSchemaVersion: 2,
     projectionSha256: row.projection_sha256,
     title: row.title,
     tocEntryCount: row.toc_entry_count,

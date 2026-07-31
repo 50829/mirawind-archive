@@ -1,18 +1,17 @@
 import { SafeApplicationError } from "@/domain/errors";
-import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
-import type { ContentRole } from "@/modules/publishing/core/preparation/structure-proposal";
 import type { NormalizedDocument } from "@/modules/publishing/core/preparation/document-model";
+import type { ContentRole } from "@/modules/publishing/core/preparation/structure-proposal";
+import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
 
 export interface ConfigSemanticDiagnostic {
   readonly block_id?: string;
   readonly code:
+    | "BLOCK_IDENTITY_MISMATCH"
     | "DISPLAY_LEVEL_SKIPPED"
     | "HEADING_ORDER_CHANGED"
     | "HEADING_REQUIRED"
     | "HEADING_SET_MISMATCH"
-    | "HEADING_UNKNOWN"
-    | "PAGE_ALIAS_DUPLICATE"
-    | "PAGE_ALIAS_REQUIRES_START";
+    | "HEADING_UNKNOWN";
   readonly field?: string;
 }
 
@@ -34,22 +33,30 @@ interface StructureNode {
   readonly alias?: string;
   readonly block_id: string;
   readonly display_level: number;
-  readonly display_title?: string;
   readonly include_in_toc: boolean;
-  readonly role?: ContentRole;
+  readonly source_number?: string;
   readonly starts_page: boolean;
+  readonly title_markdown: string;
 }
 
-export interface ValidatedConfiguredHeading {
-  readonly alias?: string;
+interface SourceBlockRecord {
   readonly block_id: string;
-  readonly display_level: number;
-  readonly display_title?: string;
-  readonly include_in_toc: boolean;
+  readonly end_offset: number;
+  readonly kind: string;
+  readonly start_offset: number;
+  readonly text_fingerprint: string;
+}
+
+interface Boundaries {
+  readonly appendix_start_block_id?: string;
+  readonly backmatter_start_block_id?: string;
+  readonly body_start_block_id: string;
+}
+
+export interface ValidatedConfiguredHeading extends StructureNode {
   readonly role: ContentRole;
   readonly source_level: number;
   readonly source_title: string;
-  readonly starts_page: boolean;
 }
 
 export interface ValidatedDocumentConfig {
@@ -61,6 +68,17 @@ function structureOf(
   config: Readonly<Record<string, unknown>>,
 ): readonly StructureNode[] {
   return config.structure as readonly StructureNode[];
+}
+
+function sourceBlocksOf(
+  config: Readonly<Record<string, unknown>>,
+): readonly SourceBlockRecord[] {
+  return (config.source as { readonly blocks: readonly SourceBlockRecord[] })
+    .blocks;
+}
+
+function boundariesOf(config: Readonly<Record<string, unknown>>): Boundaries {
+  return config.boundaries as unknown as Boundaries;
 }
 
 function diagnostic(
@@ -77,22 +95,15 @@ function diagnostic(
 
 function hierarchyDiagnostics(
   structure: readonly StructureNode[],
-  activeBlockIds?: ReadonlySet<string>,
 ): readonly ConfigSemanticDiagnostic[] {
   const diagnostics: ConfigSemanticDiagnostic[] = [];
-  let activeCount = 0;
   let previousLevel = 0;
   for (let index = 0; index < structure.length; index += 1) {
     const configured = structure[index];
+    if (!configured) continue;
     if (
-      !configured ||
-      (activeBlockIds && !activeBlockIds.has(configured.block_id))
-    ) {
-      continue;
-    }
-    if (
-      (activeCount === 0 && configured.display_level !== 1) ||
-      (activeCount > 0 && configured.display_level > previousLevel + 1)
+      (index === 0 && configured.display_level !== 1) ||
+      (index > 0 && configured.display_level > previousLevel + 1)
     ) {
       diagnostics.push(
         diagnostic(
@@ -102,7 +113,6 @@ function hierarchyDiagnostics(
         ),
       );
     }
-    activeCount += 1;
     previousLevel = configured.display_level;
   }
   return Object.freeze(diagnostics);
@@ -117,14 +127,85 @@ export function validateConfiguredStructureHierarchy(
   }
 }
 
+interface BoundaryIndexes {
+  readonly appendix?: number;
+  readonly backmatter?: number;
+  readonly body: number;
+}
+
+function boundaryIndexes(
+  structure: readonly StructureNode[],
+  boundaries: Boundaries,
+): BoundaryIndexes {
+  const indexById = new Map(
+    structure.map((node, nodeIndex) => [node.block_id, nodeIndex] as const),
+  );
+  const appendix = boundaries.appendix_start_block_id
+    ? indexById.get(boundaries.appendix_start_block_id)
+    : undefined;
+  const backmatter = boundaries.backmatter_start_block_id
+    ? indexById.get(boundaries.backmatter_start_block_id)
+    : undefined;
+  return Object.freeze({
+    ...(appendix === undefined ? {} : { appendix }),
+    ...(backmatter === undefined ? {} : { backmatter }),
+    body: indexById.get(boundaries.body_start_block_id) ?? 0,
+  });
+}
+
+function roleAt(index: number, boundaries: BoundaryIndexes): ContentRole {
+  if (boundaries.backmatter !== undefined && index >= boundaries.backmatter) {
+    return "backmatter";
+  }
+  if (boundaries.appendix !== undefined && index >= boundaries.appendix) {
+    return "appendix";
+  }
+  return index < boundaries.body ? "frontmatter" : "body";
+}
+
+function validateBlockIdentities(
+  configured: readonly SourceBlockRecord[],
+  document: NormalizedDocument,
+): readonly ConfigSemanticDiagnostic[] {
+  if (configured.length !== document.blocks.length) {
+    return Object.freeze([
+      diagnostic("BLOCK_IDENTITY_MISMATCH", undefined, "source/blocks"),
+    ]);
+  }
+  const diagnostics: ConfigSemanticDiagnostic[] = [];
+  for (const [index, block] of document.blocks.entries()) {
+    const expected = configured[index];
+    if (
+      !expected ||
+      block.blockId !== expected.block_id ||
+      block.type !== expected.kind ||
+      block.position?.start.offset !== expected.start_offset ||
+      block.position.end.offset !== expected.end_offset ||
+      block.textFingerprint !== expected.text_fingerprint
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "BLOCK_IDENTITY_MISMATCH",
+          expected?.block_id,
+          `source/blocks/${index}`,
+        ),
+      );
+      if (diagnostics.length >= 100) break;
+    }
+  }
+  return Object.freeze(diagnostics);
+}
+
 export function validateDocumentConfig(input: {
-  readonly activeDocument?: NormalizedDocument;
   readonly config: unknown;
   readonly document: NormalizedDocument;
 }): ValidatedDocumentConfig {
   const config = validateBookConfig(input.config);
   const structure = structureOf(config);
-  const diagnostics: ConfigSemanticDiagnostic[] = [];
+  const diagnostics: ConfigSemanticDiagnostic[] = [
+    ...hierarchyDiagnostics(structure),
+    ...validateBlockIdentities(sourceBlocksOf(config), input.document),
+  ];
   if (structure.length !== input.document.headings.length) {
     diagnostics.push(
       diagnostic("HEADING_SET_MISMATCH", undefined, "structure"),
@@ -138,16 +219,9 @@ export function validateDocumentConfig(input: {
       block.blockId ? [block.blockId] : [],
     ),
   );
-  const aliases = new Set<string>();
+  const boundaries = boundariesOf(config);
+  const configuredBoundaryIndexes = boundaryIndexes(structure, boundaries);
   const headings: ValidatedConfiguredHeading[] = [];
-  const activeHeadingIds = new Set(
-    (input.activeDocument ?? input.document).headings.map(
-      (heading) => heading.blockId,
-    ),
-  );
-  diagnostics.push(...hierarchyDiagnostics(structure, activeHeadingIds));
-  let inheritedRole: ContentRole = "body";
-
   for (let index = 0; index < structure.length; index += 1) {
     const configured = structure[index];
     const source = input.document.headings[index];
@@ -161,57 +235,19 @@ export function validateDocumentConfig(input: {
       diagnostics.push(
         diagnostic(code, configured.block_id, `structure/${index}/block_id`),
       );
+      continue;
     }
-    const active = activeHeadingIds.has(configured.block_id);
-    if (active && configured.display_level === 1) {
-      inheritedRole = configured.role ?? "body";
-    } else if (active && configured.role !== undefined) {
-      inheritedRole = configured.role;
-    }
-    if (active && configured.alias) {
-      if (!configured.starts_page) {
-        diagnostics.push(
-          diagnostic(
-            "PAGE_ALIAS_REQUIRES_START",
-            configured.block_id,
-            `structure/${index}/alias`,
-          ),
-        );
-      }
-      if (aliases.has(configured.alias)) {
-        diagnostics.push(
-          diagnostic(
-            "PAGE_ALIAS_DUPLICATE",
-            configured.block_id,
-            `structure/${index}/alias`,
-          ),
-        );
-      }
-      aliases.add(configured.alias);
-    }
-    if (source && active) {
-      headings.push(
-        Object.freeze({
-          ...(configured.alias ? { alias: configured.alias } : {}),
-          block_id: configured.block_id,
-          display_level: configured.display_level,
-          ...(configured.display_title === undefined
-            ? {}
-            : { display_title: configured.display_title }),
-          include_in_toc: configured.include_in_toc,
-          role: inheritedRole,
-          source_level: source.level,
-          source_title: source.sourceTitle,
-          starts_page: configured.starts_page,
-        }),
-      );
-    }
+    headings.push(
+      Object.freeze({
+        ...configured,
+        role: roleAt(index, configuredBoundaryIndexes),
+        source_level: source.level,
+        source_title: source.sourceTitle,
+      }),
+    );
   }
   if (diagnostics.length > 0) {
     throw new ConfigSemanticValidationError(diagnostics);
   }
-  return Object.freeze({
-    config,
-    headings: Object.freeze(headings),
-  });
+  return Object.freeze({ config, headings: Object.freeze(headings) });
 }

@@ -8,11 +8,17 @@ import { authorizePreviewHtmlResources } from "@/http/authorization/preview-reso
 import { responsePolicyFor } from "@/http/cache/policies";
 import { materializeCandidatePages } from "@/modules/publishing/adapters/reader-html/candidate-materializer";
 import { createCandidateFileInventory } from "@/modules/publishing/adapters/filesystem/candidate-file-inventory";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import { buildManifestPageRecord } from "@/modules/publishing/core/publication/manifest";
 import { renderSemanticDocument } from "@/modules/publishing/core/publication/render-document";
 import { buildSearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
+import {
+  createBookConfigV4,
+  structureForDocument,
+} from "../../helpers/book-config";
 
 const headingIds = [
   "blk_candidate_preview_0001",
@@ -24,40 +30,28 @@ function compiledFixture() {
   const markdown =
     "# First\n\n[Go to second](#second)\n\n![Diagram](diagram.png)\n\n# Second\n\nBody.\n";
   const sourceSha256 = createHash("sha256").update(markdown).digest("hex");
-  const config = {
-    book_id: 7,
+  let headingOrdinal = 0;
+  let contentOrdinal = 0;
+  const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown), {
+    idFactory: (node) =>
+      node.type === "heading"
+        ? (headingIds[headingOrdinal++] ?? "blk_candidate_preview_overflow")
+        : `blk_candidate_preview_content_${String(++contentOrdinal).padStart(4, "0")}`,
+  });
+  const structure = structureForDocument(document).map((node, index) => ({
+    ...node,
+    include_in_toc: index === 0,
+  }));
+  const config = createBookConfigV4({
+    bookId: 7,
+    document,
     metadata: { authors: ["Author"], language: "en" },
-    publishing: {
-      code: { line_numbers: false },
-      numbering: { mode: "normalized" },
-    },
+    numbering: "generated",
     revision: 3,
-    schema_version: 3,
-    source: {
-      main_markdown: "book.md",
-      main_markdown_sha256: sourceSha256,
-      original_files: [],
-      preprocessing: {
-        typography: {
-          input_sha256: sourceSha256,
-          output_sha256: sourceSha256,
-          profile: "verbatim-v1",
-          protected_nodes: 0,
-          punctuation_converted: 0,
-          spaces_normalized: 0,
-        },
-      },
-    },
-    source_regions: [],
-    structure: headingIds.map((blockId, index) => ({
-      block_id: blockId,
-      display_level: 1,
-      include_in_toc: index === 0,
-      role: "body",
-      starts_page: true,
-    })),
+    sourceSha256,
+    structure,
     title: "Candidate Preview",
-  };
+  });
   return {
     book: compileBook({
       config,

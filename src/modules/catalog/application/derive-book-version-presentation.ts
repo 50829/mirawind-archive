@@ -55,7 +55,7 @@ function projectionDigest(
   input: Omit<BookVersionPresentation, "createdAtMs" | "projectionSha256">,
 ): string {
   return createHash("sha256")
-    .update("mirawind-book-presentation-v1\0")
+    .update("mirawind-book-presentation-v2\0")
     .update(canonicalJson(input))
     .digest("hex");
 }
@@ -128,8 +128,8 @@ export function deriveBookVersionPresentation(input: {
       typeof firstPage.alias === "string" ? firstPage.alias : null,
     firstPageId: firstPage.page_id,
     metadataJson,
-    projectionSchemaVersion: 1 as const,
-    title: String(parsedConfig.title),
+    projectionSchemaVersion: 2 as const,
+    title: String(metadataSource.title),
     tocEntryCount: toc.length,
     tocPreviewJson,
     versionId: String(manifest.version_id),

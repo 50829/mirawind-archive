@@ -4,6 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import { renderPages } from "@/modules/publishing/core/publication/render-pages";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import {
+  createBookConfigV4,
+  structureForDocument,
+} from "../../helpers/book-config";
 
 function fixture() {
   const markdown = `${Array.from(
@@ -11,40 +17,23 @@ function fixture() {
     (_, index) => `# Chapter ${index + 1}\n\nBody ${index + 1}.`,
   ).join("\n\n")}\n`;
   const sourceSha256 = createHash("sha256").update(markdown).digest("hex");
+  let ordinal = 0;
+  const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown), {
+    idFactory: () => `blk_render_pages_${String(++ordinal).padStart(8, "0")}`,
+  });
+  const structure = structureForDocument(document).map((node) => ({
+    ...node,
+    display_level: 1,
+    starts_page: true,
+  }));
   return compileBook({
-    config: {
-      book_id: 1,
-      publishing: {
-        code: { line_numbers: false },
-        numbering: { mode: "normalized" },
-      },
-      revision: 1,
-      schema_version: 3,
-      source: {
-        main_markdown: "book.md",
-        main_markdown_sha256: sourceSha256,
-        original_files: [],
-        preprocessing: {
-          typography: {
-            input_sha256: sourceSha256,
-            output_sha256: sourceSha256,
-            profile: "verbatim-v1",
-            protected_nodes: 0,
-            punctuation_converted: 0,
-            spaces_normalized: 0,
-          },
-        },
-      },
-      source_regions: [],
-      structure: Array.from({ length: 6 }, (_, index) => ({
-        block_id: `blk_render_pages_${String(index + 1).padStart(8, "0")}`,
-        display_level: 1,
-        include_in_toc: true,
-        role: "body",
-        starts_page: true,
-      })),
+    config: createBookConfigV4({
+      document,
+      numbering: "generated",
+      sourceSha256,
+      structure,
       title: "Render Pages",
-    },
+    }),
     configSha256: "b".repeat(64),
     markdownBytes: markdown,
   });

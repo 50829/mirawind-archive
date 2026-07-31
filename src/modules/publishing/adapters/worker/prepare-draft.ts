@@ -102,7 +102,7 @@ export async function prepareDraft(input: {
     const typography = await profilePipelineStage("typography", async () => {
       const result = preprocessMarkdownTypography(
         markdownBytes,
-        input.typographyProfile ?? "zh-smart-v1",
+        input.typographyProfile ?? "zh-smart-v2",
       );
       await atomicWriteFile(markdownPath, result.markdown, { mode: 0o600 });
       return result;
@@ -110,32 +110,13 @@ export async function prepareDraft(input: {
     recordPipelineProfileMetrics({
       protected_nodes: typography.provenance.protected_nodes,
     });
-    const { document, normalized } = await profilePipelineStage(
-      "parse_normalize",
-      () => {
-        const parsed = parseMarkdownDocument(typography.markdown);
-        return {
-          document: parsed,
-          normalized: normalizeDocumentBlocks(parsed),
-        };
-      },
-    );
+    const normalized = await profilePipelineStage("parse_normalize", () => {
+      const parsed = parseMarkdownDocument(typography.markdown);
+      return normalizeDocumentBlocks(parsed);
+    });
     recordPipelineProfileMetrics({
       headings: normalized.headings.length,
       root_blocks: normalized.blocks.length,
-    });
-    const resources = await profilePipelineStage("resource_resolution", () =>
-      resolveDocumentResources({
-        document,
-        markdownPath,
-        resourceRoot: dirname(markdownPath),
-      }),
-    );
-    if (resources.diagnostics.length > 0) {
-      throw new Error("IMPORT_RESOURCE_CLOSURE_FAILED");
-    }
-    recordPipelineProfileMetrics({
-      resources: resources.resources.length,
     });
     const contents = await analyzeDraftContents({
       markdownPath,
@@ -148,8 +129,37 @@ export async function prepareDraft(input: {
       sourceSha256: typography.provenance.output_sha256,
       stagingDirectory,
     });
+    await atomicWriteFile(
+      markdownPath,
+      contents.preparedDocument.activeMarkdown,
+      {
+        mode: 0o600,
+      },
+    );
+    recordPipelineProfileMetrics({
+      cleanup_helper_blocks_removed:
+        contents.contentCleanup.helper_blocks_removed,
+      cleanup_printed_toc_regions_removed:
+        contents.contentCleanup.printed_toc_regions_removed,
+    });
+    const resources = await profilePipelineStage("resource_resolution", () =>
+      resolveDocumentResources({
+        document: contents.preparedDocument.active,
+        markdownPath,
+        resourceRoot: dirname(markdownPath),
+      }),
+    );
+    if (resources.diagnostics.length > 0) {
+      throw new Error("IMPORT_RESOURCE_CLOSURE_FAILED");
+    }
+    recordPipelineProfileMetrics({
+      resources: resources.resources.length,
+    });
+    const { preparedDocument: _preparedDocument, ...artifactContents } =
+      contents;
+    void _preparedDocument;
     const artifact: PreparedDraftArtifact = Object.freeze({
-      ...contents,
+      ...artifactContents,
       mainMarkdownRelativePath: input.selectedCandidatePath,
       typography: typography.provenance,
       typographyRiskSummaries: typography.riskSummaries,

@@ -17,19 +17,35 @@ function config(coverResourceId: string | null = resourceId) {
       authors: ["甲", "Author"],
       description: "A bounded description.",
       language: "zh-CN",
+      title: "Example Book",
       ...(coverResourceId ? { cover_resource_id: coverResourceId } : {}),
     },
     publishing: {
       code: { line_numbers: false },
-      numbering: { mode: "normalized" },
+      numbering: { mode: "source" },
     },
     revision: 2,
-    schema_version: 3,
+    schema_version: 4,
     source: {
+      blocks: [
+        {
+          block_id: blockId(1),
+          end_offset: 10,
+          kind: "heading",
+          start_offset: 0,
+          text_fingerprint: `tfp_v1_${"A".repeat(43)}`,
+        },
+      ],
       main_markdown: "main.md",
       main_markdown_sha256: "a".repeat(64),
       original_files: [],
       preprocessing: {
+        content_cleanup: {
+          helper_blocks_removed: 0,
+          input_sha256: "a".repeat(64),
+          output_sha256: "a".repeat(64),
+          printed_toc_regions_removed: 0,
+        },
         typography: {
           input_sha256: "a".repeat(64),
           output_sha256: "a".repeat(64),
@@ -40,9 +56,16 @@ function config(coverResourceId: string | null = resourceId) {
         },
       },
     },
-    source_regions: [],
-    structure: [],
-    title: "Example Book",
+    boundaries: { body_start_block_id: blockId(1) },
+    structure: [
+      {
+        block_id: blockId(1),
+        display_level: 1,
+        include_in_toc: true,
+        starts_page: true,
+        title_markdown: "Chapter 1",
+      },
+    ],
   };
 }
 
@@ -76,7 +99,7 @@ function manifest(tocSize = 1, includeCover = true) {
       name: "mirawind-book-compiler",
       renderer_version: "semantic-html-v6-katex-0.18.1",
       text_normalization_version: 1,
-      version: "compiler-v5",
+      version: "compiler-v6",
     },
     config_revision: 2,
     created_at: "2026-07-25T00:00:00.000Z",
@@ -102,7 +125,7 @@ function manifest(tocSize = 1, includeCover = true) {
           },
         }
       : {},
-    schema_version: 2,
+    schema_version: 3,
     source_files: [
       { path: "source/main.md", sha256: "c".repeat(64), size: 10 },
     ],
@@ -138,7 +161,7 @@ describe("book version presentation projection", () => {
       coverResourceId: resourceId,
       firstPageAlias: null,
       firstPageId: 1,
-      projectionSchemaVersion: 1,
+      projectionSchemaVersion: 2,
       title: "Example Book",
       tocEntryCount: 1,
       versionId,

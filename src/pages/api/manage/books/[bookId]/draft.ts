@@ -71,31 +71,18 @@ export const GET: APIRoute = async ({ locals, params }) => {
     {
       book_id: book.id,
       candidate,
+      alias: configValue.alias ?? null,
+      boundaries: configValue.boundaries,
       config_revision: config.revision,
       diagnostics,
-      regions: (
-        configValue.source_regions as readonly {
-          readonly applied: boolean;
-          readonly entries: readonly unknown[];
-          readonly region_id: string;
-        }[]
-      ).map((region) => ({
-        applied: region.applied,
-        block_id:
-          (
-            region.entries as readonly {
-              readonly body_heading_block_id?: string;
-            }[]
-          ).find((entry) => entry.body_heading_block_id)
-            ?.body_heading_block_id ?? null,
-        entry_count: region.entries.length,
-        region_id: region.region_id,
-      })),
+      metadata: configValue.metadata,
       preview:
         previewModel === null
           ? null
           : {
               compiler_version: previewModel.compiler_version,
+              boundaries: previewModel.boundaries,
+              content_cleanup: previewModel.content_cleanup,
               config_sha256: previewModel.config_sha256,
               config_revision: previewModel.config_revision,
               headings: previewModel.headings,
@@ -103,12 +90,11 @@ export const GET: APIRoute = async ({ locals, params }) => {
               pages: previewModel.pages,
               renderer_version: previewModel.renderer_version,
               semantic_digest: previewModel.semantic_digest,
-              source_regions: previewModel.source_regions,
               source_sha256: previewModel.source_sha256,
               typography: previewModel.typography,
             },
       structure: configValue.structure,
-      title: book.title,
+      title: (configValue.metadata as Record<string, unknown>).title,
     },
     { headers },
   );

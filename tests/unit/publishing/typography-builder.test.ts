@@ -12,7 +12,7 @@ describe("typography output builder", () => {
       "https://example.com/a,b",
     ];
     const source = `中文English,测试. ${protectedValues.join(" 中文English ")} 结束.\n`;
-    const result = preprocessMarkdownTypography(source, "zh-smart-v1");
+    const result = preprocessMarkdownTypography(source, "zh-smart-v2");
 
     for (const value of protectedValues) {
       expect(Buffer.from(result.markdown).includes(Buffer.from(value))).toBe(
@@ -24,7 +24,7 @@ describe("typography output builder", () => {
   it("reports exact UTF-8 ranges against the unmodified source", () => {
     const source = "前缀😀\n\n中文English,测试.\n\n尾部中文API,完成.\n";
     const sourceBytes = Buffer.from(source, "utf8");
-    const result = preprocessMarkdownTypography(source, "zh-smart-v1");
+    const result = preprocessMarkdownTypography(source, "zh-smart-v2");
 
     expect(result.riskSummaries).toHaveLength(2);
     expect(

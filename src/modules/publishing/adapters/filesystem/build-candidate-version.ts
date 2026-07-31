@@ -4,10 +4,7 @@ import { relative, resolve, sep } from "node:path";
 
 import type { SafeDiagnostic } from "@/domain/errors";
 import type { CandidateTreeCrashPointInjector } from "@/modules/publishing/application/candidate-durability";
-import type {
-  ConfirmedSourceRegion,
-  TypographyProvenance,
-} from "@/modules/publishing/core/preparation/document-model";
+import type { TypographyProvenance } from "@/modules/publishing/core/preparation/document-model";
 import {
   assembleCandidate,
   type CandidateAssemblyResult,
@@ -157,28 +154,11 @@ export async function buildCandidateVersion(input: {
         versionId: command.versionId,
       });
       safeDiagnostics = boundedDiagnostics(materialized.diagnostics);
-      const sourceRegions = (
-        context.config.source_regions as readonly ConfirmedSourceRegion[]
-      ).map((region) => {
-        const blockId = region.entries.find(
-          (entry) => entry.body_heading_block_id,
-        )?.body_heading_block_id;
-        return {
-          applied: region.applied,
-          ...(blockId ? { block_id: blockId } : {}),
-          end_byte: region.range.end_byte,
-          entry_count: region.entries.length,
-          matched_heading_count: region.entries.filter(
-            (entry) => entry.body_heading_block_id,
-          ).length,
-          region_id: region.region_id,
-          start_byte: region.range.start_byte,
-        };
-      });
-      const typography = (
-        (context.config.source as Readonly<Record<string, unknown>>)
-          .preprocessing as Readonly<Record<string, unknown>>
-      ).typography as TypographyProvenance;
+      const source = context.config.source as Readonly<Record<string, unknown>>;
+      const preprocessing = source.preprocessing as Readonly<
+        Record<string, unknown>
+      >;
+      const typography = preprocessing.typography as TypographyProvenance;
       await context.files.write(
         "preview/diagnostics.json",
         canonicalJson({ diagnostics: safeDiagnostics }),
@@ -187,6 +167,7 @@ export async function buildCandidateVersion(input: {
         "preview/preview-model.json",
         canonicalJson({
           compiler_version: context.compiled.identity.compiler_version,
+          boundaries: context.config.boundaries,
           config_sha256: context.compiled.identity.config_sha256,
           config_revision: command.configRevision,
           headings: context.compiled.headings.map((heading) => ({
@@ -195,11 +176,12 @@ export async function buildCandidateVersion(input: {
             include_in_toc: heading.include_in_toc,
             number: heading.number,
             page_id: materialized.pageByHeading.get(heading.block_id) ?? null,
-            role: heading.role,
+            source_number: heading.sourceNumber,
             source_level: heading.source_level,
             source_title: heading.source_title,
             starts_page: heading.starts_page,
-            title: heading.display_title,
+            title: heading.title,
+            title_markdown: heading.title_markdown,
           })),
           pages: context.compiled.pages.map((page) => ({
             page_id: page.pageId,
@@ -207,7 +189,7 @@ export async function buildCandidateVersion(input: {
           })),
           renderer_version: context.compiled.identity.renderer_version,
           semantic_digest: context.compiled.identity.semantic_digest,
-          source_regions: sourceRegions,
+          content_cleanup: preprocessing.content_cleanup,
           source_sha256: context.compiled.identity.source_sha256,
           typography,
           version: command.previewIdentity,

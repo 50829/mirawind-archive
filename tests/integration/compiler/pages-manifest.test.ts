@@ -17,6 +17,10 @@ import {
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { renderSemanticDocument } from "@/modules/publishing/core/publication/render-document";
+import {
+  createBookConfigV4,
+  structureForDocument,
+} from "../../helpers/book-config";
 
 const versionId = "ver_pages_manifest_test_0001";
 
@@ -43,47 +47,26 @@ function fixture() {
     idFactory: () =>
       `blk_pages_manifest_${String(++sequence).padStart(8, "0")}`,
   });
-  const structures = document.headings.map((heading, index) => ({
-    block_id: heading.blockId,
+  const structures = structureForDocument(document).map((node, index) => ({
+    ...node,
     display_level: index === 2 ? 2 : 1,
-    ...(index === 0
-      ? { display_title: "Introduction", role: "frontmatter" }
-      : index === 1
-        ? { role: "body" }
-        : index === 3
-          ? { role: "appendix" }
-          : {}),
     include_in_toc: index !== 2,
     starts_page: index !== 2,
+    ...(index === 0 ? { title_markdown: "Introduction" } : {}),
   }));
   const sourceHash = createHash("sha256").update(source).digest("hex");
-  const config = {
-    book_id: 1,
-    publishing: {
-      code: { line_numbers: false },
-      numbering: { mode: "normalized" },
+  const config = createBookConfigV4({
+    boundaries: {
+      appendix_start_block_id: structures[3]?.block_id ?? "",
+      body_start_block_id: structures[1]?.block_id ?? "",
     },
+    document,
+    numbering: "generated",
     revision: 2,
-    schema_version: 3,
-    source: {
-      main_markdown: "book.md",
-      main_markdown_sha256: sourceHash,
-      original_files: [],
-      preprocessing: {
-        typography: {
-          input_sha256: sourceHash,
-          output_sha256: sourceHash,
-          profile: "verbatim-v1",
-          protected_nodes: 0,
-          punctuation_converted: 0,
-          spaces_normalized: 0,
-        },
-      },
-    },
-    source_regions: [],
+    sourceSha256: sourceHash,
     structure: structures,
     title: "Test Book",
-  };
+  });
   const book = compileBook({
     config,
     configSha256: createHash("sha256")
@@ -173,41 +156,19 @@ describe("deterministic publication pages and manifest", () => {
     const source = "# 4.4.4 **Virtual memory** $x^2$\n\nBody.\n";
     const sourceHash = createHash("sha256").update(source).digest("hex");
     const blockId = "blk_heading_presentation_0001";
-    const config = {
-      book_id: 1,
-      publishing: {
-        code: { line_numbers: false },
-        numbering: { mode: "normalized" },
-      },
-      revision: 1,
-      schema_version: 3,
-      source: {
-        main_markdown: "book.md",
-        main_markdown_sha256: sourceHash,
-        original_files: [],
-        preprocessing: {
-          typography: {
-            input_sha256: sourceHash,
-            output_sha256: sourceHash,
-            profile: "verbatim-v1",
-            protected_nodes: 0,
-            punctuation_converted: 0,
-            spaces_normalized: 0,
-          },
-        },
-      },
-      source_regions: [],
-      structure: [
-        {
-          block_id: blockId,
-          display_level: 1,
-          include_in_toc: true,
-          role: "body",
-          starts_page: true,
-        },
-      ],
+    let ordinal = 0;
+    const document = normalizeDocumentBlocks(parseMarkdownDocument(source), {
+      idFactory: (node) =>
+        node.type === "heading"
+          ? blockId
+          : `blk_heading_content_${String(++ordinal).padStart(4, "0")}`,
+    });
+    const config = createBookConfigV4({
+      document,
+      numbering: "generated",
+      sourceSha256: sourceHash,
       title: "Systems",
-    };
+    });
     const book = compileBook({
       config,
       configSha256: "e".repeat(64),
@@ -250,10 +211,10 @@ describe("deterministic publication pages and manifest", () => {
     });
 
     expect(book.headings[0]).toMatchObject({
-      display_title: "Virtual memory x^2",
       label: "1 Virtual memory x^2",
       number: "1",
       sourceNumber: "4.4.4",
+      title: "Virtual memory x^2",
     });
     expect(pageMetadata(book, page).title).toBe("1 Virtual memory x^2");
     expect(rendered.html).toContain('<span class="heading-number">1 ');
@@ -275,41 +236,17 @@ describe("deterministic publication pages and manifest", () => {
   it("assigns deduplicated resource IDs by exact source position", () => {
     const source = "# Chapter\n\n![Diagram](diagram.png)\n";
     const sourceHash = createHash("sha256").update(source).digest("hex");
-    const config = {
-      book_id: 1,
-      publishing: {
-        code: { line_numbers: false },
-        numbering: { mode: "normalized" },
-      },
-      revision: 1,
-      schema_version: 3,
-      source: {
-        main_markdown: "book.md",
-        main_markdown_sha256: sourceHash,
-        original_files: [],
-        preprocessing: {
-          typography: {
-            input_sha256: sourceHash,
-            output_sha256: sourceHash,
-            profile: "verbatim-v1",
-            protected_nodes: 0,
-            punctuation_converted: 0,
-            spaces_normalized: 0,
-          },
-        },
-      },
-      source_regions: [],
-      structure: [
-        {
-          block_id: "blk_image_manifest_00000001",
-          display_level: 1,
-          include_in_toc: true,
-          role: "body",
-          starts_page: true,
-        },
-      ],
+    let ordinal = 0;
+    const document = normalizeDocumentBlocks(parseMarkdownDocument(source), {
+      idFactory: () =>
+        `blk_image_manifest_${String(++ordinal).padStart(8, "0")}`,
+    });
+    const config = createBookConfigV4({
+      document,
+      numbering: "generated",
+      sourceSha256: sourceHash,
       title: "Image Book",
-    };
+    });
     const book = compileBook({
       config,
       configSha256: "d".repeat(64),

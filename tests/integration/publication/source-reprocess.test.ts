@@ -88,7 +88,7 @@ describe("explicit source typography reprocessing", () => {
         expectedConfigRevision: 1,
         layout: dataRoot.layout,
         nowMs: 6,
-        profile: "zh-smart-v1",
+        profile: "zh-smart-v2",
       });
       const reprocessImport = imports.require(queued.importId);
       const reprocessCandidate = imports
@@ -109,7 +109,7 @@ describe("explicit source typography reprocessing", () => {
         ),
         selectedCandidatePath: reprocessCandidate.normalizedPath,
         stagingDirectory: resolve(dataRoot.path, "staging/reprocess"),
-        typographyProfile: "zh-smart-v1",
+        typographyProfile: "zh-smart-v2",
       });
       const finalized = await finalizePreparedDraft({
         artifact: reprocessed.artifact,
@@ -152,12 +152,12 @@ describe("explicit source typography reprocessing", () => {
       });
       expect(config).toMatchObject({
         revision: 2,
-        schema_version: 3,
+        schema_version: 4,
         source: {
           main_markdown_sha256: finalized.snapshot.source.mainMarkdownSha256,
           preprocessing: {
             typography: {
-              profile: "zh-smart-v1",
+              profile: "zh-smart-v2",
             },
           },
         },

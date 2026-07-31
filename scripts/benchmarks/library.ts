@@ -123,8 +123,8 @@ function seedBooks(database: Database.Database, count: number): void {
        blocking_diagnostic_count, complete_at, published_at,
        verified_at, created_by_job_id
      ) VALUES (?, ?, ?, 1, NULL, 'published', ?, 2, ?, ?, ?,
-               'compiler-v5', 'semantic-html-v6-katex-0.18.1',
-               'draft-preview-v5', 'mirawind-reader-v3-tailwind-4.3.3',
+               'compiler-v6', 'semantic-html-v6-katex-0.18.1',
+               'draft-preview-v6', 'mirawind-reader-v3-tailwind-4.3.3',
                0, 1, 1, 1, ?)`,
   );
   const insertCandidate = database.prepare(

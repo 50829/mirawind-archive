@@ -81,7 +81,7 @@ describe("ready-version and search index transaction", () => {
         bookId: book.id,
         nowMs: 4,
         revision: 1,
-        schemaVersion: 3,
+        schemaVersion: 4,
         sourceId,
         title: "Book",
         yamlRelativePath: "books/1/draft/configs/1/book.yaml",
@@ -99,12 +99,12 @@ describe("ready-version and search index transaction", () => {
       const versions = new VersionRepository(database);
       const ready = versions.registerReadyWithSearch({
         bookId: book.id,
-        compilerVersion: "compiler-v5",
+        compilerVersion: "compiler-v6",
         completeAtMs: 6,
         configRevision: 1,
         createdByJobId: firstJob.id,
         expectedSearchBlockIds: [blockId],
-        manifestSchemaVersion: 2,
+        manifestSchemaVersion: 3,
         manifestSha256: hash,
         predecessorVersionId: null,
         presentation: presentationForTest(book.id, versionId),
@@ -141,12 +141,12 @@ describe("ready-version and search index transaction", () => {
       expect(() =>
         versions.registerReadyWithSearch({
           bookId: book.id,
-          compilerVersion: "compiler-v5",
+          compilerVersion: "compiler-v6",
           completeAtMs: 8,
           configRevision: 1,
           createdByJobId: secondJob.id,
           expectedSearchBlockIds: ["blk_search_index_missing_0001"],
-          manifestSchemaVersion: 2,
+          manifestSchemaVersion: 3,
           manifestSha256: hash,
           predecessorVersionId: versionId,
           presentation: presentationForTest(book.id, secondVersionId),

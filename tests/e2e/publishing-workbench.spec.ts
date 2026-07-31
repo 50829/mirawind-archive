@@ -9,13 +9,14 @@ function draftProjection(
   const structure = Array.from({ length: size }, (_, index) => ({
     block_id: `blk_workbench_${String(index).padStart(16, "0")}`,
     display_level: (index % 4) + 1,
-    display_title: `Structure item ${index + 1}`,
     include_in_toc: true,
-    ...(index % 4 === 0 ? { role: "body" as const } : {}),
     starts_page: index === 0,
+    title_markdown: `Structure item ${index + 1}`,
   }));
   return {
+    alias: null,
     book_id: 99,
+    boundaries: { body_start_block_id: structure[0]?.block_id },
     candidate: {
       attempt_id: "candidate_workbench_0000000001",
       preview_url: "/api/manage/books/99/preview/1/pages/1",
@@ -42,7 +43,8 @@ function draftProjection(
       },
     ],
     preview: {
-      compiler_version: "compiler-v5",
+      boundaries: { body_start_block_id: structure[0]?.block_id },
+      compiler_version: "compiler-v6",
       config_revision: 1,
       config_sha256: "a".repeat(64),
       headings: structure.map((node, index) => ({
@@ -50,29 +52,21 @@ function draftProjection(
         page_id: 1,
         source_level: node.display_level,
         source_title: `Source item ${index + 1}`,
-        title: node.display_title,
+        title: node.title_markdown,
       })),
       is_stale: false,
       pages: [{ page_id: 1, title: "Preview page" }],
       renderer_version: "semantic-html-v6-katex-0.18.1",
       semantic_digest: "b".repeat(64),
-      source_regions: [],
       source_sha256: "c".repeat(64),
       typography: {
-        profile: "zh-smart-v1",
+        profile: "zh-smart-v2",
         protected_nodes: 3,
         punctuation_converted: 2,
         spaces_normalized: 1,
       },
     },
-    regions: [
-      {
-        applied: true,
-        block_id: structure[0]?.block_id,
-        entry_count: 6,
-        region_id: "region_workbench_0001",
-      },
-    ],
+    metadata: { title: `Workbench ${size}` },
     structure,
     title: `Workbench ${size}`,
   };

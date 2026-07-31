@@ -17,46 +17,22 @@ import {
   type HeadingPresentation,
 } from "@/modules/publishing/core/publication/heading-presentation";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
-import { applySourceRegions } from "@/modules/publishing/core/preparation/source-regions";
-import type {
-  ConfirmedSourceRegion,
-  NormalizedDocument,
-} from "@/modules/publishing/core/preparation/document-model";
+import type { NormalizedDocument } from "@/modules/publishing/core/preparation/document-model";
 import {
   validateDocumentConfig,
   type ValidatedDocumentConfig,
 } from "@/modules/publishing/core/publication/validate-config";
 
-interface ConfigStructureNode {
+interface ConfigSourceBlock {
   readonly block_id: string;
+  readonly end_offset: number;
+  readonly kind: string;
+  readonly start_offset: number;
+  readonly text_fingerprint: string;
 }
 
 function sha256(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function configuredBlockId(configSha256: string, ordinal: number): string {
-  return `blk_${createHash("sha256")
-    .update("mirawind-configured-block-v1\0")
-    .update(configSha256)
-    .update("\0")
-    .update(String(ordinal))
-    .digest("base64url")
-    .slice(0, 24)}`;
-}
-
-function configuredStructure(
-  config: Readonly<Record<string, unknown>>,
-): readonly ConfigStructureNode[] {
-  return config.structure as readonly ConfigStructureNode[];
-}
-
-function configuredRegions(
-  config: Readonly<Record<string, unknown>>,
-): readonly ConfirmedSourceRegion[] {
-  return (config.source_regions as readonly ConfirmedSourceRegion[]).filter(
-    (region) => region.applied,
-  );
 }
 
 function createPagePlans(input: {
@@ -174,7 +150,8 @@ function semanticPayload(input: {
       alias: heading.alias ?? null,
       block_id: heading.block_id,
       display_level: heading.display_level,
-      display_title: heading.display_title,
+      title: heading.title,
+      title_markdown: heading.title_markdown,
       include_in_toc: heading.include_in_toc,
       number: heading.number,
       source_number: heading.sourceNumber,
@@ -199,7 +176,6 @@ export function compileBook(input: {
   readonly config: unknown;
   readonly configSha256: string;
   readonly markdownBytes: string | Uint8Array;
-  readonly sourceHeadingBlockIds?: readonly string[];
 }): CompiledBook {
   if (!/^[a-f0-9]{64}$/u.test(input.configSha256)) {
     throw new Error("CONFIGURED_DOCUMENT_CONFIG_HASH_INVALID");
@@ -215,63 +191,61 @@ export function compileBook(input: {
     throw new Error("CONFIGURED_DOCUMENT_SOURCE_HASH_MISMATCH");
   }
 
-  const structure = configuredStructure(config);
-  const sourceHeadingBlockIds =
-    input.sourceHeadingBlockIds ?? structure.map((heading) => heading.block_id);
-  let headingIndex = 0;
-  let blockOrdinal = 0;
-  const fullDocument = normalizeDocumentBlocks(
-    parseMarkdownDocument(markdown),
-    {
-      idFactory(node) {
-        if (node.type === "heading") {
-          const blockId = sourceHeadingBlockIds[headingIndex++];
-          if (!blockId) {
-            throw new Error("CONFIGURED_DOCUMENT_HEADING_COUNT_MISMATCH");
-          }
-          return blockId;
-        }
-        return configuredBlockId(input.configSha256, ++blockOrdinal);
-      },
-    },
+  const sourceBlocks = source.blocks as readonly ConfigSourceBlock[];
+  const configuredBlockByIdentity = new Map(
+    sourceBlocks.map((block) => [
+      [
+        block.kind,
+        block.start_offset,
+        block.end_offset,
+        block.text_fingerprint,
+      ].join("\0"),
+      block.block_id,
+    ]),
   );
-  if (
-    headingIndex !== sourceHeadingBlockIds.length ||
-    sourceHeadingBlockIds.length !== structure.length
-  ) {
-    throw new Error("CONFIGURED_DOCUMENT_HEADING_COUNT_MISMATCH");
-  }
-
-  const sourceRegions = configuredRegions(config);
-  const applied = applySourceRegions({
-    document: fullDocument,
-    mainMarkdownPath: String(source.main_markdown),
-    mainMarkdownSha256: sourceSha256,
-    regions: sourceRegions,
+  const assignedBlockIds = new Set<string>();
+  const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown), {
+    idFactory(node, identity) {
+      const start = node.position?.start.offset;
+      const end = node.position?.end.offset;
+      if (start === undefined || end === undefined) {
+        throw new Error("CONFIGURED_DOCUMENT_BLOCK_POSITION_MISSING");
+      }
+      const blockId = configuredBlockByIdentity.get(
+        [node.type, start, end, identity.textFingerprint].join("\0"),
+      );
+      if (!blockId || assignedBlockIds.has(blockId)) {
+        throw new Error("CONFIGURED_DOCUMENT_BLOCK_IDENTITY_MISMATCH");
+      }
+      assignedBlockIds.add(blockId);
+      return blockId;
+    },
   });
+  if (assignedBlockIds.size !== sourceBlocks.length) {
+    throw new Error("CONFIGURED_DOCUMENT_BLOCK_IDENTITY_MISMATCH");
+  }
   const validated: ValidatedDocumentConfig = validateDocumentConfig({
-    activeDocument: applied.document,
     config,
-    document: fullDocument,
+    document,
   });
   const publishing = config.publishing as Readonly<Record<string, unknown>>;
   const numbering = publishing.numbering as Readonly<Record<string, unknown>>;
   const headings = presentConfiguredHeadings({
-    document: applied.document,
     headings: validated.headings,
-    mode: numbering.mode === "preserve" ? "source" : "generated",
+    mode: numbering.mode as "generated" | "none" | "source",
   });
-  const bookTitle = String(config.title);
+  const metadata = config.metadata as Readonly<Record<string, unknown>>;
+  const bookTitle = String(metadata.title);
   const { metadataById, pages } = createPagePlans({
     bookTitle,
-    document: applied.document,
+    document,
     headings,
   });
 
   const blockById = new Map<string, NormalizedDocument["blocks"][number]>();
   const blockIds: string[] = [];
   const blockIndexById = new Map<string, number>();
-  for (const [blockIndex, block] of applied.document.blocks.entries()) {
+  for (const [blockIndex, block] of document.blocks.entries()) {
     if (!block.blockId) throw new Error("COMPILED_BOOK_BLOCK_ID_MISSING");
     blockById.set(block.blockId, block);
     blockIds.push(block.blockId);
@@ -280,10 +254,7 @@ export function compileBook(input: {
   const headingByBlockId = new Map(
     headings.map((heading) => [heading.block_id, heading]),
   );
-  const headingLinkIndex = createHeadingLinkIndex(
-    applied.document,
-    headingByBlockId,
-  );
+  const headingLinkIndex = createHeadingLinkIndex(document, headingByBlockId);
   const pageById = new Map(pages.map((page) => [page.pageId, page]));
   const pageByBlockId = new Map<string, PagePlan>();
   for (const page of pages) {
@@ -311,9 +282,7 @@ export function compileBook(input: {
     blockIds: Object.freeze(blockIds),
     blockIndexById: blockIndexById as ReadonlyMap<string, number>,
     bookTitle,
-    document: applied.document,
-    excludedBlockIds: applied.excludedBlockIds,
-    fullDocument,
+    document,
     headingByBlockId: headingByBlockId as ReadonlyMap<
       string,
       HeadingPresentation
@@ -325,7 +294,6 @@ export function compileBook(input: {
     pageById: pageById as ReadonlyMap<number, PagePlan>,
     pageMetadataById: metadataById,
     pages,
-    sourceRegions,
     validated,
   };
   const semanticDigest = semanticCompilationDigest(

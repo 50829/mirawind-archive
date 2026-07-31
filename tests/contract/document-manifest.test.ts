@@ -35,7 +35,7 @@ function manifest(): Record<string, unknown> {
       name: "mirawind-book-compiler",
       renderer_version: "semantic-html-v6-katex-0.18.1",
       text_normalization_version: 1,
-      version: "compiler-v5",
+      version: "compiler-v6",
     },
     config_revision: 2,
     created_at: "2026-07-24T00:00:00.000Z",
@@ -59,7 +59,7 @@ function manifest(): Record<string, unknown> {
         width: 10,
       },
     },
-    schema_version: 2,
+    schema_version: 3,
     source_files: [
       {
         path: "source/main.md",
@@ -90,7 +90,7 @@ function versionMarker(): Record<string, unknown> {
       name: "mirawind-book-compiler",
       renderer_version: "semantic-html-v6-katex-0.18.1",
       text_normalization_version: 1,
-      version: "compiler-v5",
+      version: "compiler-v6",
     },
     config_revision: 2,
     created_at: "2026-07-24T00:00:00.000Z",
@@ -109,7 +109,7 @@ function versionMarker(): Record<string, unknown> {
     ],
     manifest_sha256: "e".repeat(64),
     predecessor_version_id: null,
-    schema_version: 2,
+    schema_version: 3,
     source_id: sourceId,
     version_id: versionId,
   };
@@ -120,7 +120,7 @@ describe("document manifest and immutable version marker", () => {
     const result = validateDocumentManifest(manifest());
     expect(result).toMatchObject({
       book_id: 1,
-      schema_version: 2,
+      schema_version: 3,
       version_id: versionId,
     });
     expect(Object.isFrozen(result)).toBe(true);
@@ -182,7 +182,7 @@ describe("document manifest and immutable version marker", () => {
   it("requires a strict complete marker and canonical closed file list", () => {
     expect(validateVersionMarker(versionMarker())).toMatchObject({
       complete: true,
-      schema_version: 2,
+      schema_version: 3,
     });
 
     expect(() =>
@@ -226,28 +226,28 @@ describe("document manifest and immutable version marker", () => {
       validateDocumentManifest({ ...manifest(), private_notes: true }),
     ).toThrow(expect.objectContaining({ code: "DOCUMENT_MANIFEST_INVALID" }));
     expect(() =>
-      validateDocumentManifest({ ...manifest(), schema_version: 1 }),
+      validateDocumentManifest({ ...manifest(), schema_version: 2 }),
     ).toThrow(
       expect.objectContaining({
         code: "DOCUMENT_MANIFEST_SCHEMA_VERSION_INVALID",
       }),
     );
     expect(() =>
-      validateDocumentManifest({ ...manifest(), schema_version: 3 }),
+      validateDocumentManifest({ ...manifest(), schema_version: 4 }),
     ).toThrow(
       expect.objectContaining({
         code: "DOCUMENT_MANIFEST_SCHEMA_VERSION_UNSUPPORTED",
       }),
     );
     expect(() =>
-      validateVersionMarker({ ...versionMarker(), schema_version: 1 }),
+      validateVersionMarker({ ...versionMarker(), schema_version: 2 }),
     ).toThrow(
       expect.objectContaining({
         code: "VERSION_MARKER_SCHEMA_VERSION_INVALID",
       }),
     );
     expect(() =>
-      validateVersionMarker({ ...versionMarker(), schema_version: 3 }),
+      validateVersionMarker({ ...versionMarker(), schema_version: 4 }),
     ).toThrow(
       expect.objectContaining({
         code: "VERSION_MARKER_SCHEMA_VERSION_UNSUPPORTED",

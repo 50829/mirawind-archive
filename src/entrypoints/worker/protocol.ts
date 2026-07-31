@@ -136,7 +136,7 @@ function isNullableTypographyProfile(
     value === undefined ||
     value === null ||
     value === "verbatim-v1" ||
-    value === "zh-smart-v1"
+    value === "zh-smart-v2"
   );
 }
 

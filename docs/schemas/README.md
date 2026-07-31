@@ -2,9 +2,9 @@
 
 本目录冻结三个独立版本化格式：
 
-- `book.schema.json`：`book.yaml` v3
-- `document-manifest.schema.json`：派生 document manifest v2
-- `version.schema.json`：不可变版本完整性标记 v2
+- `book.schema.json`：`book.yaml` v4
+- `document-manifest.schema.json`：派生 document manifest v3
+- `version.schema.json`：不可变版本完整性标记 v3
 
 三者均使用 JSON Schema Draft 2020-12。YAML 在验证前必须解析为 JSON
 兼容数据模型；不得使用 YAML 自定义 tag、对象构造器、锚点合并造成的重复
@@ -12,7 +12,7 @@
 
 ## 版本与未知字段
 
-- `book.yaml` 仅支持 v3；manifest 与 version marker 分别仅支持 v2。
+- `book.yaml` 仅支持 v4；manifest 与 version marker 仅支持 v3。
 - schema 版本只在格式语义变化时增加，不随书籍内容修改增加。
 - `book.yaml.revision` 在每次接受的出版配置修改后单调递增。
 - 已知版本中的未知字段一律拒绝，不静默忽略。
@@ -28,8 +28,8 @@
 - 可移植元数据
 - 主 Markdown 和登记原文件描述
 - 已持久化源预处理的 profile、输入/输出摘要与有界计数
-- 与规范化主 Markdown 摘要和 UTF-8 字节范围绑定的源区域
-- 目录、标题、层级、角色、拆页和编号配置
+- 活动 Markdown 的稳定 block 身份
+- 目录、富文本标题、层级、线性内容边界、拆页和编号配置
 
 `book.yaml` 不得包含：
 
@@ -54,5 +54,5 @@
 
 ## 示例
 
-`examples/book.v3.yaml` 展示当前配置。新导入默认在接纳正文前应用
-`zh-smart-v1`。示例 ID 和哈希只用于说明格式，不得作为生产默认值。
+`examples/book.v4.yaml` 展示当前配置。新导入默认在接纳正文前应用
+`zh-smart-v2`。示例 ID 和哈希只用于说明格式，不得作为生产默认值。

@@ -13,9 +13,10 @@ import {
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { detectPrintedContents } from "@/modules/publishing/core/preparation/printed-contents";
+import { prepareActiveDocument } from "@/modules/publishing/core/preparation/prepared-document";
 import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
 import { buildSearchSpool } from "@/modules/publishing/core/publication/search-model";
-import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
+import { createBookConfigV4 } from "../../helpers/book-config";
 
 const fixturePath = fileURLToPath(
   new URL("../../fixtures/publishing-quality/printed-toc.md", import.meta.url),
@@ -26,7 +27,7 @@ function sha256(value: string | Uint8Array): string {
 }
 
 describe("configured document preparation", () => {
-  it("preserves source while excluding printed contents from every derived consumer", async () => {
+  it("compiles only cleaned active Markdown into every derived consumer", async () => {
     const markdown = await readFile(fixturePath, "utf8");
     const sourceSha256 = sha256(markdown);
     let ordinal = 0;
@@ -45,33 +46,35 @@ describe("configured document preparation", () => {
     const regions = detection.candidates.flatMap((candidate) =>
       candidate.proposedRegion ? [candidate.proposedRegion] : [],
     );
-    const config = validateBookConfig({
-      book_id: 1,
-      publishing: {
-        code: { line_numbers: false },
-        numbering: { mode: "normalized" },
-      },
+    const prepared = prepareActiveDocument({
+      document: proposedDocument,
+      mainMarkdownPath: "book.md",
+      mainMarkdownSha256: sourceSha256,
+      regions,
+    });
+    const printedEntries = detection.candidates.flatMap((candidate) =>
+      candidate.canonical
+        ? candidate.logicalEntries.map((entry) => ({
+            ...(entry.bodyHeadingBlockId
+              ? { bodyHeadingBlockId: entry.bodyHeadingBlockId }
+              : {}),
+            referenceLevel: entry.referenceLevel,
+            sourceTitle: entry.sourceTitle,
+          }))
+        : [],
+    );
+    const proposal = proposeDocumentStructure(prepared.active, {
+      printedEntries,
+    });
+    const activeSha256 = sha256(prepared.activeMarkdown);
+    const config = createBookConfigV4({
+      boundaries: proposal.boundaries,
+      document: prepared.active,
+      numbering: "generated",
+      preCleanupSha256: sourceSha256,
       revision: 2,
-      schema_version: 3,
-      source: {
-        main_markdown: "book.md",
-        main_markdown_sha256: sourceSha256,
-        original_files: [],
-        preprocessing: {
-          typography: {
-            input_sha256: sourceSha256,
-            output_sha256: sourceSha256,
-            profile: "verbatim-v1",
-            protected_nodes: 0,
-            punctuation_converted: 0,
-            spaces_normalized: 0,
-          },
-        },
-      },
-      source_regions: regions,
-      structure: proposeDocumentStructure(proposedDocument, {
-        sourceRegions: regions,
-      }).nodes,
+      sourceSha256: activeSha256,
+      structure: proposal.nodes,
       title: "机器学习",
     });
     const configSha256 = sha256(stringify(config, { lineWidth: 0 }));
@@ -79,16 +82,15 @@ describe("configured document preparation", () => {
     const configured = compileBook({
       config,
       configSha256,
-      markdownBytes: markdown,
+      markdownBytes: prepared.activeMarkdown,
     });
     const repeated = compileBook({
       config,
       configSha256,
-      markdownBytes: markdown,
+      markdownBytes: prepared.activeMarkdown,
     });
 
-    expect(configured.fullDocument.source).toBe(markdown);
-    expect(configured.fullDocument.headings).toHaveLength(9);
+    expect(configured.document.source).toBe(prepared.activeMarkdown);
     expect(
       configured.document.headings.map((heading) => heading.sourceTitle),
     ).toEqual([
@@ -113,11 +115,11 @@ describe("configured document preparation", () => {
     expect(configured.pages).toHaveLength(2);
     expect(configured.identity).toEqual(repeated.identity);
     expect(configured.identity).toMatchObject({
-      compiler_version: "compiler-v5",
+      compiler_version: "compiler-v6",
       config_sha256: configSha256,
       renderer_version: "semantic-html-v6-katex-0.18.1",
       semantic_digest: expect.stringMatching(/^[a-f0-9]{64}$/u),
-      source_sha256: sourceSha256,
+      source_sha256: activeSha256,
     });
 
     const manifest = buildDocumentManifest({
@@ -131,8 +133,8 @@ describe("configured document preparation", () => {
       sourceFiles: [
         {
           path: "source/book.md",
-          sha256: sourceSha256,
-          size: Buffer.byteLength(markdown),
+          sha256: activeSha256,
+          size: Buffer.byteLength(prepared.activeMarkdown),
         },
       ],
       versionId: "ver_abcdefghijklmnop",

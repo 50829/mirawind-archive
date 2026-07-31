@@ -1,12 +1,12 @@
 import { SafeApplicationError } from "@/domain/errors";
 
-type SupportedBookSchemaVersion = 3;
+type SupportedBookSchemaVersion = 4;
 
 export function requireSupportedBookSchemaVersion(
   value: unknown,
 ): SupportedBookSchemaVersion {
-  if (value === 3) return 3;
-  if (Number.isSafeInteger(value) && (value as number) > 3) {
+  if (value === 4) return 4;
+  if (Number.isSafeInteger(value) && (value as number) > 4) {
     throw new SafeApplicationError(
       "BOOK_SCHEMA_VERSION_UNSUPPORTED",
       "This book configuration uses a newer unsupported schema version.",
@@ -20,12 +20,12 @@ export function requireSupportedBookSchemaVersion(
   );
 }
 
-function requireVersionTwo(
+function requireVersionThree(
   value: unknown,
   label: "DOCUMENT_MANIFEST" | "VERSION_MARKER",
-): 2 {
-  if (value === 2) return 2;
-  if (Number.isSafeInteger(value) && (value as number) > 2) {
+): 3 {
+  if (value === 3) return 3;
+  if (Number.isSafeInteger(value) && (value as number) > 3) {
     throw new SafeApplicationError(
       `${label}_SCHEMA_VERSION_UNSUPPORTED`,
       "This document uses a newer unsupported schema version.",
@@ -41,10 +41,10 @@ function requireVersionTwo(
 
 export function requireSupportedDocumentManifestSchemaVersion(
   value: unknown,
-): 2 {
-  return requireVersionTwo(value, "DOCUMENT_MANIFEST");
+): 3 {
+  return requireVersionThree(value, "DOCUMENT_MANIFEST");
 }
 
-export function requireSupportedVersionMarkerSchemaVersion(value: unknown): 2 {
-  return requireVersionTwo(value, "VERSION_MARKER");
+export function requireSupportedVersionMarkerSchemaVersion(value: unknown): 3 {
+  return requireVersionThree(value, "VERSION_MARKER");
 }

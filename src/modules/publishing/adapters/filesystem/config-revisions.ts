@@ -53,7 +53,6 @@ async function clonePrintedContentsAnalysis(input: {
   readonly layout: StorageLayout;
   readonly nextRevision: number;
   readonly sourceId: string;
-  readonly sourceSha256: string;
 }): Promise<string> {
   const directory = resolve(
     input.layout.bookDirectory,
@@ -82,8 +81,7 @@ async function clonePrintedContentsAnalysis(input: {
   }
   if (
     current.config_revision !== input.currentRevision ||
-    current.source_id !== input.sourceId ||
-    current.source_sha256 !== input.sourceSha256
+    current.source_id !== input.sourceId
   ) {
     throw new SafeApplicationError(
       "DRAFT_ANALYSIS_INVALID",
@@ -113,12 +111,24 @@ export interface ConfigRevisionUpdate {
 }
 
 interface DraftStructureChange {
+  readonly alias?: string | null;
   readonly block_id: string;
   readonly display_level?: number;
-  readonly display_title?: string | null;
   readonly include_in_toc?: boolean;
-  readonly role?: "appendix" | "backmatter" | "body" | "frontmatter" | null;
+  readonly source_number?: string | null;
   readonly starts_page?: boolean;
+  readonly title_markdown?: string;
+}
+
+interface DraftPatch {
+  readonly alias?: string | null;
+  readonly boundaries?: Readonly<{
+    readonly appendix_start_block_id?: string | null;
+    readonly backmatter_start_block_id?: string | null;
+    readonly body_start_block_id?: string;
+  }>;
+  readonly changes: readonly DraftStructureChange[];
+  readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -146,10 +156,13 @@ function exactKeys(
 }
 
 function parseDraftPatch(value: unknown): {
+  readonly alias?: string | null;
+  readonly boundaries?: DraftPatch["boundaries"];
   readonly changes: readonly DraftStructureChange[];
+  readonly metadata?: Readonly<Record<string, unknown>>;
 } {
   const patch = record(value);
-  exactKeys(patch, ["changes"]);
+  exactKeys(patch, ["alias", "boundaries", "changes", "metadata"]);
   if (!Array.isArray(patch.changes) || patch.changes.length > 20_000) {
     throw new SafeApplicationError(
       "DRAFT_PATCH_INVALID",
@@ -160,12 +173,13 @@ function parseDraftPatch(value: unknown): {
   const changes = patch.changes.map((item) => {
     const change = record(item);
     exactKeys(change, [
+      "alias",
       "block_id",
       "display_level",
-      "display_title",
       "include_in_toc",
-      "role",
+      "source_number",
       "starts_page",
+      "title_markdown",
     ]);
     if (
       typeof change.block_id !== "string" ||
@@ -173,20 +187,20 @@ function parseDraftPatch(value: unknown): {
         (!Number.isSafeInteger(change.display_level) ||
           Number(change.display_level) < 1 ||
           Number(change.display_level) > 4)) ||
-      (change.display_title !== undefined &&
-        change.display_title !== null &&
-        (typeof change.display_title !== "string" ||
-          change.display_title.length < 1 ||
-          change.display_title.length > 500)) ||
+      (change.title_markdown !== undefined &&
+        (typeof change.title_markdown !== "string" ||
+          change.title_markdown.length < 1 ||
+          change.title_markdown.length > 2_000)) ||
       (change.include_in_toc !== undefined &&
         typeof change.include_in_toc !== "boolean") ||
       (change.starts_page !== undefined &&
         typeof change.starts_page !== "boolean") ||
-      (change.role !== undefined &&
-        change.role !== null &&
-        !["appendix", "backmatter", "body", "frontmatter"].includes(
-          String(change.role),
-        ))
+      (change.source_number !== undefined &&
+        change.source_number !== null &&
+        typeof change.source_number !== "string") ||
+      (change.alias !== undefined &&
+        change.alias !== null &&
+        typeof change.alias !== "string")
     ) {
       throw new SafeApplicationError(
         "DRAFT_PATCH_INVALID",
@@ -205,7 +219,81 @@ function parseDraftPatch(value: unknown): {
       400,
     );
   }
-  return { changes };
+  let metadata: Readonly<Record<string, unknown>> | undefined;
+  if (patch.metadata !== undefined) {
+    metadata = record(patch.metadata);
+    exactKeys(metadata, [
+      "authors",
+      "contributors",
+      "cover_resource_id",
+      "description",
+      "edition",
+      "isbn_10",
+      "isbn_13",
+      "language",
+      "publisher",
+      "subtitle",
+      "title",
+      "year",
+    ]);
+  }
+  let boundaries: DraftPatch["boundaries"];
+  if (patch.boundaries !== undefined) {
+    const value = record(patch.boundaries);
+    exactKeys(value, [
+      "appendix_start_block_id",
+      "backmatter_start_block_id",
+      "body_start_block_id",
+    ]);
+    if (
+      (value.body_start_block_id !== undefined &&
+        typeof value.body_start_block_id !== "string") ||
+      ["appendix_start_block_id", "backmatter_start_block_id"].some(
+        (key) =>
+          value[key] !== undefined &&
+          value[key] !== null &&
+          typeof value[key] !== "string",
+      )
+    ) {
+      throw new SafeApplicationError(
+        "DRAFT_PATCH_INVALID",
+        "The content boundaries are invalid.",
+        400,
+      );
+    }
+    boundaries = value as DraftPatch["boundaries"];
+  }
+  if (
+    patch.alias !== undefined &&
+    patch.alias !== null &&
+    typeof patch.alias !== "string"
+  ) {
+    throw new SafeApplicationError(
+      "DRAFT_PATCH_INVALID",
+      "The book alias is invalid.",
+      400,
+    );
+  }
+  return {
+    ...(patch.alias !== undefined
+      ? { alias: patch.alias as string | null }
+      : {}),
+    ...(boundaries ? { boundaries } : {}),
+    changes,
+    ...(metadata ? { metadata } : {}),
+  };
+}
+
+function applyNullableFields(
+  current: Readonly<Record<string, unknown>>,
+  patch: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const result: Record<string, unknown> = { ...current };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) Reflect.deleteProperty(result, key);
+    else result[key] = value;
+  }
+  return result;
 }
 
 export async function patchDraftConfig(input: {
@@ -245,8 +333,21 @@ export async function patchDraftConfig(input: {
   const changes = new Map(
     parsed.changes.map((change) => [change.block_id, change]),
   );
+  const currentMetadata = config.metadata as Readonly<Record<string, unknown>>;
+  const currentBoundaries = config.boundaries as Readonly<
+    Record<string, unknown>
+  >;
+  const configWithAlias: Record<string, unknown> = { ...config };
+  if (parsed.alias === null) Reflect.deleteProperty(configWithAlias, "alias");
+  else if (parsed.alias !== undefined) configWithAlias.alias = parsed.alias;
   const next = {
-    ...config,
+    ...configWithAlias,
+    boundaries: parsed.boundaries
+      ? applyNullableFields(currentBoundaries, parsed.boundaries)
+      : currentBoundaries,
+    metadata: parsed.metadata
+      ? applyNullableFields(currentMetadata, parsed.metadata)
+      : currentMetadata,
     revision: Number(config.revision) + 1,
     structure: currentNodes.map((node) => {
       const change = changes.get(String(node.block_id));
@@ -256,10 +357,11 @@ export async function patchDraftConfig(input: {
         "display_level",
         "include_in_toc",
         "starts_page",
+        "title_markdown",
       ] as const) {
         if (change[key] !== undefined) updated[key] = change[key];
       }
-      for (const key of ["display_title", "role"] as const) {
+      for (const key of ["alias", "source_number"] as const) {
         if (change[key] === null) Reflect.deleteProperty(updated, key);
         else if (change[key] !== undefined) updated[key] = change[key];
       }
@@ -327,9 +429,7 @@ export async function replaceDraftConfig(input: {
     );
   }
   validateConfiguredStructureHierarchy(next);
-  const source = new SourceRepository(input.database).requireSnapshot(
-    book.draftSourceId,
-  );
+  new SourceRepository(input.database).requireSnapshot(book.draftSourceId);
   const yaml = stringify(next, { lineWidth: 0 });
   if (Buffer.byteLength(yaml, "utf8") > maximumConfigBytes) {
     throw new SafeApplicationError(
@@ -366,7 +466,6 @@ export async function replaceDraftConfig(input: {
       layout: input.layout,
       nextRevision: Number(next.revision),
       sourceId: book.draftSourceId,
-      sourceSha256: source.mainMarkdownSha256,
     });
     const selected = new DraftCandidateRepository(
       input.database,
@@ -378,7 +477,7 @@ export async function replaceDraftConfig(input: {
       revision: Number(next.revision),
       schemaVersion: Number(next.schema_version),
       sourceId: book.draftSourceId,
-      title: String(next.title),
+      title: String((next.metadata as Readonly<Record<string, unknown>>).title),
       yamlRelativePath: dataRelativePath(input.layout.root, yamlPath),
       yamlSha256,
     });

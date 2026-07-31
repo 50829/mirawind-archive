@@ -7,7 +7,7 @@ export interface BookVersionPresentation {
   readonly firstPageAlias: string | null;
   readonly firstPageId: number;
   readonly metadataJson: string;
-  readonly projectionSchemaVersion: 1;
+  readonly projectionSchemaVersion: 2;
   readonly projectionSha256: string;
   readonly title: string;
   readonly tocEntryCount: number;

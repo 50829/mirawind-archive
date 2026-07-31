@@ -80,7 +80,7 @@ export interface ConfirmedSourceRegion {
   readonly source_sha256: string;
 }
 
-export type TypographyProfile = "verbatim-v1" | "zh-smart-v1";
+export type TypographyProfile = "verbatim-v1" | "zh-smart-v2";
 
 export interface TypographyProvenance {
   readonly input_sha256: string;

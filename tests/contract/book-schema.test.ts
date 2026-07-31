@@ -9,7 +9,7 @@ import {
 } from "@/modules/publishing/core/publication/book-config-schema";
 
 const examplePath = fileURLToPath(
-  new URL("../../docs/schemas/examples/book.v3.yaml", import.meta.url),
+  new URL("../../docs/schemas/examples/book.v4.yaml", import.meta.url),
 );
 
 function code(error: unknown): string | undefined {
@@ -19,23 +19,43 @@ function code(error: unknown): string | undefined {
 }
 
 function minimalConfig(): Record<string, unknown> {
-  const digest = "a".repeat(64);
+  const sourceDigest = "a".repeat(64);
+  const inputDigest = "b".repeat(64);
+  const typographyDigest = "c".repeat(64);
+  const blockId = "blk_schema_heading_0001";
   return {
     book_id: 1,
+    boundaries: { body_start_block_id: blockId },
+    metadata: { title: "Book" },
     publishing: {
       code: { line_numbers: false },
-      numbering: { mode: "normalized" },
+      numbering: { mode: "source" },
     },
     revision: 1,
-    schema_version: 3,
+    schema_version: 4,
     source: {
+      blocks: [
+        {
+          block_id: blockId,
+          end_offset: 6,
+          kind: "heading",
+          start_offset: 0,
+          text_fingerprint: `tfp_v1_${"A".repeat(43)}`,
+        },
+      ],
       main_markdown: "source/full.md",
-      main_markdown_sha256: digest,
+      main_markdown_sha256: sourceDigest,
       original_files: [],
       preprocessing: {
+        content_cleanup: {
+          helper_blocks_removed: 0,
+          input_sha256: typographyDigest,
+          output_sha256: sourceDigest,
+          printed_toc_regions_removed: 0,
+        },
         typography: {
-          input_sha256: digest,
-          output_sha256: digest,
+          input_sha256: inputDigest,
+          output_sha256: typographyDigest,
           profile: "verbatim-v1",
           protected_nodes: 0,
           punctuation_converted: 0,
@@ -43,20 +63,26 @@ function minimalConfig(): Record<string, unknown> {
         },
       },
     },
-    source_regions: [],
-    structure: [],
-    title: "Book",
+    structure: [
+      {
+        block_id: blockId,
+        display_level: 1,
+        include_in_toc: true,
+        starts_page: true,
+        title_markdown: "Book",
+      },
+    ],
   };
 }
 
 describe("strict book.yaml schema", () => {
-  it("accepts the canonical version-three YAML example", async () => {
+  it("accepts the canonical version-four YAML example", async () => {
     const result = parseBookConfigYaml(await readFile(examplePath, "utf8"));
     expect(result).toMatchObject({
       book_id: 42,
+      metadata: { title: "深度学习" },
       revision: 1,
-      schema_version: 3,
-      title: "深度学习",
+      schema_version: 4,
     });
     expect(Object.isFrozen(result)).toBe(true);
   });
@@ -64,55 +90,44 @@ describe("strict book.yaml schema", () => {
   it.each([
     [
       "alias",
-      `schema_version: 3
+      `schema_version: 4
 revision: 1
 book_id: 1
-title: Book
 metadata: &metadata
-  language: zh-CN
-source: *metadata
-publishing: {}
-structure: []`,
+  title: Book
+source: *metadata`,
     ],
     [
       "duplicate key",
-      `schema_version: 3
+      `schema_version: 4
 revision: 1
 book_id: 1
-title: First
-title: Second
-source: {}
-publishing: {}
-structure: []`,
+metadata:
+  title: First
+  title: Second`,
     ],
     [
       "custom tag",
-      `schema_version: 3
+      `schema_version: 4
 revision: 1
 book_id: 1
-title: !private Book
-source: {}
-publishing: {}
-structure: []`,
+metadata:
+  title: !private Book`,
     ],
     [
       "merge key",
-      `schema_version: 3
+      `schema_version: 4
 revision: 1
 book_id: 1
-title: Book
 metadata:
   <<:
-    language: zh-CN
-source: {}
-publishing: {}
-structure: []`,
+    title: Book`,
     ],
   ])("rejects YAML %s features", (_label, yaml) => {
     expect(() => parseBookConfigYaml(yaml)).toThrow();
   });
 
-  it("rejects unknown fields and reports bounded structural diagnostics", () => {
+  it("rejects unknown fields with bounded structural diagnostics", () => {
     const config = { ...minimalConfig(), private_notes: "must never persist" };
     try {
       validateBookConfig(config);
@@ -127,12 +142,11 @@ structure: []`,
     }
   });
 
-  it("accepts only strict version three", () => {
+  it("accepts only strict version four", () => {
     expect(validateBookConfig(minimalConfig())).toMatchObject({
-      schema_version: 3,
-      source_regions: [],
+      schema_version: 4,
     });
-    for (const schemaVersion of [1, 2]) {
+    for (const schemaVersion of [1, 2, 3]) {
       expect(() =>
         validateBookConfig({
           ...minimalConfig(),
@@ -143,61 +157,16 @@ structure: []`,
       );
     }
     expect(() =>
-      validateBookConfig({ ...minimalConfig(), schema_version: 4 }),
+      validateBookConfig({ ...minimalConfig(), schema_version: 5 }),
     ).toThrow(
       expect.objectContaining({ code: "BOOK_SCHEMA_VERSION_UNSUPPORTED" }),
     );
     expect(() =>
-      validateBookConfig({ ...minimalConfig(), schema_version: "3" }),
+      validateBookConfig({ ...minimalConfig(), schema_version: "4" }),
     ).toThrow(expect.objectContaining({ code: "BOOK_SCHEMA_VERSION_INVALID" }));
   });
 
-  it("rejects invalid preprocessing provenance and range bounds", () => {
-    const config = minimalConfig();
-    const source = config.source as Record<string, unknown>;
-    expect(() =>
-      validateBookConfig({
-        ...config,
-        source: {
-          ...source,
-          preprocessing: {
-            typography: {
-              ...(
-                source.preprocessing as {
-                  typography: Record<string, unknown>;
-                }
-              ).typography,
-              profile: "smart",
-            },
-          },
-        },
-      }),
-    ).toThrow(expect.objectContaining({ code: "BOOK_CONFIG_INVALID" }));
-
-    expect(() =>
-      validateBookConfig({
-        ...config,
-        source_regions: [
-          {
-            applied: true,
-            disposition: "reference_only",
-            entries: [],
-            kind: "printed_toc",
-            range: {
-              end_byte: 10,
-              sha256: "b".repeat(64),
-              start_byte: 10,
-            },
-            region_id: "region_abcdefghijklmnop",
-            source_path: "source/full.md",
-            source_sha256: "a".repeat(64),
-          },
-        ],
-      }),
-    ).toThrow(expect.objectContaining({ code: "BOOK_CONFIG_INVALID" }));
-  });
-
-  it("rejects provenance whose output digest differs from main Markdown", () => {
+  it("rejects invalid preprocessing provenance and source block ranges", () => {
     const config = minimalConfig();
     const source = config.source as Record<string, unknown>;
     const preprocessing = source.preprocessing as {
@@ -209,9 +178,45 @@ structure: []`,
         source: {
           ...source,
           preprocessing: {
+            ...(source.preprocessing as Record<string, unknown>),
             typography: {
               ...preprocessing.typography,
-              output_sha256: "b".repeat(64),
+              profile: "smart",
+            },
+          },
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: "BOOK_CONFIG_INVALID" }));
+
+    const [block] = source.blocks as readonly Record<string, unknown>[];
+    expect(() =>
+      validateBookConfig({
+        ...config,
+        source: {
+          ...source,
+          blocks: [{ ...block, end_offset: 0 }],
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: "BOOK_CONFIG_INVALID" }));
+  });
+
+  it("rejects a broken preprocessing digest chain", () => {
+    const config = minimalConfig();
+    const source = config.source as Record<string, unknown>;
+    const preprocessing = source.preprocessing as {
+      content_cleanup: Record<string, unknown>;
+      typography: Record<string, unknown>;
+    };
+    expect(() =>
+      validateBookConfig({
+        ...config,
+        source: {
+          ...source,
+          preprocessing: {
+            ...preprocessing,
+            content_cleanup: {
+              ...preprocessing.content_cleanup,
+              input_sha256: "d".repeat(64),
             },
           },
         },
@@ -219,7 +224,26 @@ structure: []`,
     ).toThrow(expect.objectContaining({ code: "BOOK_CONFIG_INVALID" }));
   });
 
-  it("does not coerce, default, remove or otherwise mutate rejected input", () => {
+  it("rejects invalid boundaries and multiline heading Markdown", () => {
+    const config = minimalConfig();
+    const structure = config.structure as readonly Record<string, unknown>[];
+    expect(() =>
+      validateBookConfig({
+        ...config,
+        boundaries: {
+          body_start_block_id: "blk_unknown_heading_0001",
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: "BOOK_CONFIG_INVALID" }));
+    expect(() =>
+      validateBookConfig({
+        ...config,
+        structure: [{ ...structure[0], title_markdown: "First\nSecond" }],
+      }),
+    ).toThrow(expect.objectContaining({ code: "BOOK_CONFIG_INVALID" }));
+  });
+
+  it("does not coerce, default, remove or mutate rejected input", () => {
     const input = {
       ...minimalConfig(),
       book_id: "1",

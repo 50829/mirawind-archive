@@ -13,6 +13,8 @@ import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { createStrongEtag } from "@/http/cache/policies";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
 import {
   patchDraftConfig,
@@ -20,8 +22,13 @@ import {
 } from "@/modules/publishing/adapters/filesystem/config-revisions";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
+import {
+  createBookConfigV4,
+  structureForDocument,
+} from "../../helpers/book-config";
 
 const blockId = "blk_config_revision_heading_0001";
+const sourceMarkdown = "# Source heading\n\nBody.";
 
 function sha256(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
@@ -29,64 +36,31 @@ function sha256(value: string | Uint8Array): string {
 
 function config(input: {
   readonly level?: number;
-  readonly regionApplied?: boolean;
   readonly revision: number;
   readonly sourceHash: string;
   readonly title: string;
 }) {
-  return {
-    book_id: 1,
-    publishing: {
-      code: { line_numbers: false },
-      numbering: { mode: "normalized" },
+  let contentOrdinal = 0;
+  const document = normalizeDocumentBlocks(
+    parseMarkdownDocument(sourceMarkdown),
+    {
+      idFactory: (node) =>
+        node.type === "heading"
+          ? blockId
+          : `blk_config_revision_content_${String(++contentOrdinal).padStart(4, "0")}`,
     },
+  );
+  const structure = structureForDocument(document).map((node) => ({
+    ...node,
+    display_level: input.level ?? 1,
+  }));
+  return createBookConfigV4({
+    document,
     revision: input.revision,
-    schema_version: 3,
-    source: {
-      main_markdown: "book.md",
-      main_markdown_sha256: input.sourceHash,
-      original_files: [],
-      preprocessing: {
-        typography: {
-          input_sha256: input.sourceHash,
-          output_sha256: input.sourceHash,
-          profile: "verbatim-v1",
-          protected_nodes: 0,
-          punctuation_converted: 0,
-          spaces_normalized: 0,
-        },
-      },
-    },
-    source_regions:
-      input.regionApplied === undefined
-        ? []
-        : [
-            {
-              applied: input.regionApplied,
-              disposition: "reference_only",
-              entries: [],
-              kind: "printed_toc",
-              range: {
-                end_byte: 16,
-                sha256: sha256("# Source heading"),
-                start_byte: 0,
-              },
-              region_id: "region_config_revision_0001",
-              source_path: "book.md",
-              source_sha256: input.sourceHash,
-            },
-          ],
-    structure: [
-      {
-        block_id: blockId,
-        display_level: input.level ?? 1,
-        include_in_toc: true,
-        role: "body",
-        starts_page: true,
-      },
-    ],
+    sourceSha256: input.sourceHash,
+    structure,
     title: input.title,
-  };
+  });
 }
 
 async function fixture(
@@ -95,9 +69,8 @@ async function fixture(
     readonly bookDirectory: string;
     readonly root: string;
   },
-  regionApplied?: boolean,
 ) {
-  const markdown = "# Source heading\n\nBody.";
+  const markdown = sourceMarkdown;
   const markdownHash = sha256(markdown);
   const drafts = new DraftRepository(database);
   const book = drafts.createBook({ nowMs: 1, title: "Initial" });
@@ -131,7 +104,6 @@ async function fixture(
     sourceRootRelativePath: `books/${book.id}/draft/sources/src_config_revision_test_0001`,
   });
   const initial = config({
-    ...(regionApplied === undefined ? {} : { regionApplied }),
     revision: 1,
     sourceHash: markdownHash,
     title: "Initial",
@@ -176,7 +148,7 @@ async function fixture(
     bookId: book.id,
     nowMs: 4,
     revision: 1,
-    schemaVersion: 3,
+    schemaVersion: 4,
     sourceId: source.id,
     title: "Initial",
     yamlRelativePath: `books/${book.id}/draft/configs/1/book.yaml`,
@@ -191,35 +163,6 @@ async function fixture(
 }
 
 describe("atomic draft configuration revisions", () => {
-  it("rejects source-region adjudication patches", () =>
-    withMigratedTestDatabase(async ({ database }, dataRoot) => {
-      const setup = await fixture(database, dataRoot.layout, true);
-      await expect(
-        patchDraftConfig({
-          bookId: setup.book.id,
-          database,
-          expectedEtag: setup.currentEtag,
-          layout: dataRoot.layout,
-          nowMs: 10,
-          patch: {
-            changes: [],
-            regions: [
-              {
-                applied: false,
-                region_id: "region_config_revision_0001",
-              },
-            ],
-          },
-        }),
-      ).rejects.toMatchObject({ code: "DRAFT_PATCH_INVALID" });
-
-      expect(
-        new DraftRepository(database).requireBook(setup.book.id),
-      ).toMatchObject({
-        draftConfigRevision: 1,
-      });
-    }));
-
   it("merges a strict block patch without accepting unknown fields", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const setup = await fixture(database, dataRoot.layout);
@@ -247,8 +190,8 @@ describe("atomic draft configuration revisions", () => {
             {
               block_id: blockId,
               display_level: 1,
-              display_title: "Edited heading",
               include_in_toc: false,
+              title_markdown: "Edited heading",
             },
           ],
         },
@@ -268,9 +211,9 @@ describe("atomic draft configuration revisions", () => {
         expect.objectContaining({
           block_id: blockId,
           display_level: 1,
-          display_title: "Edited heading",
           include_in_toc: false,
           starts_page: true,
+          title_markdown: "Edited heading",
         }),
       ]);
     }));
@@ -316,7 +259,8 @@ describe("atomic draft configuration revisions", () => {
         ),
       );
       expect(persisted).toMatchObject({
-        schema_version: 3,
+        metadata: { title: "Edited" },
+        schema_version: 4,
         source: {
           preprocessing: {
             typography: {
@@ -326,10 +270,8 @@ describe("atomic draft configuration revisions", () => {
             },
           },
         },
-        source_regions: [],
-        title: "Edited",
       });
-      expect(revision.schemaVersion).toBe(3);
+      expect(revision.schemaVersion).toBe(4);
       expect(
         (await stat(resolve(dataRoot.layout.root, revision.yamlRelativePath)))
           .mode & 0o777,

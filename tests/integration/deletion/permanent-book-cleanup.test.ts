@@ -214,7 +214,7 @@ describe("permanent book cleanup", () => {
           `INSERT INTO config_revisions (
             book_id, revision, source_id, schema_version,
             yaml_rel_path, yaml_sha256, created_at
-          ) VALUES (?, 1, ?, 3, ?, ?, 1200)`,
+          ) VALUES (?, 1, ?, 4, ?, ?, 1200)`,
         )
         .run(
           book.id,
@@ -254,7 +254,7 @@ describe("permanent book cleanup", () => {
             renderer_version, preview_version, reader_version,
             blocking_diagnostic_count, complete_at, published_at,
             verified_at, created_by_job_id, reclaimed_at
-          ) VALUES (?, ?, ?, 1, NULL, 'published', ?, 2, ?, ?, ?,
+          ) VALUES (?, ?, ?, 1, NULL, 'published', ?, 3, ?, ?, ?,
                     'fixture', 'fixture', 'fixture', 'fixture', 0,
                     1500, 1500, 1500, ?, NULL)`,
         )
@@ -291,7 +291,7 @@ describe("permanent book cleanup", () => {
             alias, title, metadata_json, cover_resource_id, first_page_id,
             first_page_alias, toc_preview_json, toc_entry_count,
             projection_sha256, created_at
-          ) VALUES (?, ?, 1, 1, 'full-graph', 'Full graph', '{}', NULL, 1,
+          ) VALUES (?, ?, 1, 2, 'full-graph', 'Full graph', '{}', NULL, 1,
                     NULL, '[]', 0, ?, 1500)`,
         )
         .run(versionId, book.id, "f".repeat(64));

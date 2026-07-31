@@ -4,9 +4,8 @@ import {
   inferPrintedReferenceLevels,
   isLocalPartHeading,
 } from "@/modules/publishing/core/preparation/printed-contents";
-import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
+import { configuredHeadingTitle } from "@/modules/publishing/core/preparation/heading-title";
 import type {
-  ConfirmedSourceRegion,
   NormalizedDocument,
   NormalizedHeading,
   TransientDocumentNode,
@@ -17,13 +16,20 @@ export type ContentRole = "appendix" | "backmatter" | "body" | "frontmatter";
 export interface ProposedStructureNode {
   readonly block_id: string;
   readonly display_level: number;
-  readonly display_title?: string;
   readonly include_in_toc: boolean;
-  readonly role?: ContentRole;
+  readonly source_number?: string;
   readonly starts_page: boolean;
+  readonly title_markdown: string;
+}
+
+export interface ProposedStructureBoundaries {
+  readonly appendix_start_block_id?: string;
+  readonly backmatter_start_block_id?: string;
+  readonly body_start_block_id: string;
 }
 
 export interface StructureProposal {
+  readonly boundaries: ProposedStructureBoundaries;
   readonly nodes: readonly ProposedStructureNode[];
 }
 
@@ -83,26 +89,6 @@ function proposedRole(title: string): ContentRole {
   if (appendixTitle.test(normalized)) return "appendix";
   if (backmatterTitle.test(normalized)) return "backmatter";
   return "body";
-}
-
-function printedEntryTitle(
-  sourceBytes: Buffer,
-  entry: ConfirmedSourceRegion["entries"][number],
-): string | undefined {
-  if (
-    entry.range.start_byte < 0 ||
-    entry.range.end_byte > sourceBytes.byteLength ||
-    entry.range.start_byte >= entry.range.end_byte
-  ) {
-    return;
-  }
-  return sourceBytes
-    .subarray(entry.range.start_byte, entry.range.end_byte)
-    .toString("utf8")
-    .normalize("NFKC")
-    .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|\d+、\s*)/u, "")
-    .replace(/\s*(?:\.{2,}|…+|\s{2,})\s*(?:\d+|[ivxlcdm]+)\s*$/iu, "")
-    .trim();
 }
 
 function printedTitleRole(
@@ -332,43 +318,6 @@ function indexHeadingGaps(
   });
 }
 
-function indexActiveHeadings(
-  document: NormalizedDocument,
-  regions: readonly ConfirmedSourceRegion[],
-): Uint8Array {
-  const active = new Uint8Array(document.headings.length);
-  active.fill(1);
-  const ranges = regions
-    .filter((region) => region.applied)
-    .map((region) => region.range)
-    .toSorted(
-      (left, right) =>
-        left.start_byte - right.start_byte || right.end_byte - left.end_byte,
-    );
-  if (ranges.length === 0) return active;
-
-  const sourceIndex = new SourceTextIndex(document.source);
-  let rangeCursor = 0;
-  let greatestEligibleEnd = Number.NEGATIVE_INFINITY;
-  for (const [headingIndex, heading] of document.headings.entries()) {
-    if (!heading.position) continue;
-    const startByte = sourceIndex.byteOffsetAt(heading.position.start.offset);
-    const endByte = sourceIndex.byteOffsetAt(heading.position.end.offset);
-    while (
-      rangeCursor < ranges.length &&
-      (ranges[rangeCursor]?.start_byte ?? Number.POSITIVE_INFINITY) <= startByte
-    ) {
-      greatestEligibleEnd = Math.max(
-        greatestEligibleEnd,
-        ranges[rangeCursor]?.end_byte ?? Number.NEGATIVE_INFINITY,
-      );
-      rangeCursor += 1;
-    }
-    if (greatestEligibleEnd >= endByte) active[headingIndex] = 0;
-  }
-  return active;
-}
-
 interface PrintedStructureEntry {
   readonly bodyHeadingBlockId?: string;
   readonly referenceLevel: number;
@@ -377,7 +326,6 @@ interface PrintedStructureEntry {
 
 interface StructureProposalOptions {
   readonly printedEntries?: readonly PrintedStructureEntry[];
-  readonly sourceRegions?: readonly ConfirmedSourceRegion[];
 }
 
 type PrintedHeadingKind = NonNullable<
@@ -399,8 +347,13 @@ interface StructureEvidenceIndex {
   readonly printedRoles: ReadonlyMap<string, ContentRole>;
 }
 
-interface StructureNodeState extends ProposedStructureNode {
-  readonly display_title?: string;
+interface StructureNodeState {
+  readonly block_id: string;
+  readonly display_level: number;
+  readonly include_in_toc: boolean;
+  readonly role?: ContentRole;
+  readonly starts_page: boolean;
+  readonly title_override?: string;
 }
 
 function indexPrintedStructureEvidence(
@@ -412,33 +365,13 @@ function indexPrintedStructureEvidence(
     printedEntries,
     document.headings,
   );
-  const sourceBytes = Buffer.from(document.source, "utf8");
-  const sourceRegionLevels: [string, number][] = [];
-  const sourceRegionRoles: [string, ContentRole][] = [];
-  const sourceRegionKinds: [string, PrintedHeadingKind][] = [];
-  for (const region of options.sourceRegions ?? []) {
-    let beforeFirstBodyUnit = true;
-    for (const entry of region.entries) {
-      const blockId = entry.body_heading_block_id;
-      if (blockId) sourceRegionLevels.push([blockId, entry.reference_level]);
-      const title = printedEntryTitle(sourceBytes, entry);
-      const kind = title ? inferPrintedHeadingEvidence(title)?.kind : undefined;
-      const role = title
-        ? printedTitleRole(title, beforeFirstBodyUnit)
-        : undefined;
-      if (kind === "part" || kind === "chapter") beforeFirstBodyUnit = false;
-      if (blockId && role) sourceRegionRoles.push([blockId, role]);
-      if (blockId && kind) sourceRegionKinds.push([blockId, kind]);
-    }
-  }
-  const printedLevels = new Map([
-    ...sourceRegionLevels,
-    ...projectedPrintedEntries.flatMap((entry) =>
+  const printedLevels = new Map(
+    projectedPrintedEntries.flatMap((entry) =>
       entry.bodyHeadingBlockId
         ? [[entry.bodyHeadingBlockId, entry.referenceLevel] as const]
         : [],
     ),
-  ]);
+  );
   let beforeFirstPrintedBodyUnit = true;
   const projectedPrintedRoles = printedEntries.flatMap((entry) => {
     const kind = inferPrintedHeadingEvidence(entry.sourceTitle)?.kind;
@@ -453,7 +386,7 @@ function indexPrintedStructureEvidence(
       ? [[entry.bodyHeadingBlockId, role] as const]
       : [];
   });
-  const printedRoles = new Map(sourceRegionRoles);
+  const printedRoles = new Map<string, ContentRole>();
   const projectedPrintedRoleByBlock = new Map(projectedPrintedRoles);
   for (const entry of printedEntries) {
     if (!entry.bodyHeadingBlockId) continue;
@@ -461,7 +394,7 @@ function indexPrintedStructureEvidence(
     if (role) printedRoles.set(entry.bodyHeadingBlockId, role);
     else printedRoles.delete(entry.bodyHeadingBlockId);
   }
-  const printedKinds = new Map(sourceRegionKinds);
+  const printedKinds = new Map<string, PrintedHeadingKind>();
   for (const entry of printedEntries) {
     if (!entry.bodyHeadingBlockId) continue;
     const kind = inferPrintedHeadingEvidence(entry.sourceTitle)?.kind;
@@ -942,7 +875,7 @@ function repairDetachedHeadingPairs(
     ) {
       output[index - 1] = Object.freeze({
         ...previousNode,
-        display_title: `${previousTitle}${title}`,
+        title_override: `${previousTitle}${title}`,
       });
       output[index] = Object.freeze({
         ...node,
@@ -963,15 +896,12 @@ function finalizeStructureNodes(
   nodes: readonly StructureNodeState[],
   detachedNumericChapterMarkerIndexes: ReadonlySet<number>,
   evidenceIndex: StructureEvidenceIndex,
-  sourceRegions: readonly ConfirmedSourceRegion[],
-): readonly ProposedStructureNode[] {
+): readonly StructureNodeState[] {
   const output = nodes.slice();
-  const activeHeadings = indexActiveHeadings(document, sourceRegions);
   let inheritedRole: ContentRole = "body";
   let previousActiveLevel = 0;
   let hasNestedPartContext = false;
   for (const [index, initialNode] of output.entries()) {
-    if (activeHeadings[index] === 0) continue;
     const heading = document.headings[index];
     const semanticKind = heading
       ? (evidenceIndex.printedKinds.get(heading.blockId) ??
@@ -1009,9 +939,9 @@ function finalizeStructureNodes(
       node = {
         block_id: node.block_id,
         display_level: node.display_level,
-        ...(node.display_title === undefined
+        ...(node.title_override === undefined
           ? {}
-          : { display_title: node.display_title }),
+          : { title_override: node.title_override }),
         include_in_toc: node.include_in_toc,
         starts_page: node.starts_page,
       };
@@ -1036,6 +966,60 @@ function finalizeStructureNodes(
     previousActiveLevel = node.display_level;
   }
   return Object.freeze(output);
+}
+
+function portableProposal(
+  document: NormalizedDocument,
+  nodes: readonly StructureNodeState[],
+): StructureProposal {
+  const roles: ContentRole[] = [];
+  let inheritedRole: ContentRole = "body";
+  for (const node of nodes) {
+    if (node.role) inheritedRole = node.role;
+    roles.push(inheritedRole);
+  }
+  const firstBodyIndex = roles.indexOf("body");
+  const bodyIndex = firstBodyIndex < 0 ? 0 : firstBodyIndex;
+  const lastBodyIndex = roles.lastIndexOf("body");
+  const appendixIndex = roles.findIndex(
+    (role, index) =>
+      index > Math.max(bodyIndex, lastBodyIndex) && role === "appendix",
+  );
+  const backmatterIndex = roles.findIndex(
+    (role, index) =>
+      index > Math.max(lastBodyIndex, appendixIndex) && role === "backmatter",
+  );
+  const body = nodes[bodyIndex];
+  if (!body) throw new Error("DOCUMENT_STRUCTURE_BODY_BOUNDARY_MISSING");
+  const appendix = appendixIndex >= 0 ? nodes[appendixIndex] : undefined;
+  const backmatter = backmatterIndex >= 0 ? nodes[backmatterIndex] : undefined;
+  const boundaries: ProposedStructureBoundaries = Object.freeze({
+    ...(appendix ? { appendix_start_block_id: appendix.block_id } : {}),
+    ...(backmatter ? { backmatter_start_block_id: backmatter.block_id } : {}),
+    body_start_block_id: body.block_id,
+  });
+  const portableNodes = nodes.map((node, index) => {
+    const heading = document.headings[index];
+    if (!heading || heading.blockId !== node.block_id) {
+      throw new Error("DOCUMENT_STRUCTURE_HEADING_ALIGNMENT_INVALID");
+    }
+    const title = configuredHeadingTitle({
+      document,
+      heading,
+      ...(node.title_override ? { titleOverride: node.title_override } : {}),
+    });
+    return Object.freeze({
+      block_id: node.block_id,
+      display_level: node.display_level,
+      include_in_toc: node.include_in_toc,
+      ...(title.number && title.markdown !== title.number
+        ? { source_number: title.number }
+        : {}),
+      starts_page: node.starts_page,
+      title_markdown: title.markdown,
+    });
+  });
+  return Object.freeze({ boundaries, nodes: Object.freeze(portableNodes) });
 }
 
 /**
@@ -1072,13 +1056,13 @@ export function proposeDocumentStructure(
   const detachedNumericChapterMarkerIndexes =
     repairedHeadingPairs.detachedNumericChapterMarkerIndexes;
 
-  return Object.freeze({
-    nodes: finalizeStructureNodes(
+  return portableProposal(
+    document,
+    finalizeStructureNodes(
       document,
       nodes,
       detachedNumericChapterMarkerIndexes,
       evidence,
-      options.sourceRegions ?? [],
     ),
-  });
+  );
 }

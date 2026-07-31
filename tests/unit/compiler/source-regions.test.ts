@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { prepareActiveDocument } from "@/modules/publishing/core/preparation/prepared-document";
 import {
   SourceRegionValidationError,
   applySourceRegions,
@@ -46,6 +47,41 @@ function setup() {
 }
 
 describe("reference-only source regions", () => {
+  it("removes a bounded MinerU helper bundle after its retained image", () => {
+    const source = [
+      "# Chapter",
+      "",
+      "![Plot](plot.png)",
+      "",
+      "<details><summary>text_image</summary>",
+      "",
+      "```json",
+      '{"type":"discarded helper"}',
+      "```",
+      "",
+      "</details>",
+      "",
+      "Body remains.",
+    ].join("\n");
+    let ordinal = 0;
+    const document = normalizeDocumentBlocks(parseMarkdownDocument(source), {
+      idFactory: () => `blk_helper_${String(++ordinal).padStart(16, "0")}`,
+    });
+
+    const prepared = prepareActiveDocument({
+      document,
+      mainMarkdownPath: "source/full.md",
+      mainMarkdownSha256: sha(source),
+      regions: [],
+    });
+
+    expect(prepared.activeMarkdown).toContain("![Plot](plot.png)");
+    expect(prepared.activeMarkdown).toContain("Body remains.");
+    expect(prepared.activeMarkdown).not.toContain("text_image");
+    expect(prepared.activeMarkdown).not.toContain("discarded helper");
+    expect(prepared.cleanup.helper_blocks_removed).toBeGreaterThan(0);
+  });
+
   it("converts Unicode offsets to UTF-8 bytes and reversibly filters complete root blocks", () => {
     const { document, region, source } = setup();
     expect(new SourceTextIndex(source).byteOffsetAt(source.indexOf("中"))).toBe(
@@ -62,6 +98,19 @@ describe("reference-only source regions", () => {
     ).toEqual(["第一章 中文"]);
     expect(result.excludedBlockIds.size).toBeGreaterThan(0);
     expect(document.headings).toHaveLength(3);
+
+    const prepared = prepareActiveDocument({
+      document,
+      mainMarkdownPath: "source/full.md",
+      mainMarkdownSha256: sha(source),
+      regions: [region],
+    });
+    expect(prepared.activeMarkdown).not.toContain("# 目录");
+    expect(prepared.activeMarkdown).not.toContain("...... 1");
+    expect(prepared.active.blocks.map((block) => block.blockId)).toEqual(
+      result.document.blocks.map((block) => block.blockId),
+    );
+    expect(prepared.active.source).toBe(prepared.activeMarkdown);
 
     const restored = applySourceRegions({
       document,

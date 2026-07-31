@@ -26,8 +26,11 @@ import {
 } from "@/modules/publishing/application/public";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { createStorageLayout } from "@/platform/filesystem/layout";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 
 import { buildZip } from "../../scripts/fixtures/zip-builder.js";
+import { createBookConfigV4, structureForDocument } from "./book-config.js";
 import { startWorkerProcess } from "./processes.js";
 
 export const e2eAdministrator = Object.freeze({
@@ -159,59 +162,38 @@ async function seedPublishedLibraryBook(input: {
     nowMs: nowMs + 2,
     sourceRootRelativePath: `books/${book.id}/draft/sources/${sourceId}`,
   });
-  const config = {
+  const headingIds = [
+    "blk_e2e_library_opening_0001",
+    "blk_e2e_library_overview_0001",
+    "blk_e2e_library_continue_0001",
+  ] as const;
+  let headingOrdinal = 0;
+  let contentOrdinal = 0;
+  const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown), {
+    idFactory: (node) =>
+      node.type === "heading"
+        ? (headingIds[headingOrdinal++] ?? "blk_e2e_library_heading_overflow")
+        : `blk_e2e_library_content_${String(++contentOrdinal).padStart(6, "0")}`,
+  });
+  const structure = structureForDocument(document).map((node, index) => ({
+    ...node,
+    starts_page: index === 0 || index === 2,
+  }));
+  const title = "E2E Library Book";
+  const config = createBookConfigV4({
     alias: "e2e-library-book",
-    book_id: book.id,
+    bookId: book.id,
+    document,
     metadata: {
       authors: ["Mirawind Test"],
       description: "A stable browser fixture for the public reading loop.",
       language: "en",
     },
-    publishing: {
-      code: { line_numbers: false },
-      numbering: { mode: "normalized" },
-    },
-    revision: 1,
-    schema_version: 3,
-    source: {
-      main_markdown: "book.md",
-      main_markdown_sha256: markdownSha256,
-      original_files: [],
-      preprocessing: {
-        typography: {
-          input_sha256: markdownSha256,
-          output_sha256: markdownSha256,
-          profile: "verbatim-v1",
-          protected_nodes: 0,
-          punctuation_converted: 0,
-          spaces_normalized: 0,
-        },
-      },
-    },
-    source_regions: [],
-    structure: [
-      {
-        block_id: "blk_e2e_library_opening_0001",
-        display_level: 1,
-        include_in_toc: true,
-        role: "body",
-        starts_page: true,
-      },
-      {
-        block_id: "blk_e2e_library_overview_0001",
-        display_level: 2,
-        include_in_toc: true,
-        starts_page: false,
-      },
-      {
-        block_id: "blk_e2e_library_continue_0001",
-        display_level: 2,
-        include_in_toc: true,
-        starts_page: true,
-      },
-    ],
-    title: "E2E Library Book",
-  };
+    numbering: "generated",
+    sourceSha256: markdownSha256,
+    structure,
+    title,
+  });
   const configYaml = stringify(config, { lineWidth: 0 });
   const configPath = resolve(draftRoot, "configs", "1", "book.yaml");
   await mkdir(dirname(configPath), { mode: 0o700, recursive: true });
@@ -220,9 +202,9 @@ async function seedPublishedLibraryBook(input: {
     bookId: book.id,
     nowMs: nowMs + 3,
     revision: 1,
-    schemaVersion: 3,
+    schemaVersion: 4,
     sourceId,
-    title: config.title,
+    title,
     yamlRelativePath: `books/${book.id}/draft/configs/1/book.yaml`,
     yamlSha256: createHash("sha256").update(configYaml).digest("hex"),
   });

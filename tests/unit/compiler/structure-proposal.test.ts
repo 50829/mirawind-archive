@@ -10,6 +10,26 @@ function requireAt<T>(values: readonly T[], index: number): T {
   return value;
 }
 
+function proposalRoles(
+  proposal: ReturnType<typeof proposeDocumentStructure>,
+): readonly ("appendix" | "backmatter" | "body" | "frontmatter")[] {
+  const indexById = new Map(
+    proposal.nodes.map((node, index) => [node.block_id, index] as const),
+  );
+  const body = indexById.get(proposal.boundaries.body_start_block_id) ?? 0;
+  const appendix = proposal.boundaries.appendix_start_block_id
+    ? indexById.get(proposal.boundaries.appendix_start_block_id)
+    : undefined;
+  const backmatter = proposal.boundaries.backmatter_start_block_id
+    ? indexById.get(proposal.boundaries.backmatter_start_block_id)
+    : undefined;
+  return proposal.nodes.map((_, index) => {
+    if (backmatter !== undefined && index >= backmatter) return "backmatter";
+    if (appendix !== undefined && index >= appendix) return "appendix";
+    return index < body ? "frontmatter" : "body";
+  });
+}
+
 describe("default document structure proposal", () => {
   it("keeps cover metadata before numbered chapters out of navigation", () => {
     const document = normalizeDocumentBlocks(
@@ -73,9 +93,13 @@ describe("default document structure proposal", () => {
       ),
     );
 
-    expect(
-      proposeDocumentStructure(document).nodes.map((node) => node.role),
-    ).toEqual(["body", "appendix", "appendix", "backmatter", "backmatter"]);
+    expect(proposalRoles(proposeDocumentStructure(document))).toEqual([
+      "body",
+      "appendix",
+      "appendix",
+      "backmatter",
+      "backmatter",
+    ]);
   });
 
   it("treats named author and subject indexes as top-level backmatter", () => {
@@ -85,10 +109,12 @@ describe("default document structure proposal", () => {
       ),
     );
 
+    const proposal = proposeDocumentStructure(document);
+    const roles = proposalRoles(proposal);
     expect(
-      proposeDocumentStructure(document).nodes.map((node) => ({
+      proposal.nodes.map((node, index) => ({
         level: node.display_level,
-        role: node.role,
+        role: roles[index],
         starts: node.starts_page,
       })),
     ).toEqual([
@@ -105,9 +131,11 @@ describe("default document structure proposal", () => {
       ),
     );
 
-    expect(
-      proposeDocumentStructure(document).nodes.map((node) => node.role),
-    ).toEqual(["backmatter", "body", "body"]);
+    expect(proposalRoles(proposeDocumentStructure(document))).toEqual([
+      "frontmatter",
+      "body",
+      "body",
+    ]);
   });
 
   it("resets a carried role at a nested chapter", () => {
@@ -117,9 +145,10 @@ describe("default document structure proposal", () => {
       ),
     );
 
-    expect(
-      proposeDocumentStructure(document).nodes.map((node) => node.role),
-    ).toEqual(["backmatter", "body"]);
+    expect(proposalRoles(proposeDocumentStructure(document))).toEqual([
+      "frontmatter",
+      "body",
+    ]);
   });
 
   it("resets inherited role without emitting role on a chapter nested in a part", () => {
@@ -145,10 +174,10 @@ describe("default document structure proposal", () => {
     });
 
     expect(proposal.nodes).toMatchObject([
-      { display_level: 1, role: "body" },
+      { display_level: 1 },
       { display_level: 2 },
     ]);
-    expect(proposal.nodes[1]).not.toHaveProperty("role");
+    expect(proposalRoles(proposal)).toEqual(["body", "body"]);
   });
 
   it("resets a carried role from a matched printed chapter", () => {
@@ -166,46 +195,17 @@ describe("default document structure proposal", () => {
     const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
     const chapter = document.headings[1];
     if (!chapter) throw new Error("expected chapter heading");
-    const entryText = "Chapter 1 Introduction ........ 1";
-    const entryStart = Buffer.from(
-      source.slice(0, source.indexOf(entryText)),
-      "utf8",
-    ).byteLength;
-    const entryEnd = entryStart + Buffer.from(entryText, "utf8").byteLength;
-
     const proposal = proposeDocumentStructure(document, {
-      sourceRegions: [
+      printedEntries: [
         {
-          applied: true,
-          disposition: "reference_only",
-          entries: [
-            {
-              body_heading_block_id: chapter.blockId,
-              range: {
-                end_byte: entryEnd,
-                sha256: "a".repeat(64),
-                start_byte: entryStart,
-              },
-              reference_level: 2,
-            },
-          ],
-          kind: "printed_toc",
-          range: {
-            end_byte: entryEnd,
-            sha256: "b".repeat(64),
-            start_byte: entryStart,
-          },
-          region_id: "region_0123456789abcdef",
-          source_path: "book.md",
-          source_sha256: "c".repeat(64),
+          bodyHeadingBlockId: chapter.blockId,
+          referenceLevel: 2,
+          sourceTitle: "Chapter 1 Introduction ........ 1",
         },
       ],
     });
 
-    expect(proposal.nodes.map((node) => node.role)).toEqual([
-      "backmatter",
-      "body",
-    ]);
+    expect(proposalRoles(proposal)).toEqual(["frontmatter", "body"]);
     expect(proposal.nodes.map((node) => node.display_level)).toEqual([1, 1]);
   });
 
@@ -249,14 +249,14 @@ describe("default document structure proposal", () => {
       false,
       false,
     ]);
-    expect(proposal.nodes.map((node) => node.role)).toEqual([
+    expect(proposalRoles(proposal)).toEqual([
       "frontmatter",
-      undefined,
-      undefined,
+      "frontmatter",
+      "frontmatter",
       "body",
-      undefined,
+      "body",
       "appendix",
-      undefined,
+      "appendix",
       "backmatter",
     ]);
     expect(proposal.nodes.every((node) => node.include_in_toc)).toBe(true);
@@ -301,32 +301,13 @@ describe("default document structure proposal", () => {
         ].join("\n"),
       ),
     );
-    const sourceRegions = [
-      {
-        applied: true,
-        disposition: "reference_only" as const,
-        entries: document.headings.map((heading, index) => ({
-          body_heading_block_id: heading.blockId,
-          range: {
-            end_byte: index * 2 + 2,
-            sha256: "a".repeat(64),
-            start_byte: index * 2 + 1,
-          },
-          reference_level: index === 0 ? 1 : 2,
-        })),
-        kind: "printed_toc" as const,
-        range: {
-          end_byte: 7,
-          sha256: "b".repeat(64),
-          start_byte: 1,
-        },
-        region_id: "region_abcdefghijklmnop",
-        source_path: "full.md",
-        source_sha256: "c".repeat(64),
-      },
-    ];
-
-    const proposal = proposeDocumentStructure(document, { sourceRegions });
+    const proposal = proposeDocumentStructure(document, {
+      printedEntries: document.headings.map((heading, index) => ({
+        bodyHeadingBlockId: heading.blockId,
+        referenceLevel: index === 0 ? 1 : 2,
+        sourceTitle: heading.sourceTitle,
+      })),
+    });
     expect(proposal.nodes.map((node) => node.display_level)).toEqual([1, 2, 2]);
     expect(proposal.nodes.map((node) => node.starts_page)).toEqual([
       true,
@@ -360,46 +341,21 @@ describe("default document structure proposal", () => {
     const chapter = document.headings[1];
     const section = document.headings[2];
     if (!chapter || !section) throw new Error("expected headings");
-    const sourceRegions = [
-      {
-        applied: true,
-        disposition: "reference_only" as const,
-        entries: [
+    expect(
+      proposeDocumentStructure(document, {
+        printedEntries: [
           {
-            body_heading_block_id: chapter.blockId,
-            range: {
-              end_byte: 2,
-              sha256: "a".repeat(64),
-              start_byte: 1,
-            },
-            reference_level: 2,
+            bodyHeadingBlockId: chapter.blockId,
+            referenceLevel: 2,
+            sourceTitle: chapter.sourceTitle,
           },
           {
-            body_heading_block_id: section.blockId,
-            range: {
-              end_byte: 4,
-              sha256: "b".repeat(64),
-              start_byte: 3,
-            },
-            reference_level: 3,
+            bodyHeadingBlockId: section.blockId,
+            referenceLevel: 3,
+            sourceTitle: section.sourceTitle,
           },
         ],
-        kind: "printed_toc" as const,
-        range: {
-          end_byte: 4,
-          sha256: "c".repeat(64),
-          start_byte: 1,
-        },
-        region_id: "region_0123456789abcdef",
-        source_path: "book.md",
-        source_sha256: "d".repeat(64),
-      },
-    ];
-
-    expect(
-      proposeDocumentStructure(document, { sourceRegions }).nodes.map(
-        (node) => node.display_level,
-      ),
+      }).nodes.map((node) => node.display_level),
     ).toEqual([1, 1, 2, 3]);
   });
 
@@ -432,18 +388,6 @@ describe("default document structure proposal", () => {
     if (!part || !chapter || !firstSection || !missingChapterSection) {
       throw new Error("expected body headings");
     }
-    const ranges = printed.map((entry) => {
-      const start = Buffer.from(
-        source.slice(0, source.indexOf(entry)),
-        "utf8",
-      ).byteLength;
-      return {
-        end_byte: start + Buffer.from(entry, "utf8").byteLength,
-        sha256: "a".repeat(64),
-        start_byte: start,
-      };
-    });
-
     const proposal = proposeDocumentStructure(document, {
       printedEntries: [
         {
@@ -466,44 +410,6 @@ describe("default document structure proposal", () => {
           bodyHeadingBlockId: missingChapterSection.blockId,
           referenceLevel: 3,
           sourceTitle: requireAt(printed, 4),
-        },
-      ],
-      sourceRegions: [
-        {
-          applied: true,
-          disposition: "reference_only",
-          entries: [
-            {
-              body_heading_block_id: part.blockId,
-              range: requireAt(ranges, 0),
-              reference_level: 1,
-            },
-            {
-              body_heading_block_id: chapter.blockId,
-              range: requireAt(ranges, 1),
-              reference_level: 2,
-            },
-            {
-              body_heading_block_id: firstSection.blockId,
-              range: requireAt(ranges, 2),
-              reference_level: 3,
-            },
-            { range: requireAt(ranges, 3), reference_level: 2 },
-            {
-              body_heading_block_id: missingChapterSection.blockId,
-              range: requireAt(ranges, 4),
-              reference_level: 3,
-            },
-          ],
-          kind: "printed_toc",
-          range: {
-            end_byte: requireAt(ranges, 4).end_byte,
-            sha256: "b".repeat(64),
-            start_byte: requireAt(ranges, 0).start_byte,
-          },
-          region_id: "region_0123456789abcdef",
-          source_path: "book.md",
-          source_sha256: "c".repeat(64),
         },
       ],
     });
@@ -620,8 +526,9 @@ describe("default document structure proposal", () => {
     const proposal = proposeDocumentStructure(document);
     expect(proposal.nodes[0]).toMatchObject({
       display_level: 1,
-      display_title: "第一部分程序结构和执行",
       include_in_toc: true,
+      source_number: "第一部分",
+      title_markdown: "程序结构和执行",
     });
     expect(proposal.nodes[1]).toMatchObject({
       display_level: 1,
@@ -669,8 +576,8 @@ describe("default document structure proposal", () => {
         starts_page: true,
       },
     ]);
-    expect(proposal.nodes[0]?.display_title).toBeUndefined();
-    expect(proposal.nodes[1]?.display_title).toBeUndefined();
+    expect(proposal.nodes[0]?.title_markdown).toBe("第一部分");
+    expect(proposal.nodes[1]?.title_markdown).toBe("程序结构和执行");
   });
 
   it("keeps a detached Chinese chapter marker and splits on its title", () => {
@@ -788,13 +695,11 @@ describe("default document structure proposal", () => {
       {
         display_level: 1,
         include_in_toc: false,
-        role: "body",
         starts_page: false,
       },
       {
         display_level: 1,
         include_in_toc: true,
-        role: "body",
         starts_page: true,
       },
     ]);
@@ -817,7 +722,7 @@ describe("default document structure proposal", () => {
       include_in_toc: true,
       starts_page: true,
     });
-    expect(proposal.nodes[1]?.display_title).toBeUndefined();
+    expect(proposal.nodes[1]?.title_markdown).toBe("导论");
   });
 
   it("does not include unrecognized frontmatter headings before a numbered book", () => {
@@ -851,42 +756,16 @@ describe("default document structure proposal", () => {
       "正文",
     ].join("\n");
     const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
-    const entryStart = Buffer.from(
-      source.slice(0, source.indexOf("附录")),
-      "utf8",
-    ).byteLength;
-    const entryEnd =
-      entryStart +
-      Buffer.from("附录 1 数据来源 ........ 99", "utf8").byteLength;
     const bodyHeading = document.headings[1];
     expect(bodyHeading).toBeDefined();
     if (!bodyHeading) throw new Error("expected body heading");
 
     const proposal = proposeDocumentStructure(document, {
-      sourceRegions: [
+      printedEntries: [
         {
-          applied: true,
-          disposition: "reference_only",
-          entries: [
-            {
-              body_heading_block_id: bodyHeading.blockId,
-              range: {
-                end_byte: entryEnd,
-                sha256: "a".repeat(64),
-                start_byte: entryStart,
-              },
-              reference_level: 1,
-            },
-          ],
-          kind: "printed_toc",
-          range: {
-            end_byte: entryEnd,
-            sha256: "b".repeat(64),
-            start_byte: entryStart,
-          },
-          region_id: "region_0123456789abcdef",
-          source_path: "book.md",
-          source_sha256: "c".repeat(64),
+          bodyHeadingBlockId: bodyHeading.blockId,
+          referenceLevel: 1,
+          sourceTitle: "附录 1 数据来源 ........ 99",
         },
       ],
     });
@@ -894,8 +773,8 @@ describe("default document structure proposal", () => {
     expect(proposal.nodes[1]).toMatchObject({
       display_level: 1,
       include_in_toc: true,
-      role: "appendix",
     });
+    expect(proposalRoles(proposal)).toEqual(["body", "appendix"]);
   });
 
   it("uses transient logical-entry semantics when Markdown provenance is damaged", () => {
@@ -918,8 +797,8 @@ describe("default document structure proposal", () => {
     expect(proposal.nodes[0]).toMatchObject({
       display_level: 1,
       include_in_toc: true,
-      role: "appendix",
     });
+    expect(proposalRoles(proposal)).toEqual(["body"]);
   });
 
   it("keeps a nested printed appendix inside the body role", () => {
@@ -939,47 +818,17 @@ describe("default document structure proposal", () => {
     const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
     const bodyHeading = document.headings[1];
     if (!bodyHeading) throw new Error("expected appendix heading");
-    const entryText = "附录 4.1 Derivation ...... 99";
-    const entryStart = Buffer.from(
-      source.slice(0, source.indexOf(entryText)),
-      "utf8",
-    ).byteLength;
-    const entryEnd = entryStart + Buffer.from(entryText, "utf8").byteLength;
-
     const proposal = proposeDocumentStructure(document, {
-      sourceRegions: [
+      printedEntries: [
         {
-          applied: true,
-          disposition: "reference_only",
-          entries: [
-            {
-              body_heading_block_id: bodyHeading.blockId,
-              range: {
-                end_byte: entryEnd,
-                sha256: "a".repeat(64),
-                start_byte: entryStart,
-              },
-              reference_level: 2,
-            },
-          ],
-          kind: "printed_toc",
-          range: {
-            end_byte: entryEnd,
-            sha256: "b".repeat(64),
-            start_byte: entryStart,
-          },
-          region_id: "region_0123456789abcdef",
-          source_path: "book.md",
-          source_sha256: "c".repeat(64),
+          bodyHeadingBlockId: bodyHeading.blockId,
+          referenceLevel: 2,
+          sourceTitle: "附录 4.1 Derivation ...... 99",
         },
       ],
     });
 
-    expect(proposal.nodes.map((node) => node.role)).toEqual([
-      "body",
-      undefined,
-      undefined,
-    ]);
+    expect(proposalRoles(proposal)).toEqual(["body", "body", "body"]);
     expect(proposal.nodes[1]?.starts_page).toBe(true);
   });
 
@@ -1224,7 +1073,6 @@ describe("default document structure proposal", () => {
       {
         display_level: 1,
         include_in_toc: true,
-        role: "body",
         starts_page: true,
       },
     ]);
@@ -1368,8 +1216,8 @@ describe("default document structure proposal", () => {
     expect(proposal.nodes[1]).toMatchObject({
       display_level: 1,
       include_in_toc: true,
-      role: "backmatter",
     });
+    expect(proposalRoles(proposal)).toEqual(["body", "backmatter"]);
   });
 
   it("classifies a matched author biography as frontmatter", () => {
@@ -1392,10 +1240,7 @@ describe("default document structure proposal", () => {
       ],
     });
 
-    expect(proposal.nodes.map((node) => node.role)).toEqual([
-      "frontmatter",
-      "body",
-    ]);
+    expect(proposalRoles(proposal)).toEqual(["frontmatter", "body"]);
     expect(proposal.nodes.map((node) => node.starts_page)).toEqual([
       true,
       true,
@@ -1424,7 +1269,10 @@ describe("default document structure proposal", () => {
       include_in_toc: true,
       starts_page: false,
     });
-    expect(proposal.nodes[1]?.display_title).toBeUndefined();
+    expect(proposal.nodes[1]?.title_markdown).toBe(
+      "从个人贸易到国际贸易，再回到个人贸",
+    );
+    expect(proposal.nodes[1]?.source_number).toBe("2.8");
     expect(proposal.nodes[2]).toMatchObject({
       display_level: 2,
       include_in_toc: false,
@@ -1619,12 +1467,7 @@ describe("default document structure proposal", () => {
     expect(proposal.nodes.map((node) => node.display_level)).toEqual([
       1, 1, 2, 3,
     ]);
-    expect(proposal.nodes.map((node) => node.role)).toEqual([
-      "body",
-      "appendix",
-      "body",
-      undefined,
-    ]);
+    expect(proposalRoles(proposal)).toEqual(["body", "body", "body", "body"]);
   });
 
   it("splits parts, later nested chapters and appendices independently of levels", () => {
@@ -1705,11 +1548,11 @@ describe("default document structure proposal", () => {
       false,
       true,
     ]);
-    expect(proposal.nodes.map((node) => node.role)).toEqual([
+    expect(proposalRoles(proposal)).toEqual([
       "frontmatter",
       "body",
-      undefined,
-      undefined,
+      "body",
+      "body",
       "backmatter",
     ]);
     expect(proposal.nodes.map((node) => node.starts_page)).toEqual([
@@ -1756,7 +1599,7 @@ describe("default document structure proposal", () => {
 
     const proposal = proposeDocumentStructure(document, { printedEntries });
 
-    expect(proposal.nodes.map((node) => node.role)).toEqual([
+    expect(proposalRoles(proposal)).toEqual([
       "frontmatter",
       "frontmatter",
       "frontmatter",
@@ -1790,10 +1633,7 @@ describe("default document structure proposal", () => {
       ],
     });
 
-    expect(proposal.nodes.map((node) => node.role)).toEqual([
-      "frontmatter",
-      "body",
-    ]);
+    expect(proposalRoles(proposal)).toEqual(["frontmatter", "body"]);
   });
 
   it("counts raw HTML as body when splitting adjacent backmatter units", () => {
@@ -1823,40 +1663,9 @@ describe("default document structure proposal", () => {
   it("does not split a matched exercise heading with OCR wrapper artifacts", () => {
     const source = "## 第1章 开始\n\n正文\n\n## K习题 1Ck\n\n练习正文";
     const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
-    const proxyStart = Buffer.from(
-      source.slice(0, source.indexOf("第1章")),
-      "utf8",
-    ).byteLength;
-    const proxyEnd = proxyStart + Buffer.from("第1章 开始", "utf8").byteLength;
     const [chapter, exercises] = document.headings;
     if (!chapter || !exercises) throw new Error("expected headings");
     const proposal = proposeDocumentStructure(document, {
-      sourceRegions: [
-        {
-          applied: true,
-          disposition: "reference_only",
-          entries: [
-            {
-              body_heading_block_id: exercises.blockId,
-              range: {
-                end_byte: proxyEnd,
-                sha256: "a".repeat(64),
-                start_byte: proxyStart,
-              },
-              reference_level: 3,
-            },
-          ],
-          kind: "printed_toc",
-          range: {
-            end_byte: proxyEnd,
-            sha256: "b".repeat(64),
-            start_byte: proxyStart,
-          },
-          region_id: "region_0123456789abcdef",
-          source_path: "book.md",
-          source_sha256: "c".repeat(64),
-        },
-      ],
       printedEntries: [
         {
           bodyHeadingBlockId: chapter?.blockId ?? "",
@@ -1896,9 +1705,11 @@ describe("default document structure proposal", () => {
       ),
     );
 
-    expect(
-      proposeDocumentStructure(document).nodes.map((node) => node.role),
-    ).toEqual(["frontmatter", "frontmatter", "body"]);
+    expect(proposalRoles(proposeDocumentStructure(document))).toEqual([
+      "frontmatter",
+      "frontmatter",
+      "body",
+    ]);
   });
 
   it("keeps audience notes before the first chapter in frontmatter", () => {
@@ -1918,9 +1729,12 @@ describe("default document structure proposal", () => {
       ),
     );
 
-    expect(
-      proposeDocumentStructure(document).nodes.map((node) => node.role),
-    ).toEqual(["frontmatter", "frontmatter", "frontmatter", "body"]);
+    expect(proposalRoles(proposeDocumentStructure(document))).toEqual([
+      "frontmatter",
+      "frontmatter",
+      "frontmatter",
+      "body",
+    ]);
   });
 
   it("starts later chapters at their own heading rather than at the first section", () => {

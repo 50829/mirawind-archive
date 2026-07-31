@@ -1,22 +1,18 @@
-export type ContentRole = "frontmatter" | "body" | "appendix" | "backmatter";
-
 export interface EditableStructureNode {
+  readonly alias?: string;
   readonly block_id: string;
   readonly display_level: number;
-  readonly display_title?: string;
   readonly include_in_toc: boolean;
-  readonly role?: ContentRole;
+  readonly source_number?: string;
   readonly starts_page: boolean;
+  readonly title_markdown: string;
 }
 
 export function changeDisplayLevel(
   node: EditableStructureNode,
   displayLevel: number,
 ): EditableStructureNode {
-  if (displayLevel === 1) return { ...node, display_level: displayLevel };
-  const changed = { ...node, display_level: displayLevel };
-  Reflect.deleteProperty(changed, "role");
-  return changed;
+  return { ...node, display_level: displayLevel };
 }
 
 export function mergeAcceptedNodes(
@@ -35,10 +31,11 @@ export function mergeAcceptedNodes(
       "display_level",
       "include_in_toc",
       "starts_page",
+      "title_markdown",
     ] as const) {
       if (localNode[key] !== submittedNode[key]) merged[key] = localNode[key];
     }
-    for (const key of ["display_title", "role"] as const) {
+    for (const key of ["alias", "source_number"] as const) {
       if (localNode[key] === submittedNode[key]) continue;
       if (localNode[key] === undefined) Reflect.deleteProperty(merged, key);
       else merged[key] = localNode[key];

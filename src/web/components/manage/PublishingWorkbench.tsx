@@ -5,7 +5,6 @@ import {
   manageDialog,
   manageDialogClose,
   manageDialogHeader,
-  manageField,
   managePanel,
   manageQuietButton,
   manageSecondaryButton,
@@ -209,14 +208,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   );
   const activateDiagnostic = useCallback(
     (diagnostic: PreviewDiagnostic) => {
-      const blockId =
-        diagnostic.location?.blockId ??
-        diagnostic.blockId ??
-        draft?.preview?.source_regions.find(
-          (region) =>
-            region.region_id === diagnostic.location?.regionId &&
-            region.block_id,
-        )?.block_id;
+      const blockId = diagnostic.location?.blockId ?? diagnostic.blockId;
       diagnosticsDialog.current?.close();
       setActiveDiagnostic(diagnostic);
       if (!blockId) {
@@ -233,7 +225,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
       setNavigationSerial((value) => value + 1);
       setMobileMode("preview");
     },
-    [draft?.preview?.source_regions, pageForBlock],
+    [pageForBlock],
   );
 
   const recoverDiagnostic = useCallback(
@@ -370,7 +362,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           type="button"
         >
           <Save aria-hidden="true" size={18} />
-          {editorState.saving ? "正在保存" : "保存并重建"}
+          {editorState.saving ? "正在保存" : "保存并更新预览"}
         </button>
         <PublishPanel
           blocked={editorState.dirty || blockingDiagnostics.length > 0}
@@ -433,6 +425,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             <StructureEditor
               ref={editorRef}
               bookId={draft.book_id}
+              boundaries={draft.boundaries}
               etag={etag}
               focusedBlockId={focusedBlockId}
               headings={preview?.headings ?? []}
@@ -473,27 +466,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             <h2 className="mr-auto text-base font-bold" id="document-title">
               正文预览
             </h2>
-            {preview && preview.pages.length > 0 && (
-              <label className="m-0">
-                <span className="sr-only">预览页面</span>
-                <select
-                  className={`${manageField} w-auto`}
-                  value={pageId ?? ""}
-                  onChange={(event) => {
-                    setFrameReady(false);
-                    setSelectedFragment(null);
-                    setSelectedPage(Number(event.target.value));
-                    setNavigationSerial((value) => value + 1);
-                  }}
-                >
-                  {preview.pages.map((page) => (
-                    <option key={page.page_id} value={page.page_id}>
-                      {page.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
             <div aria-label="预览宽度" className="flex gap-1">
               <button
                 aria-pressed={previewWidth === "desktop"}

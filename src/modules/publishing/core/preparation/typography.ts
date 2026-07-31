@@ -824,7 +824,7 @@ export function preprocessMarkdownTypography(
       riskSummariesTruncated: false,
     });
   }
-  if (profile !== "zh-smart-v1") {
+  if (profile !== "zh-smart-v2") {
     throw new TypeError("Unsupported typography profile");
   }
   const bom = original.startsWith("\uFEFF") ? "\uFEFF" : "";

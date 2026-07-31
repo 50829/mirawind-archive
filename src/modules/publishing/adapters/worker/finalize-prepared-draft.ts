@@ -43,38 +43,36 @@ export interface FinalizedPreparedDraft {
 
 function configFor(input: {
   readonly baseConfig?: Readonly<Record<string, unknown>>;
+  readonly boundaries: PreparedDraftArtifact["boundaries"];
   readonly bookId: number;
+  readonly contentCleanup: PreparedDraftArtifact["contentCleanup"];
+  readonly metadata: PreparedDraftArtifact["metadata"];
   readonly revision: number;
   readonly snapshot: SourceSnapshotResult;
-  readonly sourceRegions: PreparedDraftArtifact["sourceRegions"];
+  readonly sourceBlocks: PreparedDraftArtifact["sourceBlocks"];
   readonly structure: PreparedDraftArtifact["structure"];
-  readonly title: string;
   readonly typography: PreparedDraftArtifact["typography"];
 }): Readonly<Record<string, unknown>> {
   if (
-    input.typography.output_sha256 !== input.snapshot.source.mainMarkdownSha256
+    input.typography.output_sha256 !== input.contentCleanup.input_sha256 ||
+    input.contentCleanup.output_sha256 !==
+      input.snapshot.source.mainMarkdownSha256
   ) {
     throw new Error("PREPROCESS_OUTPUT_HASH_MISMATCH");
   }
-  if (
-    input.sourceRegions.some(
-      (region) =>
-        region.source_path !== input.snapshot.source.mainMarkdownPath ||
-        region.source_sha256 !== input.snapshot.source.mainMarkdownSha256,
-    )
-  ) {
-    throw new Error("SOURCE_REGION_SNAPSHOT_MISMATCH");
-  }
   return validateBookConfig({
-    ...(input.baseConfig ?? {}),
+    ...(input.baseConfig?.alias ? { alias: input.baseConfig.alias } : {}),
+    boundaries: input.boundaries,
     book_id: input.bookId,
+    metadata: input.baseConfig?.metadata ?? input.metadata,
     publishing: input.baseConfig?.publishing ?? {
       code: { line_numbers: false },
-      numbering: { mode: "normalized" },
+      numbering: { mode: "source" },
     },
     revision: input.revision,
-    schema_version: 3,
+    schema_version: 4,
     source: {
+      blocks: input.sourceBlocks,
       main_markdown: input.snapshot.source.mainMarkdownPath,
       main_markdown_sha256: input.snapshot.source.mainMarkdownSha256,
       original_files: [
@@ -88,11 +86,12 @@ function configFor(input: {
           size: input.snapshot.original.sizeBytes,
         },
       ],
-      preprocessing: { typography: input.typography },
+      preprocessing: {
+        content_cleanup: input.contentCleanup,
+        typography: input.typography,
+      },
     },
-    source_regions: input.sourceRegions,
     structure: input.structure,
-    title: input.title,
   });
 }
 
@@ -115,7 +114,7 @@ function reprocessEvidence(
     typeof evidence.expectedSourceId !== "string" ||
     typeof evidence.originalFileId !== "string" ||
     (evidence.typographyProfile !== "verbatim-v1" &&
-      evidence.typographyProfile !== "zh-smart-v1")
+      evidence.typographyProfile !== "zh-smart-v2")
   ) {
     throw new Error("REPROCESS_EVIDENCE_INVALID");
   }
@@ -172,7 +171,7 @@ export async function finalizePreparedDraft(input: {
     mainMarkdownRelativePath: input.artifact.mainMarkdownRelativePath,
     nowMs: input.nowMs,
     originalArchivePath: input.originalArchivePath,
-    originalName: "mineru.zip",
+    originalName: imported.originalName,
     resourceRelativePaths: input.resourceRelativePaths,
   });
   const currentConfig =
@@ -190,14 +189,18 @@ export async function finalizePreparedDraft(input: {
   const revision = reprocess ? reprocess.expectedConfigRevision + 1 : 1;
   const config = configFor({
     ...(currentConfig ? { baseConfig: currentConfig } : {}),
+    boundaries: input.artifact.boundaries,
     bookId: imported.bookId,
+    contentCleanup: input.artifact.contentCleanup,
+    metadata: input.artifact.metadata,
     revision,
     snapshot,
-    sourceRegions: input.artifact.sourceRegions,
+    sourceBlocks: input.artifact.sourceBlocks,
     structure: input.artifact.structure,
-    title: currentConfig ? String(currentConfig.title) : input.artifact.title,
     typography: input.artifact.typography,
   });
+  const configMetadata = config.metadata as Readonly<Record<string, unknown>>;
+  const title = String(configMetadata.title);
   const yaml = stringify(config, { lineWidth: 0 });
   const yamlSha256 = createHash("sha256").update(yaml).digest("hex");
   const yamlPath = resolve(
@@ -218,7 +221,7 @@ export async function finalizePreparedDraft(input: {
     layoutSource: input.artifact.layoutSource,
     pdfDiagnostics: input.artifact.pdfDiagnostics,
     sourceId: snapshot.source.id,
-    sourceSha256: snapshot.source.mainMarkdownSha256,
+    sourceSha256: input.artifact.analysisSourceSha256,
     typographyRiskSummaries: input.artifact.typographyRiskSummaries,
     typographyRiskSummariesTruncated:
       input.artifact.typographyRiskSummariesTruncated,
@@ -244,8 +247,8 @@ export async function finalizePreparedDraft(input: {
       newSourceId: snapshot.source.id,
       nowMs: input.nowMs,
       revision,
-      schemaVersion: 3,
-      title: String(config.title),
+      schemaVersion: 4,
+      title,
       yamlRelativePath,
       yamlSha256,
     });
@@ -255,9 +258,9 @@ export async function finalizePreparedDraft(input: {
       importId: imported.id,
       nowMs: input.nowMs,
       revision,
-      schemaVersion: 3,
+      schemaVersion: 4,
       sourceId: snapshot.source.id,
-      title: input.artifact.title,
+      title,
       yamlRelativePath,
       yamlSha256,
     });

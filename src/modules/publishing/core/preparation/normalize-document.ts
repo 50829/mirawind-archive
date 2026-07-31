@@ -20,6 +20,11 @@ const blockTypes = new Set([
   "table",
 ]);
 
+export interface NormalizedBlockIdentity {
+  readonly textFingerprint: string;
+  readonly visibleText: string;
+}
+
 function normalizedVisibleText(node: TransientDocumentNode): string {
   const values: string[] = [];
   const visit = (current: TransientDocumentNode) => {
@@ -59,7 +64,10 @@ function fingerprint(type: string, visibleText: string): string {
 export function normalizeDocumentBlocks(
   document: ParsedDocument,
   options: {
-    readonly idFactory?: (node: TransientDocumentNode) => string;
+    readonly idFactory?: (
+      node: TransientDocumentNode,
+      identity: NormalizedBlockIdentity,
+    ) => string;
   } = {},
 ): NormalizedDocument {
   const blocks: TransientDocumentNode[] = [];
@@ -71,10 +79,13 @@ export function normalizeDocumentBlocks(
     });
     if (!blockTypes.has(node.type)) return withChildren;
     const visibleText = normalizedVisibleText(withChildren);
+    const textFingerprint = fingerprint(node.type, visibleText);
     const block = Object.freeze({
       ...withChildren,
-      blockId: options.idFactory?.(node) ?? createOpaqueId("block"),
-      textFingerprint: fingerprint(node.type, visibleText),
+      blockId:
+        options.idFactory?.(node, { textFingerprint, visibleText }) ??
+        createOpaqueId("block"),
+      textFingerprint,
       visibleText,
     });
     blocks.push(block);

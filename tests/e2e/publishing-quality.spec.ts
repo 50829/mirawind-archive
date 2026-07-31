@@ -137,7 +137,7 @@ test("closes typography, formula and printed contents preview-to-publication beh
   await page.getByRole("link", { name: "打开出版工作台" }).click();
   const sourceHandling = page.locator(".desktop-source-regions");
   await sourceHandling.locator("summary").click();
-  await expect(sourceHandling).toContainText("zh-smart-v1");
+  await expect(sourceHandling).toContainText("zh-smart-v2");
   await expect(sourceHandling).toContainText("补齐空格");
   await expect(sourceHandling).toContainText("2");
   await expect(sourceHandling).toContainText("转换标点");

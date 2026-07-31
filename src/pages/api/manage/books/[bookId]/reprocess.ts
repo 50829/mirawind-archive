@@ -40,7 +40,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   const value = body as Record<string, unknown>;
   const profile = value.profile;
   if (
-    (profile !== "verbatim-v1" && profile !== "zh-smart-v1") ||
+    (profile !== "verbatim-v1" && profile !== "zh-smart-v2") ||
     !Number.isSafeInteger(value.expected_config_revision) ||
     Number(value.expected_config_revision) < 1
   ) {

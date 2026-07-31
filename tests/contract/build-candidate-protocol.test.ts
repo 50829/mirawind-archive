@@ -16,12 +16,12 @@ function fixture() {
     bookId,
     candidateId,
     capturedCurrentVersionId: null,
-    compilerIdentity: "compiler-v5",
+    compilerIdentity: "compiler-v6",
     configRelativePath: `books/${bookId}/draft/configs/3/book.yaml`,
     configRevision: 3,
     jobId,
     kind: "build_candidate",
-    previewIdentity: "draft-preview-v5",
+    previewIdentity: "draft-preview-v6",
     readerIdentity: "mirawind-reader-v3-tailwind-4.3.3",
     rendererIdentity: "semantic-html-v6-katex-0.18.1",
     sourceId,
@@ -77,7 +77,7 @@ describe("build candidate protocol values", () => {
       { ...artifact, pageCount: Number.POSITIVE_INFINITY },
       { ...artifact, blockingDiagnosticCount: 5 },
       { ...artifact, versionId: createOpaqueId("version") },
-      { ...artifact, compilerIdentity: "compiler-v6" },
+      { ...artifact, compilerIdentity: "invalid-compiler" },
       { ...artifact, artifactRootRelativePath: "../../escape" },
     ]) {
       expect(() => parseCandidateBuildArtifact(invalid, parsedCommand)).toThrow(

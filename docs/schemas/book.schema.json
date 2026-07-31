@@ -1,62 +1,33 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mirawind.local/schemas/book.schema.json",
-  "title": "Mirawind book.yaml schema v3",
-  "description": "Portable publishing configuration. It must not contain body text or private reading data.",
+  "title": "Mirawind book.yaml schema v4",
+  "description": "Portable publishing configuration for one cleaned Markdown source.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "revision",
     "book_id",
-    "title",
+    "metadata",
     "source",
     "publishing",
-    "source_regions",
+    "boundaries",
     "structure"
   ],
   "properties": {
-    "schema_version": {
-      "const": 3
-    },
-    "revision": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "book_id": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "title": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 500
-    },
-    "alias": {
-      "$ref": "#/$defs/structureNode/properties/alias"
-    },
-    "metadata": {
-      "$ref": "#/$defs/metadata"
-    },
-    "source": {
-      "$ref": "#/$defs/source"
-    },
-    "publishing": {
-      "$ref": "#/$defs/publishing"
-    },
-    "source_regions": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/sourceRegion"
-      },
-      "maxItems": 32
-    },
+    "schema_version": { "const": 4 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "book_id": { "type": "integer", "minimum": 1 },
+    "alias": { "$ref": "#/$defs/alias" },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "source": { "$ref": "#/$defs/source" },
+    "publishing": { "$ref": "#/$defs/publishing" },
+    "boundaries": { "$ref": "#/$defs/boundaries" },
     "structure": {
       "type": "array",
-      "description": "Heading overrides in Markdown source order, including reference-only regions.",
-      "items": {
-        "$ref": "#/$defs/structureNode"
-      },
+      "description": "Active headings in cleaned Markdown source order.",
+      "items": { "$ref": "#/$defs/structureNode" },
       "maxItems": 20000
     }
   },
@@ -67,75 +38,55 @@
       "maxLength": 2048,
       "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
     },
-    "sha256": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
-    },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "blockId": {
       "type": "string",
       "pattern": "^blk_[A-Za-z0-9_-]{16,80}$"
     },
+    "resourceId": {
+      "type": "string",
+      "pattern": "^res_[A-Za-z0-9_-]{16,80}$"
+    },
+    "alias": {
+      "type": "string",
+      "pattern": "^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 120
+    },
+    "counter": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647
+    },
     "metadata": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["title"],
       "properties": {
-        "subtitle": {
-          "type": "string",
-          "maxLength": 500
-        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "subtitle": { "type": "string", "maxLength": 500 },
         "authors": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200
-          },
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 },
           "uniqueItems": true,
           "maxItems": 100
         },
         "contributors": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200
-          },
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 },
           "uniqueItems": true,
           "maxItems": 100
         },
-        "description": {
-          "type": "string",
-          "maxLength": 10000
-        },
+        "description": { "type": "string", "maxLength": 10000 },
         "language": {
           "type": "string",
           "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
         },
-        "publisher": {
-          "type": "string",
-          "maxLength": 300
-        },
-        "year": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9999
-        },
-        "edition": {
-          "type": "string",
-          "maxLength": 100
-        },
-        "isbn_10": {
-          "type": "string",
-          "pattern": "^[0-9]{9}[0-9X]$"
-        },
-        "isbn_13": {
-          "type": "string",
-          "pattern": "^[0-9]{13}$"
-        },
-        "cover_resource_id": {
-          "type": "string",
-          "pattern": "^res_[A-Za-z0-9_-]{16,80}$"
-        }
+        "publisher": { "type": "string", "maxLength": 300 },
+        "year": { "type": "integer", "minimum": 1, "maximum": 9999 },
+        "edition": { "type": "string", "maxLength": 100 },
+        "isbn_10": { "type": "string", "pattern": "^[0-9]{9}[0-9X]$" },
+        "isbn_13": { "type": "string", "pattern": "^[0-9]{13}$" },
+        "cover_resource_id": { "$ref": "#/$defs/resourceId" }
       }
     },
     "source": {
@@ -145,24 +96,65 @@
         "main_markdown",
         "main_markdown_sha256",
         "original_files",
-        "preprocessing"
+        "preprocessing",
+        "blocks"
       ],
       "properties": {
-        "main_markdown": {
-          "$ref": "#/$defs/relativePath"
-        },
-        "main_markdown_sha256": {
-          "$ref": "#/$defs/sha256"
-        },
+        "main_markdown": { "$ref": "#/$defs/relativePath" },
+        "main_markdown_sha256": { "$ref": "#/$defs/sha256" },
         "original_files": {
           "type": "array",
-          "items": {
-            "$ref": "#/$defs/originalFile"
-          },
+          "items": { "$ref": "#/$defs/originalFile" },
           "maxItems": 100
         },
-        "preprocessing": {
-          "$ref": "#/$defs/preprocessing"
+        "preprocessing": { "$ref": "#/$defs/preprocessing" },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceBlock" },
+          "minItems": 1,
+          "maxItems": 20000
+        }
+      }
+    },
+    "sourceBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "kind",
+        "start_offset",
+        "end_offset",
+        "text_fingerprint"
+      ],
+      "properties": {
+        "block_id": { "$ref": "#/$defs/blockId" },
+        "kind": {
+          "enum": [
+            "blockquote",
+            "code",
+            "footnoteDefinition",
+            "heading",
+            "image",
+            "listItem",
+            "math",
+            "paragraph",
+            "semanticContainer",
+            "table"
+          ]
+        },
+        "start_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 268435456
+        },
+        "end_offset": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 268435456
+        },
+        "text_fingerprint": {
+          "type": "string",
+          "pattern": "^tfp_v1_[A-Za-z0-9_-]{43}$"
         }
       }
     },
@@ -186,14 +178,8 @@
         "role": {
           "enum": ["mineru_zip", "pdf", "epub", "image_archive", "other"]
         },
-        "path": {
-          "$ref": "#/$defs/relativePath"
-        },
-        "filename": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 255
-        },
+        "path": { "$ref": "#/$defs/relativePath" },
+        "filename": { "type": "string", "minLength": 1, "maxLength": 255 },
         "media_type": {
           "type": "string",
           "pattern": "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$"
@@ -203,90 +189,16 @@
           "minimum": 0,
           "maximum": 2147483648
         },
-        "sha256": {
-          "$ref": "#/$defs/sha256"
-        }
+        "sha256": { "$ref": "#/$defs/sha256" }
       }
-    },
-    "publishing": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["numbering", "code"],
-      "properties": {
-        "numbering": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["mode"],
-          "properties": {
-            "mode": {
-              "enum": ["normalized", "preserve"]
-            }
-          }
-        },
-        "code": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["line_numbers"],
-          "properties": {
-            "line_numbers": {
-              "type": "boolean"
-            }
-          }
-        }
-      }
-    },
-    "structureNode": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "block_id",
-        "include_in_toc",
-        "display_level",
-        "starts_page"
-      ],
-      "properties": {
-        "block_id": {
-          "$ref": "#/$defs/blockId"
-        },
-        "include_in_toc": {
-          "type": "boolean"
-        },
-        "display_title": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 500
-        },
-        "display_level": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 4
-        },
-        "starts_page": {
-          "type": "boolean"
-        },
-        "role": {
-          "enum": ["frontmatter", "body", "appendix", "backmatter"]
-        },
-        "alias": {
-          "type": "string",
-          "pattern": "^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$",
-          "maxLength": 120
-        }
-      }
-    },
-    "counter": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 2147483647
     },
     "preprocessing": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["typography"],
+      "required": ["typography", "content_cleanup"],
       "properties": {
-        "typography": {
-          "$ref": "#/$defs/typographyProvenance"
-        }
+        "typography": { "$ref": "#/$defs/typographyProvenance" },
+        "content_cleanup": { "$ref": "#/$defs/contentCleanupProvenance" }
       }
     },
     "typographyProvenance": {
@@ -301,123 +213,95 @@
         "protected_nodes"
       ],
       "properties": {
-        "profile": {
-          "enum": ["verbatim-v1", "zh-smart-v1"]
-        },
-        "input_sha256": {
-          "$ref": "#/$defs/sha256"
-        },
-        "output_sha256": {
-          "$ref": "#/$defs/sha256"
-        },
-        "spaces_normalized": {
-          "$ref": "#/$defs/counter"
-        },
-        "punctuation_converted": {
-          "$ref": "#/$defs/counter"
-        },
-        "protected_nodes": {
-          "$ref": "#/$defs/counter"
-        }
+        "profile": { "enum": ["verbatim-v1", "zh-smart-v2"] },
+        "input_sha256": { "$ref": "#/$defs/sha256" },
+        "output_sha256": { "$ref": "#/$defs/sha256" },
+        "spaces_normalized": { "$ref": "#/$defs/counter" },
+        "punctuation_converted": { "$ref": "#/$defs/counter" },
+        "protected_nodes": { "$ref": "#/$defs/counter" }
       }
     },
-    "byteRange": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["start_byte", "end_byte", "sha256"],
-      "properties": {
-        "start_byte": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 268435456
-        },
-        "end_byte": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 268435456
-        },
-        "sha256": {
-          "$ref": "#/$defs/sha256"
-        }
-      }
-    },
-    "sourceRegionEntry": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["range", "reference_level"],
-      "properties": {
-        "range": {
-          "$ref": "#/$defs/byteRange"
-        },
-        "reference_level": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 4
-        },
-        "body_heading_block_id": {
-          "$ref": "#/$defs/blockId"
-        }
-      }
-    },
-    "sourceRegion": {
+    "contentCleanupProvenance": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "region_id",
-        "applied",
-        "kind",
-        "disposition",
-        "source_path",
-        "source_sha256",
-        "range",
-        "entries"
+        "input_sha256",
+        "output_sha256",
+        "printed_toc_regions_removed",
+        "helper_blocks_removed"
       ],
       "properties": {
-        "applied": {
-          "type": "boolean"
+        "input_sha256": { "$ref": "#/$defs/sha256" },
+        "output_sha256": { "$ref": "#/$defs/sha256" },
+        "printed_toc_regions_removed": { "$ref": "#/$defs/counter" },
+        "helper_blocks_removed": { "$ref": "#/$defs/counter" }
+      }
+    },
+    "publishing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numbering", "code"],
+      "properties": {
+        "numbering": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": { "enum": ["source", "generated", "none"] }
+          }
         },
-        "region_id": {
-          "type": "string",
-          "pattern": "^region_[A-Za-z0-9_-]{16,80}$"
-        },
-        "kind": {
-          "const": "printed_toc"
-        },
-        "disposition": {
-          "const": "reference_only"
-        },
-        "source_path": {
-          "$ref": "#/$defs/relativePath"
-        },
-        "source_sha256": {
-          "$ref": "#/$defs/sha256"
-        },
-        "range": {
-          "$ref": "#/$defs/byteRange"
-        },
-        "entries": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/sourceRegionEntry"
-          },
-          "maxItems": 20000
+        "code": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["line_numbers"],
+          "properties": { "line_numbers": { "type": "boolean" } }
         }
+      }
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["body_start_block_id"],
+      "properties": {
+        "body_start_block_id": { "$ref": "#/$defs/blockId" },
+        "appendix_start_block_id": { "$ref": "#/$defs/blockId" },
+        "backmatter_start_block_id": { "$ref": "#/$defs/blockId" }
+      }
+    },
+    "structureNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "title_markdown",
+        "include_in_toc",
+        "display_level",
+        "starts_page"
+      ],
+      "properties": {
+        "block_id": { "$ref": "#/$defs/blockId" },
+        "title_markdown": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "source_number": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "include_in_toc": { "type": "boolean" },
+        "display_level": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "starts_page": { "type": "boolean" },
+        "alias": { "$ref": "#/$defs/alias" }
       }
     }
   },
   "x-semantic-validations": [
-    "book_id must match the owning book",
-    "revision must increase on every accepted configuration change",
-    "preprocessing output_sha256 must equal main_markdown_sha256",
-    "source regions and entries must be ordered, non-overlapping and within the normalized source",
-    "source region and entry hashes must match exact UTF-8 byte ranges",
-    "source region boundaries must align to complete document-root blocks",
-    "body heading mappings must target unique later headings in monotonic order",
-    "all source-region entries across the book must not exceed 20000",
-    "structure entries must reference all source heading blocks in source order",
-    "active display levels must form a continuous valid hierarchy",
-    "reference-only regions cannot remove an actively referenced definition or footnote",
-    "unknown properties are rejected for schema_version 3",
-    "body text and private notes, annotations, bookmarks, or progress are forbidden"
+    "book_id must match the owning book and revision must increase",
+    "typography output must equal content cleanup input and cleanup output must equal main Markdown",
+    "source block identities must be unique and match every parsed active block in source order",
+    "structure must reference every active heading exactly once in source order",
+    "title_markdown must contain inline Markdown only",
+    "display levels must form a continuous hierarchy",
+    "boundaries must reference source blocks and occur in body, appendix, backmatter order",
+    "page aliases must be unique and may only appear on page-start headings",
+    "body text and private reading data are forbidden"
   ]
 }

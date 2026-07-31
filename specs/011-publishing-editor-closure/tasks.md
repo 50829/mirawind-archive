@@ -2,15 +2,15 @@
 
 ## Phase 1: Clean Model
 
-- [ ] T001 Update the single SQLite baseline, v4/v3 schemas, identities and strict parsers.
+- [x] T001 Update the single SQLite baseline, v4/v3 schemas, identities and strict parsers.
 - [ ] T002 Add immutable source edit revisions and reusable asset bindings without changing deletion guarantees.
-- [ ] T003 Replace config/source DTOs and focused schema/transaction evidence.
+- [x] T003 Replace config/source DTOs and focused schema/transaction evidence.
 
 ## Phase 2: Preparation And Structure
 
-- [ ] T004 [US1] Introduce `PreparedDocument` and make production structure consume only `active`.
+- [x] T004 [US1] Introduce `PreparedDocument` and make production structure consume only `active`.
 - [ ] T005 [US1] Split printed-contents detection into typed semantic, extraction, alignment and decision stages.
-- [ ] T006 [US1] Remove printed TOC/helper blocks and implement protected `zh-smart-v2` cleanup.
+- [x] T006 [US1] Remove printed TOC/helper blocks and implement protected `zh-smart-v2` cleanup.
 - [ ] T007 [US1] Replace mutable structure passes with hierarchy, boundary, TOC, pagination and validation passes.
 - [ ] T008 [US1] Prove CSAPP, appendix and active-only behavior plus 3-5 representative books.
 

@@ -11,10 +11,9 @@ describe("publishing workbench local edit retention", () => {
     const submittedNode: EditableStructureNode = {
       block_id: "blk_structure_editor_state_0001",
       display_level: 1,
-      display_title: "Submitted title",
       include_in_toc: true,
-      role: "body",
       starts_page: true,
+      title_markdown: "Submitted title",
     };
     const submitted: readonly EditableStructureNode[] = [submittedNode];
     const server: readonly EditableStructureNode[] = submitted.map((node) => ({
@@ -24,7 +23,7 @@ describe("publishing workbench local edit retention", () => {
       changeDisplayLevel(
         {
           ...submittedNode,
-          display_title: "Typed after submit",
+          title_markdown: "Typed after submit",
         },
         2,
       ),
@@ -33,22 +32,21 @@ describe("publishing workbench local edit retention", () => {
     expect(mergeAcceptedNodes(server, submitted, local)).toEqual([
       expect.objectContaining({
         display_level: 2,
-        display_title: "Typed after submit",
         include_in_toc: true,
+        title_markdown: "Typed after submit",
       }),
     ]);
-    expect(local[0]).not.toHaveProperty("role");
   });
 
-  it("removes a top-level role when a heading moves below H1", () => {
+  it("changes only the selected heading level", () => {
     expect(
       changeDisplayLevel(
         {
           block_id: "blk_structure_editor_state_0002",
           display_level: 1,
           include_in_toc: true,
-          role: "appendix",
           starts_page: true,
+          title_markdown: "Appendix",
         },
         3,
       ),
@@ -57,6 +55,7 @@ describe("publishing workbench local edit retention", () => {
       display_level: 3,
       include_in_toc: true,
       starts_page: true,
+      title_markdown: "Appendix",
     });
   });
 });

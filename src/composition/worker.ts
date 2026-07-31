@@ -110,7 +110,7 @@ function frozenInput(
   const typographyProfile =
     preparation?.kind === "reprocess" &&
     (preparation.typographyProfile === "verbatim-v1" ||
-      preparation.typographyProfile === "zh-smart-v1")
+      preparation.typographyProfile === "zh-smart-v2")
       ? preparation.typographyProfile
       : null;
   const source = job.capturedSourceId

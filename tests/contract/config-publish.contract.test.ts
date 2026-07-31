@@ -110,7 +110,7 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
     });
     expect(at(body, "properties", "profile").enum).toEqual([
       "verbatim-v1",
-      "zh-smart-v1",
+      "zh-smart-v2",
     ]);
     expect(at(operation, "responses")).toHaveProperty("202");
     expect(at(operation, "responses")).toHaveProperty("409");

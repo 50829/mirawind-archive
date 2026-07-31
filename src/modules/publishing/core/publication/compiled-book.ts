@@ -1,5 +1,4 @@
 import type {
-  ConfirmedSourceRegion,
   NormalizedDocument,
   SemanticCompilationIdentity,
 } from "@/modules/publishing/core/preparation/document-model";
@@ -49,7 +48,7 @@ export function createHeadingLinkIndex(
     const presentation = presentations.get(heading.blockId);
     for (const title of [
       heading.sourceTitle,
-      ...(presentation ? [presentation.display_title, presentation.label] : []),
+      ...(presentation ? [presentation.title, presentation.label] : []),
     ]) {
       const slug = headingSlug(title);
       if (slug && !blockIdBySlug.has(slug)) {
@@ -75,8 +74,6 @@ export interface CompiledBook {
   readonly blockIndexById: ReadonlyMap<string, number>;
   readonly bookTitle: string;
   readonly document: NormalizedDocument;
-  readonly excludedBlockIds: ReadonlySet<string>;
-  readonly fullDocument: NormalizedDocument;
   readonly headingByBlockId: ReadonlyMap<string, HeadingPresentation>;
   readonly headingLinkIndex: HeadingLinkIndex;
   readonly headings: readonly HeadingPresentation[];
@@ -86,7 +83,6 @@ export interface CompiledBook {
   readonly pageById: ReadonlyMap<number, PagePlan>;
   readonly pageMetadataById: ReadonlyMap<number, PageMetadata>;
   readonly pages: readonly PagePlan[];
-  readonly sourceRegions: readonly ConfirmedSourceRegion[];
   readonly validated: ValidatedDocumentConfig;
 }
 

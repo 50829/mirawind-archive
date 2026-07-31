@@ -24,14 +24,14 @@ describe("persisted Markdown typography preprocessing", () => {
   it("normalizes Han/Latin and Han/digit boundaries and Chinese punctuation", () => {
     const input =
       "# 中文English与数字42测试\n\n使用API,然后重试!这是第1章...结束.\n";
-    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+    const result = preprocessMarkdownTypography(input, "zh-smart-v2");
     expect(result.markdown).toBe(
       "# 中文 English 与数字 42 测试\n\n使用 API，然后重试！这是第 1 章……结束。\n",
     );
     expect(result.provenance).toMatchObject({
       input_sha256: sha256(input),
       output_sha256: sha256(result.markdown),
-      profile: "zh-smart-v1",
+      profile: "zh-smart-v2",
     });
     expect(result.provenance.spaces_normalized).toBeGreaterThan(0);
     expect(result.provenance.punctuation_converted).toBeGreaterThan(0);
@@ -40,7 +40,7 @@ describe("persisted Markdown typography preprocessing", () => {
   it("converts only confident paired punctuation and removes inner spaces", () => {
     const input =
       '他说: "中文 test" (示例),但保留 unmatched "quote 与 API(v1.2.3).\n';
-    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+    const result = preprocessMarkdownTypography(input, "zh-smart-v2");
     expect(result.markdown).toBe(
       '他说：“中文 test”（示例），但保留 unmatched "quote 与 API(v1.2.3).\n',
     );
@@ -59,7 +59,7 @@ describe("persisted Markdown typography preprocessing", () => {
       "```",
       "",
     ].join("\n");
-    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+    const result = preprocessMarkdownTypography(input, "zh-smart-v2");
     expect(result.markdown).toContain("中文 v1.2.3 中文");
     expect(result.markdown).toContain("file.md 中文");
     expect(result.markdown).toContain("12:30 中文");
@@ -106,7 +106,7 @@ describe("persisted Markdown typography preprocessing", () => {
       "C:\\资料\\第1章\\配置.json",
     ];
     const input = `运行 ${protectedValues.join(" 再运行 ")} 完成.\n`;
-    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+    const result = preprocessMarkdownTypography(input, "zh-smart-v2");
 
     for (const value of protectedValues) {
       expect(Buffer.from(result.markdown).includes(Buffer.from(value))).toBe(
@@ -117,7 +117,7 @@ describe("persisted Markdown typography preprocessing", () => {
 
   it("preserves the synthetic protected-token fixture", async () => {
     const input = await readFile(protectedTokensPath, "utf8");
-    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+    const result = preprocessMarkdownTypography(input, "zh-smart-v2");
 
     for (const token of [
       "/资料/第1章/API,v1.2.3.md",
@@ -138,7 +138,7 @@ describe("persisted Markdown typography preprocessing", () => {
       { length: 150 },
       () => "中文English,测试.",
     ).join("\n\n")}\n`;
-    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+    const result = preprocessMarkdownTypography(input, "zh-smart-v2");
 
     expect(result.riskSummaries).toHaveLength(100);
     expect(result.riskSummariesTruncated).toBe(true);
@@ -156,7 +156,7 @@ describe("persisted Markdown typography preprocessing", () => {
 
   it("handles transparent emphasis and link-label boundaries without changing destinations", () => {
     const input = "中文**English**中文与[API](https://example.com/a,b)中文\n";
-    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+    const result = preprocessMarkdownTypography(input, "zh-smart-v2");
     expect(result.markdown).toBe(
       "中文 **English** 中文与 [API](https://example.com/a,b) 中文\n",
     );
@@ -165,7 +165,7 @@ describe("persisted Markdown typography preprocessing", () => {
   it("preserves line breaks and every non-target Markdown byte", () => {
     const input =
       '> 中文English  \n> 下一行\n\n![中文API](images/a,b.png "标题")\n';
-    const result = preprocessMarkdownTypography(input, "zh-smart-v1");
+    const result = preprocessMarkdownTypography(input, "zh-smart-v2");
     expect(result.markdown).toBe(
       '> 中文 English  \n> 下一行\n\n![中文API](images/a,b.png "标题")\n',
     );
@@ -173,8 +173,8 @@ describe("persisted Markdown typography preprocessing", () => {
 
   it("is idempotent and verbatim-v1 is byte-identical", () => {
     const input = "\uFEFF# 中文English,第1章.\r\n";
-    const first = preprocessMarkdownTypography(input, "zh-smart-v1");
-    const second = preprocessMarkdownTypography(first.markdown, "zh-smart-v1");
+    const first = preprocessMarkdownTypography(input, "zh-smart-v2");
+    const second = preprocessMarkdownTypography(first.markdown, "zh-smart-v2");
     expect(second.markdown).toBe(first.markdown);
     expect(second.provenance.spaces_normalized).toBe(0);
     expect(second.provenance.punctuation_converted).toBe(0);

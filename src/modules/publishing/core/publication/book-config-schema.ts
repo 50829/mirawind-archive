@@ -4,6 +4,7 @@ import { isAlias, isMap, isPair, isSeq, parseDocument } from "yaml";
 import bookSchema from "@/schemas/book.schema.json" with { type: "json" };
 import { SafeApplicationError } from "@/domain/errors";
 import { requireSupportedBookSchemaVersion } from "@/modules/publishing/core/publication/versioning-schema";
+import { parseHeadingMarkdown } from "@/modules/publishing/core/publication/heading-markdown";
 
 export interface BookConfigDiagnostic {
   readonly instancePath: string;
@@ -40,7 +41,7 @@ ajv.addKeyword({
   schemaType: "array",
   valid: true,
 });
-const validateVersionThree = ajv.compile(bookSchema);
+const validateVersionFour = ajv.compile(bookSchema);
 
 function freezeDeep<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
@@ -142,21 +143,31 @@ export function validateBookConfig(
 ): Readonly<Record<string, unknown>> {
   const config = objectRecord(input);
   requireSupportedBookSchemaVersion(config.schema_version);
-  if (!validateVersionThree(config)) {
+  if (!validateVersionFour(config)) {
     throw new BookConfigValidationError(
       "BOOK_CONFIG_INVALID",
       "The book configuration does not match its schema.",
-      diagnostics(validateVersionThree.errors),
+      diagnostics(validateVersionFour.errors),
     );
   }
-  validateVersionThreeSemantics(config);
+  validateVersionFourSemantics(config);
   return freezeDeep(config);
 }
 
-interface ByteRangeRecord {
-  readonly end_byte: number;
-  readonly sha256: string;
-  readonly start_byte: number;
+interface SourceBlockRecord {
+  readonly block_id: string;
+  readonly end_offset: number;
+  readonly kind: string;
+  readonly start_offset: number;
+  readonly text_fingerprint: string;
+}
+
+interface StructureRecord {
+  readonly alias?: string;
+  readonly block_id: string;
+  readonly display_level: number;
+  readonly starts_page: boolean;
+  readonly title_markdown: string;
 }
 
 function semanticFailure(instancePath: string): never {
@@ -167,18 +178,15 @@ function semanticFailure(instancePath: string): never {
   );
 }
 
-function requireIncreasingRange(
-  range: ByteRangeRecord,
-  instancePath: string,
-): void {
-  if (range.start_byte >= range.end_byte) semanticFailure(instancePath);
-}
-
-function validateVersionThreeSemantics(config: Record<string, unknown>): void {
+function validateVersionFourSemantics(config: Record<string, unknown>): void {
   const source = config.source as {
-    readonly main_markdown: string;
+    readonly blocks: readonly SourceBlockRecord[];
     readonly main_markdown_sha256: string;
     readonly preprocessing: {
+      readonly content_cleanup: {
+        readonly input_sha256: string;
+        readonly output_sha256: string;
+      };
       readonly typography: {
         readonly output_sha256: string;
       };
@@ -186,68 +194,87 @@ function validateVersionThreeSemantics(config: Record<string, unknown>): void {
   };
   if (
     source.preprocessing.typography.output_sha256 !==
-    source.main_markdown_sha256
+      source.preprocessing.content_cleanup.input_sha256 ||
+    source.preprocessing.content_cleanup.output_sha256 !==
+      source.main_markdown_sha256
   ) {
-    semanticFailure("/source/preprocessing/typography/output_sha256");
+    semanticFailure("/source/preprocessing");
+  }
+  const blockIndexById = new Map<string, number>();
+  let previousStart = -1;
+  let previousEnd = Number.POSITIVE_INFINITY;
+  for (const [index, block] of source.blocks.entries()) {
+    if (
+      blockIndexById.has(block.block_id) ||
+      block.start_offset >= block.end_offset ||
+      block.start_offset < previousStart ||
+      (block.start_offset === previousStart && block.end_offset > previousEnd)
+    ) {
+      semanticFailure(`/source/blocks/${index}`);
+    }
+    blockIndexById.set(block.block_id, index);
+    previousStart = block.start_offset;
+    previousEnd = block.end_offset;
   }
 
-  const structure = config.structure as readonly {
-    readonly block_id: string;
-  }[];
-  const structureIndexes = new Map(
-    structure.map((node, index) => [node.block_id, index]),
-  );
-  const seenTargets = new Set<string>();
-  const regions = config.source_regions as readonly {
-    readonly entries: readonly {
-      readonly body_heading_block_id?: string;
-      readonly range: ByteRangeRecord;
-    }[];
-    readonly range: ByteRangeRecord;
-    readonly source_path: string;
-    readonly source_sha256: string;
-  }[];
-  let previousRegionEnd = -1;
-  let totalEntries = 0;
-  for (const [regionIndex, region] of regions.entries()) {
-    const regionPath = `/source_regions/${regionIndex}`;
-    requireIncreasingRange(region.range, `${regionPath}/range`);
+  const structure = config.structure as readonly StructureRecord[];
+  if (
+    source.blocks.filter((block) => block.kind === "heading").length !==
+    structure.length
+  ) {
+    semanticFailure("/structure");
+  }
+  const structureIds = new Set<string>();
+  const aliases = new Set<string>();
+  let previousStructureIndex = -1;
+  for (const [index, node] of structure.entries()) {
+    const blockIndex = blockIndexById.get(node.block_id);
+    const block =
+      blockIndex === undefined ? undefined : source.blocks[blockIndex];
     if (
-      region.range.start_byte < previousRegionEnd ||
-      region.source_path !== source.main_markdown ||
-      region.source_sha256 !== source.main_markdown_sha256
+      blockIndex === undefined ||
+      block?.kind !== "heading" ||
+      blockIndex <= previousStructureIndex ||
+      structureIds.has(node.block_id) ||
+      (node.alias !== undefined &&
+        (!node.starts_page || aliases.has(node.alias)))
     ) {
-      semanticFailure(regionPath);
+      semanticFailure(`/structure/${index}`);
     }
-    previousRegionEnd = region.range.end_byte;
-    let previousEntryEnd = region.range.start_byte;
-    let previousTargetIndex = -1;
-    totalEntries += region.entries.length;
-    if (totalEntries > 20_000) semanticFailure("/source_regions");
-    for (const [entryIndex, entry] of region.entries.entries()) {
-      const entryPath = `${regionPath}/entries/${entryIndex}`;
-      requireIncreasingRange(entry.range, `${entryPath}/range`);
-      if (
-        entry.range.start_byte < previousEntryEnd ||
-        entry.range.start_byte < region.range.start_byte ||
-        entry.range.end_byte > region.range.end_byte
-      ) {
-        semanticFailure(`${entryPath}/range`);
-      }
-      previousEntryEnd = entry.range.end_byte;
-      if (entry.body_heading_block_id) {
-        const targetIndex = structureIndexes.get(entry.body_heading_block_id);
-        if (
-          targetIndex === undefined ||
-          targetIndex <= previousTargetIndex ||
-          seenTargets.has(entry.body_heading_block_id)
-        ) {
-          semanticFailure(`${entryPath}/body_heading_block_id`);
-        }
-        previousTargetIndex = targetIndex;
-        seenTargets.add(entry.body_heading_block_id);
-      }
+    try {
+      parseHeadingMarkdown(node.title_markdown);
+    } catch {
+      semanticFailure(`/structure/${index}/title_markdown`);
     }
+    structureIds.add(node.block_id);
+    if (node.alias) aliases.add(node.alias);
+    previousStructureIndex = blockIndex;
+  }
+
+  const boundaries = config.boundaries as {
+    readonly appendix_start_block_id?: string;
+    readonly backmatter_start_block_id?: string;
+    readonly body_start_block_id: string;
+  };
+  const boundaryIds = [
+    boundaries.body_start_block_id,
+    boundaries.appendix_start_block_id,
+    boundaries.backmatter_start_block_id,
+  ].filter((value): value is string => value !== undefined);
+  const structureIndexById = new Map(
+    structure.map((node, index) => [node.block_id, index] as const),
+  );
+  const boundaryIndexes = boundaryIds.map((blockId) =>
+    structureIndexById.get(blockId),
+  );
+  if (
+    boundaryIndexes.some((index) => index === undefined) ||
+    boundaryIndexes.some(
+      (index, position) =>
+        position > 0 && Number(index) <= Number(boundaryIndexes[position - 1]),
+    )
+  ) {
+    semanticFailure("/boundaries");
   }
 }
 

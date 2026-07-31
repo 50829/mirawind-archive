@@ -17,7 +17,7 @@ export const compilerIdentity = Object.freeze({
   name: "mirawind-book-compiler" as const,
   renderer_version: "semantic-html-v6-katex-0.18.1",
   text_normalization_version: 2,
-  version: "compiler-v5",
+  version: "compiler-v6",
 });
 
 export interface ManifestSourceFile {
@@ -207,7 +207,7 @@ export function buildDocumentManifest(input: {
           },
         ]),
     ),
-    schema_version: 2,
+    schema_version: 3,
     source_files: [...input.sourceFiles].sort((left, right) =>
       Buffer.from(left.path).compare(Buffer.from(right.path)),
     ),
@@ -229,7 +229,7 @@ export function buildDocumentManifest(input: {
           number: heading.number,
           page_id: pageId,
           role: heading.role,
-          title: heading.display_title,
+          title: heading.title,
         };
       }),
     version_id: input.versionId,

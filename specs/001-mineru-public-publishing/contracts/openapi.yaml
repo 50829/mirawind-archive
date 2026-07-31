@@ -652,7 +652,7 @@ paths:
                 expected_config_revision: { type: integer, minimum: 1 }
                 profile:
                   type: string
-                  enum: [verbatim-v1, zh-smart-v1]
+                  enum: [verbatim-v1, zh-smart-v2]
       responses:
         "202":
           description: Source reprocessing job queued

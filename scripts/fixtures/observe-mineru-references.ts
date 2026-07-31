@@ -18,7 +18,7 @@ import {
   supplementalPdfPageIndices,
   type PrintedContentsCandidate,
 } from "../../src/modules/publishing/core/preparation/printed-contents.js";
-import { applySourceRegions } from "../../src/modules/publishing/core/preparation/source-regions.js";
+import { prepareActiveDocument } from "../../src/modules/publishing/core/preparation/prepared-document.js";
 import { SourceTextIndex } from "../../src/modules/publishing/core/preparation/source-text-index.js";
 import {
   proposeDocumentStructure,
@@ -537,26 +537,33 @@ function rawHeadingAccounting(input: {
 }): readonly ReferenceHeadingAccounting[] {
   const markdown = input.pack.markdown_documents[0];
   if (!markdown) throw new Error("OBSERVED_REFERENCE_MARKDOWN_MISSING");
+  const proposal = proposeDocumentStructure(input.activeDocument, {
+    printedEntries: input.projections.flatMap((projection) =>
+      projection.candidate.canonical
+        ? projection.candidate.logicalEntries.map((entry) => ({
+            ...(entry.bodyHeadingBlockId
+              ? { bodyHeadingBlockId: entry.bodyHeadingBlockId }
+              : {}),
+            referenceLevel: entry.referenceLevel,
+            sourceTitle: entry.sourceTitle,
+          }))
+        : [],
+    ),
+  });
   const activeByBlock = new Map(
-    proposeDocumentStructure(input.activeDocument, {
-      printedEntries: input.projections.flatMap((projection) =>
-        projection.candidate.canonical
-          ? projection.candidate.logicalEntries.map((entry) => ({
-              ...(entry.bodyHeadingBlockId
-                ? { bodyHeadingBlockId: entry.bodyHeadingBlockId }
-                : {}),
-              referenceLevel: entry.referenceLevel,
-              sourceTitle: entry.sourceTitle,
-            }))
-          : [],
-      ),
-      sourceRegions: input.projections.flatMap((projection) =>
-        projection.candidate.proposedRegion
-          ? [projection.candidate.proposedRegion]
-          : [],
-      ),
-    }).nodes.map((node) => [node.block_id, node] as const),
+    proposal.nodes.map((node) => [node.block_id, node] as const),
   );
+  const activeIndexByBlock = new Map(
+    proposal.nodes.map((node, index) => [node.block_id, index] as const),
+  );
+  const bodyIndex =
+    activeIndexByBlock.get(proposal.boundaries.body_start_block_id) ?? 0;
+  const appendixIndex = proposal.boundaries.appendix_start_block_id
+    ? activeIndexByBlock.get(proposal.boundaries.appendix_start_block_id)
+    : undefined;
+  const backmatterIndex = proposal.boundaries.backmatter_start_block_id
+    ? activeIndexByBlock.get(proposal.boundaries.backmatter_start_block_id)
+    : undefined;
   const blockByRoot = new Map<string, string>();
   const roots = input.originalDocument.root.children ?? [];
   for (const heading of input.originalDocument.headings) {
@@ -565,7 +572,6 @@ function rawHeadingAccounting(input: {
     );
     if (rootIndex >= 0) blockByRoot.set(String(rootIndex), heading.blockId);
   }
-  let currentRole: ContentRole = "body";
   return Object.freeze(
     markdown.headings.map((heading) => {
       const projectionIndex = input.projections.findIndex(
@@ -591,12 +597,23 @@ function rawHeadingAccounting(input: {
       const blockId = blockByRoot.get(String(heading.root_index));
       const node = blockId ? activeByBlock.get(blockId) : undefined;
       if (!node) throw new Error("OBSERVED_REFERENCE_STRUCTURE_NODE_MISSING");
-      if (node.role) currentRole = node.role;
+      const activeIndex = activeIndexByBlock.get(node.block_id);
+      if (activeIndex === undefined) {
+        throw new Error("OBSERVED_REFERENCE_STRUCTURE_NODE_MISSING");
+      }
+      const currentRole: ContentRole =
+        backmatterIndex !== undefined && activeIndex >= backmatterIndex
+          ? "backmatter"
+          : appendixIndex !== undefined && activeIndex >= appendixIndex
+            ? "appendix"
+            : activeIndex < bodyIndex
+              ? "frontmatter"
+              : "body";
       return Object.freeze({
         anchor,
         disposition: Object.freeze({
           display_level: node.display_level,
-          display_title: node.display_title ?? null,
+          display_title: null,
           include_in_toc: node.include_in_toc,
           kind: "expected_body" as const,
           role: currentRole,
@@ -714,7 +731,7 @@ export async function observeRealMineruFixture(input: {
   if (sha256(rawSource) !== markdown.input_sha256) {
     throw new Error("OBSERVED_REFERENCE_MARKDOWN_HASH_MISMATCH");
   }
-  const typography = preprocessMarkdownTypography(rawSource, "zh-smart-v1");
+  const typography = preprocessMarkdownTypography(rawSource, "zh-smart-v2");
   const originalDocument = normalizeDocumentBlocks(
     parseMarkdownDocument(typography.markdown),
   );
@@ -790,12 +807,12 @@ export async function observeRealMineruFixture(input: {
       ? [projection.candidate.proposedRegion]
       : [],
   );
-  const activeDocument = applySourceRegions({
+  const activeDocument = prepareActiveDocument({
     document: originalDocument,
     mainMarkdownPath: basename(markdown.relative_path),
     mainMarkdownSha256: typography.provenance.output_sha256,
     regions: sourceRegions,
-  }).document;
+  }).active;
   const regions = regionsFor({ pack: input.pack, projections });
   return Object.freeze({
     archive_sha256: input.pack.archive_sha256,

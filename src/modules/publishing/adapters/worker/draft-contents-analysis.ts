@@ -12,7 +12,11 @@ import {
   shouldUseNativePdfDetection,
   supplementalPdfPageIndices,
 } from "@/modules/publishing/core/preparation/printed-contents";
-import { applySourceRegions } from "@/modules/publishing/core/preparation/source-regions";
+import {
+  prepareActiveDocument,
+  type PreparedDocument,
+} from "@/modules/publishing/core/preparation/prepared-document";
+import { createSourceBlockRecords } from "@/modules/publishing/core/preparation/source-block-records";
 import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
 import type {
   PreparedDraftArtifact,
@@ -26,14 +30,18 @@ import {
 type NormalizedDocument = ReturnType<typeof normalizeDocumentBlocks>;
 type ContentsResult = Pick<
   PreparedDraftArtifact,
+  | "analysisSourceSha256"
+  | "boundaries"
+  | "contentCleanup"
   | "layoutDiagnostics"
   | "layoutSource"
+  | "metadata"
   | "pdfDiagnostics"
   | "printedContents"
+  | "sourceBlocks"
   | "sourceRegions"
   | "structure"
-  | "title"
->;
+> & { readonly preparedDocument: PreparedDocument };
 
 export async function analyzeDraftContents(input: {
   readonly markdownPath: string;
@@ -157,19 +165,19 @@ export async function analyzeDraftContents(input: {
     ),
     printed_regions: printedContents.candidates.length,
   });
-  const { activeDocument, sourceRegions } = await profilePipelineStage(
+  const { preparedDocument, sourceRegions } = await profilePipelineStage(
     "source_regions",
     () => {
       const regions = printedContents.candidates.flatMap((candidate) =>
         candidate.proposedRegion ? [candidate.proposedRegion] : [],
       );
       return {
-        activeDocument: applySourceRegions({
+        preparedDocument: prepareActiveDocument({
           document: input.normalized,
           mainMarkdownPath: basename(input.selectedCandidatePath),
           mainMarkdownSha256: input.sourceSha256,
           regions,
-        }).document,
+        }),
         sourceRegions: regions,
       };
     },
@@ -188,11 +196,15 @@ export async function analyzeDraftContents(input: {
       : [],
   );
   const proposal = await profilePipelineStage("structure_proposal", () =>
-    proposeDocumentStructure(activeDocument, {
+    proposeDocumentStructure(preparedDocument.active, {
       printedEntries,
     }),
   );
+  const sourceBlocks = createSourceBlockRecords(preparedDocument.active);
   return Object.freeze({
+    analysisSourceSha256: input.sourceSha256,
+    boundaries: proposal.boundaries,
+    contentCleanup: preparedDocument.cleanup,
     layoutDiagnostics: layoutEvidence.diagnostics,
     layoutSource: effectiveLayoutEvidence.source,
     pdfDiagnostics,
@@ -215,11 +227,15 @@ export async function analyzeDraftContents(input: {
         }),
       ),
     ),
+    metadata: Object.freeze({
+      title:
+        preparedDocument.active.headings[0]?.sourceTitle.trim().slice(0, 500) ||
+        basename(input.selectedCandidatePath, ".md").slice(0, 500) ||
+        "Untitled book",
+    }),
+    preparedDocument,
+    sourceBlocks: Object.freeze(sourceBlocks),
     sourceRegions,
     structure: proposal.nodes,
-    title:
-      activeDocument.headings[0]?.sourceTitle.trim().slice(0, 500) ||
-      basename(input.selectedCandidatePath, ".md").slice(0, 500) ||
-      "Untitled book",
   });
 }

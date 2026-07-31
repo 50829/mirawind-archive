@@ -46,6 +46,8 @@ export const pipelineProfileMetricNames = [
   "root_blocks",
   "headings",
   "protected_nodes",
+  "cleanup_printed_toc_regions_removed",
+  "cleanup_helper_blocks_removed",
   "layout_records",
   "printed_regions",
   "printed_entries",

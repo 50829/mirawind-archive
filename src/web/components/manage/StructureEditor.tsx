@@ -30,7 +30,6 @@ import {
 import {
   changeDisplayLevel,
   mergeAcceptedNodes,
-  type ContentRole,
   type EditableStructureNode as StructureNode,
 } from "@/web/components/manage/structure-editor-state";
 
@@ -42,26 +41,16 @@ interface HeadingContext {
 }
 
 interface TypographySummary {
-  readonly profile: "verbatim-v1" | "zh-smart-v1";
+  readonly profile: "verbatim-v1" | "zh-smart-v2";
   readonly protected_nodes: number;
   readonly punctuation_converted: number;
   readonly spaces_normalized: number;
 }
 
-const roleLabels: Readonly<Record<ContentRole, string>> = {
-  appendix: "附录",
-  backmatter: "后置内容",
-  body: "正文",
-  frontmatter: "前置内容",
-};
-
-function withoutOptional(
-  node: StructureNode,
-  key: "display_title" | "role",
-): StructureNode {
-  return Object.fromEntries(
-    Object.entries(node).filter(([name]) => name !== key),
-  ) as unknown as StructureNode;
+interface ContentBoundaries {
+  readonly appendix_start_block_id?: string;
+  readonly backmatter_start_block_id?: string;
+  readonly body_start_block_id: string;
 }
 
 function withoutCollapsedDescendants(
@@ -97,6 +86,7 @@ export const StructureEditor = forwardRef<
   StructureEditorHandle,
   {
     readonly bookId: number;
+    readonly boundaries: ContentBoundaries;
     readonly etag: string;
     readonly focusedBlockId?: string | null;
     readonly headings: readonly HeadingContext[];
@@ -110,6 +100,7 @@ export const StructureEditor = forwardRef<
 >(function StructureEditor(props, ref) {
   const initialNodes = props.structure;
   const [nodes, setNodes] = useState(initialNodes);
+  const [boundaries, setBoundaries] = useState(props.boundaries);
   const [query, setQuery] = useState("");
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(
     new Set(),
@@ -123,6 +114,7 @@ export const StructureEditor = forwardRef<
   const onStateChange = props.onStateChange;
   const nodesRef = useRef(nodes);
   const acceptedSnapshot = useRef<{
+    readonly boundaries: ContentBoundaries;
     readonly nodes: readonly StructureNode[];
   } | null>(null);
   const selectedDialog = useRef<HTMLDialogElement>(null);
@@ -141,7 +133,7 @@ export const StructureEditor = forwardRef<
     return nodes.filter((node) => {
       const heading = headingById.get(node.block_id);
       return [
-        node.display_title,
+        node.title_markdown,
         heading?.source_title,
         heading?.title,
         node.block_id,
@@ -186,12 +178,18 @@ export const StructureEditor = forwardRef<
       setNodes((current) =>
         mergeAcceptedNodes(props.structure, accepted.nodes, current),
       );
+      setBoundaries((current) =>
+        JSON.stringify(current) === JSON.stringify(accepted.boundaries)
+          ? props.boundaries
+          : current,
+      );
     } else {
       setNodes(props.structure);
+      setBoundaries(props.boundaries);
     }
     acceptedSnapshot.current = null;
     lastRevision.current = props.revision;
-  }, [props.revision, props.structure]);
+  }, [props.boundaries, props.revision, props.structure]);
 
   useEffect(() => {
     if (
@@ -211,10 +209,12 @@ export const StructureEditor = forwardRef<
     );
   }
 
-  function updateDisplayTitle(value: string) {
+  function updateOptionalField(key: "alias" | "source_number", value: string) {
     if (!selected) return;
-    const base = withoutOptional(selected, "display_title");
-    updateSelected(value ? { ...base, display_title: value } : base);
+    const next = { ...selected };
+    if (value) next[key] = value;
+    else Reflect.deleteProperty(next, key);
+    updateSelected(next);
   }
 
   function renderSelectedNode(titleId: string) {
@@ -234,17 +234,14 @@ export const StructureEditor = forwardRef<
               {selectedHeading ? ` · 源 H${selectedHeading.source_level}` : ""}
             </p>
             <label className={manageFieldLabel}>
-              显示标题
+              标题
               <input
                 className={manageField}
-                maxLength={500}
+                maxLength={2000}
                 onChange={(event) =>
-                  updateDisplayTitle(event.currentTarget.value)
+                  updateSelected({ title_markdown: event.currentTarget.value })
                 }
-                placeholder={
-                  selectedHeading?.source_title ?? selectedHeading?.title ?? ""
-                }
-                value={selected.display_title ?? ""}
+                value={selected.title_markdown}
               />
             </label>
             <div className="structure-fields grid grid-cols-2 gap-3">
@@ -271,26 +268,21 @@ export const StructureEditor = forwardRef<
                   ))}
                 </select>
               </label>
-              {selected.display_level === 1 && (
-                <label className={manageFieldLabel}>
-                  内容角色
-                  <select
-                    className={manageField}
-                    onChange={(event) =>
-                      updateSelected({
-                        role: event.currentTarget.value as ContentRole,
-                      })
-                    }
-                    value={selected.role ?? "body"}
-                  >
-                    {Object.entries(roleLabels).map(([role, label]) => (
-                      <option key={role} value={role}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <label className={manageFieldLabel}>
+                原书编号
+                <input
+                  className={manageField}
+                  maxLength={100}
+                  onChange={(event) =>
+                    updateOptionalField(
+                      "source_number",
+                      event.currentTarget.value,
+                    )
+                  }
+                  placeholder="无编号"
+                  value={selected.source_number ?? ""}
+                />
+              </label>
             </div>
             <div className="structure-checks grid grid-cols-2 gap-3">
               <label className="flex items-center gap-2">
@@ -320,6 +312,51 @@ export const StructureEditor = forwardRef<
                 从此标题开始新页面
               </label>
             </div>
+            <fieldset className="mt-4 border-t border-stone-200 pt-3">
+              <legend className="font-semibold">内容范围起点</legend>
+              <div className="mt-2 grid gap-2">
+                {(
+                  [
+                    ["body_start_block_id", "正文"],
+                    ["appendix_start_block_id", "附录"],
+                    ["backmatter_start_block_id", "后置内容"],
+                  ] as const
+                ).map(([key, label]) => {
+                  const active = boundaries[key] === selected.block_id;
+                  return (
+                    <div
+                      className="flex min-h-11 items-center justify-between gap-3"
+                      key={key}
+                    >
+                      <span>{label}</span>
+                      <button
+                        aria-pressed={active}
+                        className={manageQuietButton}
+                        disabled={key === "body_start_block_id" && active}
+                        onClick={() =>
+                          setBoundaries((current) => {
+                            const next: Record<string, string> = { ...current };
+                            if (active && key !== "body_start_block_id") {
+                              Reflect.deleteProperty(next, key);
+                            } else {
+                              next[key] = selected.block_id;
+                            }
+                            return next as unknown as ContentBoundaries;
+                          })
+                        }
+                        type="button"
+                      >
+                        {active
+                          ? key === "body_start_block_id"
+                            ? "当前起点"
+                            : "取消起点"
+                          : "设为起点"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </fieldset>
           </>
         )}
       </>
@@ -370,15 +407,18 @@ export const StructureEditor = forwardRef<
       "display_level",
       "include_in_toc",
       "starts_page",
+      "title_markdown",
     ] as const) {
       if (node[key] !== initial[key]) change[key] = node[key];
     }
-    for (const key of ["display_title", "role"] as const) {
+    for (const key of ["alias", "source_number"] as const) {
       if (node[key] !== initial[key]) change[key] = node[key] ?? null;
     }
     return [change];
   });
-  const dirty = dirtyChanges.length > 0;
+  const boundariesDirty =
+    JSON.stringify(boundaries) !== JSON.stringify(props.boundaries);
+  const dirty = dirtyChanges.length > 0 || boundariesDirty;
 
   async function save() {
     if (!dirty || saving || props.saveDisabled) return;
@@ -389,6 +429,7 @@ export const StructureEditor = forwardRef<
     try {
       const response = await fetch(`/api/manage/books/${props.bookId}/draft`, {
         body: JSON.stringify({
+          ...(boundariesDirty ? { boundaries } : {}),
           changes: dirtyChanges,
         }),
         cache: "no-store",
@@ -405,10 +446,11 @@ export const StructureEditor = forwardRef<
         return;
       }
       if (!response.ok) {
-        setStatus("修改未保存，请检查层级、角色和诊断信息。");
+        setStatus("修改未保存，请检查标题、层级、内容范围和诊断信息。");
         return;
       }
       acceptedSnapshot.current = {
+        boundaries,
         nodes: submittedNodes,
       };
       await props.onSaved();
@@ -507,9 +549,9 @@ export const StructureEditor = forwardRef<
                     }}
                     type="button"
                   >
-                    {node.display_title ??
-                      heading?.source_title ??
-                      heading?.title ??
+                    {node.title_markdown ||
+                      heading?.source_title ||
+                      heading?.title ||
                       node.block_id}
                   </button>
                 </div>

@@ -124,7 +124,7 @@ describe("guarded candidate publication compare-and-swap", () => {
         bookId: fixture.book.id,
         nowMs: 12,
         revision: 2,
-        schemaVersion: 3,
+        schemaVersion: 4,
         sourceId: publicationTestSourceId,
         title: "New draft",
         yamlRelativePath: "books/1/draft/configs/2/book.yaml",

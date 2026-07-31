@@ -45,6 +45,20 @@ function documentFor(source: string) {
   });
 }
 
+function printedStructureEntries(detection: PrintedContentsDetection) {
+  return detection.candidates.flatMap((candidate) =>
+    candidate.canonical
+      ? candidate.logicalEntries.map((entry) => ({
+          ...(entry.bodyHeadingBlockId
+            ? { bodyHeadingBlockId: entry.bodyHeadingBlockId }
+            : {}),
+          referenceLevel: entry.referenceLevel,
+          sourceTitle: entry.sourceTitle,
+        }))
+      : [],
+  );
+}
+
 describe("printed contents detection", () => {
   it("uses native PDF order only for a reliable sidecar inversion", () => {
     const records = [
@@ -1685,7 +1699,7 @@ describe("printed contents detection", () => {
       ),
     ).toBe(false);
     const proposal = proposeDocumentStructure(activeDocument, {
-      sourceRegions: [region],
+      printedEntries: printedStructureEntries(result),
     });
     const levels = new Map(
       proposal.nodes.map((node) => [node.block_id, node.display_level]),
@@ -3917,7 +3931,7 @@ describe("printed contents detection", () => {
     ).toEqual(body);
     expect(
       proposeDocumentStructure(activeDocument, {
-        sourceRegions: acceptedRegions,
+        printedEntries: printedStructureEntries(result),
       }).nodes.map((node) => node.display_level),
     ).toEqual([1, 1, 1, 1]);
     expect(

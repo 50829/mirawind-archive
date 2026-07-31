@@ -399,7 +399,7 @@ export async function assembleCandidate(
         })),
         manifest_sha256: sha256(manifestJson),
         predecessor_version_id: input.predecessorVersionId,
-        schema_version: 2,
+        schema_version: 3,
         source_id: input.sourceId,
         version_id: input.versionId,
       };

@@ -233,9 +233,9 @@ describe("prepare_draft candidate handoff", () => {
             kind: "printed_toc",
           },
         ],
-        title: "第 1 章 绪论",
+        metadata: { title: "第 1 章 绪论" },
         typography: expect.objectContaining({
-          profile: "zh-smart-v1",
+          profile: "zh-smart-v2",
         }),
       });
       expect(prepared.artifact.structure).toHaveLength(6);
@@ -268,26 +268,20 @@ describe("prepare_draft candidate handoff", () => {
 
       expect(acceptedMarkdown).toContain("中文与 English 排版");
       expect(parsedConfig).toMatchObject({
-        schema_version: 3,
+        metadata: { title: "第 1 章 绪论" },
+        schema_version: 4,
         source: {
           main_markdown_sha256: finalized.snapshot.source.mainMarkdownSha256,
           preprocessing: {
-            typography: {
+            content_cleanup: {
               output_sha256: finalized.snapshot.source.mainMarkdownSha256,
-              profile: "zh-smart-v1",
+              printed_toc_regions_removed: 1,
+            },
+            typography: {
+              profile: "zh-smart-v2",
             },
           },
         },
-        source_regions: [
-          {
-            applied: true,
-            disposition: "reference_only",
-            kind: "printed_toc",
-            source_path: finalized.snapshot.source.mainMarkdownPath,
-            source_sha256: finalized.snapshot.source.mainMarkdownSha256,
-          },
-        ],
-        title: "第 1 章 绪论",
       });
       const analysisPath = resolve(
         dataRoot.layout.bookDirectory,
@@ -558,21 +552,20 @@ describe("prepare_draft candidate handoff", () => {
 
       expect(parsedConfig).toMatchObject({
         book_id: book.id,
+        metadata: { title: "Prepared Book" },
         revision: 1,
-        schema_version: 3,
+        schema_version: 4,
         source: expect.objectContaining({
-          preprocessing: {
+          preprocessing: expect.objectContaining({
             typography: expect.objectContaining({
-              profile: "zh-smart-v1",
+              profile: "zh-smart-v2",
             }),
-          },
+          }),
         }),
-        source_regions: [],
         structure: [
           expect.objectContaining({
             display_level: 1,
             include_in_toc: true,
-            role: "body",
             starts_page: true,
           }),
           expect.objectContaining({
@@ -581,7 +574,6 @@ describe("prepare_draft candidate handoff", () => {
             starts_page: false,
           }),
         ],
-        title: "Prepared Book",
       });
       expect(imports.require(imported.id)).toMatchObject({
         bookId: book.id,

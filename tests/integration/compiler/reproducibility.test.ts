@@ -11,6 +11,7 @@ import {
 } from "@/modules/publishing/core/publication/compiled-book";
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { createBookConfigV4 } from "../../helpers/book-config";
 
 describe("same-version derived-data reproducibility", () => {
   it("produces identical page and search rows from unchanged normalized content", () => {
@@ -22,41 +23,12 @@ describe("same-version derived-data reproducibility", () => {
         idFactory: () =>
           `blk_reproducibility_${String(++ordinal).padStart(8, "0")}`,
       });
-      const config = {
-        book_id: 1,
-        publishing: {
-          code: { line_numbers: false },
-          numbering: { mode: "normalized" },
-        },
-        revision: 1,
-        schema_version: 3,
-        source: {
-          main_markdown: "book.md",
-          main_markdown_sha256: sourceSha256,
-          original_files: [],
-          preprocessing: {
-            typography: {
-              input_sha256: sourceSha256,
-              output_sha256: sourceSha256,
-              profile: "verbatim-v1",
-              protected_nodes: 0,
-              punctuation_converted: 0,
-              spaces_normalized: 0,
-            },
-          },
-        },
-        source_regions: [],
-        structure: [
-          {
-            block_id: document.headings[0]?.blockId,
-            display_level: 1,
-            include_in_toc: true,
-            role: "body",
-            starts_page: true,
-          },
-        ],
+      const config = createBookConfigV4({
+        document,
+        numbering: "generated",
+        sourceSha256,
         title: "Café",
-      };
+      });
       const book = compileBook({
         config,
         configSha256: createHash("sha256")

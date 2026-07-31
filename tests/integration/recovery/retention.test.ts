@@ -62,8 +62,8 @@ describe("published version and orphan retention", () => {
            renderer_version, preview_version, reader_version,
            blocking_diagnostic_count, complete_at, published_at, verified_at,
            created_by_job_id, reclaimed_at
-         ) VALUES (?, ?, ?, 1, ?, 'superseded', ?, 2, ?, ?, ?, 'compiler-v5',
-                   'semantic-html-v6-katex-0.18.1', 'draft-preview-v5',
+         ) VALUES (?, ?, ?, 1, ?, 'superseded', ?, 3, ?, ?, ?, 'compiler-v6',
+                   'semantic-html-v6-katex-0.18.1', 'draft-preview-v6',
                    'mirawind-reader-v3-tailwind-4.3.3', 0, ?, ?, ?, ?, NULL)`,
       );
       insert.run(

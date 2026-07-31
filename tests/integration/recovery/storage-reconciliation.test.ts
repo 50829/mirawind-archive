@@ -97,7 +97,7 @@ describe("publishing storage reconciliation", () => {
         bookId: book.id,
         nowMs: 4,
         revision: 1,
-        schemaVersion: 3,
+        schemaVersion: 4,
         sourceId,
         title: "Book",
         yamlRelativePath: knownConfig,

@@ -3,10 +3,16 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import { compileBook } from "@/modules/publishing/core/publication/compile-book";
+import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import {
   documentForPage,
   pageBlockIds,
 } from "@/modules/publishing/core/publication/compiled-book";
+import {
+  createBookConfigV4,
+  structureForDocument,
+} from "../../helpers/book-config";
 
 function fixture() {
   const markdown = [
@@ -27,51 +33,27 @@ function fixture() {
     "Reference.",
   ].join("\n");
   const sourceSha256 = createHash("sha256").update(markdown).digest("hex");
-  const headingIds = [
-    "blk_compiled_book_00000001",
-    "blk_compiled_book_00000002",
-    "blk_compiled_book_00000003",
-    "blk_compiled_book_00000004",
-  ];
-  const config = {
-    book_id: 1,
-    publishing: {
-      code: { line_numbers: false },
-      numbering: { mode: "normalized" },
+  let blockOrdinal = 0;
+  const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown), {
+    idFactory: () =>
+      `blk_compiled_book_${String(++blockOrdinal).padStart(8, "0")}`,
+  });
+  const structure = structureForDocument(document).map((node, index) => ({
+    ...node,
+    display_level: index === 2 ? 2 : 1,
+    starts_page: index !== 2,
+  }));
+  const config = createBookConfigV4({
+    boundaries: {
+      appendix_start_block_id: structure[3]?.block_id ?? "",
+      body_start_block_id: structure[1]?.block_id ?? "",
     },
-    revision: 1,
-    schema_version: 3,
-    source: {
-      main_markdown: "book.md",
-      main_markdown_sha256: sourceSha256,
-      original_files: [],
-      preprocessing: {
-        typography: {
-          input_sha256: sourceSha256,
-          output_sha256: sourceSha256,
-          profile: "verbatim-v1",
-          protected_nodes: 0,
-          punctuation_converted: 0,
-          spaces_normalized: 0,
-        },
-      },
-    },
-    source_regions: [],
-    structure: headingIds.map((block_id, index) => ({
-      block_id,
-      display_level: index === 2 ? 2 : 1,
-      include_in_toc: true,
-      ...(index === 0
-        ? { role: "frontmatter" }
-        : index === 3
-          ? { role: "appendix" }
-          : index === 1
-            ? { role: "body" }
-            : {}),
-      starts_page: index !== 2,
-    })),
+    document,
+    numbering: "generated",
+    sourceSha256,
+    structure,
     title: "Compiled Book",
-  };
+  });
   return compileBook({
     config,
     configSha256: "a".repeat(64),
