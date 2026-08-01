@@ -170,8 +170,7 @@ function representativeSnapshot(
     imports: count("imports"),
     jobs: count("jobs"),
     original_files: count("original_files"),
-    public_books: pointers.filter((book) => book.access === "public")
-      .length,
+    public_books: pointers.filter((book) => book.access === "public").length,
     search_fts_rows: count("search_fts"),
     search_short_rows: count("search_short_fields"),
     source_snapshots: count("source_snapshots"),
@@ -389,9 +388,7 @@ export async function runMigrationRecoveryAudit(input: AuditArguments) {
         nowMs: Date.now(),
       });
       const bookAfter = recoveryDatabase
-        .prepare(
-          "SELECT current_version_id, access FROM books WHERE id = ?",
-        )
+        .prepare("SELECT current_version_id, access FROM books WHERE id = ?")
         .get(current.book_id) as {
         current_version_id: string | null;
         access: string;

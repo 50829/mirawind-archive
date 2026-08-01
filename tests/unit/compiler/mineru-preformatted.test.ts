@@ -38,4 +38,27 @@ describe("MinerU preformatted blocks", () => {
       '<div class="mineru-algorithm">\nconsole output\n# real heading';
     expect(normalizeMineruPreformattedMarkdown(source)).toBe(source);
   });
+
+  it("restores adjacent function calls misclassified as a heading", () => {
+    const source = [
+      "Run the following code.",
+      "",
+      "## library ( car )",
+      "",
+      'linearHypothesis ( lm\\_msoft , c (" dprod =0") )',
+      "",
+      "The output follows.",
+    ].join("\n");
+
+    const markdown = normalizeMineruPreformattedMarkdown(source);
+    const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown));
+
+    expect(markdown).toContain(
+      '```r\nlibrary ( car )\nlinearHypothesis ( lm_msoft , c (" dprod =0") )\n```',
+    );
+    expect(document.headings).toHaveLength(0);
+    expect(document.root.children?.some((node) => node.type === "code")).toBe(
+      true,
+    );
+  });
 });

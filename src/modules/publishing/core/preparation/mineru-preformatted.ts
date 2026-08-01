@@ -55,8 +55,60 @@ function codeFenceFor(content: string): string {
 }
 
 const closingDiv = /^\s*<\/div>\s*$/iu;
+const functionCallHeading =
+  /^\s{0,3}#{1,6}[ \t]+(?<code>[a-z][A-Za-z0-9_.]*\s*\(.*\)\s*;?)[ \t]*$/u;
+const functionCallLine = /^\s*[a-z][A-Za-z0-9_.]*\s*\(.*\)\s*;?\s*$/u;
 
-export function normalizeMineruPreformattedMarkdown(source: string): string {
+function codeFromMarkdown(value: string): string {
+  return value.trim().replace(/\\_/gu, "_");
+}
+
+function normalizeMineruCommandBlocks(source: string): string {
+  const output: string[] = [];
+  let cursor = 0;
+  let retainedStart = 0;
+  while (cursor < source.length) {
+    const heading = sourceLineAt(source, cursor);
+    if (!heading) break;
+    cursor = heading.end;
+    const match = functionCallHeading.exec(heading.content);
+    if (!match?.groups?.code) continue;
+
+    let command: SourceLine | undefined;
+    let commandCursor = heading.end;
+    while (commandCursor < source.length) {
+      const line = sourceLineAt(source, commandCursor);
+      if (!line) break;
+      commandCursor = line.end;
+      if (!line.content.trim()) continue;
+      if (functionCallLine.test(line.content)) command = line;
+      break;
+    }
+    if (!command) continue;
+
+    const endOfLine = heading.endOfLine || command.endOfLine || "\n";
+    const content = [
+      codeFromMarkdown(match.groups.code),
+      codeFromMarkdown(command.content),
+    ].join(endOfLine);
+    const fence = codeFenceFor(content);
+    output.push(
+      source.slice(retainedStart, heading.start),
+      `${fence}r${endOfLine}`,
+      content,
+      endOfLine,
+      fence,
+      command.endOfLine,
+    );
+    retainedStart = command.end;
+    cursor = command.end;
+  }
+  if (output.length === 0) return source;
+  output.push(source.slice(retainedStart));
+  return output.join("");
+}
+
+function normalizeMineruAlgorithmBlocks(source: string): string {
   const output: string[] = [];
   let cursor = 0;
   let retainedStart = 0;
@@ -96,4 +148,8 @@ export function normalizeMineruPreformattedMarkdown(source: string): string {
   if (output.length === 0) return source;
   output.push(source.slice(retainedStart));
   return output.join("");
+}
+
+export function normalizeMineruPreformattedMarkdown(source: string): string {
+  return normalizeMineruAlgorithmBlocks(normalizeMineruCommandBlocks(source));
 }

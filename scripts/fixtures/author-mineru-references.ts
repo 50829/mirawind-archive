@@ -737,16 +737,6 @@ function matchEntries(
   );
 }
 
-function roleFor(
-  kind: ReferenceSemanticKind,
-  current: "appendix" | "backmatter" | "body" | "frontmatter",
-) {
-  if (kind === "appendix") return "appendix" as const;
-  if (kind === "backmatter") return "backmatter" as const;
-  if (kind === "frontmatter") return "frontmatter" as const;
-  return current === "frontmatter" ? ("body" as const) : current;
-}
-
 function headingAccounting(input: {
   readonly headings: readonly HeadingText[];
   readonly regions: MineruReferenceV2["printed_contents"]["regions"];
@@ -770,6 +760,62 @@ function headingAccounting(input: {
       ),
     ),
   );
+  const activeHeadings = input.headings.filter(
+    (heading) =>
+      !exclusions.some(
+        (region) =>
+          heading.rootIndex >= region.start && heading.rootIndex <= region.end,
+      ),
+  );
+  let bodyStartIndex = activeHeadings.findIndex((heading, index) => {
+    const matchedEntry = matched.get(
+      `${heading.anchor.root_index}:${heading.anchor.sha256}`,
+    );
+    if (
+      matchedEntry &&
+      !["appendix", "backmatter", "frontmatter"].includes(matchedEntry.kind)
+    ) {
+      return true;
+    }
+    const numbered = numberedKind(heading.text);
+    if (numbered && numbered.kind !== "appendix") return true;
+    const nextHeading = activeHeadings[index + 1];
+    return Boolean(
+      /^\d{1,3}$/u.test(normalize(heading.text)) &&
+      nextHeading?.rootIndex === heading.rootIndex + 1 &&
+      /^\p{Script=Han}/u.test(normalize(nextHeading.text)),
+    );
+  });
+  if (bodyStartIndex > 0) {
+    const heading = activeHeadings[bodyStartIndex];
+    const previous = activeHeadings[bodyStartIndex - 1];
+    const matchedEntry = heading
+      ? matched.get(`${heading.anchor.root_index}:${heading.anchor.sha256}`)
+      : undefined;
+    if (
+      heading &&
+      previous &&
+      matchedEntry?.kind === "part" &&
+      heading.rootIndex === previous.rootIndex + 1 &&
+      purePartLabel.test(normalize(previous.text))
+    ) {
+      bodyStartIndex -= 1;
+    }
+  }
+  if (bodyStartIndex < 0) {
+    const lastFrontmatterIndex = activeHeadings.findLastIndex((heading) =>
+      frontmatter.test(normalize(heading.text)),
+    );
+    bodyStartIndex =
+      lastFrontmatterIndex >= 0
+        ? lastFrontmatterIndex + 1 < activeHeadings.length
+          ? lastFrontmatterIndex + 1
+          : -1
+        : activeHeadings.length > 0
+          ? 0
+          : -1;
+  }
+  const bodyStartRootIndex = activeHeadings[bodyStartIndex]?.rootIndex;
   let insidePart = false;
   let currentRole: "appendix" | "backmatter" | "body" | "frontmatter" =
     "frontmatter";
@@ -849,18 +895,20 @@ function headingAccounting(input: {
         insidePart = false;
         firstChapterInPart = false;
       }
-      if (kind === "part" || kind === "chapter") {
-        currentRole = "body";
-      } else if (
-        /^\d{1,3}$/u.test(normalize(heading.text)) &&
-        input.headings[index + 1]?.rootIndex === heading.rootIndex + 1 &&
-        /^\p{Script=Han}/u.test(
-          normalize(input.headings[index + 1]?.text ?? ""),
-        )
+      if (
+        currentRole === "frontmatter" &&
+        bodyStartRootIndex !== undefined &&
+        heading.rootIndex >= bodyStartRootIndex
       ) {
         currentRole = "body";
-      } else if (level === 1) {
-        currentRole = roleFor(kind, currentRole);
+      }
+      if (currentRole === "body" && kind === "appendix") {
+        currentRole = "appendix";
+      } else if (
+        (currentRole === "body" || currentRole === "appendix") &&
+        kind === "backmatter"
+      ) {
+        currentRole = "backmatter";
       }
       const include = Boolean(
         !detachedPartLabel &&
@@ -887,7 +935,6 @@ function headingAccounting(input: {
           !continuesMajorGroup &&
           !(kind === "chapter" && insidePart && firstChapterInPart));
       if (kind === "chapter" && insidePart) firstChapterInPart = false;
-      if (detachedPartLabel) currentRole = "body";
       majorGroupLastRootIndex =
         major || appendixMarkerContinuation ? heading.rootIndex : undefined;
       previousLevel = level;
@@ -898,7 +945,7 @@ function headingAccounting(input: {
           display_title: null,
           include_in_toc: include,
           kind: "expected_body" as const,
-          role: detachedPartLabel ? "body" : currentRole,
+          role: currentRole,
           starts_page: startsPage,
         }),
       });

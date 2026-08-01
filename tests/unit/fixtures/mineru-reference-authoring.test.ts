@@ -146,7 +146,7 @@ describe("Codex vision reference authoring", () => {
           ? heading.disposition.role
           : "excluded",
       ),
-    ).toEqual(["backmatter", "body", "body"]);
+    ).toEqual(["frontmatter", "body", "body"]);
   });
 
   it("classifies translator biography as frontmatter", () => {

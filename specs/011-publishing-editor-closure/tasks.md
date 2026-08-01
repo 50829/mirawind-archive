@@ -33,5 +33,5 @@
 ## Phase 5: Closure
 
 - [x] T019 Delete superseded schemas, routes, aggregate implementations, DTOs, CSS and tests.
-- [ ] T020 Run fifteen-book exact/production closure, stress/read performance and final test/build gates.
-- [ ] T021 Run Spec Kit converge, update concise operations evidence, reset local data and commit cleanly.
+- [x] T020 Run fifteen-book exact/production closure, stress/read performance and final test/build gates.
+- [x] T021 Run Spec Kit converge, update concise operations evidence, reset local data and commit cleanly.
