@@ -19,4 +19,8 @@
   html {
     color-scheme: light;
   }
+
+  :where(a, button, input, select, textarea, summary):focus-visible {
+    @apply outline-2 outline-offset-2 outline-emerald-700;
+  }
 }

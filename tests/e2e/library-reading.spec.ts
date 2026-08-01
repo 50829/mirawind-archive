@@ -1,44 +1,6 @@
 import { expect, test } from "@playwright/test";
-import axe from "axe-core";
 
-const axeSource = axe.source;
-
-async function expectNoSeriousAccessibilityFindings(
-  page: import("@playwright/test").Page,
-) {
-  await page.addScriptTag({ content: axeSource });
-  const violations = await page.evaluate(async () => {
-    const axe = (
-      window as typeof window & {
-        axe: {
-          run: (
-            context?: Document,
-            options?: Readonly<Record<string, unknown>>,
-          ) => Promise<{
-            violations: readonly {
-              impact: string | null;
-              id: string;
-            }[];
-          }>;
-        };
-      }
-    ).axe;
-    const result = await axe.run(document, {
-      resultTypes: ["violations"],
-      runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] },
-    });
-    return result.violations
-      .filter(
-        (violation) =>
-          violation.impact === "critical" || violation.impact === "serious",
-      )
-      .map((violation) => ({
-        id: violation.id,
-        impact: violation.impact,
-      }));
-  });
-  expect(violations).toEqual([]);
-}
+import { expectNoSeriousAccessibilityFindings } from "../helpers/accessibility.js";
 
 test("discovers details, restores context and completes the reader loop", async ({
   page,
@@ -143,6 +105,7 @@ test("discovers details, restores context and completes the reader loop", async 
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/library$/u);
     await expect(detailsLink).toBeFocused();
+    await expect(detailsLink).toHaveCSS("outline-width", "2px");
 
     await detailsLink.click();
     await expect(page).toHaveURL(/\/books\/e2e-library-book$/u);

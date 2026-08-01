@@ -211,14 +211,16 @@ export function BookSettingsDialog(props: {
   return (
     <>
       <button
-        className={manageSecondaryButton}
+        aria-label="书籍设置"
+        className={`${manageSecondaryButton} max-[480px]:col-start-1 max-[480px]:row-start-3`}
         disabled={props.disabled}
         onClick={() => void open()}
         ref={trigger}
+        title="书籍设置"
         type="button"
       >
         <Settings aria-hidden="true" size={18} />
-        书籍设置
+        <span className="max-[480px]:sr-only">书籍设置</span>
       </button>
       <dialog
         aria-labelledby="book-settings-title"

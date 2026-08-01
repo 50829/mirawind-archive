@@ -95,11 +95,6 @@ const canonical = new URL(`/books/${details.bookKey}`, Astro.url);
     color: inherit;
     text-underline-offset: 0.2em;
   }
-  :global(a:focus-visible),
-  :global(button:focus-visible) {
-    outline: 3px solid var(--color-amber-700);
-    outline-offset: 3px;
-  }
   .site-nav {
     display: flex;
     justify-content: space-between;

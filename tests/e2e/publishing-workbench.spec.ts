@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+import {
+  expectNoPageOverflow,
+  expectNoSeriousAccessibilityFindings,
+} from "../helpers/accessibility.js";
 import { loginAsAdministrator } from "../helpers/e2e-login.js";
 
 const workbenchBookId = 1;
@@ -445,8 +449,8 @@ test("locates diagnostics and disables reprocessing while edits are dirty", asyn
 
 test("restores focus after each mobile workbench detail dialog", async ({
   page,
-}) => {
-  await page.setViewportSize({ height: 800, width: 390 });
+}, testInfo) => {
+  await page.setViewportSize({ height: 800, width: 320 });
   await page.route(`**/api/manage/books/${workbenchBookId}/draft`, (route) =>
     route.fulfill({
       body: JSON.stringify(draftProjection(20)),
@@ -494,6 +498,24 @@ test("restores focus after each mobile workbench detail dialog", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "关闭问题列表" }).click();
   await expect(diagnostics).toBeFocused();
+  await expectNoSeriousAccessibilityFindings(page);
+
+  for (const width of [320, 360, 768, 1_024, 1_440]) {
+    await page.setViewportSize({ height: 900, width });
+    await expectNoPageOverflow(page);
+    await page.screenshot({
+      path: testInfo.outputPath(`workbench-${width}.png`),
+    });
+  }
+
+  await page.setViewportSize({ height: 900, width: 390 });
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+  await expectNoPageOverflow(page);
+  await page.screenshot({
+    path: testInfo.outputPath("workbench-text-200.png"),
+  });
 });
 
 test("edits a selected preview block and keeps the last preview while rebuilding", async ({

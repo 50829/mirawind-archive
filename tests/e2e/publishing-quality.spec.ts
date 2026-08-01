@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { expect, test, type FrameLocator, type Page } from "@playwright/test";
-import axe from "axe-core";
 import Database from "better-sqlite3";
 
 import {
@@ -10,60 +9,11 @@ import {
   e2eFixtureRoot,
   e2eOrigin,
 } from "../helpers/global-setup.js";
+import {
+  expectNoPageOverflow,
+  expectNoSeriousAccessibilityFindings,
+} from "../helpers/accessibility.js";
 import { loginAsAdministrator } from "../helpers/e2e-login.js";
-
-const axeSource = axe.source;
-
-async function expectNoSeriousAccessibilityFindings(page: Page) {
-  await page.addScriptTag({ content: axeSource });
-  const violations = await page.evaluate(async () => {
-    const result = await (
-      window as typeof window & {
-        axe: {
-          run: (
-            context?: Document,
-            options?: Readonly<Record<string, unknown>>,
-          ) => Promise<{
-            violations: readonly {
-              impact: string | null;
-              id: string;
-              nodes: readonly { target: readonly string[] }[];
-            }[];
-          }>;
-        };
-      }
-    ).axe.run(document, {
-      resultTypes: ["violations"],
-      runOnly: {
-        type: "tag",
-        values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"],
-      },
-    });
-    return result.violations
-      .filter(
-        (violation) =>
-          violation.impact === "critical" || violation.impact === "serious",
-      )
-      .map(({ id, impact, nodes }) => ({
-        id,
-        impact,
-        targets: nodes.map((node) => node.target),
-      }));
-  });
-  expect(violations).toEqual([]);
-}
-
-async function expectNoPageOverflow(page: Page) {
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          document.documentElement.scrollWidth <=
-          document.documentElement.clientWidth,
-      ),
-    )
-    .toBe(true);
-}
 
 async function expectFormulaPresentation(document: Page | FrameLocator) {
   const formula = document.locator(".katex").first();
@@ -188,7 +138,7 @@ test("closes typography, formula and printed contents preview-to-publication beh
   await expect(
     preview.getByText("中文 English123 测试，继续：结束？"),
   ).toBeVisible();
-  await expect(preview.locator("code.math-fallback")).toContainText(
+  await expect(preview.locator(".math-fallback code")).toContainText(
     "\\notacommand{",
   );
   await expect(preview.locator(".katex")).toHaveCount(1);
@@ -273,7 +223,7 @@ test("closes typography, formula and printed contents preview-to-publication beh
   await expect(
     page.getByText("中文 English123 测试，继续：结束？"),
   ).toBeVisible();
-  await expect(page.locator("code.math-fallback")).toContainText(
+  await expect(page.locator(".math-fallback code")).toContainText(
     "\\notacommand{",
   );
   await expect(page.locator(".katex")).toHaveCount(1);
@@ -337,8 +287,9 @@ test("closes typography, formula and printed contents preview-to-publication beh
     resolve(e2eDataRoot, book.source_root_rel_path, book.main_markdown_path),
     "utf8",
   );
-  expect(retainedMarkdown).toContain("# 目录");
-  expect(retainedMarkdown).toContain("# 第 1 章 绪论 ...... 1");
+  expect(retainedMarkdown).not.toContain("# 目录");
+  expect(retainedMarkdown).not.toContain("# 第 1 章 绪论 ...... 1");
+  expect(retainedMarkdown).toContain("# 第 1 章 绪论");
 
   await page.getByRole("button", { name: "发布当前修订" }).click();
   await expect(page.getByRole("link", { name: "开始阅读" })).toBeVisible({
@@ -368,10 +319,8 @@ test("closes typography, formula and printed contents preview-to-publication beh
 
   await page.goBack();
   await page.reload();
-  await page.getByRole("button", { name: "发布当前修订" }).click();
-  await expect(page.getByRole("link", { name: "开始阅读" })).toBeVisible({
-    timeout: 10_000,
-  });
+  await expect(page.getByRole("button", { name: "已发布" })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "开始阅读" })).toBeVisible();
   const republished = new Database(databasePath, { readonly: true });
   try {
     const state = republished

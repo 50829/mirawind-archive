@@ -1,3 +1,4 @@
+import { Upload } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -60,27 +61,33 @@ export function PublishPanel(props: {
     !props.blocked &&
     !submitting &&
     !props.candidatePublished;
+  const publishLabel = submitting
+    ? "正在发布"
+    : props.candidatePublished
+      ? "已发布"
+      : "发布当前修订";
 
   return (
     <section
       aria-label="发布"
       className={`publish-panel ${
         props.compact
-          ? "publish-panel-compact flex items-center gap-2 max-[850px]:row-start-2"
+          ? "publish-panel-compact flex items-center gap-2 max-[850px]:row-start-2 max-[480px]:col-span-full max-[480px]:row-start-4"
           : ""
       }`}
     >
       <button
+        aria-label={publishLabel}
         className={`${managePrimaryButton} whitespace-nowrap`}
         disabled={!canPublish}
         onClick={() => void publish()}
+        title={publishLabel}
         type="button"
       >
-        {submitting
-          ? "正在发布"
-          : props.candidatePublished
-            ? "已发布"
-            : "发布当前修订"}
+        {props.compact && <Upload aria-hidden="true" size={18} />}
+        <span className={props.compact ? "max-[480px]:sr-only" : undefined}>
+          {publishLabel}
+        </span>
       </button>
       {props.candidatePublished && (
         <a

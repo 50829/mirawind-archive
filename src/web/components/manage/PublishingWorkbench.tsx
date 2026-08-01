@@ -506,14 +506,14 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     preview?.config_revision === draft.config_revision;
   return (
     <div className="preview-workspace" data-mobile-mode={mobileMode}>
-      <header className="preview-header sticky top-0 z-10 mb-4 grid min-h-18 grid-cols-[auto_minmax(12rem,1fr)_auto_auto_auto_auto] items-center gap-3 rounded-lg border border-stone-300 bg-white px-6 py-3 max-[850px]:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <header className="preview-header sticky top-0 z-10 mb-4 grid min-h-18 grid-cols-[auto_minmax(12rem,1fr)_auto_auto_auto_auto] items-center gap-3 rounded-lg border border-stone-300 bg-white px-6 py-3 max-[850px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[480px]:grid-cols-[minmax(0,1fr)_auto] max-[480px]:gap-2 max-[480px]:px-3">
         <a
-          className="workbench-back font-semibold text-emerald-800 hover:text-emerald-900"
+          className="workbench-back font-semibold text-emerald-800 hover:text-emerald-900 max-[480px]:col-start-1 max-[480px]:row-start-1"
           href="/library"
         >
           返回书库
         </a>
-        <div className="workbench-title min-w-0">
+        <div className="workbench-title min-w-0 max-[480px]:col-span-full max-[480px]:row-start-2">
           <h1 className="truncate text-base font-bold">{draft.title}</h1>
           {candidateState === "building" && (
             <p className="text-xs text-amber-800" role="status">
@@ -550,13 +550,16 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
               {draft.diagnostics.length} 个问题
             </a>
             <button
-              className={`${manageSecondaryButton} workbench-issues-mobile hidden max-[850px]:flex`}
+              aria-label={`${draft.diagnostics.length} 个问题`}
+              className={`${manageSecondaryButton} workbench-issues-mobile hidden max-[850px]:flex max-[480px]:col-start-2 max-[480px]:row-start-1 max-[480px]:justify-self-end`}
               onClick={() => diagnosticsDialog.current?.showModal()}
               ref={diagnosticsDialogTrigger}
+              title={`${draft.diagnostics.length} 个问题`}
               type="button"
             >
               <CircleAlert aria-hidden="true" size={18} />
-              {draft.diagnostics.length} 个问题
+              <span aria-hidden="true">{draft.diagnostics.length}</span>
+              <span className="sr-only">个问题</span>
             </button>
           </>
         )}
@@ -576,7 +579,8 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           }}
         />
         <button
-          className={`${manageSecondaryButton} whitespace-nowrap max-[850px]:row-start-2`}
+          aria-label={editorState.saving ? "正在保存" : "保存并更新预览"}
+          className={`${manageSecondaryButton} whitespace-nowrap max-[850px]:row-start-2 max-[480px]:col-start-2 max-[480px]:row-start-3`}
           disabled={
             !editorState.dirty ||
             editorState.saving ||
@@ -586,10 +590,13 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             candidateState === "building"
           }
           onClick={() => editorRef.current?.save()}
+          title={editorState.saving ? "正在保存" : "保存并更新预览"}
           type="button"
         >
           <Save aria-hidden="true" size={18} />
-          {editorState.saving ? "正在保存" : "保存并更新预览"}
+          <span className="max-[480px]:sr-only">
+            {editorState.saving ? "正在保存" : "保存并更新预览"}
+          </span>
         </button>
         <PublishPanel
           blocked={
@@ -610,7 +617,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         />
         <div
           aria-label="工作台视图"
-          className="mobile-mode-switch col-span-full row-start-3 hidden gap-1 max-[850px]:flex"
+          className="mobile-mode-switch col-span-full row-start-3 hidden gap-1 max-[850px]:flex max-[480px]:row-start-5"
         >
           <button
             aria-pressed={mobileMode === "preview"}
