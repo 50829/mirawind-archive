@@ -55,11 +55,13 @@ describe("reference-only source regions", () => {
       "",
       "<details><summary>text_image</summary>",
       "",
-      "```json",
-      '{"type":"discarded helper"}',
-      "```",
+      "discarded helper",
+      "-",
+      "(0,0)",
       "",
       "</details>",
+      "",
+      "#",
       "",
       "Body remains.",
     ].join("\n");
@@ -79,6 +81,7 @@ describe("reference-only source regions", () => {
     expect(prepared.activeMarkdown).toContain("Body remains.");
     expect(prepared.activeMarkdown).not.toContain("text_image");
     expect(prepared.activeMarkdown).not.toContain("discarded helper");
+    expect(prepared.activeMarkdown).not.toContain("\n#\n");
     expect(prepared.cleanup.helper_blocks_removed).toBeGreaterThan(0);
   });
 

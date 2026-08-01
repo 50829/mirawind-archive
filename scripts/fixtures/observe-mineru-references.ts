@@ -8,6 +8,7 @@ import { extractZipFile } from "../../src/modules/publishing/adapters/filesystem
 import { readMineruLayoutEvidence } from "../../src/modules/publishing/adapters/filesystem/read-layout-evidence.js";
 import { supplementMissingListPageLabels } from "../../src/modules/publishing/core/preparation/layout-evidence.js";
 import { normalizeDocumentBlocks } from "../../src/modules/publishing/core/preparation/normalize-document.js";
+import { normalizeMineruPreformattedMarkdown } from "../../src/modules/publishing/core/preparation/mineru-preformatted.js";
 import { parseMarkdownDocument } from "../../src/modules/publishing/core/preparation/parse-markdown.js";
 import { readPdfContentsEvidence } from "../../src/modules/publishing/adapters/filesystem/read-pdf-contents-evidence.js";
 import {
@@ -181,30 +182,50 @@ function rootForRange(
 function headingAnchorByBlock(input: {
   readonly document: NormalizedDocument;
   readonly pack: MineruReferencePack;
+  readonly sourceDocument: NormalizedDocument;
 }): ReadonlyMap<string, ReferenceAnchor> {
-  const roots = input.document.root.children ?? [];
+  const roots = input.sourceDocument.root.children ?? [];
   const observed = input.pack.markdown_documents[0];
   if (!observed) throw new Error("OBSERVED_REFERENCE_MARKDOWN_MISSING");
   const observations = new Map(
     observed.headings.map((heading) => [heading.root_index, heading] as const),
   );
-  return new Map(
-    input.document.headings.flatMap((heading) => {
-      const start = heading.position?.start.offset;
-      const rootIndex = roots.findIndex(
-        (root) => root.position?.start.offset === start,
-      );
+  const rootByStart = new Map(
+    roots.map((root, rootIndex) => [root.position?.start.offset, rootIndex]),
+  );
+  const sourceAnchors = new Map<string, ReferenceAnchor>(
+    input.sourceDocument.headings.flatMap((heading) => {
+      const rootIndex = rootByStart.get(heading.position?.start.offset);
+      if (rootIndex === undefined) return [];
       const source = observations.get(rootIndex);
       return source
-        ? [
-            [
-              heading.blockId,
-              Object.freeze({ root_index: rootIndex, sha256: source.sha256 }),
-            ] as const,
-          ]
+        ? [[heading.blockId, { root_index: rootIndex, sha256: source.sha256 }]]
         : [];
     }),
   );
+  const result = new Map<string, ReferenceAnchor>();
+  let sourceIndex = 0;
+  for (const heading of input.document.headings) {
+    let matched = false;
+    while (sourceIndex < input.sourceDocument.headings.length) {
+      const sourceHeading = input.sourceDocument.headings[sourceIndex++];
+      if (
+        !sourceHeading ||
+        sourceHeading.level !== heading.level ||
+        sourceHeading.sourceTitle !== heading.sourceTitle
+      ) {
+        continue;
+      }
+      const anchor = sourceAnchors.get(sourceHeading.blockId);
+      if (!anchor) throw new Error("OBSERVED_REFERENCE_HEADING_ANCHOR_MISSING");
+      result.set(heading.blockId, anchor);
+      matched = true;
+      break;
+    }
+    if (!matched)
+      throw new Error("OBSERVED_REFERENCE_HEADING_ALIGNMENT_INVALID");
+  }
+  return result;
 }
 
 function kindFor(
@@ -403,14 +424,10 @@ function pagesForEntries(input: {
 function projectCandidates(input: {
   readonly candidates: readonly PrintedContentsCandidate[];
   readonly document: NormalizedDocument;
+  readonly headingAnchors: ReadonlyMap<string, ReferenceAnchor>;
   readonly layout: Awaited<ReturnType<typeof readMineruLayoutEvidence>>;
-  readonly pack: MineruReferencePack;
 }): readonly CandidateProjection[] {
   const roots = rootRanges(input.document);
-  const anchors = headingAnchorByBlock({
-    document: input.document,
-    pack: input.pack,
-  });
   const rows = pageRows({ layout: input.layout });
   const accepted = input.candidates.filter(
     (
@@ -447,7 +464,7 @@ function projectCandidates(input: {
       const entries = candidate.logicalEntries.map((entry, entryIndex) => {
         const printed = stripPageLabel(entry.sourceTitle);
         const anchor = entry.bodyHeadingBlockId
-          ? (anchors.get(entry.bodyHeadingBlockId) ?? null)
+          ? (input.headingAnchors.get(entry.bodyHeadingBlockId) ?? null)
           : null;
         return Object.freeze({
           body_heading_anchor: anchor,
@@ -533,14 +550,12 @@ function regionsFor(input: {
 }
 
 function rawHeadingAccounting(input: {
+  readonly headingAnchors: ReadonlyMap<string, ReferenceAnchor>;
   readonly originalDocument: NormalizedDocument;
-  readonly pack: MineruReferencePack;
   readonly preparedDocument: PreparedDocument;
   readonly projections: readonly CandidateProjection[];
   readonly regions: readonly ReferenceContentsRegion[];
 }): readonly ReferenceHeadingAccounting[] {
-  const markdown = input.pack.markdown_documents[0];
-  if (!markdown) throw new Error("OBSERVED_REFERENCE_MARKDOWN_MISSING");
   const canonicalRegion = input.projections.find(
     (projection) => projection.candidate.canonical,
   )?.candidate.proposedRegion;
@@ -578,63 +593,65 @@ function rawHeadingAccounting(input: {
   const backmatterIndex = proposal.boundaries.backmatter_start_block_id
     ? activeIndexByBlock.get(proposal.boundaries.backmatter_start_block_id)
     : undefined;
-  const blockByRoot = new Map<string, string>();
   const roots = input.originalDocument.root.children ?? [];
-  for (const heading of input.originalDocument.headings) {
-    const rootIndex = roots.findIndex(
-      (root) => root.position?.start.offset === heading.position?.start.offset,
-    );
-    if (rootIndex >= 0) blockByRoot.set(String(rootIndex), heading.blockId);
-  }
+  const rootByStart = new Map(
+    roots.map((root, rootIndex) => [root.position?.start.offset, rootIndex]),
+  );
   return Object.freeze(
-    markdown.headings.map((heading) => {
-      const projectionIndex = input.projections.findIndex(
-        (projection) =>
-          heading.root_index >= projection.startRoot &&
-          heading.root_index <= projection.endRoot,
-      );
-      const anchor = Object.freeze({
-        root_index: heading.root_index,
-        sha256: heading.sha256,
-      });
-      if (projectionIndex >= 0) {
-        const region = input.regions[projectionIndex];
-        if (!region) throw new Error("OBSERVED_REFERENCE_REGION_MISSING");
-        return Object.freeze({
-          anchor,
-          disposition: Object.freeze({
-            kind: "excluded" as const,
-            region_key: region.region_key,
+    input.originalDocument.headings.flatMap<ReferenceHeadingAccounting>(
+      (heading) => {
+        const rootIndex = rootByStart.get(heading.position?.start.offset);
+        const anchor = input.headingAnchors.get(heading.blockId);
+        if (rootIndex === undefined || !anchor) {
+          throw new Error("OBSERVED_REFERENCE_HEADING_ANCHOR_MISSING");
+        }
+        const projectionIndex = input.projections.findIndex(
+          (projection) =>
+            rootIndex >= projection.startRoot &&
+            rootIndex <= projection.endRoot,
+        );
+        if (projectionIndex >= 0) {
+          const region = input.regions[projectionIndex];
+          if (!region) throw new Error("OBSERVED_REFERENCE_REGION_MISSING");
+          return [
+            Object.freeze({
+              anchor,
+              disposition: Object.freeze({
+                kind: "excluded" as const,
+                region_key: region.region_key,
+              }),
+            }),
+          ];
+        }
+        const node = activeByBlock.get(heading.blockId);
+        if (!node) return [];
+        const activeIndex = activeIndexByBlock.get(node.block_id);
+        if (activeIndex === undefined) {
+          throw new Error("OBSERVED_REFERENCE_STRUCTURE_NODE_MISSING");
+        }
+        const currentRole: ContentRole =
+          backmatterIndex !== undefined && activeIndex >= backmatterIndex
+            ? "backmatter"
+            : appendixIndex !== undefined && activeIndex >= appendixIndex
+              ? "appendix"
+              : activeIndex < bodyIndex
+                ? "frontmatter"
+                : "body";
+        return [
+          Object.freeze({
+            anchor,
+            disposition: Object.freeze({
+              display_level: node.display_level,
+              display_title: null,
+              include_in_toc: node.include_in_toc,
+              kind: "expected_body" as const,
+              role: currentRole,
+              starts_page: node.starts_page,
+            }),
           }),
-        });
-      }
-      const blockId = blockByRoot.get(String(heading.root_index));
-      const node = blockId ? activeByBlock.get(blockId) : undefined;
-      if (!node) throw new Error("OBSERVED_REFERENCE_STRUCTURE_NODE_MISSING");
-      const activeIndex = activeIndexByBlock.get(node.block_id);
-      if (activeIndex === undefined) {
-        throw new Error("OBSERVED_REFERENCE_STRUCTURE_NODE_MISSING");
-      }
-      const currentRole: ContentRole =
-        backmatterIndex !== undefined && activeIndex >= backmatterIndex
-          ? "backmatter"
-          : appendixIndex !== undefined && activeIndex >= appendixIndex
-            ? "appendix"
-            : activeIndex < bodyIndex
-              ? "frontmatter"
-              : "body";
-      return Object.freeze({
-        anchor,
-        disposition: Object.freeze({
-          display_level: node.display_level,
-          display_title: null,
-          include_in_toc: node.include_in_toc,
-          kind: "expected_body" as const,
-          role: currentRole,
-          starts_page: node.starts_page,
-        }),
-      });
-    }),
+        ];
+      },
+    ),
   );
 }
 
@@ -746,9 +763,21 @@ export async function observeRealMineruFixture(input: {
     throw new Error("OBSERVED_REFERENCE_MARKDOWN_HASH_MISMATCH");
   }
   const typography = preprocessMarkdownTypography(rawSource, "zh-smart-v2");
-  const originalDocument = normalizeDocumentBlocks(
+  const sourceDocument = normalizeDocumentBlocks(
     parseMarkdownDocument(typography.markdown),
   );
+  const analysisMarkdown = normalizeMineruPreformattedMarkdown(
+    typography.markdown,
+  );
+  const analysisSourceSha256 = sha256(analysisMarkdown);
+  const originalDocument = normalizeDocumentBlocks(
+    parseMarkdownDocument(analysisMarkdown),
+  );
+  const headingAnchors = headingAnchorByBlock({
+    document: originalDocument,
+    pack: input.pack,
+    sourceDocument,
+  });
   const layout = await readMineruLayoutEvidence(markdownPath);
   let regionCounter = 0;
   let detection = detectPrintedContents({
@@ -756,7 +785,7 @@ export async function observeRealMineruFixture(input: {
     idFactory: () => `region_${String(++regionCounter).padStart(16, "0")}`,
     layoutEvidence: layout,
     sourcePath: basename(markdown.relative_path),
-    sourceSha256: typography.provenance.output_sha256,
+    sourceSha256: analysisSourceSha256,
   });
   if (requiresSupplementalPdfEvidence(detection)) {
     const hasHighBoundary = detection.candidates.some(
@@ -791,7 +820,7 @@ export async function observeRealMineruFixture(input: {
         idFactory: () => `region_${String(++regionCounter).padStart(16, "0")}`,
         layoutEvidence: repairedLayout,
         sourcePath: basename(markdown.relative_path),
-        sourceSha256: typography.provenance.output_sha256,
+        sourceSha256: analysisSourceSha256,
       });
       regionCounter = 0;
       const nativeDetection = detectPrintedContents({
@@ -799,7 +828,7 @@ export async function observeRealMineruFixture(input: {
         idFactory: () => `region_${String(++regionCounter).padStart(16, "0")}`,
         layoutEvidence: pdfLayout,
         sourcePath: basename(markdown.relative_path),
-        sourceSha256: typography.provenance.output_sha256,
+        sourceSha256: analysisSourceSha256,
       });
       const preferNative = shouldUseNativePdfDetection({
         nativeDetection,
@@ -813,8 +842,8 @@ export async function observeRealMineruFixture(input: {
   const projections = projectCandidates({
     candidates: detection.candidates,
     document: originalDocument,
+    headingAnchors,
     layout,
-    pack: input.pack,
   });
   const sourceRegions = projections.flatMap((projection) =>
     projection.candidate.proposedRegion
@@ -822,9 +851,10 @@ export async function observeRealMineruFixture(input: {
       : [],
   );
   const preparedDocument = prepareActiveDocument({
+    cleanupInputSha256: typography.provenance.output_sha256,
     document: originalDocument,
     mainMarkdownPath: basename(markdown.relative_path),
-    mainMarkdownSha256: typography.provenance.output_sha256,
+    mainMarkdownSha256: analysisSourceSha256,
     regions: sourceRegions,
   });
   const regions = regionsFor({ pack: input.pack, projections });
@@ -847,8 +877,8 @@ export async function observeRealMineruFixture(input: {
     }),
     protected_ranges: observedProtectedRanges(rawSource, typography.markdown),
     raw_heading_accounting: rawHeadingAccounting({
+      headingAnchors,
       originalDocument,
-      pack: input.pack,
       preparedDocument,
       projections,
       regions,

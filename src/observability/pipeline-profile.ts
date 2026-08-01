@@ -12,6 +12,7 @@ export const pipelineProfileStageNames = [
   "artifact_write",
   "markdown_read",
   "typography",
+  "structural_cleanup",
   "parse_normalize",
   "layout_evidence",
   "resource_resolution",

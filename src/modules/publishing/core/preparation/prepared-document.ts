@@ -113,6 +113,18 @@ const helperDetailsStart =
 const helperDetailsEnd = /^\s*<\/details>\s*$/iu;
 const maximumHelperRoots = 12;
 
+function emptyHeadingRootIndexes(
+  document: NormalizedDocument,
+): ReadonlySet<number> {
+  return new Set(
+    (document.root.children ?? []).flatMap((root, index) =>
+      root.type === "heading" && !(root.visibleText ?? "").trim()
+        ? [index]
+        : [],
+    ),
+  );
+}
+
 function mineruHelperRootIndexes(
   document: NormalizedDocument,
   alreadyExcluded: ReadonlySet<number>,
@@ -133,7 +145,7 @@ function mineruHelperRootIndexes(
     let end = -1;
     for (let index = start + 1; index < limit; index += 1) {
       const root = roots[index];
-      if (alreadyExcluded.has(index) || root?.type === "heading") break;
+      if (alreadyExcluded.has(index)) break;
       if (root?.type === "html" && helperDetailsEnd.test(root.value ?? "")) {
         end = index;
         break;
@@ -175,6 +187,7 @@ function removeRanges(
 }
 
 export function prepareActiveDocument(input: {
+  readonly cleanupInputSha256?: string;
   readonly document: NormalizedDocument;
   readonly mainMarkdownPath: string;
   readonly mainMarkdownSha256: string;
@@ -190,9 +203,14 @@ export function prepareActiveDocument(input: {
     input.document,
     applied.excludedRootIndexes,
   );
+  const emptyHeadingIndexes = emptyHeadingRootIndexes(input.document);
+  const cleanupRootIndexes = new Set([
+    ...helperRootIndexes,
+    ...emptyHeadingIndexes,
+  ]);
   const excludedRootIndexes = new Set([
     ...applied.excludedRootIndexes,
-    ...helperRootIndexes,
+    ...cleanupRootIndexes,
   ]);
   const activeMarkdown = removeRanges(
     input.document.source,
@@ -229,8 +247,8 @@ export function prepareActiveDocument(input: {
     active,
     activeMarkdown,
     cleanup: Object.freeze({
-      helper_blocks_removed: helperRootIndexes.size,
-      input_sha256: input.mainMarkdownSha256,
+      helper_blocks_removed: cleanupRootIndexes.size,
+      input_sha256: input.cleanupInputSha256 ?? input.mainMarkdownSha256,
       output_sha256: sha256(activeMarkdown),
       printed_toc_regions_removed: input.regions.length,
     }),

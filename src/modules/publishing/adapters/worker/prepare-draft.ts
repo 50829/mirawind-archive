@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
@@ -6,6 +7,7 @@ import {
   type ArchiveExtractionLimits,
 } from "@/modules/publishing/adapters/filesystem/extract-archive";
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+import { normalizeMineruPreformattedMarkdown } from "@/modules/publishing/core/preparation/mineru-preformatted";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { readPdfContentsEvidence } from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
 import {
@@ -99,19 +101,27 @@ export async function prepareDraft(input: {
       readFile(markdownPath),
     );
     recordPipelineProfileMetrics({ markdown_bytes: markdownBytes.byteLength });
-    const typography = await profilePipelineStage("typography", async () => {
-      const result = preprocessMarkdownTypography(
+    const typography = await profilePipelineStage("typography", () =>
+      preprocessMarkdownTypography(
         markdownBytes,
         input.typographyProfile ?? "zh-smart-v2",
-      );
-      await atomicWriteFile(markdownPath, result.markdown, { mode: 0o600 });
-      return result;
-    });
+      ),
+    );
     recordPipelineProfileMetrics({
       protected_nodes: typography.provenance.protected_nodes,
     });
+    const analysisMarkdown = await profilePipelineStage(
+      "structural_cleanup",
+      async () => {
+        const markdown = normalizeMineruPreformattedMarkdown(
+          typography.markdown,
+        );
+        await atomicWriteFile(markdownPath, markdown, { mode: 0o600 });
+        return markdown;
+      },
+    );
     const normalized = await profilePipelineStage("parse_normalize", () => {
-      const parsed = parseMarkdownDocument(typography.markdown);
+      const parsed = parseMarkdownDocument(analysisMarkdown);
       return normalizeDocumentBlocks(parsed);
     });
     recordPipelineProfileMetrics({
@@ -119,6 +129,7 @@ export async function prepareDraft(input: {
       root_blocks: normalized.blocks.length,
     });
     const contents = await analyzeDraftContents({
+      cleanupInputSha256: typography.provenance.output_sha256,
       markdownPath,
       normalized,
       ...(input.pdfEvidenceReader
@@ -126,7 +137,7 @@ export async function prepareDraft(input: {
         : {}),
       selectedCandidatePath: input.selectedCandidatePath,
       ...(input.signal ? { signal: input.signal } : {}),
-      sourceSha256: typography.provenance.output_sha256,
+      sourceSha256: createHash("sha256").update(analysisMarkdown).digest("hex"),
       stagingDirectory,
     });
     await atomicWriteFile(

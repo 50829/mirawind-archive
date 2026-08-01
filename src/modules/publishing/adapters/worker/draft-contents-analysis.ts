@@ -45,6 +45,7 @@ type ContentsResult = Pick<
 > & { readonly preparedDocument: PreparedDocument };
 
 export async function analyzeDraftContents(input: {
+  readonly cleanupInputSha256?: string;
   readonly markdownPath: string;
   readonly normalized: NormalizedDocument;
   readonly pdfEvidenceReader?: typeof readPdfContentsEvidence;
@@ -174,6 +175,9 @@ export async function analyzeDraftContents(input: {
       );
       return {
         preparedDocument: prepareActiveDocument({
+          ...(input.cleanupInputSha256
+            ? { cleanupInputSha256: input.cleanupInputSha256 }
+            : {}),
           document: input.normalized,
           mainMarkdownPath: basename(input.selectedCandidatePath),
           mainMarkdownSha256: input.sourceSha256,
