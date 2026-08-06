@@ -80,6 +80,12 @@ export const GET: APIRoute = async ({ locals, params }) => {
       config_revision: config.revision,
       diagnostics,
       metadata: configValue.metadata,
+      numbering: (
+        (configValue.publishing as Record<string, unknown>).numbering as Record<
+          string,
+          unknown
+        >
+      ).mode,
       published: book.currentVersionId !== null,
       preview:
         previewModel === null

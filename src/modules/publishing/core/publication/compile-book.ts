@@ -14,6 +14,7 @@ import {
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import {
   presentConfiguredHeadings,
+  type HeadingNumberingMode,
   type HeadingPresentation,
 } from "@/modules/publishing/core/publication/heading-presentation";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
@@ -232,7 +233,7 @@ export function compileBook(input: {
   const numbering = publishing.numbering as Readonly<Record<string, unknown>>;
   const headings = presentConfiguredHeadings({
     headings: validated.headings,
-    mode: numbering.mode as "generated" | "none" | "source",
+    mode: numbering.mode as HeadingNumberingMode,
   });
   const metadata = config.metadata as Readonly<Record<string, unknown>>;
   const bookTitle = String(metadata.title);

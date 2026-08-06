@@ -82,6 +82,7 @@ function draftProjection(
       },
     },
     metadata: { title: `Workbench ${size}` },
+    numbering: "source" as const,
     published: false,
     structure,
     title: `Workbench ${size}`,
@@ -146,14 +147,121 @@ function draftAtRevision(revision: number, state: "building" | "ready") {
 
 type MutableDraftProjection = Omit<
   ReturnType<typeof draftAtRevision>,
-  "access" | "alias" | "candidate_published" | "metadata" | "published"
+  | "access"
+  | "alias"
+  | "candidate_published"
+  | "metadata"
+  | "numbering"
+  | "published"
 > & {
   access: "private" | "public";
   alias: string | null;
   candidate_published: boolean;
   metadata: Record<string, unknown>;
+  numbering: "generated" | "none" | "source";
   published: boolean;
 };
+
+test("loads the authoritative numbering mode from the draft", async ({
+  page,
+}) => {
+  await loginAsAdministrator(page, "192.0.2.20");
+  await page.goto(`/manage/books/${workbenchBookId}`);
+
+  const numbering = page.getByRole("group", { name: "标题编号方式" });
+  await expect(
+    numbering.getByRole("button", { name: "自动编号" }),
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
+test("retains conflicting numbering and unrelated heading edits", async ({
+  page,
+}) => {
+  let draft: MutableDraftProjection = draftAtRevision(1, "ready");
+  let patchCount = 0;
+  const patchBodies: Record<string, unknown>[] = [];
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/draft`,
+    async (route) => {
+      if (route.request().method() === "PATCH") {
+        patchCount += 1;
+        patchBodies.push(
+          route.request().postDataJSON() as Record<string, unknown>,
+        );
+        if (patchCount === 1) {
+          draft = {
+            ...draftAtRevision(2, "ready"),
+            numbering: "generated",
+          };
+          await route.fulfill({
+            body: JSON.stringify({ config_revision: 2 }),
+            contentType: "application/json",
+            headers: { ETag: '"draft-two"' },
+            status: 202,
+          });
+          return;
+        }
+        await route.fulfill({ status: 412 });
+        return;
+      }
+      await route.fulfill({
+        body: JSON.stringify(draft),
+        contentType: "application/json",
+        headers: { ETag: `"draft-${draft.config_revision}"` },
+        status: 200,
+      });
+    },
+  );
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/preview/**`,
+    (route) =>
+      route.fulfill({
+        body: "<!doctype html><html lang='zh-CN'><body>Preview</body></html>",
+        contentType: "text/html",
+        status: 200,
+      }),
+  );
+  await loginAsAdministrator(page, "192.0.2.21");
+  await page.goto(`/manage/books/${workbenchBookId}`);
+
+  const numbering = page.getByRole("group", { name: "标题编号方式" });
+  const save = page.getByRole("button", { name: "保存并更新预览" });
+  await numbering.getByRole("button", { name: "自动编号" }).click();
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(
+    numbering.getByRole("button", { name: "自动编号" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(save).toBeDisabled();
+
+  const title = page.getByRole("textbox", { name: "标题", exact: true });
+  await title.fill("Unsaved local heading");
+  await numbering.getByRole("button", { name: "无编号" }).click();
+  await save.click();
+  await expect(page.getByRole("alert")).toContainText("本地修改仍保留");
+  await expect(
+    numbering.getByRole("button", { name: "无编号" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(title).toHaveValue("Unsaved local heading");
+
+  expect(patchBodies).toEqual([
+    { changes: [], numbering: "generated" },
+    {
+      changes: [
+        {
+          block_id: "blk_workbench_0000000000000000",
+          title_markdown: "Unsaved local heading",
+        },
+      ],
+      numbering: "none",
+    },
+  ]);
+  await page.getByRole("button", { name: "放弃本地修改并重新载入" }).click();
+  await expect(
+    numbering.getByRole("button", { name: "自动编号" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(title).toHaveValue("Structure item 1");
+});
 
 test("saves metadata and cover before publishing and changing access", async ({
   page,

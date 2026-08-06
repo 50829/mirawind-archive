@@ -31,6 +31,62 @@ function proposalRoles(
 }
 
 describe("default document structure proposal", () => {
+  it("keeps technical decimal text as title content", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument("# 8.5英寸软盘\n\n正文"),
+    );
+
+    expect(proposeDocumentStructure(document).nodes[0]).toMatchObject({
+      title_markdown: "8.5英寸软盘",
+    });
+    expect(proposeDocumentStructure(document).nodes[0]).not.toHaveProperty(
+      "source_number",
+    );
+  });
+
+  it("separates a rich Markdown source number exactly once", () => {
+    const document = normalizeDocumentBlocks(
+      parseMarkdownDocument("# **4.4.4** Virtual memory\n\nBody"),
+    );
+
+    expect(proposeDocumentStructure(document).nodes[0]).toMatchObject({
+      source_number: "4.4.4",
+      title_markdown: "Virtual memory",
+    });
+  });
+
+  it("separates source numbers across valid inline Markdown without losing title markup", () => {
+    const cases = [
+      {
+        markdown: "***4.4.4*** Virtual memory",
+        titleMarkdown: "Virtual memory",
+      },
+      {
+        markdown: "[4.4.4](https://example.test) Virtual memory",
+        titleMarkdown: "Virtual memory",
+      },
+      {
+        markdown: "`4.4.4` Virtual memory",
+        titleMarkdown: "Virtual memory",
+      },
+      {
+        markdown: "**4.4.4 Virtual** memory",
+        titleMarkdown: "**Virtual** memory",
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const document = normalizeDocumentBlocks(
+        parseMarkdownDocument(`# ${testCase.markdown}\n\nBody`),
+      );
+
+      expect(proposeDocumentStructure(document).nodes[0]).toMatchObject({
+        source_number: "4.4.4",
+        title_markdown: testCase.titleMarkdown,
+      });
+    }
+  });
+
   it("keeps cover metadata before numbered chapters out of navigation", () => {
     const document = normalizeDocumentBlocks(
       parseMarkdownDocument(

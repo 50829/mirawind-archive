@@ -95,11 +95,12 @@ describe("import and draft-preview OpenAPI contract", () => {
     expect(at(document, "components", "schemas", "Draft")).toMatchObject({
       additionalProperties: false,
       required: expect.arrayContaining([
+        "boundaries",
         "book_id",
+        "candidate",
         "config_revision",
+        "preview",
         "structure",
-        "regions",
-        "preview_state",
       ]),
     });
     expect(

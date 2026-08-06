@@ -13,6 +13,7 @@ import {
 } from "@/modules/publishing/core/publication/render-assets";
 
 export type { TypographyProfile } from "@/modules/publishing/core/preparation/document-model";
+export type { HeadingNumberingMode } from "@/modules/publishing/core/publication/heading-presentation";
 export type {
   BookVersionRecord,
   BookVersionState,

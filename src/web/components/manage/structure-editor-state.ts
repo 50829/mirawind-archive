@@ -1,3 +1,5 @@
+import type { HeadingNumberingMode } from "@/modules/publishing/application/public";
+
 export interface EditableStructureNode {
   readonly alias?: string;
   readonly block_id: string;
@@ -6,6 +8,16 @@ export interface EditableStructureNode {
   readonly source_number?: string;
   readonly starts_page: boolean;
   readonly title_markdown: string;
+}
+
+export type { HeadingNumberingMode };
+
+export function mergeAcceptedNumbering(
+  server: HeadingNumberingMode,
+  submitted: HeadingNumberingMode,
+  local: HeadingNumberingMode,
+): HeadingNumberingMode {
+  return local === submitted ? server : local;
 }
 
 export function changeDisplayLevel(

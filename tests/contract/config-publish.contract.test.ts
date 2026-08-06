@@ -60,6 +60,99 @@ describe("configuration and atomic-publication OpenAPI contract", () => {
     );
     expect(at(operation, "responses")).toHaveProperty("202");
     expect(at(operation, "responses")).toHaveProperty("412");
+    expect(
+      at(
+        operation,
+        "requestBody",
+        "content",
+        "application/json",
+        "schema",
+        "properties",
+        "numbering",
+      ).enum,
+    ).toEqual(["source", "generated", "none"]);
+  });
+
+  it("describes the current draft read, patch and accepted response models", async () => {
+    const document = await contract();
+    const schemas = at(document, "components", "schemas");
+    const draft = at(schemas, "Draft");
+    const draftProperties = at(draft, "properties");
+    const previewAlternatives = at(draftProperties, "preview")
+      .oneOf as readonly Record<string, unknown>[];
+    const previewProperties = at(previewAlternatives[0] ?? {}, "properties");
+    const structureProperties = at(
+      draftProperties,
+      "structure",
+      "items",
+      "properties",
+    );
+    const patch = at(
+      document,
+      "paths",
+      "/api/manage/books/{bookId}/draft",
+      "patch",
+      "requestBody",
+      "content",
+      "application/json",
+      "schema",
+    );
+    const patchProperties = at(patch, "properties");
+    const changeProperties = at(
+      patchProperties,
+      "changes",
+      "items",
+      "properties",
+    );
+    const accepted = at(schemas, "DraftUpdateAccepted");
+
+    expect(draft.required).toEqual([
+      "access",
+      "alias",
+      "boundaries",
+      "book_id",
+      "candidate",
+      "candidate_published",
+      "config_revision",
+      "diagnostics",
+      "metadata",
+      "numbering",
+      "published",
+      "preview",
+      "structure",
+      "title",
+    ]);
+    expect(draftProperties).not.toHaveProperty("regions");
+    expect(draftProperties).not.toHaveProperty("preview_state");
+    expect(previewProperties).not.toHaveProperty("source_regions");
+    expect(previewProperties.compiler_version).toMatchObject({
+      const: "compiler-v6",
+    });
+    expect(structureProperties).toHaveProperty("title_markdown");
+    expect(structureProperties).toHaveProperty("source_number");
+    expect(structureProperties).not.toHaveProperty("display_title");
+    expect(structureProperties).not.toHaveProperty("role");
+    expect(Object.keys(patchProperties).sort()).toEqual([
+      "alias",
+      "boundaries",
+      "changes",
+      "metadata",
+      "numbering",
+    ]);
+    expect(Object.keys(changeProperties).sort()).toEqual([
+      "alias",
+      "block_id",
+      "display_level",
+      "include_in_toc",
+      "source_number",
+      "starts_page",
+      "title_markdown",
+    ]);
+    expect(accepted.required).toEqual([
+      "book_id",
+      "candidate",
+      "config_revision",
+    ]);
   });
 
   it("publishes the server-selected ready candidate with a config precondition", async () => {

@@ -1,5 +1,8 @@
 import type { SafeDiagnostic } from "@/domain/errors";
-import type { CurrentDraftCandidateProjection } from "@/modules/publishing/application/public";
+import type {
+  CurrentDraftCandidateProjection,
+  HeadingNumberingMode,
+} from "@/modules/publishing/application/public";
 
 export type PreviewDiagnostic = SafeDiagnostic;
 
@@ -42,6 +45,7 @@ export interface DraftView {
   readonly config_revision: number;
   readonly diagnostics: readonly PreviewDiagnostic[];
   readonly metadata: Readonly<Record<string, unknown>>;
+  readonly numbering: HeadingNumberingMode;
   readonly published: boolean;
   readonly preview: {
     readonly boundaries: DraftView["boundaries"];

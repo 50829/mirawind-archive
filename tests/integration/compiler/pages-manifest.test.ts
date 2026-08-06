@@ -24,7 +24,7 @@ import {
 
 const versionId = "ver_pages_manifest_test_0001";
 
-function fixture() {
+function fixture(numbering: "generated" | "none" | "source" = "generated") {
   const source = [
     "# Preface",
     "",
@@ -41,6 +41,10 @@ function fixture() {
     "# Appendix",
     "",
     "Reference.",
+    "",
+    "# Afterword",
+    "",
+    "Closing.",
   ].join("\n");
   let sequence = 0;
   const document = normalizeDocumentBlocks(parseMarkdownDocument(source), {
@@ -51,6 +55,7 @@ function fixture() {
     ...node,
     display_level: index === 2 ? 2 : 1,
     include_in_toc: index !== 2,
+    source_number: ["P", "C1", "C1.1", "A", "E"][index] ?? "",
     starts_page: index !== 2,
     ...(index === 0 ? { title_markdown: "Introduction" } : {}),
   }));
@@ -58,10 +63,11 @@ function fixture() {
   const config = createBookConfigV4({
     boundaries: {
       appendix_start_block_id: structures[3]?.block_id ?? "",
+      backmatter_start_block_id: structures[4]?.block_id ?? "",
       body_start_block_id: structures[1]?.block_id ?? "",
     },
     document,
-    numbering: "generated",
+    numbering,
     revision: 2,
     sourceSha256: sourceHash,
     structure: structures,
@@ -80,27 +86,134 @@ function fixture() {
 describe("deterministic publication pages and manifest", () => {
   it("splits only at configured headings and applies role-aware numbering", () => {
     const { book } = fixture();
+    const search = buildSearchSpool({
+      authors: [],
+      book,
+      bookId: 1,
+      title: "Test Book",
+      versionId,
+    });
 
-    expect(book.pages).toHaveLength(3);
+    expect(book.pages).toHaveLength(4);
     expect(book.pages.map((page) => pageMetadata(book, page).title)).toEqual([
       "Introduction",
       "1 Chapter",
-      "A Appendix",
+      "Appendix",
+      "Afterword",
     ]);
     expect(book.pages.map(pageOutputPath)).toEqual([
       "published/pages/1.html",
       "published/pages/2.html",
       "published/pages/3.html",
+      "published/pages/4.html",
     ]);
     expect(book.headings.map((heading) => heading.number)).toEqual([
       null,
       "1",
       "1.1",
-      "A",
+      null,
+      null,
+    ]);
+    expect(
+      search.shortRows
+        .filter((row) => row.kind === "heading")
+        .map((row) => row.normalizedText),
+    ).toEqual([
+      "Introduction",
+      "1 Chapter",
+      "1.1 Details",
+      "Appendix",
+      "Afterword",
     ]);
     expect(
       new Set(book.pages.flatMap((page) => pageBlockIds(book, page))).size,
     ).toBe(book.pages.flatMap((page) => pageBlockIds(book, page)).length);
+  });
+
+  it("starts a nested body at one and rebases later shallower body headings", () => {
+    const source = [
+      "# Preface",
+      "",
+      "## Body start",
+      "",
+      "### Detail",
+      "",
+      "# Later major",
+    ].join("\n");
+    const sourceHash = createHash("sha256").update(source).digest("hex");
+    let ordinal = 0;
+    const document = normalizeDocumentBlocks(parseMarkdownDocument(source), {
+      idFactory: () => `blk_nested_body_${String(++ordinal).padStart(8, "0")}`,
+    });
+    const structure = structureForDocument(document);
+    const config = createBookConfigV4({
+      boundaries: {
+        body_start_block_id: structure[1]?.block_id ?? "",
+      },
+      document,
+      numbering: "generated",
+      sourceSha256: sourceHash,
+      structure,
+      title: "Nested Body",
+    });
+    const book = compileBook({
+      config,
+      configSha256: "a".repeat(64),
+      markdownBytes: source,
+    });
+
+    expect(book.headings.map((heading) => heading.number)).toEqual([
+      null,
+      "1",
+      "1.1",
+      "2",
+    ]);
+  });
+
+  it("starts body numbering at one for configured levels one through four", () => {
+    for (const bodyLevel of [1, 2, 3, 4]) {
+      const source = Array.from({ length: bodyLevel }, (_, index) => {
+        const level = index + 1;
+        const title = level === bodyLevel ? "Body start" : `Front ${level}`;
+        return `${"#".repeat(level)} ${title}`;
+      }).join("\n\n");
+      const sourceHash = createHash("sha256").update(source).digest("hex");
+      let ordinal = 0;
+      const document = normalizeDocumentBlocks(parseMarkdownDocument(source), {
+        idFactory: () =>
+          `blk_body_level_${bodyLevel}_${String(++ordinal).padStart(8, "0")}`,
+      });
+      const structure = structureForDocument(document);
+      const body = structure.at(-1);
+      if (!body) throw new Error("TEST_BODY_HEADING_MISSING");
+      const config = createBookConfigV4({
+        boundaries: { body_start_block_id: body.block_id },
+        document,
+        numbering: "generated",
+        sourceSha256: sourceHash,
+        structure,
+        title: `Body Level ${bodyLevel}`,
+      });
+      const book = compileBook({
+        config,
+        configSha256: "b".repeat(64),
+        markdownBytes: source,
+      });
+
+      expect(book.headings.map((heading) => heading.number)).toEqual([
+        ...Array.from({ length: bodyLevel - 1 }, () => null),
+        "1",
+      ]);
+    }
+  });
+
+  it("preserves source numbers in every role and suppresses all numbers in none mode", () => {
+    expect(
+      fixture("source").book.headings.map((heading) => heading.number),
+    ).toEqual(["P", "C1", "C1.1", "A", "E"]);
+    expect(
+      fixture("none").book.headings.map((heading) => heading.number),
+    ).toEqual([null, null, null, null, null]);
   });
 
   it("renders each page and creates a strict closed canonical manifest", async () => {
@@ -124,6 +237,8 @@ describe("deterministic publication pages and manifest", () => {
     );
     expect(rendered[1]?.html).toContain('<span class="heading-number">1 ');
     expect(rendered[1]?.html).toContain("Details");
+    expect(rendered[2]?.html).not.toContain('class="heading-number"');
+    expect(rendered[3]?.html).not.toContain('class="heading-number"');
 
     const manifest = buildDocumentManifest({
       book,
@@ -147,7 +262,16 @@ describe("deterministic publication pages and manifest", () => {
       config_revision: 2,
       version_id: versionId,
     });
-    expect(manifest.toc).toHaveLength(3);
+    expect(manifest.toc).toHaveLength(4);
+    const toc = manifest.toc as readonly Readonly<{
+      number: string | null;
+    }>[];
+    expect(toc.map((heading) => heading.number)).toEqual([
+      null,
+      "1",
+      null,
+      null,
+    ]);
     expect(canonicalJson(manifest)).toBe(canonicalJson(manifest));
     expect(canonicalJson(manifest).endsWith("\n")).toBe(true);
   });

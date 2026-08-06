@@ -660,6 +660,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
                 await refresh();
               }}
               onStateChange={updateEditorState}
+              numbering={draft.numbering}
               revision={draft.config_revision}
               saveDisabled={
                 candidateState === "building" ||

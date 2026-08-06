@@ -3,10 +3,22 @@ import { describe, expect, it } from "vitest";
 import {
   changeDisplayLevel,
   mergeAcceptedNodes,
+  mergeAcceptedNumbering,
   type EditableStructureNode,
 } from "@/web/components/manage/structure-editor-state";
 
 describe("publishing workbench local edit retention", () => {
+  it("accepts the server numbering unless it changed again after submit", () => {
+    expect(mergeAcceptedNumbering("generated", "generated", "generated")).toBe(
+      "generated",
+    );
+    expect(mergeAcceptedNumbering("generated", "source", "none")).toBe("none");
+  });
+
+  it("keeps an unsaved numbering choice across an unrelated refresh", () => {
+    expect(mergeAcceptedNumbering("source", "source", "none")).toBe("none");
+  });
+
   it("keeps only edits made after the accepted save snapshot", () => {
     const submittedNode: EditableStructureNode = {
       block_id: "blk_structure_editor_state_0001",

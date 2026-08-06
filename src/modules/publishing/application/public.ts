@@ -35,6 +35,7 @@ import {
 export type {
   BookVersionRecord,
   BookVersionState,
+  HeadingNumberingMode,
   TypographyProfile,
 } from "@/modules/publishing/application/publication-formats";
 export type {

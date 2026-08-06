@@ -30,7 +30,9 @@ import {
 import {
   changeDisplayLevel,
   mergeAcceptedNodes,
+  mergeAcceptedNumbering,
   type EditableStructureNode as StructureNode,
+  type HeadingNumberingMode,
 } from "@/web/components/manage/structure-editor-state";
 
 interface HeadingContext {
@@ -92,6 +94,7 @@ export const StructureEditor = forwardRef<
     readonly headings: readonly HeadingContext[];
     readonly onSaved: () => Promise<void>;
     readonly onStateChange: (state: StructureEditorState) => void;
+    readonly numbering: HeadingNumberingMode;
     readonly revision: number;
     readonly saveDisabled?: boolean;
     readonly structure: readonly StructureNode[];
@@ -101,6 +104,7 @@ export const StructureEditor = forwardRef<
   const initialNodes = props.structure;
   const [nodes, setNodes] = useState(initialNodes);
   const [boundaries, setBoundaries] = useState(props.boundaries);
+  const [numbering, setNumbering] = useState(props.numbering);
   const [query, setQuery] = useState("");
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(
     new Set(),
@@ -113,13 +117,16 @@ export const StructureEditor = forwardRef<
   const [saving, setSaving] = useState(false);
   const onStateChange = props.onStateChange;
   const nodesRef = useRef(nodes);
+  const numberingRef = useRef(numbering);
   const acceptedSnapshot = useRef<{
     readonly boundaries: ContentBoundaries;
     readonly nodes: readonly StructureNode[];
+    readonly numbering: HeadingNumberingMode;
   } | null>(null);
   const serverSnapshot = useRef({
     boundaries: props.boundaries,
     nodes: props.structure,
+    numbering: props.numbering,
   });
   const selectedDialog = useRef<HTMLDialogElement>(null);
   const selectedDialogTrigger = useRef<HTMLButtonElement>(null);
@@ -127,6 +134,7 @@ export const StructureEditor = forwardRef<
   const sourceDialogTrigger = useRef<HTMLButtonElement>(null);
   const lastRevision = useRef(props.revision);
   nodesRef.current = nodes;
+  numberingRef.current = numbering;
   const headingById = useMemo(
     () => new Map(props.headings.map((heading) => [heading.block_id, heading])),
     [props.headings],
@@ -187,15 +195,19 @@ export const StructureEditor = forwardRef<
         ? props.boundaries
         : current,
     );
+    setNumbering((current) =>
+      mergeAcceptedNumbering(props.numbering, previous.numbering, current),
+    );
     acceptedSnapshot.current = null;
     serverSnapshot.current = {
       boundaries: props.boundaries,
       nodes: props.structure,
+      numbering: props.numbering,
     };
     lastRevision.current = props.revision;
     setConflict(false);
     setStatus("");
-  }, [props.boundaries, props.revision, props.structure]);
+  }, [props.boundaries, props.numbering, props.revision, props.structure]);
 
   useEffect(() => {
     if (
@@ -424,7 +436,8 @@ export const StructureEditor = forwardRef<
   });
   const boundariesDirty =
     JSON.stringify(boundaries) !== JSON.stringify(props.boundaries);
-  const dirty = dirtyChanges.length > 0 || boundariesDirty;
+  const numberingDirty = numbering !== props.numbering;
+  const dirty = dirtyChanges.length > 0 || boundariesDirty || numberingDirty;
 
   async function save() {
     if (!dirty || saving || props.saveDisabled) return;
@@ -432,11 +445,13 @@ export const StructureEditor = forwardRef<
     setStatus("");
     setConflict(false);
     const submittedNodes = nodesRef.current;
+    const submittedNumbering = numberingRef.current;
     try {
       const response = await fetch(`/api/manage/books/${props.bookId}/draft`, {
         body: JSON.stringify({
           ...(boundariesDirty ? { boundaries } : {}),
           changes: dirtyChanges,
+          ...(numberingDirty ? { numbering: submittedNumbering } : {}),
         }),
         cache: "no-store",
         credentials: "same-origin",
@@ -458,6 +473,7 @@ export const StructureEditor = forwardRef<
       acceptedSnapshot.current = {
         boundaries,
         nodes: submittedNodes,
+        numbering: submittedNumbering,
       };
       await props.onSaved();
     } catch {
@@ -471,6 +487,7 @@ export const StructureEditor = forwardRef<
     acceptedSnapshot.current = null;
     setNodes(props.structure);
     setBoundaries(props.boundaries);
+    setNumbering(props.numbering);
     setConflict(false);
     setStatus("");
     try {
@@ -495,6 +512,32 @@ export const StructureEditor = forwardRef<
       className="structure-editor mt-8 border-t border-stone-200 pt-4"
       aria-label="结构编辑"
     >
+      <fieldset className="mb-4">
+        <legend className="mb-2 font-semibold">标题编号</legend>
+        <div
+          aria-label="标题编号方式"
+          className="grid grid-cols-3 gap-1"
+          role="group"
+        >
+          {(
+            [
+              ["source", "原书编号"],
+              ["generated", "自动编号"],
+              ["none", "无编号"],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              aria-pressed={numbering === mode}
+              className={`${manageQuietButton} min-w-0 px-2 text-sm`}
+              key={mode}
+              onClick={() => setNumbering(mode)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
       <div className="structure-search grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
         <Search aria-hidden="true" size={18} />
         <label className="m-0">

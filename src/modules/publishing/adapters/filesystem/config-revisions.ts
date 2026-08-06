@@ -19,6 +19,7 @@ import {
   parseBookConfigYaml,
   validateBookConfig,
 } from "@/modules/publishing/core/publication/book-config-schema";
+import type { HeadingNumberingMode } from "@/modules/publishing/core/publication/heading-presentation";
 import { validateConfiguredStructureHierarchy } from "@/modules/publishing/core/publication/validate-config";
 import {
   atomicWriteFile,
@@ -129,6 +130,7 @@ interface DraftPatch {
   }>;
   readonly changes: readonly DraftStructureChange[];
   readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly numbering?: HeadingNumberingMode;
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -160,9 +162,10 @@ function parseDraftPatch(value: unknown): {
   readonly boundaries?: DraftPatch["boundaries"];
   readonly changes: readonly DraftStructureChange[];
   readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly numbering?: DraftPatch["numbering"];
 } {
   const patch = record(value);
-  exactKeys(patch, ["alias", "boundaries", "changes", "metadata"]);
+  exactKeys(patch, ["alias", "boundaries", "changes", "metadata", "numbering"]);
   if (!Array.isArray(patch.changes) || patch.changes.length > 20_000) {
     throw new SafeApplicationError(
       "DRAFT_PATCH_INVALID",
@@ -274,6 +277,18 @@ function parseDraftPatch(value: unknown): {
       400,
     );
   }
+  if (
+    patch.numbering !== undefined &&
+    patch.numbering !== "generated" &&
+    patch.numbering !== "none" &&
+    patch.numbering !== "source"
+  ) {
+    throw new SafeApplicationError(
+      "DRAFT_PATCH_INVALID",
+      "The heading numbering mode is invalid.",
+      400,
+    );
+  }
   return {
     ...(patch.alias !== undefined
       ? { alias: patch.alias as string | null }
@@ -281,6 +296,9 @@ function parseDraftPatch(value: unknown): {
     ...(boundaries ? { boundaries } : {}),
     changes,
     ...(metadata ? { metadata } : {}),
+    ...(patch.numbering !== undefined
+      ? { numbering: patch.numbering as DraftPatch["numbering"] }
+      : {}),
   };
 }
 
@@ -334,6 +352,12 @@ export async function patchDraftConfig(input: {
     parsed.changes.map((change) => [change.block_id, change]),
   );
   const currentMetadata = config.metadata as Readonly<Record<string, unknown>>;
+  const currentPublishing = config.publishing as Readonly<
+    Record<string, unknown>
+  >;
+  const currentNumbering = currentPublishing.numbering as Readonly<
+    Record<string, unknown>
+  >;
   const currentBoundaries = config.boundaries as Readonly<
     Record<string, unknown>
   >;
@@ -348,6 +372,13 @@ export async function patchDraftConfig(input: {
     metadata: parsed.metadata
       ? applyNullableFields(currentMetadata, parsed.metadata)
       : currentMetadata,
+    publishing:
+      parsed.numbering === undefined
+        ? currentPublishing
+        : {
+            ...currentPublishing,
+            numbering: { ...currentNumbering, mode: parsed.numbering },
+          },
     revision: Number(config.revision) + 1,
     structure: currentNodes.map((node) => {
       const change = changes.get(String(node.block_id));

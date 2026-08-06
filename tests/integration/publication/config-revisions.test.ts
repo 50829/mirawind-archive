@@ -59,6 +59,7 @@ function config(input: {
   const structure = structureForDocument(document).map((node) => ({
     ...node,
     display_level: input.level ?? 1,
+    source_number: "Chapter 7",
   }));
   return createBookConfigV4({
     document,
@@ -378,6 +379,7 @@ describe("atomic draft configuration revisions", () => {
         layout: dataRoot.layout,
         nowMs: 10,
         patch: {
+          numbering: "generated",
           changes: [
             {
               block_id: blockId,
@@ -399,6 +401,9 @@ describe("atomic draft configuration revisions", () => {
         ),
       );
       expect(result).toMatchObject({ revision: 2 });
+      expect(persisted.publishing).toMatchObject({
+        numbering: { mode: "generated" },
+      });
       expect(persisted.structure).toEqual([
         expect.objectContaining({
           block_id: blockId,
@@ -408,6 +413,84 @@ describe("atomic draft configuration revisions", () => {
           title_markdown: "Edited heading",
         }),
       ]);
+    }));
+
+  it("rejects an unknown numbering mode without creating a revision or candidate", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const setup = await fixture(database, dataRoot.layout);
+
+      await expect(
+        patchDraftConfig({
+          bookId: setup.book.id,
+          database,
+          expectedEtag: setup.currentEtag,
+          layout: dataRoot.layout,
+          nowMs: 10,
+          patch: { changes: [], numbering: "chapters-only" },
+        }),
+      ).rejects.toMatchObject({ code: "DRAFT_PATCH_INVALID" });
+
+      expect(
+        new DraftRepository(database).requireBook(setup.book.id),
+      ).toMatchObject({
+        currentCandidateId: null,
+        draftConfigRevision: 1,
+      });
+      await expect(
+        stat(
+          resolve(
+            dataRoot.layout.bookDirectory,
+            String(setup.book.id),
+            "draft",
+            "configs",
+            "2",
+          ),
+        ),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    }));
+
+  it("round trips every numbering mode without changing source content or numbers", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      const setup = await fixture(database, dataRoot.layout);
+      const drafts = new DraftRepository(database);
+      let etag = setup.currentEtag;
+
+      for (const [offset, numbering] of [
+        "generated",
+        "none",
+        "source",
+      ].entries()) {
+        const result = await patchDraftConfig({
+          bookId: setup.book.id,
+          database,
+          expectedEtag: etag,
+          layout: dataRoot.layout,
+          nowMs: 20 + offset,
+          patch: { changes: [], numbering },
+        });
+        etag = result.etag;
+        const persisted = parseBookConfigYaml(
+          await readFile(
+            resolve(
+              dataRoot.layout.root,
+              drafts.requireConfig(setup.book.id, result.revision)
+                .yamlRelativePath,
+            ),
+            "utf8",
+          ),
+        );
+
+        expect(persisted).toMatchObject({
+          publishing: { numbering: { mode: numbering } },
+          source: { main_markdown_sha256: setup.markdownHash },
+          structure: [
+            {
+              source_number: "Chapter 7",
+              title_markdown: "Source heading",
+            },
+          ],
+        });
+      }
     }));
 
   it("writes a read-only immutable revision and atomically queues its preview", () =>
