@@ -100,8 +100,8 @@ worker, authorization/cache, browser, reference exactness and performance eviden
 
 **Independent Test**: Each browser completes the desktop journeys and one mobile pass with no blocking visible, console, network, asset or overlap failure.
 
-- [ ] T039 [US4] Build the updated application and start isolated Web/worker processes on a free localhost port without stopping the existing port 4321 preview; record the URL in `specs/014-naming-import-path-closure/evidence.md`.
-- [ ] T040 [US4] Use the in-app Browser to inspect `/library`, `/manage`, `/manage/tasks`, a publishing workbench, preview and published Reader/TOC journey including console/network state.
+- [x] T039 [US4] Build the updated application and start isolated Web/worker processes on a free localhost port without stopping the existing port 4321 preview; record the URL in `specs/014-naming-import-path-closure/evidence.md`.
+- [x] T040 [US4] Use the in-app Browser to inspect `/library`, `/manage`, `/manage/tasks`, a publishing workbench, preview and published Reader/TOC journey including console/network state.
 - [ ] T041 [US4] Use Chrome independently for the same library, management/health, publishing, preview and Reader/TOC journey including console/network state, recording results in `specs/014-naming-import-path-closure/evidence.md`.
 - [ ] T042 [US4] Run at least one mobile-width library, management/publishing and Reader pass in each requested browser, inspect for clipped/overlapping/blank/unreachable UI, and record it in `specs/014-naming-import-path-closure/evidence.md`.
 - [ ] T043 [US4] Record route, viewport, interaction, console/network and screenshot evidence for both surfaces in `specs/014-naming-import-path-closure/evidence.md` and fix any regression before continuing.
@@ -114,14 +114,14 @@ worker, authorization/cache, browser, reference exactness and performance eviden
 
 **Purpose**: Complete repository gates, commit coherent batches and synchronize every artifact.
 
-- [ ] T044 Run Prettier on changed files followed by `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`; record exact counts/results in `specs/014-naming-import-path-closure/evidence.md`.
-- [ ] T045 Run `pnpm test:e2e` and the worker recovery/concurrency suites, preserving one claimed task, four-page backpressure, leases, timeout, retry, health, RSS and stage observation.
-- [ ] T046 Run authorization, private-resource 404, cache/indexing, publication crash, rollback, orphan recovery and immutable-version suites under `tests/integration/auth/`, `tests/integration/http/`, `tests/integration/publication/` and `tests/integration/recovery/`.
-- [ ] T047 Run all fifteen registered reference comparisons and the synthetic stress/representative performance gates; record exactness and wall/RSS/read/search results in `specs/014-naming-import-path-closure/evidence.md`.
-- [ ] T048 Synchronize import, named application API and filesystem rules in `docs/architecture/m1-architecture.md` plus any affected operations documentation.
-- [ ] T049 Re-evaluate every item in `specs/014-naming-import-path-closure/checklists/architecture-path.md` and `requirements.md` against final artifacts.
-- [ ] T050 Run Spec Kit analyze with no unmitigated CRITICAL finding, run converge, append any remaining work to `specs/014-naming-import-path-closure/tasks.md` and implement every appended task.
-- [ ] T051 Commit feature 014 in coherent governance, naming/import, path-hardening and verification batches and leave `git status` clean.
+- [x] T044 Run Prettier on changed files followed by `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`; record exact counts/results in `specs/014-naming-import-path-closure/evidence.md`.
+- [x] T045 Run `pnpm test:e2e` and the worker recovery/concurrency suites, preserving one claimed task, four-page backpressure, leases, timeout, retry, health, RSS and stage observation.
+- [x] T046 Run authorization, private-resource 404, cache/indexing, publication crash, rollback, orphan recovery and immutable-version suites under `tests/integration/auth/`, `tests/integration/http/`, `tests/integration/publication/` and `tests/integration/recovery/`.
+- [x] T047 Run all fifteen registered reference comparisons and the synthetic stress/representative performance gates; record exactness and wall/RSS/read/search results in `specs/014-naming-import-path-closure/evidence.md`.
+- [x] T048 Synchronize import, named application API and filesystem rules in `docs/architecture/m1-architecture.md` plus any affected operations documentation.
+- [x] T049 Re-evaluate every item in `specs/014-naming-import-path-closure/checklists/architecture-path.md` and `requirements.md` against final artifacts.
+- [x] T050 Run Spec Kit analyze with no unmitigated CRITICAL finding, run converge, append any remaining work to `specs/014-naming-import-path-closure/tasks.md` and implement every appended task.
+- [x] T051 Commit feature 014 in coherent governance, naming/import, path-hardening and verification batches and leave `git status` clean.
 
 ---
 

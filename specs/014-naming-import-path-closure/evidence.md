@@ -56,8 +56,41 @@
 
 ## Browser Evidence
 
-Pending.
+- Isolated updated Web and worker: `http://127.0.0.1:4322`; the existing preview on 4321 was not
+  stopped or reused.
+- In-app Browser desktop: public library, route-driven details, Reader page 1/page 2 navigation,
+  hierarchical TOC/page outline, administrator login, import page, task/recovery list, book 6
+  publishing workbench and generated preview iframe all rendered and interacted successfully.
+- In-app Browser visual/network indicators: 1280x720 library/Reader/workbench screenshots were
+  nonblank; required styles loaded; broken image count 0; document width stayed within viewport;
+  console warning/error logs remained empty.
+- In-app Browser responsive: 390x844 library, workbench/preview and Reader had no horizontal overflow,
+  blank view, clipped primary control or open-dialog overlap. Mobile Reader exposed directory, page
+  outline, search and download controls; mobile workbench exposed preview/structure switching.
+- The Browser client blocked direct top-level navigation to the private health JSON endpoint with its
+  own client policy. The authenticated `/manage/tasks` UI loaded worker-produced maintenance,
+  verification, build, interruption, cancellation and retry states without console errors.
+- Chrome plugin: **not executed**. Browser diagnostics found Google Chrome installed and running and
+  the native-host manifest correct, but the ChatGPT browser extension is not installed/enabled in the
+  selected `Default` profile. Plugin policy prohibits substituting another browser surface.
 
 ## Final Gates
 
-Pending.
+- `pnpm format`: passed.
+- `pnpm lint`: passed; canonical imports 0 replacements, dependency graph 286 files/0 diagnostics,
+  semantic names 0 diagnostics, ESLint/style tokens passed.
+- `pnpm typecheck`: 458 files, 0 errors, 0 warnings, 0 hints.
+- `pnpm test`: 123 files, 715 tests passed.
+- `pnpm build`: Astro server plus CLI/worker/child production bundles passed.
+- `MIRAWIND_E2E_PORT=4322 pnpm test:e2e`: 23 passed, 3 conditional skips.
+- Current-source reference generation: 15 registered MinerU fixtures regenerated under ignored
+  `.cache/014-reference-OTVDb2`; strict comparison returned `15/15` exact with zero issues.
+- Reference performance set: 3 designated real fixtures plus the 500-page synthetic stress fixture
+  all PASS. Worst idle read p95 `18.511 ms`, concurrent-build read p95 `34.033 ms`, normal search p95
+  `47.578 ms`, short search p95 `56.397 ms`; all are below 300/1,000 ms gates. Wall/RSS remained
+  within the accepted baseline tolerances. Sanitized report SHA-256:
+  `323795ed7f36973515a78b26fcb63f69531b70ff579149b1c8c92ce5bcbd6b2e`.
+- Final Spec Kit analyze: 27/27 buildable requirements covered, 0 CRITICAL, 0 unresolved
+  clarification, 0 constitution conflict.
+- Converge: no missing, contradictory or unrequested code work and no new task appended. The one
+  external partial finding (Chrome extension unavailable) is already tracked by T041–T043.
