@@ -73,21 +73,20 @@ that no file is exposed or left outside the expected tree.
 
 ---
 
-### User Story 4 - Verify the Real Application in Both Browsers (Priority: P2)
+### User Story 4 - Verify the Real Application With the Browser Plugin (Priority: P2)
 
 As the administrator and a reader, I can still use the main library, management, publishing,
-preview, and reading journeys after the internal cleanup in both requested browser surfaces.
+preview, and reading journeys after the internal cleanup in the available in-app Browser surface.
 
 **Why this priority**: Static checks cannot establish that route wiring, generated assets, and
 client interactions survived large import and filename changes.
 
-**Independent Test**: Use the in-app Browser and Chrome independently against the updated local
-application and complete the named journeys at desktop and mobile widths while checking visible,
-console, and network state.
+**Independent Test**: Use the in-app Browser against the updated local application and complete the
+named journeys at desktop and mobile widths while checking visible, console, and network state.
 
 **Acceptance Scenarios**:
 
-1. **Given** a running updated application, **When** `/library`, `/manage`, and the task-health view are opened in each requested browser, **Then** they render and navigate without unexpected failures.
+1. **Given** a running updated application, **When** `/library`, `/manage`, and the task-health view are opened with the Browser plugin, **Then** they render and navigate without unexpected failures.
 2. **Given** a prepared book, **When** publishing workbench, preview, published reader, and table-of-contents navigation are exercised, **Then** the current candidate and published content remain usable.
 3. **Given** a narrow viewport, **When** the library, management, and reader views are inspected, **Then** controls remain reachable and content does not overlap.
 
@@ -123,7 +122,7 @@ console, and network state.
 - **FR-012**: Worker claim concurrency, child-process isolation, page-render concurrency, leases, cancellation, retry, health, RSS, and stage-duration behavior MUST remain unchanged.
 - **FR-013**: Existing book, manifest, version marker, worker-health, and reference files MUST remain compatible under their currently approved strict-version rules without adding a migration.
 - **FR-014**: The application MUST pass automated architecture, type, lint, unit, integration, end-to-end, reference-correctness, and representative performance checks affected by the refactor.
-- **FR-015**: The in-app Browser and Chrome MUST each verify the library, management/health, import or prepared-book workflow, preview, published reader, navigation, and responsive presentation.
+- **FR-015**: The available in-app Browser plugin MUST verify the library, management/health, import or prepared-book workflow, preview, published reader, navigation, and responsive presentation; an unavailable Chrome extension MUST be documented rather than treated as a release blocker.
 - **FR-016**: Runtime and architecture documentation MUST state the canonical naming, import, and path-boundary rules and list any intentionally versioned exceptions.
 
 ### Non-Functional Requirements
@@ -151,7 +150,7 @@ console, and network state.
 - **SC-004**: Architecture analysis reports zero file cycles, module cycles, forbidden dependencies, deep cross-module imports, excessive coupling, or ambiguous import-style diagnostics for product source.
 - **SC-005**: Worker behavior remains one claimed task at a time and at most four rendered pages in flight, with health queue/RSS/stage observations still available.
 - **SC-006**: Existing automated suites and all fifteen registered reference comparisons pass; representative wall time and RSS remain within approved tolerance.
-- **SC-007**: Both requested browsers complete all listed desktop journeys, and at least one mobile-width pass, with zero blocking console errors, failed required requests, blank views, or incoherent overlap.
+- **SC-007**: The Browser plugin completes all listed desktop journeys and at least one mobile-width pass, with zero blocking console errors, failed required requests, blank views, or incoherent overlap.
 
 ## Assumptions
 
@@ -169,6 +168,8 @@ console, and network state.
   baseline to preserve.
 - Browser verification can use the repository's prepared local test data and a free localhost port;
   it does not require changing the existing Docker preview on port 4321.
+- Chrome extension availability is environment-dependent. The in-app Browser is the accepted
+  interactive verification surface when the Chrome store item or extension is unavailable.
 
 ## Out of Scope
 

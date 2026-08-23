@@ -178,10 +178,7 @@ test("shows, cancels, retries and recovers durable work without changing publica
     await expect(page.locator(`[data-job-id="${expired.id}"]`)).toContainText(
       "已中断",
     );
-    const health = await page.request.get("/api/manage/health");
-    expect(health.status()).toBe(200);
-    expect(health.headers()["cache-control"]).toBe("private, no-store");
-    const healthBody = (await health.json()) as {
+    type HealthBody = {
       worker: {
         queue: { queuedCount: number; runningCount: number };
         recentAttempt: {
@@ -194,6 +191,20 @@ test("shows, cancels, retries and recovers durable work without changing publica
         schemaVersion: number;
       } | null;
     };
+    let healthBody: HealthBody | undefined;
+    await expect
+      .poll(
+        async () => {
+          const health = await page.request.get("/api/manage/health");
+          expect(health.status()).toBe(200);
+          expect(health.headers()["cache-control"]).toBe("private, no-store");
+          healthBody = (await health.json()) as HealthBody;
+          return healthBody.worker?.recentAttempt?.stages.length ?? 0;
+        },
+        { timeout: 5_000 },
+      )
+      .toBeGreaterThan(0);
+    if (!healthBody) throw new Error("WORKER_HEALTH_MISSING");
     expect(healthBody.worker).toMatchObject({
       queue: {
         queuedCount: expect.any(Number),
@@ -201,7 +212,6 @@ test("shows, cancels, retries and recovers durable work without changing publica
       },
       schemaVersion: 2,
     });
-    expect(healthBody.worker?.recentAttempt?.stages.length).toBeGreaterThan(0);
     expect(
       healthBody.worker?.recentAttempt?.stages.every(
         (stage) => stage.durationMs >= 0 && stage.phase.length > 0,

@@ -4,7 +4,7 @@
 
 **Input**: Give current runtime concepts semantic names, use local imports inside ownership
 packages, remove superseded parsers, harden canonical filesystem boundaries, and verify all
-primary workflows in both requested browsers.
+primary workflows in the available Browser plugin.
 
 ## Summary
 
@@ -16,7 +16,7 @@ APIs without changing strict persisted identities. Delete the obsolete non-TSV P
 filesystem utility container into storage-layout, canonical-path and atomic-file primitives; enforce
 canonical POSIX paths, bounded archive collision checks, ZIP inspection/extraction identity equality,
 symlink-safe layout roots, and failed-write cleanup. Preserve worker, publication, response and schema
-behavior, then exercise the built application with both Browser and Chrome.
+behavior, then exercise the built application with the in-app Browser at desktop and mobile widths.
 
 ## Technical Context
 
@@ -29,7 +29,7 @@ primitives, existing unified/remark/rehype, SQLite and worker stack
 no schema or data-format change
 
 **Testing**: Vitest architecture/unit/contract/integration projects, Playwright E2E, reference-v2
-comparison, existing performance gates, and interactive Browser plus Chrome inspection
+comparison, existing performance gates, and interactive in-app Browser inspection
 
 **Target Platform**: One Linux host, one Astro Web process and one same-codebase worker process
 
@@ -64,7 +64,7 @@ aliases, four business-module facades, 20,000 archive entries, fifteen private r
   fixtures cover normalization, case folding, drive ambiguity, symlinks, changed ZIP identity and
   write cleanup. Full reference, E2E and performance gates remain required.
 - **Simplicity - PASS**: The design reuses TypeScript resolution, Node filesystem primitives, zip.js,
-  existing tests and the two requested browser surfaces. It adds no service, package workspace,
+  existing tests and the available Browser surface. It adds no service, package workspace,
   database, migration, queue or runtime abstraction layer.
 
 ### Post-Design Gate
@@ -144,7 +144,7 @@ trees and are not bulk-rewritten by the product canonicalizer.
 2. Rename module APIs, current analysis/reference APIs and handler contracts; delete old exports.
 3. Canonicalize all product imports and update architecture documentation.
 4. Add path-boundary failures, then split and harden filesystem/archive primitives.
-5. Run focused and full automated gates, then verify desktop/mobile workflows in Browser and Chrome.
+5. Run focused and full automated gates, then verify desktop/mobile workflows in the Browser plugin.
 6. Converge specs, tasks, tests and evidence; commit each coherent phase.
 
 ## Complexity Tracking

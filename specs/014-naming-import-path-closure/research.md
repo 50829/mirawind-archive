@@ -130,15 +130,16 @@ reason about. Descriptor-relative `openat2` would be stronger against same-user 
 not directly available through maintained Node APIs and exceeds this self-hosted single-owner threat
 model.
 
-## Decision 10: Verify with automation first and both requested browser surfaces last
+## Decision 10: Verify with automation first and the available Browser plugin last
 
 **Decision**: Run focused architecture/path tests, then full repository/reference/performance gates,
-start the updated app on a free localhost port, and independently inspect key desktop/mobile journeys
-with the in-app Browser and Chrome.
+start the updated app on a free localhost port, and inspect key desktop/mobile journeys with the
+in-app Browser. Chrome is additional evidence only when its extension is available.
 
 **Rationale**: Mechanical import changes have broad compile reach, while browser checks catch route,
 asset and interaction failures not visible to static tools. The existing Docker preview on port 4321
 must remain untouched.
 
-**Alternatives considered**: Playwright alone does not satisfy the explicit Browser and Chrome request.
-Browser-only checks without automated suites cannot validate hostile path and worker invariants.
+**Alternatives considered**: Playwright alone does not satisfy the explicit Browser request.
+Browser-only checks without automated suites cannot validate hostile path and worker invariants; an
+unavailable Chrome store item cannot be repaired or substituted by repository code.

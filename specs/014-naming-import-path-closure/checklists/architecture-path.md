@@ -40,7 +40,7 @@ complete and implementation-ready
 - [x] CHK020 Can semantic naming closure be measured without falsely counting stored version literals or vendor names? [Measurability, Spec §SC-002]
 - [x] CHK021 Are filesystem failure outcomes measurable in terms of rejected input and absence of unexpected files? [Measurability, Spec §SC-003]
 - [x] CHK022 Are worker concurrency and performance preservation expressed with existing numeric limits and tolerances? [Measurability, Spec §SC-005–SC-006]
-- [x] CHK023 Are browser outcomes measurable for both surfaces, desktop/mobile layout, visible state, console and required network requests? [Measurability, Spec §SC-007]
+- [x] CHK023 Are Browser-plugin outcomes measurable for desktop/mobile layout, visible state, console and required network requests, with Chrome unavailability handled explicitly? [Measurability, Spec §SC-007]
 
 ## Scenario And Edge Coverage
 
@@ -64,5 +64,5 @@ complete and implementation-ready
 - Depth is a formal release gate; focus is architecture consistency and hostile path/recovery coverage.
 - Re-evaluate this checklist if implementation evidence exposes a new path class or versioned artifact.
 - Final re-evaluation passed after canonical-parent symlink hardening, current-source reference exact,
-  performance, E2E and in-app Browser evidence. Chrome execution remains an external task condition,
-  not a requirements-quality defect.
+  performance, E2E and in-app Browser evidence. The unavailable Chrome store item is documented and
+  the user accepted the in-app Browser as the final interactive surface.

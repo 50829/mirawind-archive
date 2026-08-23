@@ -42,6 +42,9 @@ test("shares one responsive management hierarchy and retains library enhancement
       ),
     ).toBe(true);
   }
+  await page.goto("/manage/tasks");
+  await expect(page.getByRole("heading", { name: "最近完成" })).toBeVisible();
+  expect(await page.locator(".task-card").count()).toBeLessThanOrEqual(8);
   expect((await page.goto("/manage/books/999999999"))?.status()).toBe(404);
 
   const capability = await page.request.get(

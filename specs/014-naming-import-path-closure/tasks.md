@@ -94,19 +94,19 @@ worker, authorization/cache, browser, reference exactness and performance eviden
 
 ---
 
-## Phase 6: User Story 4 - Verify The Real Application In Both Browsers (Priority: P2)
+## Phase 6: User Story 4 - Verify The Real Application With The Browser Plugin (Priority: P2)
 
-**Goal**: Library, management, publishing, preview and reader workflows remain usable in both explicitly requested browser surfaces.
+**Goal**: Library, management, publishing, preview and reader workflows remain usable in the available in-app Browser surface.
 
-**Independent Test**: Each browser completes the desktop journeys and one mobile pass with no blocking visible, console, network, asset or overlap failure.
+**Independent Test**: The Browser plugin completes the desktop journeys and one mobile pass with no blocking visible, console, network, asset or overlap failure.
 
 - [x] T039 [US4] Build the updated application and start isolated Web/worker processes on a free localhost port without stopping the existing port 4321 preview; record the URL in `specs/014-naming-import-path-closure/evidence.md`.
 - [x] T040 [US4] Use the in-app Browser to inspect `/library`, `/manage`, `/manage/tasks`, a publishing workbench, preview and published Reader/TOC journey including console/network state.
-- [ ] T041 [US4] Use Chrome independently for the same library, management/health, publishing, preview and Reader/TOC journey including console/network state, recording results in `specs/014-naming-import-path-closure/evidence.md`.
-- [ ] T042 [US4] Run at least one mobile-width library, management/publishing and Reader pass in each requested browser, inspect for clipped/overlapping/blank/unreachable UI, and record it in `specs/014-naming-import-path-closure/evidence.md`.
-- [ ] T043 [US4] Record route, viewport, interaction, console/network and screenshot evidence for both surfaces in `specs/014-naming-import-path-closure/evidence.md` and fix any regression before continuing.
+- [x] T041 [US4] Use the in-app Browser to inspect task content density, recovery actions, publishing structure/preview switching and Reader drawer/search/navigation interaction, recording results in `specs/014-naming-import-path-closure/evidence.md`.
+- [x] T042 [US4] Run mobile-width library, task, management/publishing and Reader passes in the Browser plugin, inspect for clipped/overlapping/blank/unreachable UI, and record it in `specs/014-naming-import-path-closure/evidence.md`.
+- [x] T043 [US4] Record route, viewport, interaction, console/network and screenshot evidence for the available Browser surface and fix every observed regression before continuing.
 
-**Checkpoint**: Both Browser and Chrome establish real route and interaction continuity after the refactor.
+**Checkpoint**: The Browser plugin establishes real route, content and interaction continuity after the refactor.
 
 ---
 
@@ -122,6 +122,15 @@ worker, authorization/cache, browser, reference exactness and performance eviden
 - [x] T049 Re-evaluate every item in `specs/014-naming-import-path-closure/checklists/architecture-path.md` and `requirements.md` against final artifacts.
 - [x] T050 Run Spec Kit analyze with no unmitigated CRITICAL finding, run converge, append any remaining work to `specs/014-naming-import-path-closure/tasks.md` and implement every appended task.
 - [x] T051 Commit feature 014 in coherent governance, naming/import, path-hardening and verification batches and leave `git status` clean.
+
+---
+
+## Phase 8: Browser Follow-Up
+
+- [x] T052 [US4] Bound completed task history and preserve active/actionable recovery work in `src/web/components/import/TaskMonitor.tsx` after Browser evidence found 35 full cards and a 10,522 px default page.
+- [x] T053 [US4] Add task grouping/history coverage in `tests/unit/components/task-monitor.test.tsx` and refresh-aware management/worker assertions in `tests/e2e/manage-shell.spec.ts` and `tests/e2e/worker-recovery.spec.ts`.
+- [x] T054 [US4] Re-run Browser desktop/mobile task, workbench, preview, Reader drawer and search interactions and record the fixed card counts, dimensions and console state in `specs/014-naming-import-path-closure/evidence.md`.
+- [x] T055 Commit the Browser follow-up as a separate verified batch and leave `git status` clean.
 
 ---
 
@@ -141,8 +150,8 @@ worker, authorization/cache, browser, reference exactness and performance eviden
 - T023 and T024 affect independent runtime and offline reference concepts.
 - T030 and T031 split independent path and atomic-file primitives after T029 establishes the layout API.
 - Automated full-suite, reference and benchmark commands may run concurrently only when they do not
-  compete for the same worker/database/fixture resources; Browser and Chrome verification is sequential
-  per surface to keep evidence attributable.
+  compete for the same worker/database/fixture resources; Browser journeys remain sequential so
+  screenshots and console evidence stay attributable.
 
 ## Implementation Strategy
 

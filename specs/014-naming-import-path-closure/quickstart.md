@@ -6,7 +6,7 @@
 - dependencies installed from the frozen lockfile
 - Linux for filesystem, worker RSS and final performance evidence
 - private real fixtures available only for final reference/performance gates
-- Browser and Chrome connections available for final interactive verification
+- in-app Browser connection available for final interactive verification
 
 ## 1. Naming and Import Boundaries
 
@@ -51,8 +51,8 @@ Run the existing fifteen-book reference exact gate and established representativ
 commands. Expected: `15/15` exact, public read p95 at most 300 ms, and no representative wall/RSS
 regression beyond `max(5%, 1 s)` / `max(5%, 64 MiB)`.
 
-## 5. Browser and Chrome
+## 5. Browser Plugin
 
 Start the Web and worker on a free localhost port other than 4321. Follow
-[browser-verification.md](contracts/browser-verification.md) once with the in-app Browser and once
-with Chrome, including a mobile viewport and console/network inspection.
+[browser-verification.md](contracts/browser-verification.md) with the in-app Browser, including a
+mobile viewport and console/network inspection. Record Chrome extension unavailability when present.

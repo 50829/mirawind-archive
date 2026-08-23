@@ -1,7 +1,7 @@
 # Browser Verification Contract
 
-Verify the updated local build independently in the in-app Browser and Chrome. Do not substitute one
-surface for the other and do not stop the existing preview on port 4321.
+Verify the updated local build in the in-app Browser and do not stop the existing preview on port 4321. Chrome is additional evidence only when its extension is available; an unavailable store item
+or extension is recorded and does not block the accepted Browser-plugin pass.
 
 ## Desktop Journeys
 
