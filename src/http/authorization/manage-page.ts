@@ -1,4 +1,4 @@
-import { applyResponsePolicy } from "@/http/cache/policies";
+import { applyResponsePolicy } from "../cache/policies";
 
 export function redirectToAdministratorLogin(pathname: string): Response {
   const headers = new Headers({

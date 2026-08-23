@@ -3,15 +3,15 @@ import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
-  readMineruReferenceV2,
-  type MineruReferenceV2,
+  readMineruReference,
+  type MineruReference,
   type ReferenceAnchor,
   type ReferenceContentsRegion,
   type ReferenceContentsEntry,
   type ReferenceExpectedDiagnostic,
   type ReferenceHeadingAccounting,
   type ReferenceProtectedRange,
-} from "./mineru-reference-v2.js";
+} from "./mineru-reference.js";
 
 export interface ObservedProtectedRange extends ReferenceProtectedRange {
   readonly output_sha256: string;
@@ -21,9 +21,9 @@ export interface ObservedMineruOutcome {
   readonly archive_sha256: string;
   readonly diagnostics: readonly ReferenceExpectedDiagnostic[];
   readonly fixture_id: string;
-  readonly main_markdown: MineruReferenceV2["main_markdown"];
-  readonly original_pdf: MineruReferenceV2["original_pdf"];
-  readonly printed_contents: MineruReferenceV2["printed_contents"];
+  readonly main_markdown: MineruReference["main_markdown"];
+  readonly original_pdf: MineruReference["original_pdf"];
+  readonly printed_contents: MineruReference["printed_contents"];
   readonly protected_ranges: readonly ObservedProtectedRange[];
   readonly raw_heading_accounting: readonly ReferenceHeadingAccounting[];
 }
@@ -317,8 +317,8 @@ function compareHeading(
   }
 }
 
-export function compareMineruReferenceV2(
-  expected: MineruReferenceV2,
+export function compareMineruReference(
+  expected: MineruReference,
   actual: ObservedMineruOutcome,
 ): ReferenceComparison {
   const issues: ReferenceComparisonIssue[] = [];
@@ -514,14 +514,14 @@ export async function compareMineruReferenceSet(input: {
   }
   const comparisons: ReferenceComparison[] = [];
   for (const file of files) {
-    const expected = await readMineruReferenceV2(join(references, file));
+    const expected = await readMineruReference(join(references, file));
     if (`${expected.fixture_id}.json` !== file) {
       throw new Error("REFERENCE_V2_FILENAME_BINDING_MISMATCH");
     }
     const actual = JSON.parse(
       await readFile(join(observed, file), "utf8"),
     ) as ObservedMineruOutcome;
-    comparisons.push(compareMineruReferenceV2(expected, actual));
+    comparisons.push(compareMineruReference(expected, actual));
   }
   return Object.freeze({
     comparisons: Object.freeze(comparisons),

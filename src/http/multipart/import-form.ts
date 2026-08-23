@@ -15,8 +15,8 @@ import {
   importUploadIdempotencyOperation,
   m1ImportExpiryMs,
   maximumUploadBytes,
-} from "@/modules/publishing/application/public";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+} from "@/modules/publishing/application/publishing-api";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 type PublishingServer = ReturnType<typeof createPublishingImportServer>;
 type ImportStore = ReturnType<PublishingServer["storeImport"]>;

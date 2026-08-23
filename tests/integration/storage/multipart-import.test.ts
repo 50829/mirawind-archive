@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { storeMultipartImport } from "@/http/multipart/import-form";
-import { m1ImportExpiryMs } from "@/modules/publishing/application/public";
+import { m1ImportExpiryMs } from "@/modules/publishing/application/publishing-api";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 

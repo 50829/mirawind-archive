@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import type {
   CurrentBookVersion,
   CurrentVersionCatalogPort,
-} from "@/modules/catalog/application/public";
+} from "../../application/catalog-api";
 
 export class CurrentVersionCatalogRepository implements CurrentVersionCatalogPort {
   constructor(private readonly database: Database.Database) {}

@@ -8,7 +8,7 @@ import {
   completeBookDeletionInterruption,
   recordExpiredBookDeletion,
   retryBookDeletion,
-} from "@/composition/book-deletion";
+} from "../book-deletion";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import {
@@ -20,8 +20,8 @@ import {
   retryCandidateBuild,
   terminalizeCandidateBuild,
 } from "@/modules/publishing/application/commands/maintain-candidate-build";
-import type { StorageLayout } from "@/platform/filesystem/layout";
-import { resolveContainedPath } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 export async function cancelImportJob(input: {

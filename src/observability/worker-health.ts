@@ -8,14 +8,14 @@ import {
   type JobKind,
   type QueueObservation,
   type TerminalJobState,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 import type {
   AttemptErrorClass,
   AttemptObservation,
   ProcessTreeMemoryObservation,
   StageObservation,
-} from "@/observability/attempt-observation";
-import { atomicWriteFile } from "@/platform/filesystem/layout";
+} from "./attempt-observation";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 
 export const maximumWorkerHealthBytes = 64 * 1_024;
 export const workerHealthSchemaVersion = 2 as const;

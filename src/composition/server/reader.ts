@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 import { PublishedBookService } from "@/modules/reader/adapters/filesystem/published-book";
 import { BookSearchRepository } from "@/modules/reader/adapters/sqlite/book-search";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 export function createReaderServer(database: Database.Database) {
   const search = new BookSearchRepository(database);

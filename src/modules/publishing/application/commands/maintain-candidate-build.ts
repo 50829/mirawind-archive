@@ -1,8 +1,5 @@
 import { createOpaqueId } from "@/domain/ids";
-import type {
-  JobKind,
-  JobState,
-} from "@/modules/publishing/application/job-state";
+import type { JobKind, JobState } from "../job-state";
 
 export interface CandidateBuildAttempt {
   readonly bookId: number | null;

@@ -1,10 +1,10 @@
-import { BookSearch } from "@/web/features/reader/BookSearch";
+import { BookSearch } from "./BookSearch";
 import {
   readerBreadcrumbs,
   type ReaderOutlineLink,
   type ReaderPageModel,
-} from "@/modules/reader/application/public";
-import { TableOfContents } from "@/web/features/reader/TableOfContents";
+} from "@/modules/reader/application/reader-api";
+import { TableOfContents } from "./TableOfContents";
 import { readerMermaidScriptUrl, readerScriptUrl } from "@/styles/assets";
 
 function PageOutline(props: {

@@ -10,8 +10,8 @@ import type {
   BookDetails,
   PublicLibraryEntry,
   PublicLibraryView,
-} from "@/modules/catalog/application/library-model";
-import { createBookDeletionToken } from "@/modules/catalog/core/book-deletion-token";
+} from "../../application/library-model";
+import { createBookDeletionToken } from "../../core/book-deletion-token";
 
 const maximumPublicEntries = 5_000;
 const maximumAuthors = 100;

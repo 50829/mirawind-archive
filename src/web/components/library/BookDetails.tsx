@@ -1,4 +1,4 @@
-import type { BookDetails as BookDetailsView } from "@/modules/catalog/application/public";
+import type { BookDetails as BookDetailsView } from "@/modules/catalog/application/catalog-api";
 
 function formatBytes(value: number): string {
   if (value < 1_000) return `${value} B`;

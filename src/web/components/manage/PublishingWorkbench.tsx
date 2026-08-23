@@ -9,22 +9,22 @@ import {
   managePanel,
   manageQuietButton,
   manageSecondaryButton,
-} from "@/web/components/ui/manage-classes";
-import { usePolling } from "@/web/components/manage/use-polling";
+} from "../ui/manage-classes";
+import { usePolling } from "./use-polling";
 
-import { DiagnosticsPanel } from "@/web/components/manage/DiagnosticsPanel";
-import { BookSettingsDialog } from "@/web/components/manage/BookSettingsDialog";
-import { PublishPanel } from "@/web/components/manage/PublishPanel";
+import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import { BookSettingsDialog } from "./BookSettingsDialog";
+import { PublishPanel } from "./PublishPanel";
 import {
   StructureEditor,
   type StructureEditorHandle,
   type StructureEditorState,
-} from "@/web/components/manage/StructureEditor";
+} from "./StructureEditor";
 import type {
   DraftView,
   PreviewPage,
   RecoveryJob,
-} from "@/web/contracts/publishing";
+} from "../../contracts/publishing";
 
 const terminalJobStates = new Set<RecoveryJob["state"]>([
   "canceled",

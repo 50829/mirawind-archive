@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { open, type FileHandle } from "node:fs/promises";
 import { Readable } from "node:stream";
 
-import { resolveContainedPath } from "@/platform/filesystem/layout";
+import { resolveContainedPath, verifyContainedParent } from "./contained-path";
 
 export async function openVerifiedContainedFile(input: {
   readonly expectedSize: number;
@@ -12,6 +12,7 @@ export async function openVerifiedContainedFile(input: {
   let handle: FileHandle | undefined;
   try {
     const path = await resolveContainedPath(input.root, input.relativePath);
+    await verifyContainedParent(input.root, path);
     handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
     const metadata = await handle.stat();
     if (!metadata.isFile() || metadata.size !== input.expectedSize) {

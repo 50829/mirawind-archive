@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import type {
   BookAccessPort,
   BookAccess,
-} from "@/modules/catalog/application/commands/set-book-access";
+} from "../../application/commands/set-book-access";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 export class SqliteBookAccessRepository implements BookAccessPort {

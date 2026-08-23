@@ -3,10 +3,10 @@ import { rm } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 
-import { reconcileStorage } from "@/composition/storage-reconciliation";
-import { recoverWorkerAttempts } from "@/composition/worker/recover-attempts";
-import { WorkerHealthReporter } from "@/composition/worker/health-reporter";
-import { runWorkerLoop } from "@/composition/worker/loop";
+import { reconcileStorage } from "../storage-reconciliation";
+import { recoverWorkerAttempts } from "./recover-attempts";
+import { WorkerHealthReporter } from "./health-reporter";
+import { runWorkerLoop } from "./loop";
 import { parseEnvironment } from "@/config/environment";
 import { CurrentVersionCatalogRepository } from "@/modules/catalog/adapters/sqlite/current-version-recovery";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
@@ -15,13 +15,11 @@ import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
-import { scheduleStartupPublishingMaintenance } from "@/modules/publishing/application/public";
+import { scheduleStartupPublishingMaintenance } from "@/modules/publishing/application/publishing-api";
 import { WorkerCheckpointScheduler } from "@/entrypoints/worker/checkpoint";
 import { operationalMetrics } from "@/observability/metrics";
-import {
-  atomicWriteFile,
-  createStorageLayout,
-} from "@/platform/filesystem/layout";
+import { createStorageLayout } from "@/platform/filesystem/storage-layout";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 import { openDatabase } from "@/platform/sqlite/connection";
 
 function runtimeMode(): "development" | "production" | "test" {

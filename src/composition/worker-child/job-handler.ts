@@ -1,7 +1,7 @@
 import type {
   JobPhase,
   JobProgress,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 import type { JobResultMessage } from "@/entrypoints/worker/protocol";
 
 export type WorkerChildResultData = Readonly<

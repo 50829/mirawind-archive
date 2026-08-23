@@ -9,7 +9,7 @@ import type {
   SemanticContainerKind,
   SourcePosition,
   TransientDocumentNode,
-} from "@/modules/publishing/core/preparation/document-model";
+} from "./document-model";
 
 const containerKinds = new Set<SemanticContainerKind>([
   "definition",

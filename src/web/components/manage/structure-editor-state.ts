@@ -1,4 +1,4 @@
-import type { HeadingNumberingMode } from "@/modules/publishing/application/public";
+import type { HeadingNumberingMode } from "@/modules/publishing/application/publishing-api";
 
 export interface EditableStructureNode {
   readonly alias?: string;

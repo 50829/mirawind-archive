@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { BookCard } from "@/web/components/library/BookCard";
 import { LibraryScene } from "@/web/components/library/LibraryScene";
-import type { PublicLibraryEntry } from "@/modules/catalog/application/public";
+import type { PublicLibraryEntry } from "@/modules/catalog/application/catalog-api";
 
 const entry: PublicLibraryEntry = {
   authors: ["Ursula Writer"],

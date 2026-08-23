@@ -8,8 +8,8 @@ import {
   managePrimaryButton,
   manageQuietButton,
   manageSecondaryButton,
-} from "@/web/components/ui/manage-classes";
-import type { DraftView } from "@/web/contracts/publishing";
+} from "../ui/manage-classes";
+import type { DraftView } from "../../contracts/publishing";
 
 interface DraftImageChoice {
   readonly height: number;

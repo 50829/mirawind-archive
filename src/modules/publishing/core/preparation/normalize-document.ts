@@ -5,7 +5,7 @@ import type {
   NormalizedDocument,
   ParsedDocument,
   TransientDocumentNode,
-} from "@/modules/publishing/core/preparation/document-model";
+} from "./document-model";
 
 const blockTypes = new Set([
   "blockquote",

@@ -3,8 +3,8 @@ import { isAlias, isMap, isPair, isSeq, parseDocument } from "yaml";
 
 import bookSchema from "@/schemas/book.schema.json" with { type: "json" };
 import { SafeApplicationError } from "@/domain/errors";
-import { requireSupportedBookSchemaVersion } from "@/modules/publishing/core/publication/versioning-schema";
-import { parseHeadingMarkdown } from "@/modules/publishing/core/publication/heading-markdown";
+import { requireSupportedBookSchemaVersion } from "./versioning-schema";
+import { parseHeadingMarkdown } from "./heading-markdown";
 
 export interface BookConfigDiagnostic {
   readonly instancePath: string;

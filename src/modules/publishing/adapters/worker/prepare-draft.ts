@@ -5,29 +5,29 @@ import { dirname, resolve } from "node:path";
 import {
   extractZipFile,
   type ArchiveExtractionLimits,
-} from "@/modules/publishing/adapters/filesystem/extract-archive";
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { normalizeMineruPreformattedMarkdown } from "@/modules/publishing/core/preparation/mineru-preformatted";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
-import { readPdfContentsEvidence } from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
+} from "../filesystem/extract-archive";
+import { normalizeDocumentBlocks } from "../../core/preparation/normalize-document";
+import { normalizeMineruPreformattedMarkdown } from "../../core/preparation/mineru-preformatted";
+import { parseMarkdownDocument } from "../../core/preparation/parse-markdown";
 import {
   preprocessMarkdownTypography,
   type TypographyProvenance,
-} from "@/modules/publishing/core/preparation/typography";
-import { resolveDocumentResources } from "@/modules/publishing/adapters/filesystem/resolve-document-resources";
-import { claimSealedExtraction } from "@/modules/publishing/adapters/filesystem/sealed-extraction";
-import { analyzeDraftContents } from "@/modules/publishing/adapters/worker/draft-contents-analysis";
+} from "../../core/preparation/typography";
+import { resolveDocumentResources } from "../filesystem/resolve-document-resources";
+import { claimSealedExtraction } from "../filesystem/sealed-extraction";
+import {
+  analyzeDraftContents,
+  type PdfEvidenceReader,
+} from "./draft-contents-analysis";
 import {
   createPreparedSourceFiles,
   draftPreparationVersion,
   type PreparedDraftArtifact,
   preparationArtifactFilename,
   preparedSourceFilesFilename,
-} from "@/modules/publishing/adapters/worker/prepared-draft-artifact";
-import {
-  atomicWriteFile,
-  resolveContainedPath,
-} from "@/platform/filesystem/layout";
+} from "./prepared-draft-artifact";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 import {
   profilePipelineStage,
   recordPipelineProfileMetrics,
@@ -51,7 +51,7 @@ export async function prepareDraft(input: {
   readonly signal?: AbortSignal;
   readonly stagingDirectory: string;
   readonly typographyProfile?: TypographyProvenance["profile"];
-  readonly pdfEvidenceReader?: typeof readPdfContentsEvidence;
+  readonly pdfEvidenceReader?: PdfEvidenceReader;
   readonly onPhase?: (
     phase: "identify_document" | "organize_structure" | "security_check",
     completed: number,

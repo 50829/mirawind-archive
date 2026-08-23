@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
-import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
+import { parseMarkdownDocument } from "./parse-markdown";
+import { SourceTextIndex } from "./source-text-index";
 import type {
   TransientDocumentNode,
   TypographyProfile,
   TypographyProvenance,
-} from "@/modules/publishing/core/preparation/document-model";
+} from "./document-model";
 
 export type { TypographyProfile, TypographyProvenance };
 

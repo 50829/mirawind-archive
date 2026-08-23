@@ -6,9 +6,9 @@ import { isOpaqueId } from "@/domain/ids";
 import {
   archiveResourceLimits,
   type ArchiveExtractionResult,
-} from "@/modules/publishing/adapters/filesystem/extract-archive";
-import { maximumArchiveEntries } from "@/modules/publishing/adapters/filesystem/inspect-zip";
-import { atomicWriteFile } from "@/platform/filesystem/layout";
+} from "./extract-archive";
+import { maximumArchiveEntries } from "./inspect-zip";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 
 const markerFilename = "marker.json";
 const markerMaximumBytes = 4 * 1024;

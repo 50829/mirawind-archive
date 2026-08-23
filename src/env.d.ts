@@ -16,6 +16,7 @@ declare namespace App {
   interface Locals {
     requestContext: import("@/http/request-context").RequestContext;
     session:
-      import("@/modules/identity/application/public").RequestSession | null;
+      | import("@/modules/identity/application/identity-api").RequestSession
+      | null;
   }
 }

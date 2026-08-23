@@ -4,8 +4,8 @@ import { posix, relative, resolve, sep } from "node:path";
 import type Database from "better-sqlite3";
 
 import { isOpaqueId } from "@/domain/ids";
-import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+import { VersionRepository } from "../sqlite/versions";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 import { removeExactContainedTree } from "@/platform/filesystem/permanent-removal";
 
 export const publishingOrphanGraceMs = 60 * 60 * 1_000;
@@ -34,6 +34,13 @@ async function metadata(path: string) {
 async function existsAsDirectory(path: string): Promise<boolean> {
   const value = await metadata(path);
   return value !== null && !value.isSymbolicLink() && value.isDirectory();
+}
+
+async function ensureManagedDirectory(path: string): Promise<void> {
+  await mkdir(path, { mode: 0o700, recursive: true });
+  if (!(await existsAsDirectory(path))) {
+    throw new Error("STORAGE_DIRECTORY_UNSAFE");
+  }
 }
 
 function storageRelativePath(root: string, target: string): string {
@@ -83,7 +90,7 @@ async function reconcileStaging(input: {
   readonly nowMs: number;
 }): Promise<readonly string[]> {
   const stagingRoot = resolve(input.layout.root, "staging");
-  await mkdir(stagingRoot, { mode: 0o700, recursive: true });
+  await ensureManagedDirectory(stagingRoot);
   const entries = await readdir(stagingRoot, { withFileTypes: true });
   const removed: string[] = [];
   for (const entry of entries) {
@@ -148,7 +155,7 @@ async function quarantineOrphanVersions(input: {
       );
       await chmod(resolve(input.layout.bookDirectory, book.name), 0o700);
       await chmod(versionsDirectory, 0o700);
-      await mkdir(quarantineDirectory, { mode: 0o700, recursive: true });
+      await ensureManagedDirectory(quarantineDirectory);
       const targetName = `${entry.name}.${input.nowMs}`;
       const source = resolve(versionsDirectory, entry.name);
       if (entry.isDirectory() && !entry.isSymbolicLink()) {

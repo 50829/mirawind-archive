@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type { APIRoute } from "astro";
 
 import { createCatalogServer } from "@/composition/server/catalog";
-import type { BookDetails } from "@/modules/catalog/application/public";
+import type { BookDetails } from "@/modules/catalog/application/catalog-api";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { publicJsonResponse } from "@/http/cache/library-response";
 import { applyResponsePolicy } from "@/http/cache/policies";

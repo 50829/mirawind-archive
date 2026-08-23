@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 
-import type { BookVersionPresentation } from "@/modules/catalog/application/public";
+import type { BookVersionPresentation } from "@/modules/catalog/application/catalog-api";
 import {
   canonicalJson,
   parseBookConfigYaml,
   validateBookConfig,
   validateDocumentManifest,
-} from "@/modules/publishing/application/publication-formats";
+} from "./publication-formats";
 
 const maximumMetadataBytes = 65_536;
 const maximumTocPreviewBytes = 262_144;

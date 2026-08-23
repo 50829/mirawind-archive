@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import { createStrongEtag } from "@/http/cache/policies";
 import { SqliteBookAccessRepository } from "@/modules/catalog/adapters/sqlite/book-access";
 import { setBookAccess } from "@/modules/catalog/application/commands/set-book-access";
-import type { BookVersionPresentation } from "@/modules/catalog/application/public";
+import type { BookVersionPresentation } from "@/modules/catalog/application/catalog-api";
 import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 import { CandidatePublicationRepository } from "@/modules/publishing/adapters/sqlite/candidate-publication";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
@@ -15,7 +15,7 @@ import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions
 import {
   m1PublishPolicy,
   publishCandidate,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 import type { SearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 

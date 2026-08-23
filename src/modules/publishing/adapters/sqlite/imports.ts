@@ -4,10 +4,10 @@ import { hasControlCharacters } from "@/domain/text";
 import type {
   CandidateDiagnostic,
   MarkdownCandidate,
-} from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
+} from "../filesystem/discover-markdown-candidates";
 import { createOpaqueId } from "@/domain/ids";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
-import type { TypographyProfile } from "@/modules/publishing/core/preparation/document-model";
+import type { TypographyProfile } from "../../core/preparation/document-model";
 
 export type ImportState =
   | "uploaded"

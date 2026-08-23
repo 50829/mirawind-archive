@@ -4,12 +4,12 @@ import { createOpaqueId } from "@/domain/ids";
 import type {
   CandidateBuildAttempt,
   CandidateBuildRetryCapture,
-} from "@/modules/publishing/application/commands/maintain-candidate-build";
+} from "../../application/commands/maintain-candidate-build";
 import type {
   CurrentDraftCandidateRecord,
   CurrentDraftCandidateState,
-} from "@/modules/publishing/application/public";
-import { candidateBuildIdentities } from "@/modules/publishing/application/public";
+} from "../../application/publishing-api";
+import { candidateBuildIdentities } from "../../application/publishing-api";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 export type DraftCandidateState =

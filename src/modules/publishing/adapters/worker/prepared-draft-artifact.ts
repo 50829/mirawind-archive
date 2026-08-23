@@ -1,18 +1,18 @@
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import type { LayoutEvidenceDiagnostic } from "@/modules/publishing/core/preparation/layout-evidence";
-import type { PdfContentsEvidenceDiagnostic } from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
-import type { PrintedContentsCandidate } from "@/modules/publishing/core/preparation/printed-contents";
-import type { ProposedStructureNode } from "@/modules/publishing/core/preparation/structure-proposal";
-import type { ProposedStructureBoundaries } from "@/modules/publishing/core/preparation/structure-proposal";
-import type { ConfirmedSourceRegion } from "@/modules/publishing/core/preparation/document-model";
-import type { ContentCleanupProvenance } from "@/modules/publishing/core/preparation/prepared-document";
-import type { PdfSourceDiagnostic } from "@/modules/publishing/core/preparation/pdf-evidence-model";
+import type { LayoutEvidenceDiagnostic } from "../../core/preparation/layout-evidence";
+import type { PdfContentsEvidenceDiagnostic } from "../filesystem/read-pdf-contents-evidence";
+import type { PrintedContentsCandidate } from "../../core/preparation/printed-contents";
+import type { ProposedStructureNode } from "../../core/preparation/structure-proposal";
+import type { ProposedStructureBoundaries } from "../../core/preparation/structure-proposal";
+import type { ConfirmedSourceRegion } from "../../core/preparation/document-model";
+import type { ContentCleanupProvenance } from "../../core/preparation/prepared-document";
+import type { PdfSourceDiagnostic } from "../../core/preparation/pdf-evidence-model";
 import type {
   TypographyProvenance,
   TypographyRiskSummary,
-} from "@/modules/publishing/core/preparation/typography";
+} from "../../core/preparation/typography";
 
 export const draftPreparationVersion = "prepare-draft-v5";
 export const preparationArtifactFilename = "prepared-draft.json";

@@ -1,7 +1,7 @@
 import { SafeApplicationError } from "@/domain/errors";
-import type { NormalizedDocument } from "@/modules/publishing/core/preparation/document-model";
-import type { ContentRole } from "@/modules/publishing/core/preparation/structure-proposal";
-import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
+import type { NormalizedDocument } from "../preparation/document-model";
+import type { ContentRole } from "../preparation/structure-proposal";
+import { validateBookConfig } from "./book-config-schema";
 
 export interface ConfigSemanticDiagnostic {
   readonly block_id?: string;

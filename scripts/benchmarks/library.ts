@@ -11,7 +11,7 @@ import Database from "better-sqlite3";
 import { openDatabase } from "../../src/platform/sqlite/connection.js";
 import { applyMigrations } from "../../src/platform/sqlite/migrate.js";
 import { loadMigrationManifest } from "../../src/platform/sqlite/migration-manifest.js";
-import { createStorageLayout } from "../../src/platform/filesystem/layout.js";
+import { createStorageLayout } from "../../src/platform/filesystem/storage-layout.js";
 import {
   argumentMap,
   boundedInteger,

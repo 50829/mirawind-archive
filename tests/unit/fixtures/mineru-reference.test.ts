@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import { parseMineruReferenceV2 } from "../../../scripts/fixtures/mineru-reference-v2";
+import { parseMineruReference } from "../../../scripts/fixtures/mineru-reference";
 
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
@@ -98,7 +98,7 @@ function reference() {
 
 describe("MinerU reference v2", () => {
   it("accepts a strict hash-bound reference", () => {
-    const parsed = parseMineruReferenceV2(reference());
+    const parsed = parseMineruReference(reference());
 
     expect(parsed).toMatchObject({
       fixture_id: "real-mineru-a7f31c",
@@ -113,19 +113,19 @@ describe("MinerU reference v2", () => {
 
   it("rejects v1, unknown newer versions and unknown fields", () => {
     expect(() =>
-      parseMineruReferenceV2({ ...reference(), schema_version: 1 }),
+      parseMineruReference({ ...reference(), schema_version: 1 }),
     ).toThrow(/schema_version must be 2/);
     expect(() =>
-      parseMineruReferenceV2({ ...reference(), schema_version: 3 }),
+      parseMineruReference({ ...reference(), schema_version: 3 }),
     ).toThrow(/schema_version must be 2/);
     expect(() =>
-      parseMineruReferenceV2({ ...reference(), proposal_output: [] }),
+      parseMineruReference({ ...reference(), proposal_output: [] }),
     ).toThrow(/missing or unexpected fields/);
   });
 
   it("rejects manual structure adjudication recoveries", () => {
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...reference(),
         expected_diagnostics: [
           {
@@ -143,7 +143,7 @@ describe("MinerU reference v2", () => {
     if (!first) throw new Error("missing test region");
 
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...reference(),
         printed_contents: {
           regions: [{ ...first, canonical: false }],
@@ -152,7 +152,7 @@ describe("MinerU reference v2", () => {
       }),
     ).toThrow(/exactly one canonical region/);
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...reference(),
         printed_contents: {
           regions: [first, { ...first, region_key: "brief-contents" }],
@@ -170,17 +170,17 @@ describe("MinerU reference v2", () => {
       raw_heading_accounting: reference().raw_heading_accounting.slice(1),
     };
 
-    expect(parseMineruReferenceV2(noContents).printed_contents.state).toBe(
+    expect(parseMineruReference(noContents).printed_contents.state).toBe(
       "absent",
     );
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...noContents,
         printed_contents: reference().printed_contents,
       }),
     ).not.toThrow();
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...noContents,
         printed_contents: {
           regions: reference().printed_contents.regions,
@@ -193,13 +193,13 @@ describe("MinerU reference v2", () => {
   it("rejects duplicate or inconsistent heading accounting", () => {
     const accounting = reference().raw_heading_accounting;
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...reference(),
         raw_heading_accounting: [accounting[0], accounting[0]],
       }),
     ).toThrow(/heading anchors must be unique/);
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...reference(),
         raw_heading_accounting: [
           {
@@ -219,7 +219,7 @@ describe("MinerU reference v2", () => {
     }
 
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...reference(),
         raw_heading_accounting: [
           ...reference().raw_heading_accounting,
@@ -237,7 +237,7 @@ describe("MinerU reference v2", () => {
 
   it("rejects invalid ranges, pages and matched entry anchors", () => {
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...reference(),
         protected_ranges: [
           { ...reference().protected_ranges[0], end_byte: 100 },
@@ -245,7 +245,7 @@ describe("MinerU reference v2", () => {
       }),
     ).toThrow(/range must not be empty/);
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...reference(),
         printed_contents: {
           ...reference().printed_contents,
@@ -259,7 +259,7 @@ describe("MinerU reference v2", () => {
       }),
     ).toThrow(/outside the PDF/);
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...reference(),
         printed_contents: {
           ...reference().printed_contents,
@@ -283,7 +283,7 @@ describe("MinerU reference v2", () => {
     const item = reference().protected_ranges[0];
     if (!item) throw new Error("test fixture is incomplete");
     expect(() =>
-      parseMineruReferenceV2({
+      parseMineruReference({
         ...reference(),
         protected_ranges: Array.from({ length: 100_001 }, (_, index) => ({
           ...item,

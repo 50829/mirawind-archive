@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
-import { type createHttpAuth } from "@/modules/identity/adapters/better-auth/http-auth";
-import { appendIdentityAuditEvent } from "@/modules/identity/adapters/sqlite/identity-audit-events";
+import { type createHttpAuth } from "../better-auth/http-auth";
+import { appendIdentityAuditEvent } from "./identity-audit-events";
 
 export type FinalPasskeyDeletionResult =
   | { readonly deleted: true }

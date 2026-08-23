@@ -1,5 +1,5 @@
-import type { CurrentBookVersion } from "@/modules/catalog/application/public";
-import type { BookVersionRecord } from "@/modules/publishing/application/version-record";
+import type { CurrentBookVersion } from "@/modules/catalog/application/catalog-api";
+import type { BookVersionRecord } from "../version-record";
 
 interface StartupJob {
   readonly id: string;

@@ -1,10 +1,8 @@
 import { createHash } from "node:crypto";
 import { posix, resolve } from "node:path";
 
-import {
-  atomicWriteFile,
-  resolveContainedPath,
-} from "@/platform/filesystem/layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 
 export interface CandidateFileDescriptor {
   readonly path: string;
@@ -19,6 +17,7 @@ export interface CandidateFileSink {
 
 export interface CandidateFileInventory extends CandidateFileSink {
   snapshot(): readonly CandidateFileDescriptor[];
+  writeVersionMarker(content: string): Promise<void>;
 }
 
 function descriptor(
@@ -87,6 +86,11 @@ export function createCandidateFileInventory(
       const target = await resolveContainedPath(candidateRoot, path);
       await atomicWriteFile(target, content, { mode: 0o400 });
       record(file);
+    },
+    async writeVersionMarker(content: string): Promise<void> {
+      await atomicWriteFile(resolve(candidateRoot, "version.json"), content, {
+        mode: 0o400,
+      });
     },
   });
 }

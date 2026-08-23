@@ -13,13 +13,14 @@ import {
 } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
-import { validateVersionMarker } from "@/modules/publishing/core/publication/document-manifest-schema";
-import type { CandidateTreeCrashPointInjector } from "@/modules/publishing/application/candidate-durability";
-import { injectCandidateTreeCrashPoint } from "@/modules/publishing/application/candidate-durability";
-import {
-  resolveContainedPath,
-  type StorageLayout,
-} from "@/platform/filesystem/layout";
+import { validateVersionMarker } from "../../core/publication/document-manifest-schema";
+import type { CandidateTreeCrashPointInjector } from "../../application/candidate-durability";
+import { injectCandidateTreeCrashPoint } from "../../application/candidate-durability";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
+
+export interface CandidateTreeLayout {
+  readonly bookDirectory: string;
+}
 
 async function syncDirectory(path: string): Promise<void> {
   const handle = await open(path, "r");
@@ -108,7 +109,7 @@ export async function finalizeCandidateTree(input: {
     readonly versionId: string;
   };
   readonly crashPoint?: CandidateTreeCrashPointInjector;
-  readonly layout: StorageLayout;
+  readonly layout: CandidateTreeLayout;
   readonly stagingDirectory: string;
 }): Promise<string> {
   const stagedVersion = await resolveContainedPath(

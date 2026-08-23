@@ -10,8 +10,8 @@ import { reconcilePublishingStorage } from "@/modules/publishing/adapters/filesy
 import {
   verifyAndRecoverCurrentVersions,
   type CurrentVersionRecovery,
-} from "@/composition/version-verification";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+} from "./version-verification";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 export interface StorageReconciliation {
   readonly corruptDatabaseVersions: readonly string[];

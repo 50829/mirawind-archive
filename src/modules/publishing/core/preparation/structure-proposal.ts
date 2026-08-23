@@ -3,13 +3,13 @@ import {
   inferPrintedReferenceLevel,
   inferPrintedReferenceLevels,
   isLocalPartHeading,
-} from "@/modules/publishing/core/preparation/printed-contents";
-import { configuredHeadingTitle } from "@/modules/publishing/core/preparation/heading-title";
+} from "./printed-contents";
+import { configuredHeadingTitle } from "./heading-title";
 import type {
   NormalizedDocument,
   NormalizedHeading,
   TransientDocumentNode,
-} from "@/modules/publishing/core/preparation/document-model";
+} from "./document-model";
 
 export type ContentRole = "appendix" | "backmatter" | "body" | "frontmatter";
 

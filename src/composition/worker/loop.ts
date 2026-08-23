@@ -1,8 +1,8 @@
 import type Database from "better-sqlite3";
 
-import { executeWorkerAttempt } from "@/composition/worker/execute-attempt";
-import { completeWorkerAttempt } from "@/composition/worker/complete-attempt";
-import { recoverWorkerAttempts } from "@/composition/worker/recover-attempts";
+import { executeWorkerAttempt } from "./execute-attempt";
+import { completeWorkerAttempt } from "./complete-attempt";
+import { recoverWorkerAttempts } from "./recover-attempts";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
@@ -13,7 +13,7 @@ import type {
   JobProgress,
   QueueObservation,
   TerminalJobState,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 import {
   WorkerCheckpointScheduler,
   type WorkerStorageHealth,
@@ -23,7 +23,7 @@ import {
   type AttemptObservation,
 } from "@/observability/attempt-observation";
 import { operationalMetrics } from "@/observability/metrics";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 export const workerPollIntervalMs = 1_000;
 

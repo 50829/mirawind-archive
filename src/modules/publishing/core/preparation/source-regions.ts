@@ -6,8 +6,8 @@ import type {
   NormalizedDocument,
   TransientDocumentNode,
   Utf8ByteRange,
-} from "@/modules/publishing/core/preparation/document-model";
-import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
+} from "./document-model";
+import { SourceTextIndex } from "./source-text-index";
 
 export interface SourceRegionDiagnostic {
   readonly code:

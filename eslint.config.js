@@ -31,19 +31,6 @@ export default tseslint.config(
   {
     files: ["src/**/*.{astro,js,mjs,ts,tsx}"],
     ignores: ["src/schemas/**"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["./*", "../*"],
-              message: "Use the canonical @/ product-source import.",
-            },
-          ],
-        },
-      ],
-    },
   },
   {
     files: ["**/*.{ts,tsx}"],

@@ -16,19 +16,17 @@ import { dirname, relative, resolve, sep } from "node:path";
 import type Database from "better-sqlite3";
 
 import { SafeApplicationError } from "@/domain/errors";
-import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
+import { DraftRepository } from "../sqlite/drafts";
+import { SourceRepository } from "../sqlite/sources";
 import {
-  parsePrintedContentsAnalysisV2,
-  type PrintedContentsAnalysisV2,
-} from "@/modules/publishing/core/preparation/printed-contents-analysis";
-import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
-import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
-import {
-  atomicWriteFile,
-  resolveContainedPath,
-  type StorageLayout,
-} from "@/platform/filesystem/layout";
+  parsePrintedContentsAnalysis,
+  type PrintedContentsAnalysis,
+} from "../../core/preparation/printed-contents-analysis";
+import { parseBookConfigYaml } from "../../core/publication/book-config-schema";
+import { canonicalJson } from "../../core/publication/manifest";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 
 export const maximumDraftSourceBytes = 256 * 1024 * 1024;
 
@@ -217,15 +215,15 @@ export async function cloneDraftAnalysis(input: {
   readonly sourceId: string;
   readonly sourceSha256: string;
 }): Promise<void> {
-  const current = parsePrintedContentsAnalysisV2(
+  const current = parsePrintedContentsAnalysis(
     JSON.parse(await readFile(input.currentPath, "utf8")),
   );
-  const next = parsePrintedContentsAnalysisV2({
+  const next = parsePrintedContentsAnalysis({
     ...current,
     config_revision: input.revision,
     source_id: input.sourceId,
     source_sha256: input.sourceSha256,
     typography: { risk_summaries: [], truncated: false },
-  } satisfies PrintedContentsAnalysisV2);
+  } satisfies PrintedContentsAnalysis);
   await atomicWriteFile(input.nextPath, canonicalJson(next), { mode: 0o400 });
 }

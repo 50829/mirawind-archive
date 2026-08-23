@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { MarkdownCandidate } from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
 import {
-  parsePrintedContentsAnalysisV2,
+  parsePrintedContentsAnalysis,
   printedContentsAnalysisIdentity,
 } from "@/modules/publishing/core/preparation/printed-contents-analysis";
 import { readPdfContentsEvidence } from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
@@ -292,7 +292,7 @@ describe("prepare_draft candidate handoff", () => {
         "1.json",
       );
       expect(
-        parsePrintedContentsAnalysisV2(
+        parsePrintedContentsAnalysis(
           JSON.parse(await readFile(analysisPath, "utf8")),
         ),
       ).toMatchObject({

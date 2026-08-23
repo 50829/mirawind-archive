@@ -1,6 +1,6 @@
 import { confirm, input, password } from "@inquirer/prompts";
 
-import type { AdminPromptResult } from "@/entrypoints/cli/admin-cli";
+import type { AdminPromptResult } from "./admin-cli";
 
 async function confirmedPassword(): Promise<string> {
   const first = await password({

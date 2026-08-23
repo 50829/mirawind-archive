@@ -7,8 +7,8 @@ import {
   manageFieldLabel,
   manageQuietButton,
   manageQuietText,
-} from "@/web/components/ui/manage-classes";
-import type { PreviewDiagnostic } from "@/web/contracts/publishing";
+} from "../ui/manage-classes";
+import type { PreviewDiagnostic } from "../../contracts/publishing";
 
 function targetPage(diagnostic: PreviewDiagnostic): number | null {
   const target = diagnostic.targets?.find(

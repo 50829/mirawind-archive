@@ -7,8 +7,8 @@ import {
   verifyVersionFully,
   type CurrentVersionRecovery,
   type VersionVerificationResult,
-} from "@/composition/version-verification";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+} from "./version-verification";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 export interface VersionVerificationOutcome {
   readonly recovery: CurrentVersionRecovery | null;

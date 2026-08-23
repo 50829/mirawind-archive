@@ -27,14 +27,12 @@ import {
   SourceRepository,
   type OriginalFileRecord,
   type SourceSnapshotRecord,
-} from "@/modules/publishing/adapters/sqlite/sources";
+} from "../sqlite/sources";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import { createOpaqueId } from "@/domain/ids";
-import type { StorageLayout } from "@/platform/filesystem/layout";
-import {
-  openExclusiveFile,
-  resolveContainedPath,
-} from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
+import { openExclusiveFile } from "@/platform/filesystem/atomic-file";
 import { removeExactContainedTree } from "@/platform/filesystem/permanent-removal";
 
 export interface SourceSnapshotResult {

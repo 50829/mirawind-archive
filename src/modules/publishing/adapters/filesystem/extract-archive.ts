@@ -4,15 +4,14 @@ import { dirname, resolve } from "node:path";
 import { ZipReader } from "@zip.js/zip.js";
 
 import { SafeApplicationError } from "@/domain/errors";
-import {
-  openExclusiveFile,
-  resolveContainedPath,
-} from "@/platform/filesystem/layout";
+import { normalizeArchiveEntryPath } from "../../core/preparation/archive-path-policy";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
+import { openExclusiveFile } from "@/platform/filesystem/atomic-file";
 import {
   inspectZipFile,
   NodeFileReader,
   toArchiveFormatError,
-} from "@/modules/publishing/adapters/filesystem/inspect-zip";
+} from "./inspect-zip";
 
 export const archiveResourceLimits = Object.freeze({
   entryBytes: 2 * 1024 * 1024 * 1024,
@@ -191,8 +190,23 @@ export async function extractZipFile(input: {
       if (!entry || !inspected) {
         throw new Error("Archive entry set is incomplete");
       }
-      if (entry.directory !== inspected.directory) {
-        throw new Error("Archive entry type changed between validation passes");
+      const currentPath = normalizeArchiveEntryPath(entry.rawFilename);
+      if (
+        entry.directory !== inspected.directory ||
+        currentPath.normalizedPath !== inspected.path.normalizedPath ||
+        entry.compressedSize !== inspected.compressedSize ||
+        entry.uncompressedSize !== inspected.uncompressedSize ||
+        entry.compressionMethod !== inspected.compressionMethod ||
+        entry.signature !== inspected.signature ||
+        entry.encrypted !== inspected.encrypted ||
+        (entry.rawBitFlag ?? 0) !== inspected.rawBitFlag ||
+        entry.diskNumberStart !== inspected.diskNumberStart ||
+        entry.externalFileAttributes !== inspected.externalFileAttributes ||
+        entry.versionMadeBy !== inspected.versionMadeBy
+      ) {
+        throw new Error(
+          "Archive entry identity changed between validation passes",
+        );
       }
       const target = await resolveContainedPath(
         destination,

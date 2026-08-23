@@ -6,7 +6,7 @@ import type { EnvironmentConfig } from "@/config/environment";
 import {
   createPasskeyPolicyHooks,
   recordPasskeyUse,
-} from "@/modules/identity/adapters/sqlite/passkey-policy";
+} from "../sqlite/passkey-policy";
 
 export interface AuthFactoryInput {
   readonly database: Database.Database;

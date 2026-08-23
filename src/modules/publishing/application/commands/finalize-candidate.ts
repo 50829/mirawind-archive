@@ -2,7 +2,7 @@ import {
   parseCandidateBuildArtifact,
   type BuildCandidateCommand,
   type CandidateBuildArtifact,
-} from "@/modules/publishing/application/commands/build-candidate";
+} from "./build-candidate";
 
 export interface CandidateRegistrationPort<Result> {
   register(input: {

@@ -1,12 +1,12 @@
 import { resolve } from "node:path";
 
 import type { DeletionSafeErrorCode } from "@/domain/book-deletion";
-import type { BookRemovalInventoryPort } from "@/modules/catalog/application/public";
+import type { BookRemovalInventoryPort } from "../../application/catalog-api";
 import {
   removeExactContainedTree,
   UnsafePermanentRemovalTargetError,
 } from "@/platform/filesystem/permanent-removal";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 export interface PermanentBookCleanupResult {
   readonly removedStagingDirectories: number;

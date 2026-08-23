@@ -1,4 +1,4 @@
-import type { ResponsePolicyKind } from "@/http/cache/policies";
+import type { ResponsePolicyKind } from "../cache/policies";
 
 export function errorPolicyForRequest(
   requestPath: string,

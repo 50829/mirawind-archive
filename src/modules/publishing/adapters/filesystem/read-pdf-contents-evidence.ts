@@ -2,16 +2,16 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import type { LayoutEvidenceRecord } from "@/modules/publishing/core/preparation/layout-evidence";
+import type { LayoutEvidenceRecord } from "../../core/preparation/layout-evidence";
 import type {
   PdfContentsEvidence,
   PdfContentsEvidenceDiagnostic,
-} from "@/modules/publishing/core/preparation/pdf-evidence-model";
+} from "../../core/preparation/pdf-evidence-model";
 
 export type {
   PdfContentsEvidence,
   PdfContentsEvidenceDiagnostic,
-} from "@/modules/publishing/core/preparation/pdf-evidence-model";
+} from "../../core/preparation/pdf-evidence-model";
 
 export interface PdfContentsEvidenceCommands {
   readonly pdfinfo: string;
@@ -142,46 +142,6 @@ function pageCountFromPdfInfo(value: string): number {
     throw new ProcessOutputError();
   }
   return count;
-}
-
-function legacyNativeRecords(
-  value: string,
-  pageLimit: number,
-): {
-  readonly candidatePages: readonly number[];
-  readonly records: readonly LayoutEvidenceRecord[];
-} {
-  const pages = value.split("\f").slice(0, pageLimit);
-  const records: LayoutEvidenceRecord[] = [];
-  const candidatePages: number[] = [];
-  let sourceOrder = 0;
-  for (const [pageIndex, page] of pages.entries()) {
-    const lines = page
-      .split(/\r?\n/u)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && line.length <= maximumTextLength);
-    const rowCount = lines.filter((line) => printedRow.test(line)).length;
-    if (
-      lines.some((line) => contentsLabel.test(line.normalize("NFKC"))) ||
-      rowCount >= 2
-    ) {
-      candidatePages.push(pageIndex);
-      for (const text of lines) {
-        records.push(
-          Object.freeze({
-            pageIndex,
-            sourceOrder: sourceOrder++,
-            text,
-            type: "text",
-          }),
-        );
-      }
-    }
-  }
-  return Object.freeze({
-    candidatePages: Object.freeze(candidatePages),
-    records: Object.freeze(records.slice(0, maximumRecords)),
-  });
 }
 
 interface NativePdfWord {
@@ -372,18 +332,6 @@ function nativeTsvRecords(
         .slice(0, maximumRecords),
     ),
   });
-}
-
-function nativeRecords(
-  value: string,
-  pageLimit: number,
-): {
-  readonly candidatePages: readonly number[];
-  readonly records: readonly LayoutEvidenceRecord[];
-} {
-  return (
-    nativeTsvRecords(value, pageLimit) ?? legacyNativeRecords(value, pageLimit)
-  );
 }
 
 interface TsvWord {
@@ -600,8 +548,8 @@ export async function readPdfContentsEvidence(input: {
         limits.pageTimeoutMs,
       ),
     });
-    const native = nativeRecords(nativeText, pageLimit);
-    if (native.records.length > 0) {
+    const native = nativeTsvRecords(nativeText, pageLimit);
+    if (native && native.records.length > 0) {
       return Object.freeze({
         diagnostics: Object.freeze(diagnostics),
         inspectedPageIndices: native.candidatePages,

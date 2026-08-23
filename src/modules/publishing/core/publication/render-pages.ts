@@ -1,19 +1,16 @@
 import type { SafeDiagnostic } from "@/domain/errors";
-import type {
-  CompiledBook,
-  PagePlan,
-} from "@/modules/publishing/core/publication/compiled-book";
-import { documentForPage } from "@/modules/publishing/core/publication/compiled-book";
+import type { CompiledBook, PagePlan } from "./compiled-book";
+import { documentForPage } from "./compiled-book";
 import {
   renderSemanticDocument,
   type RenderSemanticDocumentOptions,
   type SemanticRenderResult,
-} from "@/modules/publishing/core/publication/render-document";
-import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
+} from "./render-document";
+import type { ResourceResolution } from "./resource-model";
 import {
   createRouteNeutralLinkScope,
   type RouteNeutralReference,
-} from "@/modules/publishing/core/publication/route-neutral-links";
+} from "./route-neutral-links";
 
 const maximumConcurrentPages = 4;
 

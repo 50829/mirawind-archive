@@ -4,18 +4,15 @@ import { dirname, resolve } from "node:path";
 import {
   extractZipFile,
   type ArchiveExtractionLimits,
-} from "@/modules/publishing/adapters/filesystem/extract-archive";
+} from "../filesystem/extract-archive";
 import {
   discoverMarkdownCandidates,
   type CandidateDiscovery,
   type MarkdownCandidate,
-} from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
-import { sealExtractedDirectory } from "@/modules/publishing/adapters/filesystem/sealed-extraction";
-import {
-  ImportRepository,
-  type ImportRecord,
-} from "@/modules/publishing/adapters/sqlite/imports";
-import { atomicWriteFile } from "@/platform/filesystem/layout";
+} from "../filesystem/discover-markdown-candidates";
+import { sealExtractedDirectory } from "../filesystem/sealed-extraction";
+import { ImportRepository, type ImportRecord } from "../sqlite/imports";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 import {
   profilePipelineStage,
   recordPipelineProfileMetrics,

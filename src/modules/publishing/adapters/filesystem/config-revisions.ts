@@ -6,29 +6,31 @@ import type Database from "better-sqlite3";
 import { stringify } from "yaml";
 
 import {
-  parsePrintedContentsAnalysisV2,
-  type PrintedContentsAnalysisV2,
-} from "@/modules/publishing/core/preparation/printed-contents-analysis";
-import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
-import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
-import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
+  parsePrintedContentsAnalysis,
+  type PrintedContentsAnalysis,
+} from "../../core/preparation/printed-contents-analysis";
+import { canonicalJson } from "../../core/publication/manifest";
+import { DraftRepository } from "../sqlite/drafts";
+import { DraftCandidateRepository } from "../sqlite/draft-candidate-repository";
+import { SourceRepository } from "../sqlite/sources";
 import { SafeApplicationError } from "@/domain/errors";
 import { createStrongEtag } from "@/http/cache/policies";
 import {
   parseBookConfigYaml,
   validateBookConfig,
-} from "@/modules/publishing/core/publication/book-config-schema";
-import type { HeadingNumberingMode } from "@/modules/publishing/core/publication/heading-presentation";
-import { validateConfiguredStructureHierarchy } from "@/modules/publishing/core/publication/validate-config";
-import {
-  atomicWriteFile,
-  resolveContainedPath,
-  type StorageLayout,
-} from "@/platform/filesystem/layout";
+} from "../../core/publication/book-config-schema";
+import type { HeadingNumberingMode } from "../../core/publication/heading-presentation";
+import { validateConfiguredStructureHierarchy } from "../../core/publication/validate-config";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 
 const maximumConfigBytes = 4 * 1024 * 1024;
 const maximumAnalysisBytes = 4 * 1024 * 1024;
+
+export interface DraftConfigStorage {
+  readonly bookDirectory: string;
+  readonly root: string;
+}
 
 function dataRelativePath(root: string, target: string): string {
   const result = relative(root, target).split(sep).join("/");
@@ -51,7 +53,7 @@ function equalJson(left: unknown, right: unknown): boolean {
 async function clonePrintedContentsAnalysis(input: {
   readonly bookId: number;
   readonly currentRevision: number;
-  readonly layout: StorageLayout;
+  readonly layout: DraftConfigStorage;
   readonly nextRevision: number;
   readonly sourceId: string;
 }): Promise<string> {
@@ -62,7 +64,7 @@ async function clonePrintedContentsAnalysis(input: {
     "analyses",
     input.sourceId,
   );
-  let current: PrintedContentsAnalysisV2;
+  let current: PrintedContentsAnalysis;
   try {
     const bytes = await readFile(
       resolve(directory, `${input.currentRevision}.json`),
@@ -70,9 +72,7 @@ async function clonePrintedContentsAnalysis(input: {
     if (bytes.byteLength > maximumAnalysisBytes) {
       throw new Error("PRINTED_CONTENTS_ANALYSIS_INVALID");
     }
-    current = parsePrintedContentsAnalysisV2(
-      JSON.parse(bytes.toString("utf8")),
-    );
+    current = parsePrintedContentsAnalysis(JSON.parse(bytes.toString("utf8")));
   } catch {
     throw new SafeApplicationError(
       "DRAFT_ANALYSIS_INVALID",
@@ -90,7 +90,7 @@ async function clonePrintedContentsAnalysis(input: {
       409,
     );
   }
-  const next = parsePrintedContentsAnalysisV2({
+  const next = parsePrintedContentsAnalysis({
     ...current,
     config_revision: input.nextRevision,
   });
@@ -318,7 +318,7 @@ export async function patchDraftConfig(input: {
   readonly bookId: number;
   readonly database: Database.Database;
   readonly expectedEtag: string | null;
-  readonly layout: StorageLayout;
+  readonly layout: DraftConfigStorage;
   readonly nowMs: number;
   readonly patch: unknown;
 }): Promise<ConfigRevisionUpdate> {
@@ -414,7 +414,7 @@ export async function replaceDraftConfig(input: {
   readonly config: unknown;
   readonly database: Database.Database;
   readonly expectedEtag: string | null;
-  readonly layout: StorageLayout;
+  readonly layout: DraftConfigStorage;
   readonly nowMs: number;
 }): Promise<ConfigRevisionUpdate> {
   const drafts = new DraftRepository(input.database);

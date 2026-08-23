@@ -11,7 +11,7 @@ import { queueSourceReprocess } from "@/modules/publishing/adapters/filesystem/s
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 export function createPublishingDraftServer(database: Database.Database) {
   const drafts = new DraftRepository(database);

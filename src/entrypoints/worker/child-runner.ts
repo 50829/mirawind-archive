@@ -8,7 +8,7 @@ import {
   type JobProgressMessage,
   type JobResultMessage,
   type RunJobMessage,
-} from "@/entrypoints/worker/protocol";
+} from "./protocol";
 import type { ProcessTreeMemoryObservation } from "@/observability/attempt-observation";
 import { sampleProcessTreeRss } from "@/platform/process/process-tree-rss";
 

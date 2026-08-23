@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import type { APIRoute } from "astro";
 
-import { acceptedReaderAssetPath } from "@/modules/reader/application/public";
+import { acceptedReaderAssetPath } from "@/modules/reader/application/reader-api";
 import { SafeApplicationError } from "@/domain/errors";
 import { applyResponsePolicy } from "@/http/cache/policies";
 

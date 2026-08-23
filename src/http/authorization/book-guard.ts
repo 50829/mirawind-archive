@@ -1,4 +1,4 @@
-import type { AuthorizationDecision } from "@/http/authorization/admin-guard";
+import type { AuthorizationDecision } from "./admin-guard";
 
 export type BookAccess = "private" | "public";
 export type VersionState =

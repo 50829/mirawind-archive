@@ -4,14 +4,14 @@ import { createOpaqueId } from "@/domain/ids";
 import {
   reconstructPrintedLayoutRows,
   type LayoutEvidence,
-} from "@/modules/publishing/core/preparation/layout-evidence";
+} from "./layout-evidence";
 import type {
   ConfirmedSourceRegion,
   NormalizedDocument,
   NormalizedHeading,
   TransientDocumentNode,
-} from "@/modules/publishing/core/preparation/document-model";
-import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
+} from "./document-model";
+import { SourceTextIndex } from "./source-text-index";
 
 export interface PrintedContentsDiagnostic {
   readonly blockId?: string;

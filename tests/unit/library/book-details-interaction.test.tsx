@@ -6,7 +6,7 @@ import {
   createLibraryContext,
   parseLibraryContext,
 } from "@/web/components/library/details-navigation";
-import type { BookDetails as BookDetailsView } from "@/modules/catalog/application/public";
+import type { BookDetails as BookDetailsView } from "@/modules/catalog/application/catalog-api";
 
 const details: BookDetailsView = {
   authors: ["A. Author"],

@@ -11,7 +11,7 @@ import { SafeApplicationError } from "@/domain/errors";
 import {
   ArchivePathRegistry,
   type NormalizedArchiveEntryPath,
-} from "@/modules/publishing/core/preparation/archive-path-policy";
+} from "../../core/preparation/archive-path-policy";
 
 export const maximumArchiveEntries = 20_000;
 
@@ -38,10 +38,15 @@ export interface InspectedArchiveEntry {
   readonly compressedSize: number;
   readonly compressionMethod: 0 | 8;
   readonly directory: boolean;
+  readonly diskNumberStart: number;
+  readonly encrypted: boolean;
+  readonly externalFileAttributes: number;
   readonly entry: Entry;
   readonly path: NormalizedArchiveEntryPath;
+  readonly rawBitFlag: number;
   readonly signature: number;
   readonly uncompressedSize: number;
+  readonly versionMadeBy: number;
 }
 
 export interface InspectedArchive {
@@ -240,10 +245,15 @@ async function inspectReader<Type>(
         compressedSize: entry.compressedSize,
         compressionMethod: entry.compressionMethod,
         directory: entry.directory,
+        diskNumberStart: entry.diskNumberStart,
+        encrypted: entry.encrypted,
+        externalFileAttributes: entry.externalFileAttributes,
         entry,
         path: paths.add(entry.rawFilename),
+        rawBitFlag: entry.rawBitFlag ?? 0,
         signature: entry.signature,
         uncompressedSize: entry.uncompressedSize,
+        versionMadeBy: entry.versionMadeBy,
       });
     });
 

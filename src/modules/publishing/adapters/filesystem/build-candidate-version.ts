@@ -3,35 +3,35 @@ import { readFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 
 import type { SafeDiagnostic } from "@/domain/errors";
-import type { CandidateTreeCrashPointInjector } from "@/modules/publishing/application/candidate-durability";
-import type { TypographyProvenance } from "@/modules/publishing/core/preparation/document-model";
+import type { CandidateTreeCrashPointInjector } from "../../application/candidate-durability";
+import type { TypographyProvenance } from "../../core/preparation/document-model";
 import {
   assembleCandidate,
   type CandidateAssemblyResult,
-} from "@/modules/publishing/adapters/filesystem/candidate-assembly";
-import { finalizeCandidateTree } from "@/modules/publishing/adapters/filesystem/finalize-candidate-tree";
+} from "./candidate-assembly";
+import {
+  finalizeCandidateTree,
+  type CandidateTreeLayout,
+} from "./finalize-candidate-tree";
 import {
   materializeCandidatePages,
   type CandidateMaterializationResult,
-} from "@/modules/publishing/adapters/reader-html/candidate-materializer";
+} from "../reader-html/candidate-materializer";
 import {
   type BuildCandidateCommand,
   type CandidateBuildArtifact,
   type CandidateBuildStageUpdate,
-} from "@/modules/publishing/application/public";
+} from "../../application/publishing-api";
 import {
   validateDocumentManifest,
   validateVersionMarker,
-} from "@/modules/publishing/core/publication/document-manifest-schema";
+} from "../../core/publication/document-manifest-schema";
 import {
   canonicalJson,
   compilerIdentity,
-} from "@/modules/publishing/core/publication/manifest";
-import { pageMetadata } from "@/modules/publishing/core/publication/compiled-book";
-import {
-  resolveContainedPath,
-  type StorageLayout,
-} from "@/platform/filesystem/layout";
+} from "../../core/publication/manifest";
+import { pageMetadata } from "../../core/publication/compiled-book";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import { profilePipelineStage } from "@/observability/pipeline-profile";
 
 function sha256(bytes: string | Uint8Array): string {
@@ -77,7 +77,7 @@ export async function buildCandidateVersion(input: {
   readonly command: BuildCandidateCommand;
   readonly crashPoint?: CandidateTreeCrashPointInjector;
   readonly createdAtMs: number;
-  readonly layout: StorageLayout;
+  readonly layout: CandidateTreeLayout & { readonly root: string };
   readonly onStage?: (update: CandidateBuildStageUpdate) => void;
   readonly preparationDiagnostics: readonly SafeDiagnostic[];
   readonly signal?: AbortSignal;

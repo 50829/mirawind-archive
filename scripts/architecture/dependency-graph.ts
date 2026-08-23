@@ -6,6 +6,7 @@ import ts from "typescript";
 
 import {
   dependencyViolation,
+  canonicalInternalSpecifier,
   isApplicationPort,
   isCompositionRoot,
   maximumDirectInternalDependencies,
@@ -372,7 +373,7 @@ export async function analyzeDependencyGraph(input: {
       }
       const target = relativePath(targetFile);
       targets.add(target);
-      if (imported.specifier.startsWith(".")) {
+      if (imported.specifier !== canonicalInternalSpecifier(source, target)) {
         diagnostics.push(
           diagnostic(
             "NON_CANONICAL_IMPORT",

@@ -1,7 +1,7 @@
 import { constants, lstat, open, readdir } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
-import type { PdfSourceDiagnostic } from "@/modules/publishing/core/preparation/pdf-evidence-model";
+import type { PdfSourceDiagnostic } from "../../core/preparation/pdf-evidence-model";
 
 export type OriginalPdfDiscovery =
   { readonly pdfPath: string } | { readonly diagnostic: PdfSourceDiagnostic };

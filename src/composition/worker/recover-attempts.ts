@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import {
   recordExpiredJobLifecycle,
   retryJobAttempt,
-} from "@/composition/worker/attempt-lifecycle";
+} from "./attempt-lifecycle";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { recoverExpiredJobLeases } from "@/modules/publishing/application/recover-expired-jobs";

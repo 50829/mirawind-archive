@@ -2,11 +2,8 @@ import {
   type BuildCandidateCommand,
   type CandidateBuildArtifact,
   type CandidateBuildStageUpdate,
-} from "@/modules/publishing/application/public";
-import {
-  jobChildProtocolVersion,
-  type JobProgressMessage,
-} from "@/entrypoints/worker/protocol";
+} from "@/modules/publishing/application/publishing-api";
+import { jobChildProtocolVersion, type JobProgressMessage } from "../protocol";
 
 export interface CandidateBuildExecutor {
   (input: {

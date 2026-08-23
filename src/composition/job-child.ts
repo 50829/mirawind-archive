@@ -1,6 +1,6 @@
 import { isAbsolute, resolve, sep } from "node:path";
 
-import { executeWorkerChildCommand } from "@/composition/worker-child/registry";
+import { executeWorkerChildCommand } from "./worker-child/registry";
 import { SafeApplicationError } from "@/domain/errors";
 import {
   isCancelJobMessage,

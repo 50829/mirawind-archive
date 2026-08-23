@@ -1,4 +1,4 @@
-import { chmod, lstat, readdir, rm } from "node:fs/promises";
+import { chmod, lstat, readdir, realpath, rm } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 export class UnsafePermanentRemovalTargetError extends Error {
@@ -62,6 +62,22 @@ export async function removeExactContainedTree(input: {
     throw new UnsafePermanentRemovalTargetError(
       "CLEANUP_UNSAFE_TARGET",
       "A cleanup target cannot be a symbolic link.",
+    );
+  }
+  const [canonicalRoot, canonicalTarget] = await Promise.all([
+    realpath(root),
+    realpath(target),
+  ]);
+  if (
+    canonicalRoot !== root ||
+    canonicalTarget !== target ||
+    !contained(canonicalRoot, canonicalTarget)
+  ) {
+    throw new UnsafePermanentRemovalTargetError(
+      contained(canonicalRoot, canonicalTarget)
+        ? "CLEANUP_UNSAFE_TARGET"
+        : "CLEANUP_TARGET_OUTSIDE_ROOT",
+      "The cleanup target crosses a symbolic-link boundary.",
     );
   }
   await unlockDirectories(target);

@@ -10,7 +10,7 @@ import {
   type JobProgress,
   type JobProgressUnit,
   type TypographyProfile,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 
 export const jobChildProtocolVersion = 4;
 

@@ -1,6 +1,6 @@
-import { noIndexRobotsTag } from "@/http/seo/robots";
-import { ifNoneMatchMatches } from "@/http/conditional";
-import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
+import { noIndexRobotsTag } from "../seo/robots";
+import { ifNoneMatchMatches } from "../conditional";
+import { applyResponsePolicy, createStrongEtag } from "./policies";
 
 export interface ConditionalResponseHeaders {
   readonly etag: string;

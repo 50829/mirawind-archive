@@ -1,19 +1,16 @@
 import {
   parseBookConfigYaml,
   validateBookConfig,
-} from "@/modules/publishing/core/publication/book-config-schema";
-import { validateDocumentManifest } from "@/modules/publishing/core/publication/document-manifest-schema";
-import {
-  canonicalJson,
-  compilerIdentity,
-} from "@/modules/publishing/core/publication/manifest";
+} from "../core/publication/book-config-schema";
+import { validateDocumentManifest } from "../core/publication/document-manifest-schema";
+import { canonicalJson, compilerIdentity } from "../core/publication/manifest";
 import {
   katexCriticalCss,
   rendererStylesheetUrl,
-} from "@/modules/publishing/core/publication/render-assets";
+} from "../core/publication/render-assets";
 
-export type { TypographyProfile } from "@/modules/publishing/core/preparation/document-model";
-export type { HeadingNumberingMode } from "@/modules/publishing/core/publication/heading-presentation";
+export type { TypographyProfile } from "../core/preparation/document-model";
+export type { HeadingNumberingMode } from "../core/publication/heading-presentation";
 export {
   canonicalJson,
   katexCriticalCss,

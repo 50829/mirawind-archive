@@ -1,9 +1,9 @@
 import type {
   NormalizedDocument,
   SemanticCompilationIdentity,
-} from "@/modules/publishing/core/preparation/document-model";
-import type { HeadingPresentation } from "@/modules/publishing/core/publication/heading-presentation";
-import type { ValidatedDocumentConfig } from "@/modules/publishing/core/publication/validate-config";
+} from "../preparation/document-model";
+import type { HeadingPresentation } from "./heading-presentation";
+import type { ValidatedDocumentConfig } from "./validate-config";
 
 export interface PageRange {
   readonly end: number;

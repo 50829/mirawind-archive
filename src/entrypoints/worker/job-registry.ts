@@ -1,4 +1,4 @@
-import type { FrozenJobInput } from "@/entrypoints/worker/protocol";
+import type { FrozenJobInput } from "./protocol";
 
 type CommandOf<Kind extends FrozenJobInput["kind"]> = Extract<
   FrozenJobInput,

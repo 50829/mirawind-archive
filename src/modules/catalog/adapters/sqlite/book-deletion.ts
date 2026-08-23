@@ -2,18 +2,18 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 import type Database from "better-sqlite3";
 
-import { BookDeletionRepository } from "@/modules/catalog/adapters/sqlite/book-deletions";
+import { BookDeletionRepository } from "./book-deletions";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import { SafeApplicationError } from "@/domain/errors";
 import { createOpaqueId } from "@/domain/ids";
 import {
   createBookDeletionToken,
   normalizeMutationToken,
-} from "@/modules/catalog/core/book-deletion-token";
+} from "../../core/book-deletion-token";
 import type {
   BookDeletionTaskPort,
   BookWorkCancellationPort,
-} from "@/modules/catalog/application/public";
+} from "../../application/catalog-api";
 
 interface DeletableBookRow {
   alias: string | null;

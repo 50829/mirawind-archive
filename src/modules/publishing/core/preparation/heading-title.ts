@@ -2,7 +2,7 @@ import type {
   NormalizedDocument,
   NormalizedHeading,
   TransientDocumentNode,
-} from "@/modules/publishing/core/preparation/document-model";
+} from "./document-model";
 
 export interface SourceHeadingTitle {
   readonly number: string | null;

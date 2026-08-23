@@ -1,7 +1,7 @@
 import type {
   ParsedDocument,
   SourcePosition,
-} from "@/modules/publishing/core/preparation/document-model";
+} from "../preparation/document-model";
 import type { SafeDiagnostic } from "@/domain/errors";
 
 export interface ResolvedResource {

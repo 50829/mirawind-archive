@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { noIndexRobotsTag } from "@/http/seo/robots";
+import { noIndexRobotsTag } from "../seo/robots";
 
 export type ResponsePolicyKind =
   | "draft"

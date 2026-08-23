@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual, type BinaryLike } from "node:crypto";
 
 import type Database from "better-sqlite3";
 
-import type { RequestSession } from "@/modules/identity/application/public";
+import type { RequestSession } from "@/modules/identity/application/identity-api";
 import { isOpaqueId } from "@/domain/ids";
 
 const previewAuthorizationVersion = 1;

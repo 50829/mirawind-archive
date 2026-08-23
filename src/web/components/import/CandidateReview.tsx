@@ -54,7 +54,4 @@ export function CandidateReview(props: {
     </section>
   );
 }
-import {
-  managePanel,
-  managePrimaryButton,
-} from "@/web/components/ui/manage-classes";
+import { managePanel, managePrimaryButton } from "../ui/manage-classes";

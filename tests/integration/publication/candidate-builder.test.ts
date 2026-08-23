@@ -31,7 +31,7 @@ import {
   finalizeCandidate,
   parseBuildCandidateCommand,
   type BuildCandidateCommand,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 import {
   validateDocumentManifest,
   validateVersionMarker,

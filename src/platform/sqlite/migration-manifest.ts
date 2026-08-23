@@ -4,7 +4,7 @@ import {
   checksumMigration,
   MigrationChecksumError,
   type Migration,
-} from "@/platform/sqlite/migrate";
+} from "./migrate";
 
 const migrationDefinitions = [
   {

@@ -2,17 +2,14 @@ import {
   analyzeImportHandler,
   buildCandidateHandler,
   prepareDraftHandler,
-} from "@/composition/worker-child/handlers/publishing";
+} from "./handlers/publishing";
 import {
   purgeBookHandler,
   reclaimVersionsHandler,
   reconcileHandler,
   verifyVersionHandler,
-} from "@/composition/worker-child/handlers/maintenance";
-import type {
-  WorkerChildContext,
-  WorkerChildOutcome,
-} from "@/composition/worker-child/types";
+} from "./handlers/maintenance";
+import type { WorkerChildContext, WorkerChildOutcome } from "./job-handler";
 import {
   dispatchJobCommand,
   type JobCommandRegistry,

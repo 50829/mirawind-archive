@@ -1,4 +1,4 @@
-import type { NormalizedDocument } from "@/modules/publishing/core/preparation/document-model";
+import type { NormalizedDocument } from "./document-model";
 
 export interface SourceBlockRecord {
   readonly block_id: string;

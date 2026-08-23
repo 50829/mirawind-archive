@@ -4,7 +4,7 @@ import type {
   BookVersionPresentation,
   BookVersionPresentationRemover,
   BookVersionPresentationWriter,
-} from "@/modules/catalog/application/public";
+} from "../../application/catalog-api";
 
 interface PresentationRow {
   alias: string | null;

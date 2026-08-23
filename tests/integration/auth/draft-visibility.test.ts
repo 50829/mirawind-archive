@@ -10,7 +10,7 @@ import {
   safeErrorInputFromUnknown,
 } from "@/http/errors/responses";
 import { errorPolicyForRequest } from "@/http/errors/error-policy";
-import { m1ImportExpiryMs } from "@/modules/publishing/application/public";
+import { m1ImportExpiryMs } from "@/modules/publishing/application/publishing-api";
 import { resetRuntimeStorageForTests } from "@/composition/storage";
 
 import { GET as getDraft } from "../../../src/pages/api/manage/books/[bookId]/draft.js";

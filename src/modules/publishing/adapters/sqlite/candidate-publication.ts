@@ -6,7 +6,7 @@ import type {
   CandidatePublicationCapture,
   CandidatePublicationPort,
   PublishedCandidate,
-} from "@/modules/publishing/application/commands/publish-candidate";
+} from "../../application/commands/publish-candidate";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 interface PublicationRow {

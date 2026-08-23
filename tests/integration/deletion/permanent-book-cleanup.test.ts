@@ -1,4 +1,4 @@
-import { mkdir, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -424,6 +424,26 @@ describe("permanent book cleanup", () => {
           target,
         }),
       ).rejects.toMatchObject({ code: "CLEANUP_UNSAFE_TARGET" });
+
+      const externalParent = resolve(
+        dataRoot.layout.databaseDirectory,
+        "outside-cleanup",
+      );
+      await mkdir(externalParent);
+      const externalFile = resolve(externalParent, "preserved");
+      await writeFile(externalFile, "keep");
+      const linkedParent = resolve(
+        dataRoot.layout.bookDirectory,
+        "linked-parent",
+      );
+      await symlink(externalParent, linkedParent);
+      await expect(
+        removeExactContainedTree({
+          root: dataRoot.layout.bookDirectory,
+          target: resolve(linkedParent, "preserved"),
+        }),
+      ).rejects.toBeInstanceOf(UnsafePermanentRemovalTargetError);
+      await expect(readFile(externalFile, "utf8")).resolves.toBe("keep");
     });
   });
 

@@ -1,4 +1,4 @@
-import type { LayoutEvidenceRecord } from "@/modules/publishing/core/preparation/layout-evidence";
+import type { LayoutEvidenceRecord } from "./layout-evidence";
 
 export interface PdfContentsEvidenceDiagnostic {
   readonly code:

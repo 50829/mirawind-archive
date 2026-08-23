@@ -1,26 +1,20 @@
-import { publishingReaderRendererAssets } from "@/modules/publishing/application/public";
+import { publishingReaderRendererAssets } from "@/modules/publishing/application/publishing-api";
 import {
   acceptedReaderAssetPath as acceptAssetPath,
   readerAssetIdentity,
   readerMermaidScriptUrl,
   readerScriptUrl,
   readerStylesheetUrl,
-} from "@/modules/reader/core/asset-policy";
-import { normalizeSearchQuery } from "@/modules/reader/core/search-query";
+} from "../core/asset-policy";
+import { normalizeSearchQuery } from "../core/search-query";
 import {
   buildReaderNavigationTree,
   readerBreadcrumbs,
-} from "@/modules/reader/core/navigation";
+} from "../core/navigation";
 
-export type { NormalizedSearchQuery } from "@/modules/reader/core/search-query";
-export type {
-  ReaderTocLink,
-  ReaderTocNode,
-} from "@/modules/reader/core/navigation";
-export type {
-  ReaderOutlineLink,
-  ReaderPageModel,
-} from "@/modules/reader/core/page-model";
+export type { NormalizedSearchQuery } from "../core/search-query";
+export type { ReaderTocLink, ReaderTocNode } from "../core/navigation";
+export type { ReaderOutlineLink, ReaderPageModel } from "../core/page-model";
 
 export {
   normalizeSearchQuery,

@@ -10,7 +10,7 @@ import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin"
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
 import { requireMutationOrigin } from "@/http/origin";
 import { readBoundedJson } from "@/http/json-body";
-import { getCurrentDraftCandidate } from "@/modules/publishing/application/public";
+import { getCurrentDraftCandidate } from "@/modules/publishing/application/publishing-api";
 import {
   getRuntimeEnvironment,
   getRuntimeStorageLayout,

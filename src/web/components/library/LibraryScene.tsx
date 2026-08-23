@@ -1,5 +1,5 @@
-import type { PublicLibraryView } from "@/modules/catalog/application/public";
-import { BookCard } from "@/web/components/library/BookCard";
+import type { PublicLibraryView } from "@/modules/catalog/application/catalog-api";
+import { BookCard } from "./BookCard";
 
 export function LibraryScene({
   library,

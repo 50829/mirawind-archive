@@ -1,11 +1,11 @@
-import { readdir } from "node:fs/promises";
+import { lstat, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import type { BookVersionPresentationRemover } from "@/modules/catalog/application/public";
-import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+import type { BookVersionPresentationRemover } from "@/modules/catalog/application/catalog-api";
+import { VersionRepository } from "../sqlite/versions";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 import { removeExactContainedTree } from "@/platform/filesystem/permanent-removal";
 
 export const versionRetentionGraceMs = 24 * 60 * 60 * 1_000;
@@ -44,6 +44,24 @@ async function reclaimQuarantine(input: {
       book.name,
       "quarantine",
     );
+    const directoryMetadata = await lstat(directory).catch((error: unknown) => {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "ENOENT"
+      ) {
+        return null;
+      }
+      throw error;
+    });
+    if (!directoryMetadata) continue;
+    if (
+      !directoryMetadata.isDirectory() ||
+      directoryMetadata.isSymbolicLink()
+    ) {
+      throw new Error("QUARANTINE_DIRECTORY_UNSAFE");
+    }
     const entries = await readdir(directory, { withFileTypes: true }).catch(
       (error: unknown) => {
         if (

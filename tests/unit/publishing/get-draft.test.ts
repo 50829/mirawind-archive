@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createOpaqueId } from "@/domain/ids";
-import { getCurrentDraftCandidate } from "@/modules/publishing/application/public";
+import { getCurrentDraftCandidate } from "@/modules/publishing/application/publishing-api";
 
 describe("current draft candidate projection", () => {
   it("returns one bounded ready candidate for the current revision", () => {

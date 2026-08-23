@@ -1,16 +1,16 @@
 import { isOpaqueId } from "@/domain/ids";
-import type { LayoutEvidenceDiagnostic } from "@/modules/publishing/core/preparation/layout-evidence";
+import type { LayoutEvidenceDiagnostic } from "./layout-evidence";
 import type {
   PdfContentsEvidenceDiagnostic,
   PdfSourceDiagnostic,
-} from "@/modules/publishing/core/preparation/pdf-evidence-model";
-import type { PrintedContentsDetection } from "@/modules/publishing/core/preparation/printed-contents";
-import type { TypographyRiskSummary } from "@/modules/publishing/core/preparation/typography";
+} from "./pdf-evidence-model";
+import type { PrintedContentsDetection } from "./printed-contents";
+import type { TypographyRiskSummary } from "./typography";
 
 export const printedContentsAnalysisIdentity =
   "printed-contents-analysis-v2" as const;
 
-export interface PrintedContentsAnalysisV2 {
+export interface PrintedContentsAnalysis {
   readonly candidates: readonly {
     readonly alignment: {
       readonly best_score: number;
@@ -111,11 +111,11 @@ function validRisk(value: unknown): boolean {
   );
 }
 
-export function createPrintedContentsAnalysisV2(input: {
+export function createPrintedContentsAnalysis(input: {
   readonly configRevision: number;
   readonly detection: PrintedContentsDetection;
   readonly layoutDiagnostics: readonly LayoutEvidenceDiagnostic[];
-  readonly layoutSource: PrintedContentsAnalysisV2["layout_source"];
+  readonly layoutSource: PrintedContentsAnalysis["layout_source"];
   readonly pdfDiagnostics: readonly {
     readonly code: PdfContentsEvidenceDiagnostic["code"] | PdfSourceDiagnostic;
     readonly pageIndex?: number;
@@ -124,8 +124,8 @@ export function createPrintedContentsAnalysisV2(input: {
   readonly sourceSha256: string;
   readonly typographyRiskSummaries: readonly TypographyRiskSummary[];
   readonly typographyRiskSummariesTruncated: boolean;
-}): PrintedContentsAnalysisV2 {
-  const value: PrintedContentsAnalysisV2 = Object.freeze({
+}): PrintedContentsAnalysis {
+  const value: PrintedContentsAnalysis = Object.freeze({
     candidates: Object.freeze(
       input.detection.candidates.slice(0, 100).map((candidate) =>
         Object.freeze({
@@ -192,12 +192,12 @@ export function createPrintedContentsAnalysisV2(input: {
         input.typographyRiskSummaries.length > 100,
     }),
   });
-  return parsePrintedContentsAnalysisV2(value);
+  return parsePrintedContentsAnalysis(value);
 }
 
-export function parsePrintedContentsAnalysisV2(
+export function parsePrintedContentsAnalysis(
   input: unknown,
-): PrintedContentsAnalysisV2 {
+): PrintedContentsAnalysis {
   const value = record(input);
   if (
     !value ||
@@ -378,5 +378,5 @@ export function parsePrintedContentsAnalysisV2(
   ) {
     throw new Error("PRINTED_CONTENTS_ANALYSIS_INVALID");
   }
-  return input as PrintedContentsAnalysisV2;
+  return input as PrintedContentsAnalysis;
 }

@@ -4,11 +4,11 @@ import type {
   ConfirmedSourceRegion,
   NormalizedDocument,
   TransientDocumentNode,
-} from "@/modules/publishing/core/preparation/document-model";
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
-import { applySourceRegions } from "@/modules/publishing/core/preparation/source-regions";
-import { SourceTextIndex } from "@/modules/publishing/core/preparation/source-text-index";
+} from "./document-model";
+import { normalizeDocumentBlocks } from "./normalize-document";
+import { parseMarkdownDocument } from "./parse-markdown";
+import { applySourceRegions } from "./source-regions";
+import { SourceTextIndex } from "./source-text-index";
 
 export interface PreparedDocument {
   readonly active: NormalizedDocument;

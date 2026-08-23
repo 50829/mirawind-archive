@@ -7,17 +7,17 @@ import {
   buildSearchRowsForBlocks,
   buildSearchShortRows,
   type SearchRowCursor,
-} from "@/modules/publishing/core/publication/search-model";
-import { materializeRouteNeutralHtmlVariants } from "@/modules/publishing/adapters/reader-html/materialize-route-neutral-html";
-import type { CompiledBook } from "@/modules/publishing/core/publication/compiled-book";
-import { pageMetadata } from "@/modules/publishing/core/publication/compiled-book";
-import { buildManifestPageRecord } from "@/modules/publishing/core/publication/manifest";
+} from "../../core/publication/search-model";
+import { materializeRouteNeutralHtmlVariants } from "./materialize-route-neutral-html";
+import type { CompiledBook } from "../../core/publication/compiled-book";
+import { pageMetadata } from "../../core/publication/compiled-book";
+import { buildManifestPageRecord } from "../../core/publication/manifest";
 import {
   renderPages,
   type PageRenderer,
-} from "@/modules/publishing/core/publication/render-pages";
-import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
-import type { CandidateFileSink } from "@/modules/publishing/adapters/filesystem/candidate-file-inventory";
+} from "../../core/publication/render-pages";
+import type { ResourceResolution } from "../../core/publication/resource-model";
+import type { CandidateFileSink } from "../filesystem/candidate-file-inventory";
 import { renderReaderHtmlDocument } from "@/web/features/reader/render-document";
 import { renderReaderShell } from "@/web/features/reader/render";
 

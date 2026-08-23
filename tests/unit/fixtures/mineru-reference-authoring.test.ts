@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
-  authorMineruReferenceV2,
+  authorMineruReference,
   createVisionTranscriptTemplate,
   type CodexVisionTranscript,
   type VisionTranscriptTemplate,
@@ -102,7 +102,7 @@ describe("Codex vision reference authoring", () => {
       source: "codex-image-recognition",
     };
 
-    const reference = authorMineruReferenceV2({ pack, source, transcript });
+    const reference = authorMineruReference({ pack, source, transcript });
     const bytes = Buffer.from(source, "utf8");
     expect(
       reference.protected_ranges.map((range) => ({
@@ -137,7 +137,7 @@ describe("Codex vision reference authoring", () => {
     };
 
     expect(
-      authorMineruReferenceV2({
+      authorMineruReference({
         pack,
         source,
         transcript,
@@ -161,7 +161,7 @@ describe("Codex vision reference authoring", () => {
     };
 
     expect(
-      authorMineruReferenceV2({ pack, source, transcript })
+      authorMineruReference({ pack, source, transcript })
         .raw_heading_accounting[0]?.disposition,
     ).toEqual({
       display_level: 1,
@@ -223,7 +223,7 @@ describe("Codex vision reference authoring", () => {
       ],
     });
 
-    const headings = authorMineruReferenceV2({
+    const headings = authorMineruReference({
       pack,
       source,
       transcript,
@@ -277,7 +277,7 @@ describe("Codex vision reference authoring", () => {
       }),
     );
 
-    const headings = authorMineruReferenceV2({
+    const headings = authorMineruReference({
       pack,
       source,
       transcript,
@@ -351,7 +351,7 @@ describe("Codex vision reference authoring", () => {
       /boundaryConfidence|bodyHeadingBlockId|proposedRegion/u,
     );
 
-    const reference = authorMineruReferenceV2({ pack, transcript });
+    const reference = authorMineruReference({ pack, transcript });
     expect(reference.printed_contents.regions[0]?.entries).toMatchObject([
       { expected_match: "matched", level: 1 },
       { expected_match: "matched", level: 2 },
@@ -405,7 +405,7 @@ describe("Codex vision reference authoring", () => {
     );
 
     expect(
-      authorMineruReferenceV2({ pack, transcript }).printed_contents.regions[0]
+      authorMineruReference({ pack, transcript }).printed_contents.regions[0]
         ?.entries[0],
     ).toMatchObject({
       body_heading_anchor: { root_index: 3 },
@@ -464,7 +464,7 @@ describe("Codex vision reference authoring", () => {
       }),
     );
 
-    const reference = authorMineruReferenceV2({ pack, transcript });
+    const reference = authorMineruReference({ pack, transcript });
     expect(
       reference.printed_contents.regions[0]?.entries.map(
         (entry) => entry.body_heading_anchor?.root_index,
@@ -490,7 +490,7 @@ describe("Codex vision reference authoring", () => {
         pack,
       }),
     );
-    const reference = authorMineruReferenceV2({ pack, transcript });
+    const reference = authorMineruReference({ pack, transcript });
 
     expect(transcript.inspected_pages).toEqual([
       { page_index: 2, sha256: hash("page three") },
@@ -516,7 +516,7 @@ describe("Codex vision reference authoring", () => {
     );
 
     expect(
-      authorMineruReferenceV2({ pack, transcript }).raw_heading_accounting.map(
+      authorMineruReference({ pack, transcript }).raw_heading_accounting.map(
         (heading) =>
           heading.disposition.kind === "expected_body"
             ? heading.disposition.display_level
@@ -550,7 +550,7 @@ describe("Codex vision reference authoring", () => {
         pack,
       }),
     );
-    const accounting = authorMineruReferenceV2({
+    const accounting = authorMineruReference({
       pack,
       transcript,
     }).raw_heading_accounting;
@@ -603,7 +603,7 @@ describe("Codex vision reference authoring", () => {
     );
 
     expect(
-      authorMineruReferenceV2({ pack, transcript }).expected_diagnostics,
+      authorMineruReference({ pack, transcript }).expected_diagnostics,
     ).toHaveLength(100);
   });
 
@@ -641,7 +641,7 @@ describe("Codex vision reference authoring", () => {
     );
 
     expect(
-      authorMineruReferenceV2({ pack, transcript }).expected_diagnostics.map(
+      authorMineruReference({ pack, transcript }).expected_diagnostics.map(
         (diagnostic) => diagnostic.code,
       ),
     ).toEqual([
@@ -675,7 +675,7 @@ describe("Codex vision reference authoring", () => {
     });
 
     expect(() =>
-      authorMineruReferenceV2({
+      authorMineruReference({
         pack,
         transcript: template as unknown as CodexVisionTranscript,
       }),

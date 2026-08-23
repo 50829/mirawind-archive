@@ -1,10 +1,10 @@
-import { resolveContainedPath } from "@/platform/filesystem/layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import { removeExactContainedTree } from "@/platform/filesystem/permanent-removal";
 import type {
   ExpiredJobLeaseRepository,
   RecoverableJob,
-} from "@/modules/publishing/application/ports/expired-job-leases";
-import { evaluateJobRetry } from "@/modules/publishing/application/retry-policy";
+} from "./ports/expired-job-leases";
+import { evaluateJobRetry } from "./retry-policy";
 
 export interface InterruptedJobRecovery<Job extends RecoverableJob> {
   readonly interrupted: Job;

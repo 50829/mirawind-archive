@@ -1,6 +1,6 @@
-import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
-import { ifNoneMatchMatches } from "@/http/conditional";
-import type { BookAccess } from "@/http/authorization/book-guard";
+import { applyResponsePolicy, createStrongEtag } from "./policies";
+import { ifNoneMatchMatches } from "../conditional";
+import type { BookAccess } from "../authorization/book-guard";
 
 export function readingPageHeaders(input: {
   readonly access: BookAccess;

@@ -1,8 +1,8 @@
 import type Database from "better-sqlite3";
 
-import { type createSetupAuth } from "@/modules/identity/adapters/better-auth/setup-auth";
-import { appendIdentityAuditEvent } from "@/modules/identity/adapters/sqlite/identity-audit-events";
-import { InstallationRepository } from "@/modules/identity/adapters/sqlite/installation";
+import { type createSetupAuth } from "../better-auth/setup-auth";
+import { appendIdentityAuditEvent } from "./identity-audit-events";
+import { InstallationRepository } from "./installation";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 export async function recoverAdministrator(input: {

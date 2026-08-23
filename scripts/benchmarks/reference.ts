@@ -19,7 +19,7 @@ import { openDatabase } from "../../src/platform/sqlite/connection.js";
 import {
   m1PublishPolicy,
   publishCandidate,
-} from "../../src/modules/publishing/application/public.js";
+} from "../../src/modules/publishing/application/publishing-api.js";
 import { runBuildBenchmarks } from "./build.js";
 import { captureBenchmarkEnvironment } from "./environment.js";
 import { argumentMap, boundedInteger, requiredArgument } from "./http.js";

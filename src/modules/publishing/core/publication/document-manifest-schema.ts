@@ -7,7 +7,7 @@ import { SafeApplicationError } from "@/domain/errors";
 import {
   requireSupportedDocumentManifestSchemaVersion,
   requireSupportedVersionMarkerSchemaVersion,
-} from "@/modules/publishing/core/publication/versioning-schema";
+} from "./versioning-schema";
 
 interface SchemaDiagnostic {
   readonly instancePath: string;

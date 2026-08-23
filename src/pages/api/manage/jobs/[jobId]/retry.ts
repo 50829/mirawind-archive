@@ -8,7 +8,7 @@ import { isOpaqueId } from "@/domain/ids";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
 import { requireMutationOrigin } from "@/http/origin";
-import { evaluateJobRetry } from "@/modules/publishing/application/public";
+import { evaluateJobRetry } from "@/modules/publishing/application/publishing-api";
 import { getRuntimeEnvironment } from "@/composition/storage";
 
 export const prerender = false;

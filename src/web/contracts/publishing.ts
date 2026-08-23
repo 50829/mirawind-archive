@@ -2,7 +2,7 @@ import type { SafeDiagnostic } from "@/domain/errors";
 import type {
   CurrentDraftCandidateProjection,
   HeadingNumberingMode,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 
 export type PreviewDiagnostic = SafeDiagnostic;
 

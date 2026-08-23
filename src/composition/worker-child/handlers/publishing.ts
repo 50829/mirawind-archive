@@ -5,7 +5,7 @@ import type {
   AnalyzeImportCommand,
   PrepareDraftCommand,
 } from "@/entrypoints/worker/protocol";
-import type { BuildCandidateCommand } from "@/modules/publishing/application/public";
+import type { BuildCandidateCommand } from "@/modules/publishing/application/publishing-api";
 import { handleBuildCandidate } from "@/entrypoints/worker/handlers/build-candidate";
 import { analyzeImport } from "@/modules/publishing/adapters/worker/analyze-import";
 import { buildCandidateVersion } from "@/modules/publishing/adapters/filesystem/build-candidate-version";
@@ -15,13 +15,13 @@ import {
   readPinnedAnalysis,
 } from "@/modules/publishing/adapters/worker/preview-diagnostics";
 import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
-import { createStorageLayout } from "@/platform/filesystem/layout";
-import { resolveContainedPath } from "@/platform/filesystem/layout";
+import { createStorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import {
   stepProgress,
   type WorkerChildContext,
   type WorkerChildOutcome,
-} from "@/composition/worker-child/types";
+} from "../job-handler";
 
 export async function buildCandidateHandler(
   command: BuildCandidateCommand,

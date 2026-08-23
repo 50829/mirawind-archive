@@ -1,4 +1,4 @@
-import type { JobRecord } from "@/modules/publishing/adapters/sqlite/jobs";
+import type { JobRecord } from "./jobs";
 
 export interface JobSubject {
   readonly kind: "book" | "import" | "system";

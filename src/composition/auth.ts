@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type Database from "better-sqlite3";
 
 import { parseEnvironment } from "@/config/environment";
-import type { RequestSession } from "@/modules/identity/application/public";
+import type { RequestSession } from "@/modules/identity/application/identity-api";
 import { openDatabase } from "@/platform/sqlite/connection";
 import { createHttpAuth } from "@/modules/identity/adapters/better-auth/http-auth";
 

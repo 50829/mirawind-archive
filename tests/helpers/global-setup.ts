@@ -26,9 +26,9 @@ import {
   finalizeCandidate,
   m1PublishPolicy,
   publishCandidate,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
-import { createStorageLayout } from "@/platform/filesystem/layout";
+import { createStorageLayout } from "@/platform/filesystem/storage-layout";
 import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
 import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 

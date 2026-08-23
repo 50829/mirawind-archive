@@ -1,3 +1,5 @@
+import { posix } from "node:path";
+
 export const maximumDirectInternalDependencies = 12;
 export const maximumInjectedPorts = 8;
 
@@ -6,6 +8,37 @@ export type ModuleLayer = "adapters" | "application" | "core";
 export interface ModuleLocation {
   readonly domain: string;
   readonly layer: ModuleLayer;
+}
+
+const sourceExtensions = [".astro", ".js", ".mjs", ".ts", ".tsx"] as const;
+
+export function sourcePackage(path: string): string {
+  const module = /^modules\/([^/]+)(?:\/|$)/u.exec(path);
+  if (module?.[1]) return `modules/${module[1]}`;
+  const separator = path.indexOf("/");
+  return separator < 0 ? "src-root" : path.slice(0, separator);
+}
+
+export function applicationApiPath(domain: string): string {
+  return `modules/${domain}/application/${domain}-api.ts`;
+}
+
+export function canonicalInternalSpecifier(
+  sourcePath: string,
+  targetPath: string,
+): string {
+  const extension = posix.extname(targetPath);
+  const importPath =
+    extension === ".astro" ||
+    extension === ".css" ||
+    !sourceExtensions.includes(extension as (typeof sourceExtensions)[number])
+      ? targetPath
+      : targetPath.slice(0, -extension.length);
+  if (sourcePackage(sourcePath) !== sourcePackage(targetPath)) {
+    return `@/${importPath}`;
+  }
+  const local = posix.relative(posix.dirname(sourcePath), importPath);
+  return local.startsWith(".") ? local : `./${local}`;
 }
 
 export function moduleLocation(path: string): ModuleLocation | null {
@@ -37,7 +70,7 @@ export function dependencyViolation(
     if (
       /^(?:entrypoints|pages|web)\//u.test(sourcePath) &&
       target !== null &&
-      targetPath !== `modules/${target.domain}/application/public.ts`
+      targetPath !== applicationApiPath(target.domain)
     ) {
       return "FORBIDDEN_DEPENDENCY";
     }
@@ -63,7 +96,7 @@ export function dependencyViolation(
     return "FORBIDDEN_DEPENDENCY";
   }
   if (target && source.domain !== target.domain) {
-    return targetPath === `modules/${target.domain}/application/public.ts`
+    return targetPath === applicationApiPath(target.domain)
       ? null
       : "CROSS_MODULE_DEEP_IMPORT";
   }

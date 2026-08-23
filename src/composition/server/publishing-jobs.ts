@@ -1,9 +1,6 @@
 import type Database from "better-sqlite3";
 
-import {
-  cancelBookDeletion,
-  retryBookDeletion,
-} from "@/composition/book-deletion";
+import { cancelBookDeletion, retryBookDeletion } from "../book-deletion";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";

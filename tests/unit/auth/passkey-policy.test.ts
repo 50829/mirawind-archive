@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { authorizePasskeyMutation } from "@/modules/identity/application/public";
+import { authorizePasskeyMutation } from "@/modules/identity/application/identity-api";
 
 const nowMs = 1_800_000_000_000;
 

@@ -25,7 +25,7 @@ import {
   manageFieldLabel,
   manageQuietButton,
   manageSecondaryButton,
-} from "@/web/components/ui/manage-classes";
+} from "../ui/manage-classes";
 
 import {
   changeDisplayLevel,
@@ -33,7 +33,7 @@ import {
   mergeAcceptedNumbering,
   type EditableStructureNode as StructureNode,
   type HeadingNumberingMode,
-} from "@/web/components/manage/structure-editor-state";
+} from "./structure-editor-state";
 
 interface HeadingContext {
   readonly block_id: string;

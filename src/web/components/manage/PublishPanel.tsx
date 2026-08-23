@@ -1,10 +1,7 @@
 import { Upload } from "lucide-react";
 import { useState } from "react";
 
-import {
-  managePrimaryButton,
-  manageQuietText,
-} from "@/web/components/ui/manage-classes";
+import { managePrimaryButton, manageQuietText } from "../ui/manage-classes";
 
 export function PublishPanel(props: {
   readonly blocked?: boolean;

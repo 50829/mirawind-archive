@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
+import { canonicalInternalSpecifier } from "./boundaries.js";
+
 const parsedExtensions = [".ts", ".tsx", ".astro", ".js", ".mjs"] as const;
 const resolvedExtensions = [...parsedExtensions, ".css"] as const;
 
@@ -119,14 +121,6 @@ function candidatePaths(base: string): readonly string[] {
   ]);
 }
 
-function aliasFor(target: string, sourceDirectory: string): string {
-  const extension = extname(target);
-  const sourcePath = relative(sourceDirectory, target).split(sep).join("/");
-  const suffix =
-    extension === ".css" ? sourcePath : sourcePath.slice(0, -extension.length);
-  return `@/${suffix}`;
-}
-
 export async function canonicalizeInternalImports(input: {
   readonly sourceDirectory: string;
   readonly write: boolean;
@@ -146,18 +140,29 @@ export async function canonicalizeInternalImports(input: {
       continue;
     }
     const source = await readFile(file, "utf8");
+    const sourcePath = relative(sourceDirectory, file).split(sep).join("/");
     const replacements = specifiers(file, source)
       .flatMap((location) => {
-        if (!location.specifier.startsWith(".")) return [];
-        const base = resolve(dirname(file), location.specifier);
+        if (location.specifier.startsWith("@/schemas/")) return [];
+        const base = location.specifier.startsWith("@/")
+          ? resolve(sourceDirectory, location.specifier.slice(2))
+          : location.specifier.startsWith(".")
+            ? resolve(dirname(file), location.specifier)
+            : null;
+        if (!base) return [];
         const target = candidatePaths(base).find((candidate) =>
           fileSet.has(candidate),
         );
         if (!target) return [];
+        const targetPath = relative(sourceDirectory, target)
+          .split(sep)
+          .join("/");
+        const canonical = canonicalInternalSpecifier(sourcePath, targetPath);
+        if (canonical === location.specifier) return [];
         return [
           Object.freeze({
             ...location,
-            alias: aliasFor(target, sourceDirectory),
+            canonical,
           }),
         ];
       })
@@ -165,7 +170,7 @@ export async function canonicalizeInternalImports(input: {
     if (replacements.length === 0) continue;
     let output = source;
     for (const replacement of replacements) {
-      output = `${output.slice(0, replacement.start)}${replacement.alias}${output.slice(replacement.end)}`;
+      output = `${output.slice(0, replacement.start)}${replacement.canonical}${output.slice(replacement.end)}`;
     }
     if (input.write) await writeFile(file, output);
     changed.push(

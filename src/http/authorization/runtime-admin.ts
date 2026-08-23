@@ -1,8 +1,8 @@
-import type { RequestSession } from "@/modules/identity/application/public";
+import type { RequestSession } from "@/modules/identity/application/identity-api";
 import { getRuntimeDatabase } from "@/composition/auth";
 import { createIdentityServer } from "@/composition/server/identity";
 import { SafeApplicationError } from "@/domain/errors";
-import { authorizeSoleAdministrator } from "@/http/authorization/admin-guard";
+import { authorizeSoleAdministrator } from "./admin-guard";
 
 export function resolveRuntimeAdministrator(
   session: RequestSession | null,

@@ -14,7 +14,7 @@ import {
   type QueueObservation,
   type JobState,
   type TerminalJobState,
-} from "@/modules/publishing/application/job-state";
+} from "../../application/job-state";
 
 export type JobErrorClass =
   | "infrastructure"

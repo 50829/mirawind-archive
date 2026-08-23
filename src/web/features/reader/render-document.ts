@@ -1,7 +1,7 @@
 import {
   readerRendererAssets,
   readerStylesheetUrl,
-} from "@/modules/reader/application/public";
+} from "@/modules/reader/application/reader-api";
 
 function htmlEscape(value: string): string {
   return value

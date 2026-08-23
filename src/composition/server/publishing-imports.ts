@@ -4,7 +4,7 @@ import { ImportUploadService } from "@/modules/publishing/adapters/filesystem/im
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { confirmImportCandidateAndQueuePreparation } from "@/modules/publishing/application/commands/confirm-import-candidate";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 export function createPublishingImportServer(database: Database.Database) {

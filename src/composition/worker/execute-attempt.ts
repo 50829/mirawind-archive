@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
-import { markBookDeletionPurging } from "@/composition/book-deletion";
-import { captureFrozenJobInput } from "@/composition/worker/capture-frozen-input";
+import { markBookDeletionPurging } from "../book-deletion";
+import { captureFrozenJobInput } from "./capture-frozen-input";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
@@ -14,13 +14,13 @@ import {
   isJobPhase,
   type JobPhase,
   type JobProgress,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 import {
   runJobChild,
   type ChildExecution,
 } from "@/entrypoints/worker/child-runner";
 import type { ProcessTreeMemoryObservation } from "@/observability/attempt-observation";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import type { FrozenJobInput } from "@/entrypoints/worker/protocol";
 

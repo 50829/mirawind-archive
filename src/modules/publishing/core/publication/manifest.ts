@@ -1,17 +1,10 @@
 import { createHash } from "node:crypto";
 
-import type {
-  ResourceReference,
-  ResolvedResource,
-} from "@/modules/publishing/core/publication/resource-model";
-import type { CompiledBook } from "@/modules/publishing/core/publication/compiled-book";
-import {
-  pageBlockIds,
-  pageMetadata,
-  pageOutputPath,
-} from "@/modules/publishing/core/publication/compiled-book";
-import { validateDocumentManifest } from "@/modules/publishing/core/publication/document-manifest-schema";
-import type { TransientDocumentNode } from "@/modules/publishing/core/preparation/document-model";
+import type { ResourceReference, ResolvedResource } from "./resource-model";
+import type { CompiledBook } from "./compiled-book";
+import { pageBlockIds, pageMetadata, pageOutputPath } from "./compiled-book";
+import { validateDocumentManifest } from "./document-manifest-schema";
+import type { TransientDocumentNode } from "../preparation/document-model";
 
 export const compilerIdentity = Object.freeze({
   name: "mirawind-book-compiler" as const,

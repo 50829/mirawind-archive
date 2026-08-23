@@ -1,4 +1,4 @@
-import type { PublicLibraryEntry } from "@/modules/catalog/application/public";
+import type { PublicLibraryEntry } from "@/modules/catalog/application/catalog-api";
 
 export function BookCard({ entry }: { readonly entry: PublicLibraryEntry }) {
   const placeholder = [...entry.title.trim()][0]?.toLocaleUpperCase() ?? "书";

@@ -6,12 +6,12 @@ import type Database from "better-sqlite3";
 import type {
   BookVersionPresentation,
   BookVersionPresentationReconciliationStore,
-} from "@/modules/catalog/application/public";
-import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
-import { deriveBookVersionPresentation } from "@/modules/publishing/application/derive-book-version-presentation";
-import type { BookVersionRecord } from "@/modules/publishing/application/version-record";
-import type { StorageLayout } from "@/platform/filesystem/layout";
-import { resolveContainedPath } from "@/platform/filesystem/layout";
+} from "@/modules/catalog/application/catalog-api";
+import { VersionRepository } from "../sqlite/versions";
+import { deriveBookVersionPresentation } from "../../application/derive-book-version-presentation";
+import type { BookVersionRecord } from "../../application/version-record";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 
 const maximumConfigBytes = 4 * 1024 * 1024;
 const maximumManifestBytes = 64 * 1024 * 1024;

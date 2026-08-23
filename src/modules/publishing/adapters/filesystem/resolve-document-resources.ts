@@ -7,13 +7,13 @@ import type {
   ParsedDocument,
   SourcePosition,
   TransientDocumentNode,
-} from "@/modules/publishing/core/preparation/document-model";
+} from "../../core/preparation/document-model";
 import type {
   ResolvedResource,
   ResolveDocumentResourcesOptions,
   ResourceReference,
   ResourceResolution,
-} from "@/modules/publishing/core/publication/resource-model";
+} from "../../core/publication/resource-model";
 
 function containedRelativePath(
   root: string,

@@ -84,23 +84,26 @@ async function fixture(
 }
 
 describe("bounded PDF contents evidence", () => {
-  it("uses sufficient native text without rasterizing pages", async () => {
+  it("rejects non-TSV native output instead of using the removed parser", async () => {
     const value = await fixture({
       nativeText: "Contents\\nChapter 1 Start .... 1\\nChapter 2 End .... 9\\f",
     });
 
     const result = await readPdfContentsEvidence({
+      allowOcr: false,
       commands: value.commands,
       pdfPath: value.pdfPath,
       temporaryRoot: value.work,
     });
 
     expect(result).toMatchObject({
-      diagnostics: [],
-      inspectedPageIndices: [0],
-      source: "native-pdf",
+      inspectedPageIndices: [],
+      records: [],
+      source: "none",
     });
-    expect(result.records.length).toBeGreaterThanOrEqual(3);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "PDF_CONTENTS_NATIVE_ABSENT" }),
+    );
     await expect(access(`${value.commands.pdftoppm}.log`)).rejects.toThrow();
     expect(await readdir(value.work)).toEqual([]);
   });

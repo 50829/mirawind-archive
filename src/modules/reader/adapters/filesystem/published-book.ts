@@ -15,9 +15,9 @@ import {
   type IndexedManifestPage,
   type VersionArtifactIndex,
   type VersionArtifactIndexCache,
-} from "@/modules/reader/adapters/filesystem/version-artifact-index";
-import type { StorageLayout } from "@/platform/filesystem/layout";
-import { resolveContainedPath } from "@/platform/filesystem/layout";
+} from "./version-artifact-index";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import {
   fileHandleWebStream,
   openVerifiedContainedFile,

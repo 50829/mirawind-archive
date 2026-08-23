@@ -1,6 +1,6 @@
 import { escapeAttribute } from "entities/escape";
 
-import type { RouteNeutralReference } from "@/modules/publishing/core/publication/route-neutral-links";
+import type { RouteNeutralReference } from "../../core/publication/route-neutral-links";
 
 interface MaterializationPolicy {
   readonly headingHref: (blockId: string) => string;

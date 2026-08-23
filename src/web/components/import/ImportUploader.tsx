@@ -8,18 +8,15 @@ import {
   managePanel,
   managePrimaryButton,
   manageSecondaryButton,
-} from "@/web/components/ui/manage-classes";
-import { usePolling } from "@/web/components/manage/use-polling";
+} from "../ui/manage-classes";
+import { usePolling } from "../manage/use-polling";
 
-import {
-  CandidateReview,
-  type CandidateView,
-} from "@/web/components/import/CandidateReview";
+import { CandidateReview, type CandidateView } from "./CandidateReview";
 import {
   jobProgressDetail,
   jobProgressPercent,
   jobProgressSummary,
-} from "@/web/components/import/job-presentation";
+} from "./job-presentation";
 
 type FormSubmitEvent = Parameters<
   NonNullable<ComponentProps<"form">["onSubmit"]>

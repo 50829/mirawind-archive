@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 
-import { type AuthFactoryInput } from "@/modules/identity/adapters/better-auth/http-auth";
+import { type AuthFactoryInput } from "./http-auth";
 
 export function createSetupAuth(input: AuthFactoryInput) {
   return betterAuth({

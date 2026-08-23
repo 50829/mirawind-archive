@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 
 import { publishingDraftActions } from "@/composition/server/publishing-drafts";
-import type { TypographyProfile } from "@/modules/publishing/application/public";
+import type { TypographyProfile } from "@/modules/publishing/application/publishing-api";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";

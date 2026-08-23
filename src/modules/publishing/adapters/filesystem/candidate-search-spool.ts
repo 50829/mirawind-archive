@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 
-import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
+import { canonicalJson } from "../../core/publication/manifest";
 import type {
   SearchFtsRow,
   SearchShortRow,
   SearchSpool,
-} from "@/modules/publishing/core/publication/search-model";
+} from "../../core/publication/search-model";
 
 const maximumCandidateSpoolBytes = 512 * 1024 * 1024;
 

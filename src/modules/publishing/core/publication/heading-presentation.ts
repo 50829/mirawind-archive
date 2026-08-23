@@ -1,5 +1,5 @@
-import { parseHeadingMarkdown } from "@/modules/publishing/core/publication/heading-markdown";
-import type { ValidatedConfiguredHeading } from "@/modules/publishing/core/publication/validate-config";
+import { parseHeadingMarkdown } from "./heading-markdown";
+import type { ValidatedConfiguredHeading } from "./validate-config";
 
 export type HeadingNumberingMode = "generated" | "none" | "source";
 

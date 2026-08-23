@@ -1,6 +1,6 @@
-import type { SourceBlockRecord } from "@/modules/publishing/core/preparation/source-block-records";
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import type { SourceBlockRecord } from "./source-block-records";
+import { normalizeDocumentBlocks } from "./normalize-document";
+import { parseMarkdownDocument } from "./parse-markdown";
 
 export interface EditedDocumentBlock {
   readonly blocks: readonly SourceBlockRecord[];

@@ -7,12 +7,12 @@ import {
   draftSourceSha256,
   maximumDraftSourceBytes,
   readCurrentDraftBlock,
-} from "@/modules/publishing/adapters/filesystem/draft-block-source";
-import { createDraftSourceRevision } from "@/modules/publishing/adapters/filesystem/draft-source-revision";
-import { editDocumentBlock } from "@/modules/publishing/core/preparation/edit-document-block";
-import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
-import { validateConfiguredStructureHierarchy } from "@/modules/publishing/core/publication/validate-config";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+} from "./draft-block-source";
+import { createDraftSourceRevision } from "./draft-source-revision";
+import { editDocumentBlock } from "../../core/preparation/edit-document-block";
+import { validateBookConfig } from "../../core/publication/book-config-schema";
+import { validateConfiguredStructureHierarchy } from "../../core/publication/validate-config";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 const maximumBlockMarkdownBytes = 4 * 1024 * 1024;
 

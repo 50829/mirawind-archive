@@ -4,9 +4,9 @@ import {
   parseReaderManifestProjection,
   type ReaderManifestPageProjection,
   type ReaderManifestResourceProjection,
-} from "@/modules/publishing/application/public";
-import type { StorageLayout } from "@/platform/filesystem/layout";
-import { resolveContainedPath } from "@/platform/filesystem/layout";
+} from "@/modules/publishing/application/publishing-api";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 
 export type IndexedManifestPage = ReaderManifestPageProjection;
 export type IndexedManifestResource = ReaderManifestResourceProjection;

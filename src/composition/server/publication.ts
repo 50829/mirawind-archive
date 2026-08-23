@@ -4,7 +4,7 @@ import { CandidatePublicationRepository } from "@/modules/publishing/adapters/sq
 import {
   m1PublishPolicy,
   publishCandidate,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 
 export function createPublicationServer(database: Database.Database) {
   return Object.freeze({

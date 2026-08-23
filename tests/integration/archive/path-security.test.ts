@@ -29,6 +29,7 @@ describe("archive entry path policy", () => {
     ["./", "ARCHIVE_PATH_EMPTY"],
     ["/book.md", "ARCHIVE_PATH_ABSOLUTE"],
     ["C:/book.md", "ARCHIVE_PATH_ABSOLUTE"],
+    ["C:book.md", "ARCHIVE_PATH_ABSOLUTE"],
     ["c:\\book.md", "ARCHIVE_PATH_ABSOLUTE"],
     ["//server/share/book.md", "ARCHIVE_PATH_ABSOLUTE"],
     ["\\\\server\\share\\book.md", "ARCHIVE_PATH_ABSOLUTE"],
@@ -36,6 +37,8 @@ describe("archive entry path policy", () => {
     ["wrapper/../../book.md", "ARCHIVE_PATH_TRAVERSAL"],
     ["wrapper\\..\\book.md", "ARCHIVE_PATH_TRAVERSAL"],
     ["book\u0000.md", "ARCHIVE_PATH_NUL"],
+    ["book\u0001.md", "ARCHIVE_PATH_CONTROL"],
+    ["book\u007f.md", "ARCHIVE_PATH_CONTROL"],
   ])("rejects hostile path %j", (path, code) => {
     expect(errorCode(() => normalizeArchiveEntryPath(path))).toBe(code);
   });
@@ -93,6 +96,18 @@ describe("archive entry path policy", () => {
       "ARCHIVE_PATH_COLLISION",
     );
 
+    const caseFolded = new ArchivePathRegistry();
+    caseFolded.add("book/Chapter.md");
+    expect(errorCode(() => caseFolded.add("book/chapter.md"))).toBe(
+      "ARCHIVE_PATH_COLLISION",
+    );
+
+    const expandedCaseFold = new ArchivePathRegistry();
+    expandedCaseFold.add("book/Straße.md");
+    expect(errorCode(() => expandedCaseFold.add("book/STRASSE.md"))).toBe(
+      "ARCHIVE_PATH_COLLISION",
+    );
+
     const fileFirst = new ArchivePathRegistry();
     fileFirst.add("book");
     expect(errorCode(() => fileFirst.add("book/full.md"))).toBe(
@@ -109,5 +124,10 @@ describe("archive entry path policy", () => {
     explicitDirectory.add("book/");
     explicitDirectory.add("book/full.md");
     expect(explicitDirectory.entries()).toHaveLength(2);
+
+    const inferredThenExplicit = new ArchivePathRegistry();
+    inferredThenExplicit.add("book/full.md");
+    inferredThenExplicit.add("book/");
+    expect(inferredThenExplicit.entries()).toHaveLength(2);
   });
 });

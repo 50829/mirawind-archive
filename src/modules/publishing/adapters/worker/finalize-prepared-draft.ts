@@ -5,34 +5,32 @@ import { resolve } from "node:path";
 import type Database from "better-sqlite3";
 import { stringify } from "yaml";
 
-import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
-import { createPrintedContentsAnalysisV2 } from "@/modules/publishing/core/preparation/printed-contents-analysis";
-import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { canonicalJson } from "../../core/publication/manifest";
+import { createPrintedContentsAnalysis } from "../../core/preparation/printed-contents-analysis";
+import { DraftRepository } from "../sqlite/drafts";
 import {
   DraftCandidateRepository,
   type DraftCandidateRecord,
-} from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
+} from "../sqlite/draft-candidate-repository";
 import {
   ImportRepository,
   type ReprocessPreparationEvidence,
-} from "@/modules/publishing/adapters/sqlite/imports";
+} from "../sqlite/imports";
 import {
   draftPreparationVersion,
   type PreparedDraftArtifact,
-} from "@/modules/publishing/adapters/worker/prepared-draft-artifact";
+} from "./prepared-draft-artifact";
 import {
   parseBookConfigYaml,
   validateBookConfig,
-} from "@/modules/publishing/core/publication/book-config-schema";
+} from "../../core/publication/book-config-schema";
 import {
   SourceSnapshotService,
   type SourceSnapshotResult,
-} from "@/modules/publishing/adapters/filesystem/source-snapshot";
-import {
-  atomicWriteFile,
-  resolveContainedPath,
-  type StorageLayout,
-} from "@/platform/filesystem/layout";
+} from "../filesystem/source-snapshot";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 
 export interface FinalizedPreparedDraft {
   readonly bookId: number;
@@ -214,7 +212,7 @@ export async function finalizePreparedDraft(input: {
   await atomicWriteFile(yamlPath, yaml, { mode: 0o600 });
   await chmod(yamlPath, 0o400);
   const yamlRelativePath = relativePath(input.layout.root, yamlPath);
-  const analysis = createPrintedContentsAnalysisV2({
+  const analysis = createPrintedContentsAnalysis({
     configRevision: revision,
     detection: preparedDetection(input.artifact),
     layoutDiagnostics: input.artifact.layoutDiagnostics,

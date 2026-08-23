@@ -1,8 +1,4 @@
-import {
-  isTerminalJobState,
-  type JobKind,
-  type JobState,
-} from "@/modules/publishing/application/job-state";
+import { isTerminalJobState, type JobKind, type JobState } from "./job-state";
 
 export interface RetryableJob {
   readonly automaticRetryCount: number;

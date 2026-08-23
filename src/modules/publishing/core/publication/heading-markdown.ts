@@ -1,5 +1,5 @@
-import type { TransientDocumentNode } from "@/modules/publishing/core/preparation/document-model";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import type { TransientDocumentNode } from "../preparation/document-model";
+import { parseMarkdownDocument } from "../preparation/parse-markdown";
 
 export interface ParsedHeadingMarkdown {
   readonly children: readonly TransientDocumentNode[];

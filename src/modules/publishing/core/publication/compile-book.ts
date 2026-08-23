@@ -5,24 +5,21 @@ import {
   type CompiledBook,
   type PageMetadata,
   type PagePlan,
-} from "@/modules/publishing/core/publication/compiled-book";
-import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
-import {
-  compilerIdentity,
-  semanticCompilationDigest,
-} from "@/modules/publishing/core/publication/manifest";
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
+} from "./compiled-book";
+import { validateBookConfig } from "./book-config-schema";
+import { compilerIdentity, semanticCompilationDigest } from "./manifest";
+import { normalizeDocumentBlocks } from "../preparation/normalize-document";
 import {
   presentConfiguredHeadings,
   type HeadingNumberingMode,
   type HeadingPresentation,
-} from "@/modules/publishing/core/publication/heading-presentation";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
-import type { NormalizedDocument } from "@/modules/publishing/core/preparation/document-model";
+} from "./heading-presentation";
+import { parseMarkdownDocument } from "../preparation/parse-markdown";
+import type { NormalizedDocument } from "../preparation/document-model";
 import {
   validateDocumentConfig,
   type ValidatedDocumentConfig,
-} from "@/modules/publishing/core/publication/validate-config";
+} from "./validate-config";
 
 interface ConfigSourceBlock {
   readonly block_id: string;

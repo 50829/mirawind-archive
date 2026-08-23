@@ -1,4 +1,4 @@
-import type { PublishPolicy } from "@/modules/publishing/application/publish-policy";
+import type { PublishPolicy } from "../publish-policy";
 
 export interface CandidatePublicationCapture {
   readonly bookId: number;

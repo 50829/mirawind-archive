@@ -2,7 +2,7 @@ import { parseEnvironment } from "@/config/environment";
 import {
   createStorageLayout,
   type StorageLayout,
-} from "@/platform/filesystem/layout";
+} from "@/platform/filesystem/storage-layout";
 
 let runtimeLayout: Promise<StorageLayout> | undefined;
 

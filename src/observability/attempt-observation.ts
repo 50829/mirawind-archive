@@ -7,7 +7,7 @@ import {
   type JobPhase,
   type JobProgress,
   type TerminalJobState,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 
 export type AttemptErrorClass =
   | "infrastructure"

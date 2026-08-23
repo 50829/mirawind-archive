@@ -6,23 +6,21 @@ import type Database from "better-sqlite3";
 import { SafeApplicationError } from "@/domain/errors";
 import { createOpaqueId } from "@/domain/ids";
 import { createStrongEtag } from "@/http/cache/policies";
-import { maximumCoverUploadBytes } from "@/modules/publishing/application/public";
+import { maximumCoverUploadBytes } from "../../application/publishing-api";
 import {
   draftSourceSha256,
   readCurrentDraft,
   relativeDraftStoragePath,
-} from "@/modules/publishing/adapters/filesystem/draft-block-source";
-import { createDraftSourceRevision } from "@/modules/publishing/adapters/filesystem/draft-source-revision";
-import { validateBookConfig } from "@/modules/publishing/core/publication/book-config-schema";
+} from "./draft-block-source";
+import { createDraftSourceRevision } from "./draft-source-revision";
+import { validateBookConfig } from "../../core/publication/book-config-schema";
 import {
   inspectRasterImage,
   type SupportedRasterFormat,
-} from "@/modules/publishing/core/publication/inspect-image";
-import { validateConfiguredStructureHierarchy } from "@/modules/publishing/core/publication/validate-config";
-import {
-  atomicWriteFile,
-  type StorageLayout,
-} from "@/platform/filesystem/layout";
+} from "../../core/publication/inspect-image";
+import { validateConfiguredStructureHierarchy } from "../../core/publication/validate-config";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 
 const extensionByFormat: Readonly<Record<SupportedRasterFormat, string>> = {
   gif: "gif",

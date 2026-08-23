@@ -1,4 +1,4 @@
-import { compilerIdentity } from "@/modules/publishing/core/publication/manifest";
+import { compilerIdentity } from "./manifest";
 
 export const rendererAssetBaseUrl =
   `/reader-assets/renderers/${compilerIdentity.renderer_version}` as const;

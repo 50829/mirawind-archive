@@ -5,7 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import {
   createStorageLayout,
   type StorageLayout,
-} from "@/platform/filesystem/layout";
+} from "@/platform/filesystem/storage-layout";
 
 export interface TemporaryDataRoot {
   readonly cleanup: () => Promise<void>;

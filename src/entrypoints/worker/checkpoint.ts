@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import type Database from "better-sqlite3";
 
-import type { StorageLayout } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 export const passiveCheckpointIntervalMs = 60_000;
 export const walSizeWarningBytes = 256 * 1024 * 1024;

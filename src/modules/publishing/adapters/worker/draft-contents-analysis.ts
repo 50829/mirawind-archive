@@ -1,34 +1,35 @@
 import { basename, dirname } from "node:path";
 
-import { readMineruLayoutEvidence } from "@/modules/publishing/adapters/filesystem/read-layout-evidence";
-import { supplementMissingListPageLabels } from "@/modules/publishing/core/preparation/layout-evidence";
-import type { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { readPdfContentsEvidence } from "@/modules/publishing/adapters/filesystem/read-pdf-contents-evidence";
-import { findOriginalPdf } from "@/modules/publishing/adapters/filesystem/find-original-pdf";
+import { readMineruLayoutEvidence } from "../filesystem/read-layout-evidence";
+import { supplementMissingListPageLabels } from "../../core/preparation/layout-evidence";
+import type { normalizeDocumentBlocks } from "../../core/preparation/normalize-document";
+import { readPdfContentsEvidence } from "../filesystem/read-pdf-contents-evidence";
+import { findOriginalPdf } from "../filesystem/find-original-pdf";
 import {
   createPrintedContentsDocumentIndex,
   detectPrintedContents,
   requiresSupplementalPdfEvidence,
   shouldUseNativePdfDetection,
   supplementalPdfPageIndices,
-} from "@/modules/publishing/core/preparation/printed-contents";
+} from "../../core/preparation/printed-contents";
 import {
   firstActiveHeadingAfterSourceRegion,
   prepareActiveDocument,
   type PreparedDocument,
-} from "@/modules/publishing/core/preparation/prepared-document";
-import { createSourceBlockRecords } from "@/modules/publishing/core/preparation/source-block-records";
-import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
+} from "../../core/preparation/prepared-document";
+import { createSourceBlockRecords } from "../../core/preparation/source-block-records";
+import { proposeDocumentStructure } from "../../core/preparation/structure-proposal";
 import type {
   PreparedDraftArtifact,
   PreparedPdfDiagnostic,
-} from "@/modules/publishing/adapters/worker/prepared-draft-artifact";
+} from "./prepared-draft-artifact";
 import {
   profilePipelineStage,
   recordPipelineProfileMetrics,
 } from "@/observability/pipeline-profile";
 
 type NormalizedDocument = ReturnType<typeof normalizeDocumentBlocks>;
+export type PdfEvidenceReader = typeof readPdfContentsEvidence;
 type ContentsResult = Pick<
   PreparedDraftArtifact,
   | "analysisSourceSha256"
@@ -48,7 +49,7 @@ export async function analyzeDraftContents(input: {
   readonly cleanupInputSha256?: string;
   readonly markdownPath: string;
   readonly normalized: NormalizedDocument;
-  readonly pdfEvidenceReader?: typeof readPdfContentsEvidence;
+  readonly pdfEvidenceReader?: PdfEvidenceReader;
   readonly selectedCandidatePath: string;
   readonly signal?: AbortSignal;
   readonly sourceSha256: string;

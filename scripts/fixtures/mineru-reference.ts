@@ -96,7 +96,7 @@ export interface ReferenceExpectedDiagnostic {
   readonly severity: "error" | "warning" | "info";
 }
 
-export interface MineruReferenceV2 {
+export interface MineruReference {
   readonly archive_sha256: string;
   readonly expected_diagnostics: readonly ReferenceExpectedDiagnostic[];
   readonly fixture_id: string;
@@ -571,7 +571,7 @@ function parseDiagnostic(
   });
 }
 
-export function parseMineruReferenceV2(value: unknown): MineruReferenceV2 {
+export function parseMineruReference(value: unknown): MineruReference {
   const input = object(value, "reference");
   exactKeys(
     input,
@@ -826,12 +826,12 @@ export function parseMineruReferenceV2(value: unknown): MineruReferenceV2 {
   });
 }
 
-export async function readMineruReferenceV2(
+export async function readMineruReference(
   path: string,
-): Promise<MineruReferenceV2> {
+): Promise<MineruReference> {
   const source = await readFile(path, "utf8");
   if (Buffer.byteLength(source) > 16 * 1024 * 1024) {
     throw new Error("reference file exceeds 16 MiB");
   }
-  return parseMineruReferenceV2(JSON.parse(source) as unknown);
+  return parseMineruReference(JSON.parse(source) as unknown);
 }

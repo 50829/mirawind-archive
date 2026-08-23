@@ -37,8 +37,8 @@ import {
   m1ImportExpiryMs,
   m1PublishPolicy,
   publishCandidate,
-} from "../../src/modules/publishing/application/public.js";
-import { createStorageLayout } from "../../src/platform/filesystem/layout.js";
+} from "../../src/modules/publishing/application/publishing-api.js";
+import { createStorageLayout } from "../../src/platform/filesystem/storage-layout.js";
 import { parsePipelineProfileArtifact } from "../../src/observability/pipeline-profile.js";
 import { sampleProcessTreeRss } from "../../src/platform/process/process-tree-rss.js";
 import {

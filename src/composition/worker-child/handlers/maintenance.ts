@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
-import { reconcileStorage } from "@/composition/storage-reconciliation";
-import { verifyVersion } from "@/composition/verify-version-job";
+import { reconcileStorage } from "../../storage-reconciliation";
+import { verifyVersion } from "../../verify-version-job";
 import type {
   PurgeBookCommand,
   ReclaimVersionsCommand,
@@ -12,13 +12,13 @@ import { permanentlyCleanupBook } from "@/modules/catalog/adapters/filesystem/pe
 import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 import { SqliteBookPublishingCleanup } from "@/modules/publishing/adapters/sqlite/book-cleanup";
 import { reclaimRetainedStorage } from "@/modules/publishing/adapters/worker/reclaim";
-import { createStorageLayout } from "@/platform/filesystem/layout";
+import { createStorageLayout } from "@/platform/filesystem/storage-layout";
 import { openDatabase } from "@/platform/sqlite/connection";
 import {
   stepProgress,
   type WorkerChildContext,
   type WorkerChildOutcome,
-} from "@/composition/worker-child/types";
+} from "../job-handler";
 
 export async function verifyVersionHandler(
   command: VerifyVersionCommand,

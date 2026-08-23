@@ -4,19 +4,16 @@ export {
   responsePolicyFor,
   type ResponsePolicy,
   type ResponsePolicyKind,
-} from "@/http/cache/policies";
+} from "./cache/policies";
 export {
   createSafeHtmlError,
   createSafeJsonError,
   safeErrorInputFromUnknown,
   type SafeErrorInput,
-} from "@/http/errors/responses";
-export { requireExactOrigin, requireMutationOrigin } from "@/http/origin";
+} from "./errors/responses";
+export { requireExactOrigin, requireMutationOrigin } from "./origin";
 
-import {
-  responsePolicyFor,
-  type ResponsePolicyKind,
-} from "@/http/cache/policies";
+import { responsePolicyFor, type ResponsePolicyKind } from "./cache/policies";
 
 export function cachePolicyFor(kind: ResponsePolicyKind): string {
   return responsePolicyFor(kind).cacheControl;

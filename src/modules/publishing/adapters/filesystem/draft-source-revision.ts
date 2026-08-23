@@ -13,11 +13,11 @@ import {
   materializeEditedDraftSource,
   relativeDraftStoragePath,
   type CurrentDraftContext,
-} from "@/modules/publishing/adapters/filesystem/draft-block-source";
-import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
-import type { StorageLayout } from "@/platform/filesystem/layout";
-import { atomicWriteFile } from "@/platform/filesystem/layout";
+} from "./draft-block-source";
+import { DraftCandidateRepository } from "../sqlite/draft-candidate-repository";
+import { SourceRepository } from "../sqlite/sources";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
 import { removeExactContainedTree } from "@/platform/filesystem/permanent-removal";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 

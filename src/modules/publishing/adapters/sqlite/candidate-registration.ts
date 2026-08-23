@@ -4,21 +4,21 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import type { BookVersionPresentationWriter } from "@/modules/catalog/application/public";
-import { readCandidateSearchSpool } from "@/modules/publishing/adapters/filesystem/candidate-search-spool";
-import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
-import type { CandidateRegistrationPort } from "@/modules/publishing/application/commands/finalize-candidate";
+import type { BookVersionPresentationWriter } from "@/modules/catalog/application/catalog-api";
+import { readCandidateSearchSpool } from "../filesystem/candidate-search-spool";
+import { VersionRepository } from "./versions";
+import type { CandidateRegistrationPort } from "../../application/commands/finalize-candidate";
 import {
   deriveBookVersionPresentation,
   type BuildCandidateCommand,
   type CandidateBuildArtifact,
-} from "@/modules/publishing/application/public";
+} from "../../application/publishing-api";
 import {
   validateDocumentManifest,
   validateVersionMarker,
-} from "@/modules/publishing/core/publication/document-manifest-schema";
-import type { StorageLayout } from "@/platform/filesystem/layout";
-import { resolveContainedPath } from "@/platform/filesystem/layout";
+} from "../../core/publication/document-manifest-schema";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 function sha256(bytes: Uint8Array): string {

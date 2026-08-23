@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 
 import type { WorkerStorageHealth } from "@/entrypoints/worker/checkpoint";
-import type { QueueObservation } from "@/modules/publishing/application/public";
+import type { QueueObservation } from "@/modules/publishing/application/publishing-api";
 import type { AttemptObservation } from "@/observability/attempt-observation";
 import { createLogger } from "@/observability/logger";
 import {
@@ -9,7 +9,7 @@ import {
   workerHealthCoalesceMs,
   type WorkerHealthSnapshot,
 } from "@/observability/worker-health";
-import type { StorageLayout } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 const activeRefreshMs = 5_000;
 const idleRefreshMs = 60_000;

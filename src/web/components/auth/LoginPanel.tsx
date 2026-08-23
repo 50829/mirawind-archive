@@ -1,6 +1,6 @@
 import { type ComponentProps, useState } from "react";
 
-import { authClient } from "@/web/identity/auth-client";
+import { authClient } from "../../identity/auth-client";
 
 export interface LoginPanelProps {
   readonly nextPath?: string;

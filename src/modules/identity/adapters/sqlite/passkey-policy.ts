@@ -8,9 +8,9 @@ import type Database from "better-sqlite3";
 import {
   authorizePasskeyMutation,
   type PasskeyMutationDecision,
-} from "@/modules/identity/application/public";
-import { appendIdentityAuditEvent } from "@/modules/identity/adapters/sqlite/identity-audit-events";
-import { InstallationRepository } from "@/modules/identity/adapters/sqlite/installation";
+} from "../../application/identity-api";
+import { appendIdentityAuditEvent } from "./identity-audit-events";
+import { InstallationRepository } from "./installation";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 const mutationPaths = new Set([

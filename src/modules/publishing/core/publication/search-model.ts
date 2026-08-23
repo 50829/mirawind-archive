@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 
-import type { TransientDocumentNode } from "@/modules/publishing/core/preparation/document-model";
-import type { CompiledBook } from "@/modules/publishing/core/publication/compiled-book";
-import { canonicalJson } from "@/modules/publishing/core/publication/manifest";
+import type { TransientDocumentNode } from "../preparation/document-model";
+import type { CompiledBook } from "./compiled-book";
+import { canonicalJson } from "./manifest";
 
 export interface SearchFtsRow {
   readonly authors: string;

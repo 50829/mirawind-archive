@@ -3,14 +3,14 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import { finalizeBookDeletion } from "@/composition/book-deletion";
+import { finalizeBookDeletion } from "../book-deletion";
 import {
   cancelImportJob,
   completeJobFailure,
   completeJobInterruption,
   retryJobAttempt,
-} from "@/composition/worker/attempt-lifecycle";
-import type { WorkerAttemptExecutionOutcome } from "@/composition/worker/execute-attempt";
+} from "./attempt-lifecycle";
+import type { WorkerAttemptExecutionOutcome } from "./execute-attempt";
 import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 import { CandidateRegistrationAdapter } from "@/modules/publishing/adapters/sqlite/candidate-registration";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
@@ -33,10 +33,10 @@ import {
 import {
   evaluateJobRetry,
   finalizeCandidate,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 import type { ProcessTreeMemoryObservation } from "@/observability/attempt-observation";
-import type { StorageLayout } from "@/platform/filesystem/layout";
-import { resolveContainedPath } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 
 export async function completeWorkerAttempt(input: {
   readonly candidates: DraftCandidateRepository;

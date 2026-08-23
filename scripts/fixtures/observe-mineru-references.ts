@@ -34,7 +34,7 @@ import {
   findTypographyProtectedRanges,
   preprocessMarkdownTypography,
 } from "../../src/modules/publishing/core/preparation/typography.js";
-import { resolveContainedPath } from "../../src/platform/filesystem/layout.js";
+import { resolveContainedPath } from "../../src/platform/filesystem/contained-path.js";
 import type { MineruReferencePack } from "./create-mineru-reference-pack.js";
 import type {
   ObservedMineruOutcome,
@@ -47,7 +47,7 @@ import type {
   ReferenceExpectedDiagnostic,
   ReferenceHeadingAccounting,
   ReferenceSemanticKind,
-} from "./mineru-reference-v2.js";
+} from "./mineru-reference.js";
 import { verifyRealMineruFixtures } from "./verify-real-mineru.js";
 
 interface RootRange {

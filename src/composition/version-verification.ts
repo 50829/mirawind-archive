@@ -11,10 +11,8 @@ import type { BookVersionRecord } from "@/modules/publishing/application/version
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import { validateVersionMarker } from "@/modules/publishing/core/publication/document-manifest-schema";
-import {
-  resolveContainedPath,
-  type StorageLayout,
-} from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 
 export type VersionVerificationCode =
   | "VERSION_DIRECTORY_INVALID"

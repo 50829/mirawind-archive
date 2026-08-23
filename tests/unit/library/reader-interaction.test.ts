@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildReaderNavigationTree,
   readerBreadcrumbs,
-} from "@/modules/reader/application/public";
+} from "@/modules/reader/application/reader-api";
 import { renderReaderShell } from "@/web/features/reader/render";
 import { shouldNavigateWithArrowKey } from "@/web/features/reader/reader-interaction";
 import { readerScriptUrl } from "@/styles/assets";

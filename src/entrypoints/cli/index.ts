@@ -7,9 +7,9 @@ import {
   createSetupAuth,
   recoverAdministrator,
 } from "@/composition/cli";
-import { runAdminCli } from "@/entrypoints/cli/admin-cli";
-import { runDatabaseMigrations } from "@/entrypoints/cli/commands/db-migrate";
-import { promptForAdministrator } from "@/entrypoints/cli/prompt";
+import { runAdminCli } from "./admin-cli";
+import { runDatabaseMigrations } from "./commands/db-migrate";
+import { promptForAdministrator } from "./prompt";
 import { parseEnvironment } from "@/config/environment";
 import { openDatabase } from "@/platform/sqlite/connection";
 import { loadMigrationManifest } from "@/platform/sqlite/migration-manifest";

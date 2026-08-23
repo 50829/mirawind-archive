@@ -4,23 +4,17 @@ import { relative, resolve, sep } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import {
-  ImportRepository,
-  type ImportRecord,
-} from "@/modules/publishing/adapters/sqlite/imports";
-import {
-  JobRepository,
-  type JobRecord,
-} from "@/modules/publishing/adapters/sqlite/jobs";
+import { ImportRepository, type ImportRecord } from "../sqlite/imports";
+import { JobRepository, type JobRecord } from "../sqlite/jobs";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import { SafeApplicationError } from "@/domain/errors";
 import { createOpaqueId } from "@/domain/ids";
-import type { StorageLayout } from "@/platform/filesystem/layout";
-import { openExclusiveFile } from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { openExclusiveFile } from "@/platform/filesystem/atomic-file";
 import {
   importUploadIdempotencyOperation,
   maximumUploadBytes,
-} from "@/modules/publishing/application/public";
+} from "../../application/publishing-api";
 
 const idempotencyOperation = importUploadIdempotencyOperation;
 

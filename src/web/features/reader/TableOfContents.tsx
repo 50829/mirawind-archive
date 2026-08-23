@@ -2,7 +2,7 @@ import {
   buildReaderNavigationTree,
   type ReaderTocLink,
   type ReaderTocNode,
-} from "@/modules/reader/application/public";
+} from "@/modules/reader/application/reader-api";
 
 function containsHeading(node: ReaderTocNode, blockId: string | null): boolean {
   return (

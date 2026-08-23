@@ -1,4 +1,4 @@
-import type { RetryableJob } from "@/modules/publishing/application/retry-policy";
+import type { RetryableJob } from "../retry-policy";
 
 export interface RecoverableJob extends RetryableJob {
   readonly id: string;

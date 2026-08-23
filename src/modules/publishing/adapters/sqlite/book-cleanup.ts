@@ -7,8 +7,8 @@ import type {
   BookRemovalInventoryPort,
   BookRemovalInventory,
   BookWorkCancellationPort,
-} from "@/modules/catalog/application/public";
-import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+} from "@/modules/catalog/application/catalog-api";
+import { JobRepository } from "./jobs";
 
 const emptyProgress =
   '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}';

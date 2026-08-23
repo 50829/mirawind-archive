@@ -1,4 +1,4 @@
-import type { ReaderTocLink } from "@/modules/reader/core/navigation";
+import type { ReaderTocLink } from "./navigation";
 
 export interface ReaderOutlineLink {
   readonly blockId: string;

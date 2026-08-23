@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { runWorkerMain } from "@/composition/worker/bootstrap";
+import { runWorkerMain } from "./worker/bootstrap";
 
 const isMain =
   process.argv[1] !== undefined &&

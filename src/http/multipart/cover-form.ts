@@ -8,7 +8,7 @@ import Busboy, {
 
 import { SafeApplicationError } from "@/domain/errors";
 import { hasControlCharacters } from "@/domain/text";
-import { maximumCoverUploadBytes } from "@/modules/publishing/application/public";
+import { maximumCoverUploadBytes } from "@/modules/publishing/application/publishing-api";
 
 function invalidCover(message = "The cover upload is invalid.") {
   return new SafeApplicationError("INVALID_COVER_UPLOAD", message, 400);

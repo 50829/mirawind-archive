@@ -1,13 +1,13 @@
 import { readFile, stat } from "node:fs/promises";
 
 import {
-  parsePrintedContentsAnalysisV2,
-  type PrintedContentsAnalysisV2,
-} from "@/modules/publishing/core/preparation/printed-contents-analysis";
+  parsePrintedContentsAnalysis,
+  type PrintedContentsAnalysis,
+} from "../../core/preparation/printed-contents-analysis";
 import { createSafeDiagnostic, type SafeDiagnostic } from "@/domain/errors";
 
 export function printedContentsDiagnostics(
-  analysis: PrintedContentsAnalysisV2,
+  analysis: PrintedContentsAnalysis,
 ): readonly SafeDiagnostic[] {
   return Object.freeze([
     ...analysis.evidence_diagnostics.map((diagnostic) =>
@@ -101,11 +101,11 @@ export async function readPinnedAnalysis(input: {
   readonly configRevision: number;
   readonly sourceId: string;
   readonly sourceSha256: string;
-}): Promise<PrintedContentsAnalysisV2> {
+}): Promise<PrintedContentsAnalysis> {
   if ((await stat(input.analysisPath)).size > 4 * 1024 * 1024) {
     throw new Error("PREVIEW_ANALYSIS_INVALID");
   }
-  const analysis = parsePrintedContentsAnalysisV2(
+  const analysis = parsePrintedContentsAnalysis(
     JSON.parse(await readFile(input.analysisPath, "utf8")),
   );
   if (

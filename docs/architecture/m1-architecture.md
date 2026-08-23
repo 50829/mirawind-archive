@@ -4,7 +4,7 @@
 - Date: 2026-07-31
 - Scope: M0 foundations required by the first MinerU vertical slice, plus M1 import,
   preview, compile, search, publish, read, and original ZIP download
-- Governing decisions: D-019～D-025, D-042～D-119
+- Governing decisions: D-019～D-025, D-042～D-124
 
 ## 1. System boundary
 
@@ -37,6 +37,19 @@ module direction is Reader -> Publishing -> Catalog, with Identity independent. 
 calls use only declared application surfaces. Catalog owns presentation and deletion policy,
 while Publishing interprets version artifacts and invokes Catalog's narrow presentation or
 cleanup operations.
+
+Source dependency notation follows ownership rather than a repository-wide alias rule. Each
+`src/modules/<domain>/` tree is one package; every other direct source tree is one package, and
+direct files below `src/` form `src-root`. Imports inside one package use the shortest relative
+specifier. Cross-package imports use `@/`, while cross-business-module and entrypoint access can
+target only `application/<domain>-api.ts`. The architecture graph resolves both forms before
+checking layers, coupling and file/module cycles. `@/schemas/*` is the explicit exception that
+maps to authoritative `docs/schemas/` data. Tests and scripts remain separate support-code trees.
+
+Current first-party runtime files, types and functions use semantic names rather than `V1`,
+`V2` or `legacy` history. Numeric versions remain mandatory in persisted schemas, frozen
+compiler/renderer/profile identities, vendor filenames and offline reference data. A rename
+does not leave a forwarding export or alternate parser.
 
 For local preview, D-098 adds a repository launcher and a Compose override, not a new
 runtime topology. `./docker/local.sh` manages the same separate Web and worker processes as
@@ -101,6 +114,14 @@ directories are never directly exposed as a static Web root. `version.json` reco
 compiler version, schema versions, config revision, build time, manifest hash, and a complete
 build marker.
 
+The configured storage root is canonical and cannot itself be a symlink; managed database,
+book, temporary and upload directories are private non-symlink directories on that same
+filesystem. Persisted internal relative paths use one NFC POSIX form and reject absolute,
+drive-relative, backslash, control, empty, repeated and dot components. Existing-file reads and
+permanent removals also verify canonical parents so `O_NOFOLLOW` on a leaf cannot be bypassed by
+an intermediate symlink. Atomic writes remove their exclusive temporary sibling on every
+pre-rename failure.
+
 ## 4. Core SQLite responsibilities
 
 The concrete schema belongs in the M1 data model, but it must represent:
@@ -162,8 +183,8 @@ creates a durable import job.
 
 Before and during extraction, the worker must:
 
-- treat `/`, `\`, drive letters, UNC prefixes, NUL, `.`, `..`, empty components, and Unicode
-  normalization collisions as security-relevant;
+- treat `/`, `\`, drive letters, UNC prefixes, NUL/control characters, `.`, `..`, empty
+  components, Unicode normalization and Unicode case-fold collisions as security-relevant;
 - convert accepted entry names to one internal POSIX-relative representation;
 - reject absolute paths, traversal, duplicate normalized paths, symlinks, hardlinks, devices,
   FIFOs, sockets, encrypted entries, multi-disk archives, and unsupported compression;
@@ -172,6 +193,12 @@ Before and during extraction, the worker must:
   time, and expansion ratio;
 - read image metadata under decoder limits before any full decode;
 - terminate and remove the entire staging root on any violation.
+
+ZIP inspection records normalized path, entry type, compression, sizes, signature, encryption
+flags and platform attributes. Extraction rereads the directory and compares that complete
+identity before creating each target; replacing or changing the archive between passes fails and
+removes the incomplete extraction tree. File/directory prefix checks use bounded prefix metadata
+rather than scanning every registered path.
 
 The original uploaded ZIP is copied into the immutable version only after its stream hash and
 size are known. The normalized source tree retains only the main Markdown and referenced

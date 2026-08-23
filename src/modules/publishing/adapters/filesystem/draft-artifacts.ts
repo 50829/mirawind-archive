@@ -6,12 +6,10 @@ import {
   createSafeDiagnostic,
   type SafeDiagnostic,
 } from "@/domain/errors";
-import { parseBookConfigYaml } from "@/modules/publishing/application/publication-formats";
-import { validateDocumentManifest } from "@/modules/publishing/core/publication/document-manifest-schema";
-import {
-  resolveContainedPath,
-  type StorageLayout,
-} from "@/platform/filesystem/layout";
+import { parseBookConfigYaml } from "../../application/publication-formats";
+import { validateDocumentManifest } from "../../core/publication/document-manifest-schema";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import {
   fileHandleWebStream,
   openVerifiedContainedFile,

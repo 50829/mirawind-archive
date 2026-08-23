@@ -11,29 +11,26 @@ import {
 } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
-import { compileBook } from "@/modules/publishing/core/publication/compile-book";
+import { compileBook } from "../../core/publication/compile-book";
 import {
   buildDocumentManifest,
   canonicalJson,
   compilerIdentity,
   type ManifestResource,
   type ManifestSourceFile,
-} from "@/modules/publishing/core/publication/manifest";
-import { inspectRasterImage } from "@/modules/publishing/core/publication/inspect-image";
-import { resolveDocumentResources } from "@/modules/publishing/adapters/filesystem/resolve-document-resources";
-import type { CompiledBook } from "@/modules/publishing/core/publication/compiled-book";
+} from "../../core/publication/manifest";
+import { inspectRasterImage } from "../../core/publication/inspect-image";
+import { resolveDocumentResources } from "./resolve-document-resources";
+import type { CompiledBook } from "../../core/publication/compiled-book";
 import { toIsoDateTime } from "@/domain/time";
-import type { SemanticCompilationIdentity } from "@/modules/publishing/core/preparation/document-model";
-import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
-import { validateVersionMarker } from "@/modules/publishing/core/publication/document-manifest-schema";
-import {
-  atomicWriteFile,
-  resolveContainedPath,
-} from "@/platform/filesystem/layout";
+import type { SemanticCompilationIdentity } from "../../core/preparation/document-model";
+import { parseBookConfigYaml } from "../../core/publication/book-config-schema";
+import { validateVersionMarker } from "../../core/publication/document-manifest-schema";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import {
   createCandidateFileInventory,
   type CandidateFileInventory,
-} from "@/modules/publishing/adapters/filesystem/candidate-file-inventory";
+} from "./candidate-file-inventory";
 import {
   profilePipelineStage,
   recordPipelineProfileMetrics,
@@ -327,15 +324,8 @@ export async function assembleCandidate(
           filename: resource.relativePath,
         });
         const outputPath = `published/assets/${resource.id}`;
-        await atomicWriteFile(resolve(versionDirectory, outputPath), bytes, {
-          mode: 0o400,
-        });
+        await files.write(outputPath, bytes);
         const resourceSha256 = sha256(bytes);
-        files.record({
-          path: outputPath,
-          sha256: resourceSha256,
-          size: bytes.byteLength,
-        });
         manifestResources.push(
           Object.freeze({
             ...resource,
@@ -414,11 +404,7 @@ export async function assembleCandidate(
         version_id: input.versionId,
       };
       validateVersionMarker(marker);
-      await atomicWriteFile(
-        resolve(versionDirectory, "version.json"),
-        canonicalJson(marker),
-        { mode: 0o400 },
-      );
+      await files.writeVersionMarker(canonicalJson(marker));
       const artifact: CandidateAssemblyArtifact = Object.freeze({
         bookId: input.bookId,
         configRevision: input.configRevision,

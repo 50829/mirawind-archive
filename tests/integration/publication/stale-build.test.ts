@@ -9,7 +9,7 @@ import {
 import {
   m1PublishPolicy,
   publishCandidate,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publishing-api";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {

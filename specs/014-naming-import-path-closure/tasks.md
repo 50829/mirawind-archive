@@ -22,13 +22,13 @@ worker, authorization/cache, browser, reference exactness and performance eviden
 
 **Purpose**: Add failing gates for canonical imports, semantic names and path failures before implementation.
 
-- [ ] T005 [P] Add accepted local-relative and rejected local-alias/cross-package-relative fixtures under `tests/fixtures/architecture/` and assertions in `tests/architecture/dependency-graph.test.ts`.
-- [ ] T006 [P] Add semantic identifier and filename rule tests in `tests/architecture/semantic-names.test.ts` covering current APIs and allowed persisted/version literals.
-- [ ] T007 [P] Add non-TSV native PDF output rejection evidence in `tests/unit/compiler/pdf-contents-evidence.test.ts`.
-- [ ] T008 [P] Add canonical POSIX internal-path and symlink-root/managed-directory cases in `tests/integration/storage/filesystem.test.ts`.
-- [ ] T009 [P] Add archive control, drive-relative, Unicode/case-fold collision and prefix-bound cases in `tests/integration/archive/path-security.test.ts`.
-- [ ] T010 [P] Add second-pass ZIP identity mismatch and complete extraction cleanup evidence in `tests/integration/archive/extraction.test.ts`.
-- [ ] T011 Add atomic replacement rename-failure cleanup and prior-target preservation evidence in `tests/integration/storage/filesystem.test.ts`.
+- [x] T005 [P] Add accepted local-relative and rejected local-alias/cross-package-relative fixtures under `tests/fixtures/architecture/` and assertions in `tests/architecture/dependency-graph.test.ts`.
+- [x] T006 [P] Add semantic identifier and filename rule tests in `tests/architecture/semantic-names.test.ts` covering current APIs and allowed persisted/version literals.
+- [x] T007 [P] Add non-TSV native PDF output rejection evidence in `tests/unit/compiler/pdf-contents-evidence.test.ts`.
+- [x] T008 [P] Add canonical POSIX internal-path and symlink-root/managed-directory cases in `tests/integration/storage/filesystem.test.ts`.
+- [x] T009 [P] Add archive control, drive-relative, Unicode/case-fold collision and prefix-bound cases in `tests/integration/archive/path-security.test.ts`.
+- [x] T010 [P] Add second-pass ZIP identity mismatch and complete extraction cleanup evidence in `tests/integration/archive/extraction.test.ts`.
+- [x] T011 Add atomic replacement rename-failure cleanup and prior-target preservation evidence in `tests/integration/storage/filesystem.test.ts`.
 
 **Checkpoint**: New tests fail for missing canonical import, semantic naming and path behavior while existing suites remain green.
 
@@ -40,17 +40,17 @@ worker, authorization/cache, browser, reference exactness and performance eviden
 
 **Independent Test**: Canonicalization reports zero replacements, architecture reports zero diagnostics, and no vague module facade or handler contract remains.
 
-- [ ] T012 [US1] Define ownership-package and canonical-specifier functions, including `src-root` and the reserved schema alias, in `scripts/architecture/boundaries.ts` until T005 local/cross-package cases pass.
-- [ ] T013 [US1] Change `scripts/architecture/canonical-imports.ts` to emit relative package-local specifiers and root-alias cross-package specifiers for imports, exports, import types and dynamic imports while leaving tests/scripts and `@/schemas/*` outside rewriting.
-- [ ] T014 [US1] Update `scripts/architecture/dependency-graph.ts` to accept canonical local relatives, reject noncanonical spellings and preserve resolved layering/coupling/cycle checks.
-- [ ] T015 [P] [US1] Rename `src/modules/catalog/application/public.ts` to `catalog-api.ts` and update Catalog consumers without a forwarding file.
-- [ ] T016 [P] [US1] Rename `src/modules/identity/application/public.ts` to `identity-api.ts` and update Identity consumers and `src/env.d.ts` without a forwarding file.
-- [ ] T017 [US1] Rename `src/modules/publishing/application/public.ts` to `publishing-api.ts` and update Publishing, worker, Web and test consumers without a forwarding file.
-- [ ] T018 [P] [US1] Rename `src/modules/reader/application/public.ts` to `reader-api.ts` and update Reader, Web, style and test consumers without a forwarding file.
-- [ ] T019 [US1] Rename `src/composition/worker-child/types.ts` to `job-handler.ts`, preserve its narrow handler contract and update registry/handler consumers.
-- [ ] T020 [US1] Canonicalize all first-party imports under `src/` with `scripts/architecture/canonical-imports.ts --write` and manually resolve any ambiguous or self-facade imports.
-- [ ] T021 [US1] Update architecture fixtures and expected cross-module API paths under `tests/fixtures/architecture/` for named facades.
-- [ ] T022 [US1] Run architecture import/check/test gates and record import counts, named facade paths and zero diagnostics in `specs/014-naming-import-path-closure/evidence.md`.
+- [x] T012 [US1] Define ownership-package and canonical-specifier functions, including `src-root` and the reserved schema alias, in `scripts/architecture/boundaries.ts` until T005 local/cross-package cases pass.
+- [x] T013 [US1] Change `scripts/architecture/canonical-imports.ts` to emit relative package-local specifiers and root-alias cross-package specifiers for imports, exports, import types and dynamic imports while leaving tests/scripts and `@/schemas/*` outside rewriting.
+- [x] T014 [US1] Update `scripts/architecture/dependency-graph.ts` to accept canonical local relatives, reject noncanonical spellings and preserve resolved layering/coupling/cycle checks.
+- [x] T015 [P] [US1] Rename `src/modules/catalog/application/public.ts` to `catalog-api.ts` and update Catalog consumers without a forwarding file.
+- [x] T016 [P] [US1] Rename `src/modules/identity/application/public.ts` to `identity-api.ts` and update Identity consumers and `src/env.d.ts` without a forwarding file.
+- [x] T017 [US1] Rename `src/modules/publishing/application/public.ts` to `publishing-api.ts` and update Publishing, worker, Web and test consumers without a forwarding file.
+- [x] T018 [P] [US1] Rename `src/modules/reader/application/public.ts` to `reader-api.ts` and update Reader, Web, style and test consumers without a forwarding file.
+- [x] T019 [US1] Rename `src/composition/worker-child/types.ts` to `job-handler.ts`, preserve its narrow handler contract and update registry/handler consumers.
+- [x] T020 [US1] Canonicalize all first-party imports under `src/` with `scripts/architecture/canonical-imports.ts --write` and manually resolve any ambiguous or self-facade imports.
+- [x] T021 [US1] Update architecture fixtures and expected cross-module API paths under `tests/fixtures/architecture/` for named facades.
+- [x] T022 [US1] Run architecture import/check/test gates and record import counts, named facade paths and zero diagnostics in `specs/014-naming-import-path-closure/evidence.md`.
 
 **Checkpoint**: Every product import uses the target-aware form and all module/layer boundaries remain enforced.
 
@@ -62,12 +62,12 @@ worker, authorization/cache, browser, reference exactness and performance eviden
 
 **Independent Test**: Semantic-name checks pass, stored identity fixtures remain unchanged, non-TSV PDF data no longer enters an old parser, and current supported fixtures still pass.
 
-- [ ] T023 [P] [US2] Rename `PrintedContentsAnalysisV2` and its create/parse APIs in `src/modules/publishing/core/preparation/printed-contents-analysis.ts` and update all product/test callers while retaining the strict identity literal.
-- [ ] T024 [P] [US2] Rename `scripts/fixtures/mineru-reference-v2.ts` and `tests/unit/fixtures/mineru-reference-v2.test.ts` to semantic filenames and rename current reference types/functions across scripts/tests while retaining schema version 2 data.
-- [ ] T025 [US2] Remove `legacyNativeRecords()` and the dual-format native parsing branch from `src/modules/publishing/adapters/filesystem/read-pdf-contents-evidence.ts` so malformed non-TSV output follows current diagnostics/OCR policy.
-- [ ] T026 [US2] Implement the first-party semantic name scanner in `scripts/architecture/semantic-names.ts`, wire it into `package.json`, and make T006 pass without scanning string-literal schema/identity values.
-- [ ] T027 [US2] Search product and fixture-tool source for stale old exports, forwarding files, `V<number>` identifiers and `legacy` implementations; remove every unapproved result and record approved literal exceptions in `specs/014-naming-import-path-closure/evidence.md`.
-- [ ] T028 [US2] Run printed-contents, PDF evidence, reference authoring/comparison and semantic-name tests and record strict version compatibility in `specs/014-naming-import-path-closure/evidence.md`.
+- [x] T023 [P] [US2] Rename `PrintedContentsAnalysisV2` and its create/parse APIs in `src/modules/publishing/core/preparation/printed-contents-analysis.ts` and update all product/test callers while retaining the strict identity literal.
+- [x] T024 [P] [US2] Rename `scripts/fixtures/mineru-reference-v2.ts` and `tests/unit/fixtures/mineru-reference-v2.test.ts` to semantic filenames and rename current reference types/functions across scripts/tests while retaining schema version 2 data.
+- [x] T025 [US2] Remove `legacyNativeRecords()` and the dual-format native parsing branch from `src/modules/publishing/adapters/filesystem/read-pdf-contents-evidence.ts` so malformed non-TSV output follows current diagnostics/OCR policy.
+- [x] T026 [US2] Implement the first-party semantic name scanner in `scripts/architecture/semantic-names.ts`, wire it into `package.json`, and make T006 pass without scanning string-literal schema/identity values.
+- [x] T027 [US2] Search product and fixture-tool source for stale old exports, forwarding files, `V<number>` identifiers and `legacy` implementations; remove every unapproved result and record approved literal exceptions in `specs/014-naming-import-path-closure/evidence.md`.
+- [x] T028 [US2] Run printed-contents, PDF evidence, reference authoring/comparison and semantic-name tests and record strict version compatibility in `specs/014-naming-import-path-closure/evidence.md`.
 
 **Checkpoint**: One semantically named runtime path consumes each strict current representation.
 
@@ -79,16 +79,16 @@ worker, authorization/cache, browser, reference exactness and performance eviden
 
 **Independent Test**: Hostile path, symlink, changed ZIP, extraction cleanup and atomic-write failure fixtures pass with no unexpected files.
 
-- [ ] T029 [US3] Move `StorageLayout` and `createStorageLayout()` from `src/platform/filesystem/layout.ts` to `storage-layout.ts`, canonicalize the root, reject root/managed symlinks and return only same-device canonical directories.
-- [ ] T030 [P] [US3] Move canonical relative-path resolution to `src/platform/filesystem/contained-path.ts`, reject noncanonical POSIX components and update focused tests.
-- [ ] T031 [P] [US3] Move exclusive creation and atomic replacement to `src/platform/filesystem/atomic-file.ts`, close/remove temporary siblings on pre-rename failure and update focused tests.
-- [ ] T032 [US3] Update all product/test imports from deleted `src/platform/filesystem/layout.ts` directly to the three semantic filesystem primitives without a forwarding file.
-- [ ] T033 [US3] Extend `src/modules/publishing/core/preparation/archive-path-policy.ts` with control/drive-relative rejection and case-fold collision keys while preserving strict UTF-8, NFC, byte and depth limits.
-- [ ] T034 [US3] Replace the archive registry descendant scan with bounded prefix-map checks in `src/modules/publishing/core/preparation/archive-path-policy.ts`, preserving valid explicit-after-implicit directories.
-- [ ] T035 [US3] Extend `InspectedArchiveEntry` identity comparison in `src/modules/publishing/adapters/filesystem/inspect-zip.ts` and `extract-archive.ts` before creating each second-pass target.
-- [ ] T036 [US3] Audit `src/modules/publishing/adapters/filesystem/resolve-document-resources.ts`, source snapshots, draft artifacts, candidate inventory and Reader file adapters against the canonical path contract and remove duplicate/ad-hoc containment where the platform primitive applies.
-- [ ] T037 [US3] Audit sealed extraction, permanent removal, reclaim and reconciliation paths for symlink, containment, cleanup and rename boundaries; add any discovered focused evidence in `tests/integration/storage/` or `tests/integration/recovery/`.
-- [ ] T038 [US3] Run archive, filesystem, import, source snapshot, resource, publication recovery and permanent-deletion suites and record results plus residual same-UID race limits in `specs/014-naming-import-path-closure/evidence.md`.
+- [x] T029 [US3] Move `StorageLayout` and `createStorageLayout()` from `src/platform/filesystem/layout.ts` to `storage-layout.ts`, canonicalize the root, reject root/managed symlinks and return only same-device canonical directories.
+- [x] T030 [P] [US3] Move canonical relative-path resolution to `src/platform/filesystem/contained-path.ts`, reject noncanonical POSIX components and update focused tests.
+- [x] T031 [P] [US3] Move exclusive creation and atomic replacement to `src/platform/filesystem/atomic-file.ts`, close/remove temporary siblings on pre-rename failure and update focused tests.
+- [x] T032 [US3] Update all product/test imports from deleted `src/platform/filesystem/layout.ts` directly to the three semantic filesystem primitives without a forwarding file.
+- [x] T033 [US3] Extend `src/modules/publishing/core/preparation/archive-path-policy.ts` with control/drive-relative rejection and case-fold collision keys while preserving strict UTF-8, NFC, byte and depth limits.
+- [x] T034 [US3] Replace the archive registry descendant scan with bounded prefix-map checks in `src/modules/publishing/core/preparation/archive-path-policy.ts`, preserving valid explicit-after-implicit directories.
+- [x] T035 [US3] Extend `InspectedArchiveEntry` identity comparison in `src/modules/publishing/adapters/filesystem/inspect-zip.ts` and `extract-archive.ts` before creating each second-pass target.
+- [x] T036 [US3] Audit `src/modules/publishing/adapters/filesystem/resolve-document-resources.ts`, source snapshots, draft artifacts, candidate inventory and Reader file adapters against the canonical path contract and remove duplicate/ad-hoc containment where the platform primitive applies.
+- [x] T037 [US3] Audit sealed extraction, permanent removal, reclaim and reconciliation paths for symlink, containment, cleanup and rename boundaries; add any discovered focused evidence in `tests/integration/storage/` or `tests/integration/recovery/`.
+- [x] T038 [US3] Run archive, filesystem, import, source snapshot, resource, publication recovery and permanent-deletion suites and record results plus residual same-UID race limits in `specs/014-naming-import-path-closure/evidence.md`.
 
 **Checkpoint**: Accepted paths have one identity, hostile names reject before writes, and failures clean only the intended tree.
 

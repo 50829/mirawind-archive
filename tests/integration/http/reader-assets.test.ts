@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readerMermaidScriptUrl } from "@/modules/reader/application/public";
+import { readerMermaidScriptUrl } from "@/modules/reader/application/reader-api";
 
 import {
   GET,

@@ -7,12 +7,12 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   compareMineruReferenceSet,
-  compareMineruReferenceV2,
+  compareMineruReference,
 } from "../../../scripts/fixtures/compare-mineru-references";
 import {
-  parseMineruReferenceV2,
-  type MineruReferenceV2,
-} from "../../../scripts/fixtures/mineru-reference-v2";
+  parseMineruReference,
+  type MineruReference,
+} from "../../../scripts/fixtures/mineru-reference";
 
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
@@ -28,8 +28,8 @@ afterEach(async () => {
   );
 });
 
-function reference(): MineruReferenceV2 {
-  return parseMineruReferenceV2({
+function reference(): MineruReference {
+  return parseMineruReference({
     archive_sha256: hash("archive"),
     expected_diagnostics: [],
     fixture_id: "real-mineru-a7f31c",
@@ -155,7 +155,7 @@ describe("MinerU reference v2 comparator", () => {
   });
 
   it("accepts an exact complete outcome", () => {
-    expect(compareMineruReferenceV2(reference(), observed())).toEqual({
+    expect(compareMineruReference(reference(), observed())).toEqual({
       fixture_id: "real-mineru-a7f31c",
       issues: [],
       ok: true,
@@ -164,7 +164,7 @@ describe("MinerU reference v2 comparator", () => {
 
   it("reports observed fixture and archive binding mismatches", () => {
     const expected = reference();
-    const result = compareMineruReferenceV2(expected, {
+    const result = compareMineruReference(expected, {
       ...observed(expected),
       archive_sha256: hash("another archive"),
       fixture_id: "real-mineru-b9d204",
@@ -197,7 +197,7 @@ describe("MinerU reference v2 comparator", () => {
     ) {
       throw new Error("test fixture is incomplete");
     }
-    const result = compareMineruReferenceV2(expected, {
+    const result = compareMineruReference(expected, {
       ...actual,
       main_markdown: {
         ...actual.main_markdown,
@@ -248,7 +248,7 @@ describe("MinerU reference v2 comparator", () => {
   it("reports missing, extra and reordered regions/headings/diagnostics", () => {
     const expected = reference();
     const actual = observed(expected);
-    const result = compareMineruReferenceV2(expected, {
+    const result = compareMineruReference(expected, {
       ...actual,
       diagnostics: [
         {
@@ -306,7 +306,7 @@ describe("MinerU reference v2 comparator", () => {
       page_label: "40",
       title: "Chapter Three",
     };
-    const expanded = parseMineruReferenceV2({
+    const expanded = parseMineruReference({
       ...expected,
       printed_contents: {
         ...expected.printed_contents,
@@ -342,7 +342,7 @@ describe("MinerU reference v2 comparator", () => {
     const actualRegion = actual.printed_contents.regions[0];
     if (!actualRegion) throw new Error("test fixture is incomplete");
 
-    const result = compareMineruReferenceV2(expanded, {
+    const result = compareMineruReference(expanded, {
       ...actual,
       printed_contents: {
         ...actual.printed_contents,
@@ -366,7 +366,7 @@ describe("MinerU reference v2 comparator", () => {
     const entry = region?.entries[0];
     if (!region || !entry) throw new Error("test fixture is incomplete");
 
-    const result = compareMineruReferenceV2(expected, {
+    const result = compareMineruReference(expected, {
       ...actual,
       printed_contents: {
         ...actual.printed_contents,

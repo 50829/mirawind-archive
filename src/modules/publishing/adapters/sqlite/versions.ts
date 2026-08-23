@@ -3,14 +3,14 @@ import type Database from "better-sqlite3";
 import type {
   BookVersionPresentation,
   BookVersionPresentationWriter,
-} from "@/modules/catalog/application/public";
+} from "@/modules/catalog/application/catalog-api";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
-import type { SearchSpool } from "@/modules/publishing/core/publication/search-model";
-import { SearchIndexRepository } from "@/modules/publishing/adapters/sqlite/search-index";
+import type { SearchSpool } from "../../core/publication/search-model";
+import { SearchIndexRepository } from "./search-index";
 import type {
   BookVersionRecord,
   BookVersionState,
-} from "@/modules/publishing/application/version-record";
+} from "../../application/version-record";
 
 interface VersionRow {
   blocking_diagnostic_count: number;

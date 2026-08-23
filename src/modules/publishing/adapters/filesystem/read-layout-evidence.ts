@@ -8,7 +8,7 @@ import type {
   LayoutEvidence,
   LayoutEvidenceDiagnostic,
   LayoutEvidenceRecord,
-} from "@/modules/publishing/core/preparation/layout-evidence";
+} from "../../core/preparation/layout-evidence";
 
 const maximumSidecarBytes = 128 * 1024 * 1024;
 const maximumRecords = 20_000;

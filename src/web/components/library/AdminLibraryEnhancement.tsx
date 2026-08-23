@@ -1,7 +1,7 @@
 import { BookOpen, Settings, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import type { AdministratorLibraryEntry } from "@/modules/catalog/application/public";
+import type { AdministratorLibraryEntry } from "@/modules/catalog/application/catalog-api";
 
 interface ResponseBody {
   readonly entries: readonly {

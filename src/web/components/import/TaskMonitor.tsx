@@ -7,12 +7,12 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { usePolling } from "@/web/components/manage/use-polling";
+import { usePolling } from "../manage/use-polling";
 import {
   managePanel,
   managePrimaryButton,
   manageQuietText,
-} from "@/web/components/ui/manage-classes";
+} from "../ui/manage-classes";
 import type { JobProgress } from "@/entrypoints/worker/protocol";
 import {
   jobOperationLabel,
@@ -20,7 +20,7 @@ import {
   jobProgressDetail,
   jobProgressPercent,
   jobProgressSummary,
-} from "@/web/components/import/job-presentation";
+} from "./job-presentation";
 
 type JobState =
   "canceled" | "failed" | "interrupted" | "queued" | "running" | "succeeded";

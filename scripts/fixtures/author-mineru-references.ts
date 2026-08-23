@@ -7,17 +7,17 @@ import { pathToFileURL } from "node:url";
 import { extractZipFile } from "../../src/modules/publishing/adapters/filesystem/extract-archive.js";
 import { parseMarkdownDocument } from "../../src/modules/publishing/core/preparation/parse-markdown.js";
 import type { TransientDocumentNode } from "../../src/modules/publishing/core/preparation/document-model.js";
-import { resolveContainedPath } from "../../src/platform/filesystem/layout.js";
+import { resolveContainedPath } from "../../src/platform/filesystem/contained-path.js";
 import type { MineruReferencePack } from "./create-mineru-reference-pack.js";
 import {
-  parseMineruReferenceV2,
-  type MineruReferenceV2,
+  parseMineruReference,
+  type MineruReference,
   type ReferenceAnchor,
   type ReferenceContentsEntry,
   type ReferenceHeadingAccounting,
   type ReferenceProtectedRange,
   type ReferenceSemanticKind,
-} from "./mineru-reference-v2.js";
+} from "./mineru-reference.js";
 import {
   parseRealFixtureManifest,
   verifyRealMineruFixtures,
@@ -739,7 +739,7 @@ function matchEntries(
 
 function headingAccounting(input: {
   readonly headings: readonly HeadingText[];
-  readonly regions: MineruReferenceV2["printed_contents"]["regions"];
+  readonly regions: MineruReference["printed_contents"]["regions"];
 }): readonly ReferenceHeadingAccounting[] {
   const exclusions = input.regions.map((region) => ({
     end: region.markdown_range.end.root_index,
@@ -953,11 +953,11 @@ function headingAccounting(input: {
   );
 }
 
-export function authorMineruReferenceV2(input: {
+export function authorMineruReference(input: {
   readonly pack: MineruReferencePack;
   readonly source?: string;
   readonly transcript: CodexVisionTranscript;
-}): MineruReferenceV2 {
+}): MineruReference {
   const transcript = parseCodexVisionTranscript(input.transcript);
   if (input.pack.fixture_id !== transcript.fixture_id) {
     throw new Error("VISION_REFERENCE_FIXTURE_MISMATCH");
@@ -1091,7 +1091,7 @@ export function authorMineruReferenceV2(input: {
     }),
     schema_version: 2 as const,
   };
-  return parseMineruReferenceV2(value);
+  return parseMineruReference(value);
 }
 
 export async function readVisionFixtureDecision(
@@ -1330,7 +1330,7 @@ export async function reauthorRealMineruReferences(input: {
         markdown.relative_path,
       );
       const source = await readFile(markdownPath, "utf8");
-      const reference = authorMineruReferenceV2({ pack, source, transcript });
+      const reference = authorMineruReference({ pack, source, transcript });
       await writeFile(
         join(referenceDirectory, `${fixture.id}.json`),
         `${JSON.stringify(reference, null, 2)}\n`,

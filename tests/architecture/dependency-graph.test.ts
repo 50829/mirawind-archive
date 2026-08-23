@@ -12,7 +12,8 @@ const productSource = resolve(import.meta.dirname, "../../src");
 
 describe("architecture dependency graph", () => {
   it.each<readonly [string, ArchitectureDiagnosticCode]>([
-    ["relative-import", "NON_CANONICAL_IMPORT"],
+    ["local-alias", "NON_CANONICAL_IMPORT"],
+    ["cross-package-relative", "NON_CANONICAL_IMPORT"],
     ["forbidden-edge", "FORBIDDEN_DEPENDENCY"],
     ["deep-import", "CROSS_MODULE_DEEP_IMPORT"],
     ["type-only", "FORBIDDEN_DEPENDENCY"],
@@ -32,6 +33,13 @@ describe("architecture dependency graph", () => {
       sourceDirectory: resolve(fixtureRoot, fixture, "src"),
     });
     expect(result.diagnostics.map((item) => item.code)).toContain(code);
+  });
+
+  it("accepts a relative import within one ownership package", async () => {
+    const result = await analyzeDependencyGraph({
+      sourceDirectory: resolve(fixtureRoot, "relative-import", "src"),
+    });
+    expect(result.diagnostics).toEqual([]);
   });
 
   it("accepts the complete product source tree", async () => {

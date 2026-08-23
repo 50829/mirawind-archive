@@ -12,19 +12,19 @@ import type { SafeDiagnostic } from "@/domain/errors";
 import type {
   NormalizedDocument,
   TransientDocumentNode,
-} from "@/modules/publishing/core/preparation/document-model";
-import type { ResourceResolution } from "@/modules/publishing/core/publication/resource-model";
-import type { HeadingPresentation } from "@/modules/publishing/core/publication/heading-presentation";
+} from "../preparation/document-model";
+import type { ResourceResolution } from "./resource-model";
+import type { HeadingPresentation } from "./heading-presentation";
 import {
   resolveHeadingLinkTarget,
   type HeadingLinkIndex,
-} from "@/modules/publishing/core/publication/compiled-book";
-import { renderCode } from "@/modules/publishing/core/publication/render-code";
-import { renderMath } from "@/modules/publishing/core/publication/render-math";
+} from "./compiled-book";
+import { renderCode } from "./render-code";
+import { renderMath } from "./render-math";
 import {
   importedHtmlSanitizationSchema,
   rehypeRestrictResources,
-} from "@/modules/publishing/core/publication/sanitize-html";
+} from "./sanitize-html";
 
 interface TreeNode {
   alt?: string;
