@@ -280,6 +280,13 @@ async function fixtureContext(dataRoot: string): Promise<FixtureContext> {
   }
 }
 
+export function retainedFixtureDataRoot(
+  retainDirectory: string,
+  fixtureId: string,
+): string {
+  return join(retainDirectory, fixtureId, "run-001");
+}
+
 async function waitForWeb(process_: ManagedProcess, url: URL): Promise<void> {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -403,7 +410,7 @@ async function waitForJob(
   }
 }
 
-async function benchmarkFixtureHttp(input: {
+export async function benchmarkFixtureHttp(input: {
   readonly concurrency: number;
   readonly dataRoot: string;
   readonly requests: number;
@@ -588,7 +595,7 @@ export async function runReferenceBenchmark(
     const fixtureId = String(result.fixture_id);
     const http = await benchmarkFixtureHttp({
       concurrency: input.concurrency,
-      dataRoot: join(input.retainDirectory, fixtureId),
+      dataRoot: retainedFixtureDataRoot(input.retainDirectory, fixtureId),
       requests: input.requests,
     });
     httpResults.push(

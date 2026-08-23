@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { createPublishingServer } from "@/composition/server";
+import { createPublicationServer } from "@/composition/server/publication";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";
@@ -35,7 +35,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
       400,
     );
   }
-  const publishing = createPublishingServer(database);
+  const publishing = createPublicationServer(database);
   const published = await publishing.publishCandidate({
     actorUserId: session?.user.id ?? null,
     bookId: id,

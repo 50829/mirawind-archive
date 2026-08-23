@@ -211,6 +211,124 @@ describe("durable job repository", () => {
     secondDatabase.close();
   });
 
+  it("rejects decreasing or incompatible progress within one phase", async () => {
+    const [database, secondDatabase] = await connections();
+    const repository = new JobRepository(database);
+    const job = repository.create({ kind: "prepare_draft", nowMs: 1_000 });
+    repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
+    repository.heartbeat({
+      jobId: job.id,
+      leaseOwner: "worker-a",
+      nowMs: 3_000,
+      phase: "security_check",
+      progress: {
+        completed: 12,
+        processed_bytes: 1_024,
+        total: 20,
+        unit: "items",
+      },
+    });
+
+    for (const progress of [
+      {
+        completed: 11,
+        processed_bytes: 1_024,
+        total: 20,
+        unit: "items" as const,
+      },
+      {
+        completed: 12,
+        processed_bytes: 1_023,
+        total: 20,
+        unit: "items" as const,
+      },
+      {
+        completed: 12,
+        processed_bytes: 1_024,
+        total: 21,
+        unit: "items" as const,
+      },
+      {
+        completed: 12,
+        processed_bytes: 1_024,
+        total: 20,
+        unit: "bytes" as const,
+      },
+    ]) {
+      expect(() =>
+        repository.heartbeat({
+          jobId: job.id,
+          leaseOwner: "worker-a",
+          nowMs: 4_000,
+          phase: "security_check",
+          progress,
+        }),
+      ).toThrow(/JOB_PROGRESS_/u);
+    }
+    database.close();
+    secondDatabase.close();
+  });
+
+  it("rejects a phase that moves backward within one attempt", async () => {
+    const [database, secondDatabase] = await connections();
+    const repository = new JobRepository(database);
+    const job = repository.create({ kind: "prepare_draft", nowMs: 1_000 });
+    repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
+    repository.heartbeat({
+      jobId: job.id,
+      leaseOwner: "worker-a",
+      nowMs: 3_000,
+      phase: "organize_structure",
+    });
+
+    expect(() =>
+      repository.heartbeat({
+        jobId: job.id,
+        leaseOwner: "worker-a",
+        nowMs: 4_000,
+        phase: "identify_document",
+      }),
+    ).toThrow("JOB_PHASE_REGRESSION");
+    database.close();
+    secondDatabase.close();
+  });
+
+  it("observes empty, queued, running and draining queue states", async () => {
+    const [database, secondDatabase] = await connections();
+    const repository = new JobRepository(database);
+    expect(repository.observeQueue(1_000)).toEqual({
+      observedAtMs: 1_000,
+      oldestQueuedAgeMs: null,
+      queuedCount: 0,
+      runningCount: 0,
+    });
+    const first = repository.create({ kind: "reconcile", nowMs: 1_100 });
+    repository.create({ kind: "reclaim_versions", nowMs: 1_200 });
+    expect(repository.observeQueue(2_000)).toMatchObject({
+      oldestQueuedAgeMs: 900,
+      queuedCount: 2,
+      runningCount: 0,
+    });
+    repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_100 });
+    expect(repository.observeQueue(2_200)).toMatchObject({
+      oldestQueuedAgeMs: 1_000,
+      queuedCount: 1,
+      runningCount: 1,
+    });
+    repository.completeSuccess({
+      jobId: first.id,
+      leaseOwner: "worker-a",
+      nowMs: 2_300,
+    });
+    expect(repository.observeQueue(1_000)).toMatchObject({
+      oldestQueuedAgeMs: 0,
+      queuedCount: 1,
+      runningCount: 0,
+    });
+    database.close();
+    secondDatabase.close();
+  });
+
   it("allows only one automatic retry across an immutable retry chain", async () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);

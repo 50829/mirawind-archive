@@ -23,11 +23,13 @@ const sourceExtensions = [
 ] as const;
 
 export type ArchitectureDiagnosticCode =
+  | "COMPOSITION_BUSINESS_SQL"
   | "CROSS_MODULE_DEEP_IMPORT"
   | "DEPENDENCY_CYCLE"
   | "DIRECT_INTERNAL_DEPENDENCY_LIMIT"
   | "FORBIDDEN_DEPENDENCY"
   | "INJECTED_PORT_LIMIT"
+  | "MODULE_DEPENDENCY_CYCLE"
   | "NON_CANONICAL_IMPORT"
   | "UNRESOLVED_INTERNAL_IMPORT";
 
@@ -48,6 +50,9 @@ export interface DependencyGraphResult {
 interface ImportReference {
   readonly specifier: string;
 }
+
+const businessSqlPattern =
+  /\b(?:SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[\s\S]*\b(?:audit_events|book_deletions|book_version_presentations|book_versions|books|config_revisions|draft_candidates|imports|jobs|original_files|source_snapshots)\b/iu;
 
 const forbiddenCoreRuntimeSpecifiers = Object.freeze([
   "astro",
@@ -148,6 +153,33 @@ function importsFor(path: string, source: string): readonly ImportReference[] {
   };
   visit(file);
   return Object.freeze(imports);
+}
+
+function containsBusinessSql(path: string, source: string): boolean {
+  if (!isCompositionRoot(path)) return false;
+  const kind = path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const file = ts.createSourceFile(
+    path,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    kind,
+  );
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (
+      (ts.isStringLiteralLike(node) ||
+        ts.isNoSubstitutionTemplateLiteral(node)) &&
+      businessSqlPattern.test(node.text)
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return found;
 }
 
 function candidatePaths(base: string): readonly string[] {
@@ -288,8 +320,14 @@ export async function analyzeDependencyGraph(input: {
   const diagnostics: ArchitectureDiagnostic[] = [];
   for (const sourceFile of absoluteFiles) {
     const source = relativePath(sourceFile);
+    const sourceText = await readFile(sourceFile, "utf8");
     const location = moduleLocation(source);
-    const imports = importsFor(sourceFile, await readFile(sourceFile, "utf8"));
+    const imports = importsFor(sourceFile, sourceText);
+    if (containsBusinessSql(source, sourceText)) {
+      diagnostics.push(
+        diagnostic("COMPOSITION_BUSINESS_SQL", source, null, null),
+      );
+    }
     const targets = new Set<string>();
     for (const imported of imports) {
       if (
@@ -381,6 +419,45 @@ export async function analyzeDependencyGraph(input: {
           source,
           null,
           cyclePath(component, edges),
+        ),
+      );
+    }
+  }
+  const moduleEdges = new Map<string, string[]>();
+  const modules = new Set<string>();
+  for (const [source, targets] of edges) {
+    const sourceModule = moduleLocation(source)?.domain;
+    if (!sourceModule) continue;
+    modules.add(sourceModule);
+    const targetModules = new Set(moduleEdges.get(sourceModule) ?? []);
+    for (const target of targets) {
+      const targetModule = moduleLocation(target)?.domain;
+      if (!targetModule || targetModule === sourceModule) continue;
+      modules.add(targetModule);
+      targetModules.add(targetModule);
+    }
+    moduleEdges.set(sourceModule, [...targetModules].sort());
+  }
+  for (const module of modules)
+    moduleEdges.set(module, moduleEdges.get(module) ?? []);
+  for (const component of stronglyConnectedComponents(
+    [...modules].sort(),
+    moduleEdges,
+  )) {
+    const selfCycle =
+      component.length === 1 &&
+      (moduleEdges.get(component[0] ?? "") ?? []).includes(component[0] ?? "");
+    if (component.length > 1 || selfCycle) {
+      const source = component[0] ?? "unknown";
+      diagnostics.push(
+        diagnostic(
+          "MODULE_DEPENDENCY_CYCLE",
+          `modules/${source}`,
+          `modules/${source}`,
+          null,
+          cyclePath(component, moduleEdges).map(
+            (domain) => `modules/${domain}`,
+          ),
         ),
       );
     }

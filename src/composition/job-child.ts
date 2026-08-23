@@ -1,25 +1,7 @@
-import { readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { isAbsolute, resolve, sep } from "node:path";
 
-import { openDatabase } from "@/platform/sqlite/connection";
+import { executeWorkerChildCommand } from "@/composition/worker-child/registry";
 import { SafeApplicationError } from "@/domain/errors";
-import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
-import { analyzeImport } from "@/modules/publishing/adapters/worker/analyze-import";
-import { buildCandidateVersion } from "@/modules/publishing/adapters/filesystem/build-candidate-version";
-import { handleBuildCandidate } from "@/entrypoints/worker/handlers/build-candidate";
-import { prepareDraft } from "@/modules/publishing/adapters/worker/prepare-draft";
-import {
-  printedContentsDiagnostics,
-  readPinnedAnalysis,
-} from "@/modules/publishing/adapters/worker/preview-diagnostics";
-import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
-import { reclaimRetainedStorage } from "@/modules/publishing/adapters/worker/reclaim";
-import { SqliteBookPublishingCleanup } from "@/modules/publishing/adapters/sqlite/book-cleanup";
-import { permanentlyCleanupBook } from "@/modules/catalog/adapters/filesystem/permanent-book-cleanup";
-import { reconcileStorage } from "@/composition/storage-reconciliation";
-import { verifyVersion } from "@/composition/verify-version-job";
-import { resolveContainedPath } from "@/platform/filesystem/layout";
-import { createStorageLayout } from "@/platform/filesystem/layout";
 import {
   isCancelJobMessage,
   isRunJobMessage,
@@ -77,15 +59,6 @@ function reportProgress(
   } satisfies JobProgressMessage);
 }
 
-function steps(completed: number, total: number): JobProgress {
-  return Object.freeze({
-    completed,
-    processed_bytes: null,
-    total,
-    unit: "steps",
-  });
-}
-
 function storageRoot(): string {
   const value = process.env.MIRAWIND_JOB_STORAGE_ROOT;
   if (!value || !isAbsolute(value) || resolve(value) === sep) {
@@ -120,267 +93,25 @@ async function execute(message: RunJobMessage): Promise<void> {
       jobId: message.input.jobId,
       jobKind: message.input.kind,
     });
-    const root = storageRoot();
-    if (message.input.kind === "build_candidate") {
-      const layout = await createStorageLayout(root);
-      const configPath = await resolveContainedPath(
-        root,
-        message.input.configRelativePath,
-      );
-      const config = parseBookConfigYaml(await readFile(configPath, "utf8"));
-      const source = config.source as Readonly<Record<string, unknown>>;
-      const analysis = await readPinnedAnalysis({
-        analysisPath: await resolveContainedPath(
-          root,
-          `books/${message.input.bookId}/draft/analyses/${message.input.sourceId}/${message.input.configRevision}.json`,
-        ),
-        configRevision: message.input.configRevision,
-        sourceId: message.input.sourceId,
-        sourceSha256: String(source.main_markdown_sha256),
-      });
-      const artifact = await handleBuildCandidate({
-        command: message.input,
-        execute: ({ command, onStage, signal }) =>
-          buildCandidateVersion({
-            command,
-            createdAtMs: Date.now(),
-            layout,
-            onStage,
-            preparationDiagnostics: printedContentsDiagnostics(analysis),
-            ...(signal ? { signal } : {}),
+    const outcome = await executeWorkerChildCommand(message.input, {
+      reportProgress,
+      root: storageRoot(),
+      signal: controller.signal,
+    });
+    send({
+      jobId: message.input.jobId,
+      ok: outcome.ok,
+      protocolVersion: jobChildProtocolVersion,
+      ...(outcome.ok
+        ? outcome.result
+          ? { result: outcome.result }
+          : {}
+        : {
+            safeErrorClass: outcome.safeErrorClass,
+            safeErrorCode: outcome.safeErrorCode,
           }),
-        onProgress(progress) {
-          reportProgress(progress.phase, progress.progress);
-        },
-        signal: controller.signal,
-      });
-      send({
-        jobId: message.input.jobId,
-        ok: true,
-        protocolVersion: jobChildProtocolVersion,
-        result: { ...artifact },
-        type: "result",
-      });
-      return;
-    }
-    const stagingDirectory = await resolveContainedPath(
-      root,
-      message.input.stagingRelativePath,
-    );
-    if (
-      message.input.kind === "analyze_import" &&
-      message.input.importUploadRelativePath
-    ) {
-      reportProgress("security_check", steps(0, 2));
-      const archivePath = await resolveContainedPath(
-        root,
-        message.input.importUploadRelativePath,
-      );
-      const result = await analyzeImport({
-        archivePath,
-        importId: message.input.importId,
-        sealedExtractionDirectory: resolve(
-          dirname(archivePath),
-          "sealed-extraction",
-        ),
-        signal: controller.signal,
-        stagingDirectory,
-      });
-      reportProgress("identify_document", steps(2, 2));
-      send({
-        jobId: message.input.jobId,
-        ok: true,
-        protocolVersion: jobChildProtocolVersion,
-        result: {
-          analysisResultRelativePath: relative(root, result.artifactPath)
-            .split(sep)
-            .join("/"),
-          candidates: result.artifact.candidates.length,
-          decision: result.artifact.decision,
-          entries: result.entries,
-          files: result.files,
-          totalUncompressedBytes: result.totalUncompressedBytes,
-        },
-        type: "result",
-      });
-      return;
-    }
-    if (
-      message.input.kind === "verify_version" &&
-      message.input.versionId !== null
-    ) {
-      reportProgress("verify_manifest", steps(0, 1));
-      const database = openDatabase(join(root, "db", "mirawind.sqlite"), {
-        role: "worker",
-      });
-      try {
-        const outcome = await verifyVersion({
-          database,
-          layout: await createStorageLayout(root),
-          nowMs: Date.now(),
-          versionId: message.input.versionId,
-        });
-        send({
-          jobId: message.input.jobId,
-          ok: outcome.result.ok,
-          protocolVersion: jobChildProtocolVersion,
-          ...(outcome.result.ok
-            ? {
-                result: {
-                  recovered: outcome.recovery !== null,
-                  version_id: outcome.versionId,
-                },
-              }
-            : {
-                safeErrorClass: "content",
-                safeErrorCode: outcome.result.code,
-              }),
-          type: "result",
-        });
-      } finally {
-        database.close();
-      }
-      return;
-    }
-    if (message.input.kind === "reconcile") {
-      reportProgress("reconcile_storage", steps(0, 1));
-      const database = openDatabase(join(root, "db", "mirawind.sqlite"), {
-        role: "worker",
-      });
-      try {
-        const outcome = await reconcileStorage({
-          database,
-          layout: await createStorageLayout(root),
-          nowMs: Date.now(),
-        });
-        send({
-          jobId: message.input.jobId,
-          ok: true,
-          protocolVersion: jobChildProtocolVersion,
-          result: {
-            corrupt_versions: outcome.corruptDatabaseVersions.length,
-            quarantined: outcome.quarantinedDirectories.length,
-            recovered_current: outcome.recoveredCurrentVersions.length,
-            removed_orphans: outcome.removedOrphanPaths.length,
-            removed_staging: outcome.removedStagingDirectories.length,
-          },
-          type: "result",
-        });
-      } finally {
-        database.close();
-      }
-      return;
-    }
-    if (
-      message.input.kind === "reclaim_versions" ||
-      message.input.kind === "purge_book"
-    ) {
-      reportProgress(
-        message.input.kind === "purge_book"
-          ? "permanent_book_deletion"
-          : "reclaim_storage",
-        steps(0, 1),
-      );
-      const database = openDatabase(join(root, "db", "mirawind.sqlite"), {
-        role: "worker",
-      });
-      try {
-        const layout = await createStorageLayout(root);
-        const deletionOutcome =
-          message.input.kind === "purge_book"
-            ? await permanentlyCleanupBook({
-                bookId: message.input.bookId,
-                layout,
-                publishingCleanup: new SqliteBookPublishingCleanup(database),
-              })
-            : null;
-        const outcome = deletionOutcome
-          ? null
-          : await reclaimRetainedStorage({
-              database,
-              layout,
-              nowMs: Date.now(),
-              presentationRemover: new BookPresentationRepository(database),
-            });
-        send({
-          jobId: message.input.jobId,
-          ok: deletionOutcome !== null || outcome?.failedPaths.length === 0,
-          protocolVersion: jobChildProtocolVersion,
-          ...(deletionOutcome
-            ? {
-                result: {
-                  removed_staging: deletionOutcome.removedStagingDirectories,
-                  removed_uploads: deletionOutcome.removedUploadDirectories,
-                },
-              }
-            : outcome && outcome.failedPaths.length === 0
-              ? {
-                  result: {
-                    reclaimed_versions: outcome.reclaimedVersionIds.length,
-                    removed_quarantine: outcome.removedQuarantinePaths.length,
-                  },
-                }
-              : {
-                  safeErrorClass: "infrastructure",
-                  safeErrorCode: "RECLAIM_CLEANUP_INCOMPLETE",
-                }),
-          type: "result",
-        });
-      } finally {
-        database.close();
-      }
-      return;
-    }
-    if (
-      message.input.kind === "prepare_draft" &&
-      message.input.importUploadRelativePath &&
-      message.input.selectedCandidateRelativePath
-    ) {
-      reportProgress("security_check", steps(0, 3));
-      reportProgress("identify_document", steps(1, 3));
-      const archivePath = await resolveContainedPath(
-        root,
-        message.input.importUploadRelativePath,
-      );
-      const result = await prepareDraft({
-        archivePath,
-        importId: message.input.importId,
-        sealedExtractionDirectory: resolve(
-          dirname(archivePath),
-          "sealed-extraction",
-        ),
-        selectedCandidatePath: message.input.selectedCandidateRelativePath,
-        signal: controller.signal,
-        stagingDirectory,
-        ...(message.input.typographyProfile
-          ? { typographyProfile: message.input.typographyProfile }
-          : {}),
-      });
-      reportProgress("organize_structure", steps(3, 3));
-      send({
-        jobId: message.input.jobId,
-        ok: true,
-        protocolVersion: jobChildProtocolVersion,
-        result: {
-          preparedDraftRelativePath: relative(root, result.artifactPath)
-            .split(sep)
-            .join("/"),
-          preparedSourceFilesRelativePath: relative(
-            root,
-            result.sourceFilesPath,
-          )
-            .split(sep)
-            .join("/"),
-        },
-        type: "result",
-      });
-      return;
-    }
-    throw new SafeApplicationError(
-      "JOB_HANDLER_NOT_IMPLEMENTED",
-      "The job handler is not implemented.",
-      500,
-    );
+      type: "result",
+    });
   } catch (error) {
     send({
       jobId: message.input.jobId,

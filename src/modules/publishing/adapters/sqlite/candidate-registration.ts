@@ -4,16 +4,14 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import {
-  deriveBookVersionPresentation,
-  type BookVersionPresentationWriter,
-} from "@/modules/catalog/application/public";
+import type { BookVersionPresentationWriter } from "@/modules/catalog/application/public";
 import { readCandidateSearchSpool } from "@/modules/publishing/adapters/filesystem/candidate-search-spool";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import type { CandidateRegistrationPort } from "@/modules/publishing/application/commands/finalize-candidate";
-import type {
-  BuildCandidateCommand,
-  CandidateBuildArtifact,
+import {
+  deriveBookVersionPresentation,
+  type BuildCandidateCommand,
+  type CandidateBuildArtifact,
 } from "@/modules/publishing/application/public";
 import {
   validateDocumentManifest,

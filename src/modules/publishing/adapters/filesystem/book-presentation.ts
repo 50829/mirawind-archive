@@ -3,12 +3,13 @@ import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
 
-import {
-  deriveBookVersionPresentation,
-  type BookVersionPresentation,
+import type {
+  BookVersionPresentation,
+  BookVersionPresentationReconciliationStore,
 } from "@/modules/catalog/application/public";
-import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
-import type { BookVersionRecord } from "@/modules/publishing/application/public";
+import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
+import { deriveBookVersionPresentation } from "@/modules/publishing/application/derive-book-version-presentation";
+import type { BookVersionRecord } from "@/modules/publishing/application/version-record";
 import type { StorageLayout } from "@/platform/filesystem/layout";
 import { resolveContainedPath } from "@/platform/filesystem/layout";
 
@@ -54,12 +55,13 @@ export async function reconcileBookVersionPresentations(input: {
     version: BookVersionRecord,
   ) => Promise<BookVersionPresentation>;
   readonly nowMs: number;
+  readonly presentations: BookVersionPresentationReconciliationStore;
 }): Promise<PresentationReconciliation> {
-  const repository = new BookPresentationRepository(input.database);
+  const versions = new VersionRepository(input.database);
   const rebuiltVersionIds: string[] = [];
   const mismatchedVersionIds: string[] = [];
   const failedVersionIds: string[] = [];
-  for (const version of repository.listReconciliationCandidates()) {
+  for (const version of versions.listPresentationReconciliationCandidates()) {
     try {
       const expected = await (input.loadPresentation
         ? input.loadPresentation(version)
@@ -71,59 +73,30 @@ export async function reconcileBookVersionPresentations(input: {
       ) {
         throw new Error("PRESENTATION_IDENTITY_MISMATCH");
       }
-      const existing = repository.find(version.id);
+      const existing = input.presentations.find(version.id);
       if (existing) {
         if (existing.projectionSha256 !== expected.projectionSha256) {
           mismatchedVersionIds.push(version.id);
         }
         continue;
       }
-      repository.insert(expected);
+      input.presentations.insert(expected);
       rebuiltVersionIds.push(version.id);
     } catch {
       failedVersionIds.push(version.id);
     }
   }
-  const rejected = new Set([...failedVersionIds, ...mismatchedVersionIds]);
-  const repairedCurrentBookIds: number[] = [];
-  const currentRows = input.database
-    .prepare(
-      `SELECT books.id, books.alias, books.current_version_id,
-              presentation.alias AS presentation_alias
-       FROM books
-       JOIN book_version_presentations AS presentation
-         ON presentation.version_id = books.current_version_id
-        AND presentation.book_id = books.id
-       WHERE books.current_version_id IS NOT NULL
-         AND books.deletion_requested_at IS NULL
-       ORDER BY books.id`,
-    )
-    .all() as {
-    alias: string | null;
-    current_version_id: string;
-    id: number;
-    presentation_alias: string | null;
-  }[];
-  for (const row of currentRows) {
-    if (
-      rejected.has(row.current_version_id) ||
-      row.alias === row.presentation_alias
-    ) {
-      continue;
-    }
-    const changed = input.database
-      .prepare(
-        `UPDATE books SET alias = ?, updated_at = ?
-         WHERE id = ? AND current_version_id = ?
-           AND deletion_requested_at IS NULL`,
-      )
-      .run(row.presentation_alias, input.nowMs, row.id, row.current_version_id);
-    if (changed.changes === 1) repairedCurrentBookIds.push(row.id);
-  }
+  const repairedCurrentBookIds = input.presentations.repairCurrentAliases({
+    excludedVersionIds: Object.freeze([
+      ...failedVersionIds,
+      ...mismatchedVersionIds,
+    ]),
+    nowMs: input.nowMs,
+  });
   return Object.freeze({
     failedVersionIds: Object.freeze(failedVersionIds.sort()),
     mismatchedVersionIds: Object.freeze(mismatchedVersionIds.sort()),
-    repairedCurrentBookIds: Object.freeze(repairedCurrentBookIds.sort()),
+    repairedCurrentBookIds,
     rebuiltVersionIds: Object.freeze(rebuiltVersionIds.sort()),
   });
 }

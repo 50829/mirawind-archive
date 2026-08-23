@@ -3,8 +3,10 @@ import type Database from "better-sqlite3";
 import { isOpaqueId } from "@/domain/ids";
 import type {
   BookDeletionTaskPort,
-  BookPublishingCleanupPort,
+  BookPublishingRecordPurgePort,
+  BookRemovalInventoryPort,
   BookRemovalInventory,
+  BookWorkCancellationPort,
 } from "@/modules/catalog/application/public";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 
@@ -12,7 +14,11 @@ const emptyProgress =
   '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}';
 
 export class SqliteBookPublishingCleanup
-  implements BookDeletionTaskPort, BookPublishingCleanupPort
+  implements
+    BookDeletionTaskPort,
+    BookPublishingRecordPurgePort,
+    BookRemovalInventoryPort,
+    BookWorkCancellationPort
 {
   constructor(private readonly database: Database.Database) {}
 

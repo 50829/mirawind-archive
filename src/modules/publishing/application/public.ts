@@ -1,14 +1,15 @@
 import {
   canonicalJson,
-  katexCriticalCss,
   parseBookConfigYaml,
-  publishingRendererIdentity,
-  rendererStylesheetUrl,
+  parseReaderManifestProjection,
+  publishingReaderRendererAssets,
   validateBookConfig,
-  validateDocumentManifest,
 } from "@/modules/publishing/application/publication-formats";
 import {
+  assertJobProgressUpdate,
+  isJobPhase,
   isKnownJobPhase,
+  isJobProgress,
   jobKinds,
 } from "@/modules/publishing/application/job-state";
 import { evaluateJobRetry } from "@/modules/publishing/application/retry-policy";
@@ -27,20 +28,29 @@ import {
 } from "@/modules/publishing/application/commands/build-candidate";
 import { finalizeCandidate } from "@/modules/publishing/application/commands/finalize-candidate";
 import { publishCandidate } from "@/modules/publishing/application/commands/publish-candidate";
+import { scheduleStartupPublishingMaintenance } from "@/modules/publishing/application/commands/schedule-startup-maintenance";
+import { deriveBookVersionPresentation } from "@/modules/publishing/application/derive-book-version-presentation";
 import {
   currentDraftCandidateStates,
   getCurrentDraftCandidate,
 } from "@/modules/publishing/application/queries/get-draft";
 
 export type {
-  BookVersionRecord,
-  BookVersionState,
   HeadingNumberingMode,
   TypographyProfile,
 } from "@/modules/publishing/application/publication-formats";
 export type {
+  ReaderManifestPageProjection,
+  ReaderManifestProjection,
+  ReaderManifestResourceProjection,
+} from "@/modules/publishing/application/publication-formats";
+export type {
+  JobProgress,
+  JobProgressUnit,
   JobKind,
   JobPhase,
+  TerminalJobState,
+  QueueObservation,
 } from "@/modules/publishing/application/job-state";
 export type {
   BuildCandidateCommand,
@@ -49,6 +59,7 @@ export type {
   CandidateBuildArtifact,
 } from "@/modules/publishing/application/commands/build-candidate";
 export type { CandidateRegistrationPort } from "@/modules/publishing/application/commands/finalize-candidate";
+export type { StartupMaintenanceJobPort } from "@/modules/publishing/application/commands/schedule-startup-maintenance";
 export type {
   CandidatePublicationCapture,
   CandidatePublicationPort,
@@ -64,10 +75,14 @@ export {
   candidateBuildIdentities,
   candidateBuildPhases,
   currentDraftCandidateStates,
+  deriveBookVersionPresentation,
   evaluateJobRetry,
   finalizeCandidate,
   getCurrentDraftCandidate,
   importUploadIdempotencyOperation,
+  assertJobProgressUpdate,
+  isJobPhase,
+  isJobProgress,
   isKnownJobPhase,
   jobKinds,
   m1ImportExpiryMs,
@@ -76,12 +91,11 @@ export {
   maximumUploadBytes,
   parseBuildCandidateCommand,
   parseCandidateBuildArtifact,
-  publishingRendererIdentity,
   publishCandidate,
+  scheduleStartupPublishingMaintenance,
   canonicalJson,
-  katexCriticalCss,
   parseBookConfigYaml,
-  rendererStylesheetUrl,
+  parseReaderManifestProjection,
+  publishingReaderRendererAssets,
   validateBookConfig,
-  validateDocumentManifest,
 };

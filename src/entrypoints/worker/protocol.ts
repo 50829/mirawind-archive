@@ -1,11 +1,14 @@
 import { isOpaqueId } from "@/domain/ids";
 import {
   isKnownJobPhase,
+  isJobProgress,
   jobKinds,
   parseBuildCandidateCommand,
   type BuildCandidateCommand,
   type JobKind,
   type JobPhase,
+  type JobProgress,
+  type JobProgressUnit,
   type TypographyProfile,
 } from "@/modules/publishing/application/public";
 
@@ -86,14 +89,7 @@ export interface JobProgressMessage {
   readonly type: "progress";
 }
 
-export type JobProgressUnit = "bytes" | "items" | "pages" | "steps";
-
-export interface JobProgress {
-  readonly completed: number;
-  readonly processed_bytes: number | null;
-  readonly total: number | null;
-  readonly unit: JobProgressUnit;
-}
+export type { JobProgress, JobProgressUnit };
 
 export interface JobResultMessage {
   readonly jobId: string;
@@ -164,33 +160,7 @@ function isSafeScalarRecord(
   );
 }
 
-export function isJobProgress(value: unknown): value is JobProgress {
-  if (!isRecord(value)) return false;
-  if (
-    Object.keys(value).some(
-      (key) => !["completed", "processed_bytes", "total", "unit"].includes(key),
-    )
-  ) {
-    return false;
-  }
-  const completed = value.completed;
-  const total = value.total;
-  const processedBytes = value.processed_bytes;
-  return (
-    typeof completed === "number" &&
-    Number.isSafeInteger(completed) &&
-    completed >= 0 &&
-    (total === null ||
-      (typeof total === "number" &&
-        Number.isSafeInteger(total) &&
-        total >= completed)) &&
-    (processedBytes === null ||
-      (typeof processedBytes === "number" &&
-        Number.isSafeInteger(processedBytes) &&
-        processedBytes >= 0)) &&
-    ["bytes", "items", "pages", "steps"].includes(String(value.unit))
-  );
-}
+export { isJobProgress };
 
 export function isRunJobMessage(value: unknown): value is RunJobMessage {
   if (!isRecord(value) || value.type !== "run") return false;

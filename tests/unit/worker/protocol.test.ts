@@ -6,6 +6,7 @@ import {
   type JobCommandRegistry,
 } from "@/entrypoints/worker/job-registry";
 import { shouldReportJobProgress } from "@/entrypoints/worker/progress-throttle";
+import { assertJobProgressUpdate } from "@/modules/publishing/application/job-state";
 import {
   isChildToParentMessage,
   isRunJobMessage,
@@ -195,6 +196,38 @@ describe("job child IPC protocol", () => {
         },
       }),
     ).toBe(false);
+  });
+
+  it("accepts monotonic same-phase progress and a forward phase reset", () => {
+    const current = {
+      completed: 12,
+      processed_bytes: 1_024,
+      total: 20,
+      unit: "items" as const,
+    };
+    expect(() =>
+      assertJobProgressUpdate({
+        current,
+        currentPhase: "security_check",
+        kind: "prepare_draft",
+        next: { ...current, completed: 13, processed_bytes: 2_048 },
+        nextPhase: "security_check",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertJobProgressUpdate({
+        current,
+        currentPhase: "security_check",
+        kind: "prepare_draft",
+        next: {
+          completed: 0,
+          processed_bytes: null,
+          total: 3,
+          unit: "steps",
+        },
+        nextPhase: "identify_document",
+      }),
+    ).not.toThrow();
   });
 
   it("rejects unknown protocol versions and unsafe error codes", () => {

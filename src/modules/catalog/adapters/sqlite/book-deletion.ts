@@ -12,7 +12,7 @@ import {
 } from "@/modules/catalog/core/book-deletion-token";
 import type {
   BookDeletionTaskPort,
-  BookPublishingCleanupPort,
+  BookWorkCancellationPort,
 } from "@/modules/catalog/application/public";
 
 interface DeletableBookRow {
@@ -92,7 +92,7 @@ export function acceptBookDeletion(input: {
   readonly idempotencyKey: string;
   readonly mutationToken: string;
   readonly nowMs: number;
-  readonly publishingCleanup: BookPublishingCleanupPort;
+  readonly publishingCleanup: BookWorkCancellationPort;
 }): AcceptedBookDeletion {
   if (!Number.isSafeInteger(input.bookId) || input.bookId < 1) {
     throw new SafeApplicationError("NOT_FOUND", "The book was not found.", 404);

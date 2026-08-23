@@ -31,6 +31,13 @@ surfaces.
 M1 does not introduce Redis, an external queue, object storage, a separate API service, a
 second database, or multiple Web/worker instances.
 
+The monolith is organized by `publishing`, `reader`, `catalog` and `identity` business
+modules. Both file and aggregated module dependency graphs must remain acyclic; the current
+module direction is Reader -> Publishing -> Catalog, with Identity independent. Cross-module
+calls use only declared application surfaces. Catalog owns presentation and deletion policy,
+while Publishing interprets version artifacts and invokes Catalog's narrow presentation or
+cleanup operations.
+
 For local preview, D-098 adds a repository launcher and a Compose override, not a new
 runtime topology. `./docker/local.sh` manages the same separate Web and worker processes as
 one `mirawind-local` Compose project, publishes Web only on `127.0.0.1:4321`, and omits
@@ -254,6 +261,13 @@ The generic job repository changes only task rows. Candidate terminalization/ret
 the Publishing candidate use case, and deletion terminalization/retry belongs to Catalog;
 composition coordinates each subject row and task row in one immediate transaction.
 
+Worker composition has one path for frozen input capture, isolated attempt execution,
+terminal completion and expired-lease recovery. Bootstrap, the serial claim loop and worker
+health reporting are separate composition responsibilities. Child IPC dispatches the closed
+task-kind union through an exhaustive registry; task handlers do not create a second terminal
+state path. Server routes likewise use focused Catalog, Publishing, Reader and Identity
+composition roots instead of a shared facade.
+
 Catalog owns the book visibility barrier, ordinary book row and retained deletion tombstone.
 Publishing owns jobs, candidates, imports, sources, configs, originals, versions and search
 rows. Catalog requests Publishing cleanup through a narrow application port rather than
@@ -322,13 +336,22 @@ Passkey material, full Markdown, private notes, and unsanitized archive names.
 
 Required operational views:
 
-- queued/running/interrupted/failed task counts and oldest age;
-- worker lease and heartbeat status;
-- import/build phase duration and failure category;
+- queued/running task counts and oldest queued age;
+- worker lease, heartbeat and strict health schema status;
+- current/recent attempt total and contiguous phase duration;
+- nullable task child-process-tree peak RSS and sampling availability;
+- interrupted/failed task transitions and safe failure category;
 - staging/quarantine/version disk usage;
 - publication rollback and startup reconciliation events;
 - read latency p50/p95/p99 and response status;
 - FTS build size/time and query latency by short/normal branch.
+
+The worker is the sole writer of private `worker-health.json` schema v2. It atomically
+combines the latest WAL checkpoint, queue snapshot and current/recent attempt. Web rejects
+old unversioned, unknown, malformed or oversized snapshots as unavailable. Observation
+failure never changes task or publication state; RSS `null` means unavailable rather than
+zero. State changes are coalesced for one second, active refresh is at most every five
+seconds and idle refresh is at most every 60 seconds.
 
 ## 15. Performance and fixture gates
 

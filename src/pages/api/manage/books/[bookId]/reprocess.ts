@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { publishingServerActions } from "@/composition/server";
+import { publishingDraftActions } from "@/composition/server/publishing-drafts";
 import type { TypographyProfile } from "@/modules/publishing/application/public";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
@@ -50,7 +50,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
       400,
     );
   }
-  const queued = await publishingServerActions.queueSourceReprocess({
+  const queued = await publishingDraftActions.queueSourceReprocess({
     bookId,
     database,
     expectedConfigRevision: Number(value.expected_config_revision),

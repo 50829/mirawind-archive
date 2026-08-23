@@ -1,22 +1,15 @@
 import { readFile } from "node:fs/promises";
 
-import { validateDocumentManifest } from "@/modules/publishing/application/public";
+import {
+  parseReaderManifestProjection,
+  type ReaderManifestPageProjection,
+  type ReaderManifestResourceProjection,
+} from "@/modules/publishing/application/public";
 import type { StorageLayout } from "@/platform/filesystem/layout";
 import { resolveContainedPath } from "@/platform/filesystem/layout";
 
-export interface IndexedManifestPage {
-  readonly alias?: string;
-  readonly output_path: string;
-  readonly page_id: number;
-  readonly title: string;
-}
-
-export interface IndexedManifestResource {
-  readonly media_type: string;
-  readonly output_path: string;
-  readonly sha256: string;
-  readonly size: number;
-}
+export type IndexedManifestPage = ReaderManifestPageProjection;
+export type IndexedManifestResource = ReaderManifestResourceProjection;
 
 interface ReaderManifest {
   readonly book_id: number;
@@ -121,9 +114,7 @@ export class VersionArtifactIndexCache {
     );
     const json = await this.readManifestText(path);
     const parsed = JSON.parse(json) as unknown;
-    const validated = validateDocumentManifest(
-      parsed,
-    ) as unknown as ReaderManifest;
+    const validated = parseReaderManifestProjection(parsed) as ReaderManifest;
     if (
       validated.book_id !== input.bookId ||
       validated.version_id !== input.versionId

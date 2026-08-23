@@ -162,6 +162,7 @@ export async function materializeCandidatePages(input: {
   readonly files: CandidateFileSink;
   readonly originalFiles: readonly Readonly<Record<string, unknown>>[];
   readonly onPageRendered?: (completed: number, total: number) => void;
+  readonly onSearchFinalizing?: (total: number) => void;
   readonly preparationDiagnostics?: readonly SafeDiagnostic[];
   readonly renderPage?: PageRenderer;
   readonly resourceResolution: ResourceResolution;
@@ -416,6 +417,7 @@ export async function materializeCandidatePages(input: {
       title: compiled.bookTitle,
       versionId: input.versionId,
     });
+    input.onSearchFinalizing?.(searchFtsRowCount + shortRows.length);
     await searchSpool.writeMany(
       shortRows.map((row) => ({ kind: "short", row })),
     );

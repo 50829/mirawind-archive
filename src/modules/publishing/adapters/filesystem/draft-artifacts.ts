@@ -6,10 +6,8 @@ import {
   createSafeDiagnostic,
   type SafeDiagnostic,
 } from "@/domain/errors";
-import {
-  parseBookConfigYaml,
-  validateDocumentManifest,
-} from "@/modules/publishing/application/public";
+import { parseBookConfigYaml } from "@/modules/publishing/application/publication-formats";
+import { validateDocumentManifest } from "@/modules/publishing/core/publication/document-manifest-schema";
 import {
   resolveContainedPath,
   type StorageLayout,

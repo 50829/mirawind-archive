@@ -181,6 +181,36 @@ test("shows, cancels, retries and recovers durable work without changing publica
     const health = await page.request.get("/api/manage/health");
     expect(health.status()).toBe(200);
     expect(health.headers()["cache-control"]).toBe("private, no-store");
+    const healthBody = (await health.json()) as {
+      worker: {
+        queue: { queuedCount: number; runningCount: number };
+        recentAttempt: {
+          memory: {
+            peakProcessTreeRssBytes: number | null;
+            status: "available" | "unavailable";
+          };
+          stages: readonly { durationMs: number; phase: string }[];
+        } | null;
+        schemaVersion: number;
+      } | null;
+    };
+    expect(healthBody.worker).toMatchObject({
+      queue: {
+        queuedCount: expect.any(Number),
+        runningCount: expect.any(Number),
+      },
+      schemaVersion: 2,
+    });
+    expect(healthBody.worker?.recentAttempt?.stages.length).toBeGreaterThan(0);
+    expect(
+      healthBody.worker?.recentAttempt?.stages.every(
+        (stage) => stage.durationMs >= 0 && stage.phase.length > 0,
+      ),
+    ).toBe(true);
+    const memory = healthBody.worker?.recentAttempt?.memory;
+    expect(memory?.peakProcessTreeRssBytes === null).toBe(
+      memory?.status === "unavailable",
+    );
   } finally {
     if (replacementWorker.child.pid) {
       process.kill(replacementWorker.child.pid, "SIGTERM");

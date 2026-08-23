@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  defaultMemorySampleIntervalMs,
   defaultJobTerminationGraceMs,
   defaultJobTimeoutMs,
   runJobChild,
@@ -69,6 +70,7 @@ describe("job child termination", () => {
   it("keeps the frozen 30-minute timeout and 10-second grace defaults", () => {
     expect(defaultJobTimeoutMs).toBe(30 * 60 * 1_000);
     expect(defaultJobTerminationGraceMs).toBe(10_000);
+    expect(defaultMemorySampleIntervalMs).toBe(250);
   });
 
   it.skipIf(process.platform === "win32")(
@@ -120,6 +122,9 @@ describe("job child termination", () => {
 
       const execution = await executionPromise;
       expect(execution.signal).toBe("SIGKILL");
+      expect(execution.memory.peakProcessTreeRssBytes === null).toBe(
+        execution.memory.status === "unavailable",
+      );
       const pids = JSON.parse(
         await readFile(join(root, "termination-pids.json"), "utf8"),
       ) as { child: number; grandchild: number };
@@ -144,6 +149,10 @@ describe("job child termination", () => {
         safeErrorCode: "JOB_TIMEOUT",
       });
       expect(execution.signal).toBe("SIGKILL");
+      expect(execution.memory).toMatchObject({
+        peakProcessTreeRssBytes: expect.any(Number),
+        status: "available",
+      });
     },
   );
 });

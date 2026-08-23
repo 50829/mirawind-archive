@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 
-import type { BookVersionPresentation } from "@/modules/catalog/application/book-version-presentation";
+import type { BookVersionPresentation } from "@/modules/catalog/application/public";
 import {
   canonicalJson,
   parseBookConfigYaml,
   validateBookConfig,
   validateDocumentManifest,
-} from "@/modules/publishing/application/public";
+} from "@/modules/publishing/application/publication-formats";
 
 const maximumMetadataBytes = 65_536;
 const maximumTocPreviewBytes = 262_144;
@@ -45,9 +45,8 @@ function boundedCanonicalJson(
   errorCode: string,
 ): string {
   const json = canonicalJson(value);
-  if (Buffer.byteLength(json, "utf8") > maximumBytes) {
+  if (Buffer.byteLength(json, "utf8") > maximumBytes)
     throw new Error(errorCode);
-  }
   return json;
 }
 

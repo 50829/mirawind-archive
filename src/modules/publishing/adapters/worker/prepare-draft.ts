@@ -52,6 +52,11 @@ export async function prepareDraft(input: {
   readonly stagingDirectory: string;
   readonly typographyProfile?: TypographyProvenance["profile"];
   readonly pdfEvidenceReader?: typeof readPdfContentsEvidence;
+  readonly onPhase?: (
+    phase: "identify_document" | "organize_structure" | "security_check",
+    completed: number,
+    total: number,
+  ) => void;
 }): Promise<PrepareDraftResult> {
   if (Boolean(input.importId) !== Boolean(input.sealedExtractionDirectory)) {
     throw new Error("SEALED_EXTRACTION_INPUT_INVALID");
@@ -66,6 +71,7 @@ export async function prepareDraft(input: {
   try {
     await mkdir(dirname(stagingDirectory), { mode: 0o700, recursive: true });
     await mkdir(stagingDirectory, { mode: 0o700, recursive: false });
+    input.onPhase?.("security_check", 0, 3);
     const claimed =
       input.importId && input.sealedExtractionDirectory
         ? await claimSealedExtraction({
@@ -93,6 +99,7 @@ export async function prepareDraft(input: {
       archive_uncompressed_bytes: extracted.totalUncompressedBytes,
     });
     if (extracted.files < 1) throw new Error("IMPORT_ARCHIVE_EMPTY");
+    input.onPhase?.("identify_document", 1, 3);
     const markdownPath = await resolveContainedPath(
       extractedRoot,
       input.selectedCandidatePath,
@@ -101,6 +108,7 @@ export async function prepareDraft(input: {
       readFile(markdownPath),
     );
     recordPipelineProfileMetrics({ markdown_bytes: markdownBytes.byteLength });
+    input.onPhase?.("organize_structure", 2, 3);
     const typography = await profilePipelineStage("typography", () =>
       preprocessMarkdownTypography(
         markdownBytes,
@@ -190,6 +198,7 @@ export async function prepareDraft(input: {
         }),
       ]),
     );
+    input.onPhase?.("organize_structure", 3, 3);
     return Object.freeze({
       artifact,
       artifactPath,

@@ -6,7 +6,8 @@ import { relative, resolve, sep } from "node:path";
 import type Database from "better-sqlite3";
 
 import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
-import type { BookVersionRecord } from "@/modules/publishing/application/public";
+import { CurrentVersionCatalogRepository } from "@/modules/catalog/adapters/sqlite/current-version-recovery";
+import type { BookVersionRecord } from "@/modules/publishing/application/version-record";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import { validateVersionMarker } from "@/modules/publishing/core/publication/document-manifest-schema";
@@ -232,37 +233,31 @@ export async function verifyAndRecoverCurrentVersions(input: {
 }): Promise<readonly CurrentVersionRecovery[]> {
   const versions = new VersionRepository(input.database);
   const presentations = new BookPresentationRepository(input.database);
+  const catalog = new CurrentVersionCatalogRepository(input.database);
   const presentationIntegrityFailures = new Set(
     input.presentationIntegrityFailures ?? [],
   );
-  const books = input.database
-    .prepare(
-      `SELECT id, current_version_id FROM books
-       WHERE current_version_id IS NOT NULL
-         AND deletion_requested_at IS NULL
-       ORDER BY id`,
-    )
-    .all() as { id: number; current_version_id: string }[];
+  const books = catalog.listCurrentVersions();
   const recovered: CurrentVersionRecovery[] = [];
   for (const book of books) {
-    const current = versions.find(book.current_version_id);
-    const currentPresentation = presentations.find(book.current_version_id);
+    const current = versions.find(book.currentVersionId);
+    const currentPresentation = presentations.find(book.currentVersionId);
     const result =
       current &&
       current.state !== "corrupt" &&
       !presentationIntegrityFailures.has(current.id) &&
       currentPresentation &&
-      currentPresentation.bookId === book.id &&
+      currentPresentation.bookId === book.bookId &&
       currentPresentation.configRevision === current.configRevision
         ? await verifyVersionQuickly(input.layout, current)
         : ({ code: "VERSION_IDENTITY_MISMATCH", ok: false } as const);
     if (result.ok) continue;
 
     const candidates = versions
-      .listForBook(book.id)
+      .listForBook(book.bookId)
       .filter(
         (candidate) =>
-          candidate.id !== book.current_version_id &&
+          candidate.id !== book.currentVersionId &&
           candidate.state === "superseded" &&
           candidate.publishedAtMs !== null &&
           candidate.verifiedAtMs !== null &&
@@ -296,64 +291,30 @@ export async function verifyAndRecoverCurrentVersions(input: {
     withImmediateTransaction(input.database, () => {
       if (current) versions.markCorrupt(current.id);
       if (replacement) {
-        const promoted = input.database
-          .prepare(
-            `UPDATE book_versions
-             SET state = 'published', verified_at = ?
-             WHERE id = ? AND book_id = ? AND state = 'superseded'`,
-          )
-          .run(input.nowMs, replacement.id, book.id);
-        if (promoted.changes !== 1) {
-          throw new Error("VERSION_ROLLBACK_PROMOTION_FAILED");
-        }
-        input.database
-          .prepare(
-            `UPDATE books
-             SET current_version_id = ?, alias = ?,
-                 unavailable_reason = NULL,
-                 updated_at = ?
-             WHERE id = ? AND current_version_id = ?
-               AND deletion_requested_at IS NULL`,
-          )
-          .run(
-            replacement.id,
-            presentations.require(replacement.id).alias,
-            input.nowMs,
-            book.id,
-            book.current_version_id,
-          );
+        versions.promoteRecoveredVersion({
+          bookId: book.bookId,
+          nowMs: input.nowMs,
+          versionId: replacement.id,
+        });
+        catalog.replaceCurrentVersion({
+          alias: presentations.require(replacement.id).alias,
+          bookId: book.bookId,
+          currentVersionId: book.currentVersionId,
+          nowMs: input.nowMs,
+          replacementVersionId: replacement.id,
+        });
       } else {
-        input.database
-          .prepare(
-            `UPDATE books
-             SET unavailable_reason = 'CURRENT_VERSION_CORRUPT',
-                 updated_at = ?
-             WHERE id = ? AND current_version_id = ?
-               AND deletion_requested_at IS NULL`,
-          )
-          .run(input.nowMs, book.id, book.current_version_id);
+        catalog.markCurrentVersionUnavailable({
+          bookId: book.bookId,
+          currentVersionId: book.currentVersionId,
+          nowMs: input.nowMs,
+        });
       }
-      input.database
-        .prepare(
-          `INSERT INTO audit_events (
-             actor_user_id, action, book_id, version_id, job_id,
-             safe_metadata_json, created_at
-           ) VALUES (NULL, 'book.version.recovered', ?, ?, NULL, ?, ?)`,
-        )
-        .run(
-          book.id,
-          replacement?.id ?? book.current_version_id,
-          JSON.stringify({
-            failed_version_id: book.current_version_id,
-            replacement_version_id: replacement?.id ?? null,
-          }),
-          input.nowMs,
-        );
     });
     recovered.push(
       Object.freeze({
-        bookId: book.id,
-        failedVersionId: book.current_version_id,
+        bookId: book.bookId,
+        failedVersionId: book.currentVersionId,
         replacementVersionId: replacement?.id ?? null,
       }),
     );

@@ -24,6 +24,9 @@ describe("architecture dependency graph", () => {
     ["entrypoint-adapter", "FORBIDDEN_DEPENDENCY"],
     ["core-runtime-io", "FORBIDDEN_DEPENDENCY"],
     ["long-cycle", "DEPENDENCY_CYCLE"],
+    ["module-cycle", "MODULE_DEPENDENCY_CYCLE"],
+    ["long-module-cycle", "MODULE_DEPENDENCY_CYCLE"],
+    ["composition-business-sql", "COMPOSITION_BUSINESS_SQL"],
   ])("rejects %s", async (fixture, code) => {
     const result = await analyzeDependencyGraph({
       sourceDirectory: resolve(fixtureRoot, fixture, "src"),

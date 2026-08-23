@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
-import { reconcileBookVersionPresentations } from "@/modules/catalog/adapters/filesystem/book-presentation";
+import { reconcileBookVersionPresentations } from "@/modules/publishing/adapters/filesystem/book-presentation";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 import {
@@ -22,6 +22,7 @@ describe("book presentation reconciliation", () => {
         layout: dataRoot.layout,
         loadPresentation: async () => expected,
         nowMs: 20,
+        presentations: repository,
       });
       expect(first).toMatchObject({
         mismatchedVersionIds: [],
@@ -37,6 +38,7 @@ describe("book presentation reconciliation", () => {
         layout: dataRoot.layout,
         loadPresentation: async () => expected,
         nowMs: 21,
+        presentations: repository,
       });
       expect(second).toMatchObject({
         mismatchedVersionIds: [],
@@ -59,6 +61,7 @@ describe("book presentation reconciliation", () => {
           projectionSha256: "f".repeat(64),
         }),
         nowMs: 20,
+        presentations: repository,
       });
       expect(result.mismatchedVersionIds).toEqual([publicationTestVersionId]);
       expect(

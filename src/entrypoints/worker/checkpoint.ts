@@ -1,12 +1,7 @@
 import { stat } from "node:fs/promises";
-import { resolve } from "node:path";
-
 import type Database from "better-sqlite3";
 
-import {
-  atomicWriteFile,
-  type StorageLayout,
-} from "@/platform/filesystem/layout";
+import type { StorageLayout } from "@/platform/filesystem/layout";
 
 export const passiveCheckpointIntervalMs = 60_000;
 export const walSizeWarningBytes = 256 * 1024 * 1024;
@@ -96,11 +91,6 @@ export async function runPassiveCheckpoint(input: {
     walBytes,
     warnings: Object.freeze(warnings),
   });
-  await atomicWriteFile(
-    resolve(input.layout.temporaryDirectory, "worker-health.json"),
-    `${JSON.stringify(status)}\n`,
-    { mode: 0o600 },
-  );
   return status;
 }
 

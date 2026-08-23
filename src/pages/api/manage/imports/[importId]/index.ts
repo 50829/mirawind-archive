@@ -1,6 +1,8 @@
 import type { APIRoute } from "astro";
 
-import { createPublishingServer } from "@/composition/server";
+import { createPublishingImportServer } from "@/composition/server/publishing-imports";
+import { createPublishingDraftServer } from "@/composition/server/publishing-drafts";
+import { createPublishingJobServer } from "@/composition/server/publishing-jobs";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
@@ -34,17 +36,17 @@ export const GET: APIRoute = ({ locals, params }) => {
       404,
     );
   }
-  const publishing = createPublishingServer(database);
+  const publishing = createPublishingImportServer(database);
+  const drafts = createPublishingDraftServer(database);
+  const jobs = createPublishingJobServer(database);
   const snapshot = database
     .transaction(() => {
       const imported = publishing.findImport(importId);
       if (!imported) return null;
       const currentJob = publishing.latestJobForImport(importId);
-      const book = imported.bookId
-        ? publishing.findBook(imported.bookId)
-        : null;
+      const book = imported.bookId ? drafts.findBook(imported.bookId) : null;
       const revision = book?.draftConfigRevision ?? null;
-      const candidate = book ? publishing.findCurrentCandidate(book.id) : null;
+      const candidate = book ? drafts.findCurrentCandidate(book.id) : null;
       const previewReady =
         candidate?.state === "ready" &&
         candidate.configRevision === revision &&
@@ -61,9 +63,7 @@ export const GET: APIRoute = ({ locals, params }) => {
           evidence: evidence(candidate.evidence),
         })),
         created_at: new Date(imported.createdAtMs).toISOString(),
-        current_job: currentJob
-          ? publishing.serializeJobStatus(currentJob)
-          : null,
+        current_job: currentJob ? jobs.serializeJobStatus(currentJob) : null,
         error_code: imported.safeErrorCode,
         import_id: imported.id,
         source_name: imported.originalName,

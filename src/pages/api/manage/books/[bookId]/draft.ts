@@ -2,9 +2,9 @@ import type { APIRoute } from "astro";
 
 import {
   createPublishingArtifactServer,
-  createPublishingServer,
-  publishingServerActions,
-} from "@/composition/server";
+  createPublishingDraftServer,
+  publishingDraftActions,
+} from "@/composition/server/publishing-drafts";
 import { SafeApplicationError, type SafeDiagnostic } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
@@ -35,7 +35,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
       404,
     );
   }
-  const publishing = createPublishingServer(database);
+  const publishing = createPublishingDraftServer(database);
   const book = publishing.findBook(bookId);
   if (!book?.draftConfigRevision || !book.draftSourceId) {
     throw new SafeApplicationError(
@@ -122,7 +122,7 @@ export const PATCH: APIRoute = async ({ locals, params, request }) => {
       404,
     );
   }
-  const result = await publishingServerActions.patchDraftConfig({
+  const result = await publishingDraftActions.patchDraftConfig({
     bookId,
     database,
     expectedEtag: request.headers.get("if-match"),

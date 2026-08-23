@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveBookVersionPresentation } from "@/modules/catalog/application/public";
+import { deriveBookVersionPresentation } from "@/modules/publishing/application/public";
 
 const versionId = "ver_0123456789abcdefghij";
 const resourceId = "res_0123456789abcdefghij";

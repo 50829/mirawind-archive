@@ -1,0 +1,147 @@
+import type Database from "better-sqlite3";
+
+import { executeWorkerAttempt } from "@/composition/worker/execute-attempt";
+import { completeWorkerAttempt } from "@/composition/worker/complete-attempt";
+import { recoverWorkerAttempts } from "@/composition/worker/recover-attempts";
+import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
+import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
+import type {
+  JobPhase,
+  JobProgress,
+  QueueObservation,
+  TerminalJobState,
+} from "@/modules/publishing/application/public";
+import {
+  WorkerCheckpointScheduler,
+  type WorkerStorageHealth,
+} from "@/entrypoints/worker/checkpoint";
+import {
+  AttemptObservationTracker,
+  type AttemptObservation,
+} from "@/observability/attempt-observation";
+import { operationalMetrics } from "@/observability/metrics";
+import type { StorageLayout } from "@/platform/filesystem/layout";
+
+export const workerPollIntervalMs = 1_000;
+
+function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, milliseconds);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
+function terminalState(state: string): state is TerminalJobState {
+  return ["succeeded", "failed", "canceled", "interrupted"].includes(state);
+}
+
+export async function runWorkerLoop(input: {
+  readonly candidates: DraftCandidateRepository;
+  readonly database: Database.Database;
+  readonly drafts: DraftRepository;
+  readonly imports: ImportRepository;
+  readonly layout: StorageLayout;
+  readonly onAttemptObservation?: (observation: AttemptObservation) => void;
+  readonly onCheckpoint?: (health: WorkerStorageHealth, nowMs: number) => void;
+  readonly onQueueObservation?: (observation: QueueObservation) => void;
+  readonly repository: JobRepository;
+  readonly scheduler: WorkerCheckpointScheduler;
+  readonly shutdownSignal: AbortSignal;
+  readonly sources: SourceRepository;
+  readonly workerId: string;
+}): Promise<void> {
+  while (!input.shutdownSignal.aborted) {
+    const loopNowMs = Date.now();
+    await recoverWorkerAttempts({
+      candidates: input.candidates,
+      database: input.database,
+      nowMs: loopNowMs,
+      repository: input.repository,
+      storageRoot: input.layout.root,
+    });
+    const checkpoint = await input.scheduler.checkpointIfDue(loopNowMs);
+    if (checkpoint) input.onCheckpoint?.(checkpoint, loopNowMs);
+    input.onQueueObservation?.(input.repository.observeQueue(loopNowMs));
+    const job = input.repository.claimNext({
+      leaseOwner: input.workerId,
+      nowMs: loopNowMs,
+    });
+    if (!job) {
+      await delay(workerPollIntervalMs, input.shutdownSignal);
+      continue;
+    }
+    input.onQueueObservation?.(input.repository.observeQueue(loopNowMs));
+    operationalMetrics.recordQueueAge(Math.max(0, loopNowMs - job.createdAtMs));
+    const tracker = new AttemptObservationTracker({
+      attempt: job.attempt,
+      jobId: job.id,
+      kind: job.kind,
+      startedAtMs: job.startedAtMs ?? loopNowMs,
+    });
+    const startedAtMs = Date.now();
+    const outcome = await executeWorkerAttempt({
+      candidates: input.candidates,
+      job,
+      database: input.database,
+      drafts: input.drafts,
+      imports: input.imports,
+      leaseOwner: input.workerId,
+      onProgress(progress: {
+        readonly phase: JobPhase;
+        readonly progress: JobProgress;
+      }) {
+        tracker.recordProgress(progress);
+        input.onAttemptObservation?.(tracker.snapshot());
+      },
+      repository: input.repository,
+      shutdownSignal: input.shutdownSignal,
+      layout: input.layout,
+      sources: input.sources,
+    });
+    const memory = await completeWorkerAttempt({
+      candidates: input.candidates,
+      database: input.database,
+      imports: input.imports,
+      job,
+      layout: input.layout,
+      leaseOwner: input.workerId,
+      outcome,
+      repository: input.repository,
+    });
+    operationalMetrics.recordPhase(job.kind, Date.now() - startedAtMs);
+    const completed = input.repository.get(job.id);
+    if (completed?.errorClass && completed.errorCode) {
+      operationalMetrics.recordFailure(
+        completed.errorClass,
+        completed.errorCode,
+      );
+    }
+    if (completed) {
+      operationalMetrics.recordTransition(
+        `job.${completed.kind}.${completed.state}`,
+      );
+      if (terminalState(completed.state) && completed.finishedAtMs !== null) {
+        input.onAttemptObservation?.(
+          tracker.complete({
+            errorClass: completed.errorClass,
+            errorCode: completed.errorCode,
+            finishedAtMs: completed.finishedAtMs,
+            memory,
+            state: completed.state,
+          }),
+        );
+      }
+    }
+    input.onQueueObservation?.(input.repository.observeQueue(Date.now()));
+  }
+}

@@ -1,5 +1,5 @@
 ---
-import { createPublishingServer } from "@/composition/server";
+import { createPublishingDraftServer } from "@/composition/server/publishing-drafts";
 import { PublishingWorkbench } from "@/web/components/manage/PublishingWorkbench";
 import ManageShell from "@/web/components/manage/ManageShell.astro";
 import { hiddenManagementPage } from "@/http/authorization/manage-page";
@@ -27,7 +27,7 @@ if (!administrator) {
 const { database } = administrator;
 const bookId = Number(Astro.params.bookId);
 const book = Number.isSafeInteger(bookId)
-  ? createPublishingServer(database).findBook(bookId)
+  ? createPublishingDraftServer(database).findBook(bookId)
   : null;
 if (!book?.draftConfigRevision || !book.draftSourceId) {
   return hiddenManagementPage();

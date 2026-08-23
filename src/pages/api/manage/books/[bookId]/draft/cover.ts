@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { publishingServerActions } from "@/composition/server";
+import { publishingDraftActions } from "@/composition/server/publishing-drafts";
 import {
   getRuntimeEnvironment,
   getRuntimeStorageLayout,
@@ -30,7 +30,7 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
     );
   }
   const upload = await readMultipartCover(request);
-  const result = await publishingServerActions.uploadDraftCover({
+  const result = await publishingDraftActions.uploadDraftCover({
     bookId,
     bytes: upload.bytes,
     database,

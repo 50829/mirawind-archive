@@ -2,8 +2,8 @@ import type { APIRoute } from "astro";
 
 import {
   createPublishingArtifactServer,
-  createPublishingServer,
-} from "@/composition/server";
+  createPublishingDraftServer,
+} from "@/composition/server/publishing-drafts";
 import { SafeApplicationError } from "@/domain/errors";
 import { authorizePreviewHtmlResources } from "@/http/authorization/preview-resource";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
@@ -34,7 +34,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
       404,
     );
   }
-  const publishing = createPublishingServer(database);
+  const publishing = createPublishingDraftServer(database);
   const book = publishing.findBook(bookId);
   const candidate = publishing.findCurrentCandidate(bookId);
   if (

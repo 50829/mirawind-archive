@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { APIRoute } from "astro";
 
-import { createCatalogServer } from "@/composition/server";
+import { createCatalogServer } from "@/composition/server/catalog";
 import type { BookDetails } from "@/modules/catalog/application/public";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { publicJsonResponse } from "@/http/cache/library-response";

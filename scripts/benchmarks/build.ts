@@ -40,6 +40,7 @@ import {
 } from "../../src/modules/publishing/application/public.js";
 import { createStorageLayout } from "../../src/platform/filesystem/layout.js";
 import { parsePipelineProfileArtifact } from "../../src/observability/pipeline-profile.js";
+import { sampleProcessTreeRss } from "../../src/platform/process/process-tree-rss.js";
 import {
   verifyRealMineruFixtures,
   type VerifiedRealFixture,
@@ -426,57 +427,25 @@ function startWorker(
   });
 }
 
-async function processChildren(pid: number): Promise<readonly number[]> {
-  try {
-    const value = await readFile(`/proc/${pid}/task/${pid}/children`, "utf8");
-    return value
-      .trim()
-      .split(/\s+/u)
-      .filter(Boolean)
-      .map(Number)
-      .filter(Number.isSafeInteger);
-  } catch {
-    return [];
-  }
-}
-
-async function processTree(pid: number): Promise<readonly number[]> {
-  const pending = [pid];
-  const found = new Set<number>();
-  while (pending.length > 0) {
-    const current = pending.pop();
-    if (!current || found.has(current)) continue;
-    found.add(current);
-    pending.push(...(await processChildren(current)));
-  }
-  return [...found];
-}
-
-async function rssBytes(pid: number): Promise<number> {
-  try {
-    const status = await readFile(`/proc/${pid}/status`, "utf8");
-    const match = /^VmRSS:\s+([0-9]+)\s+kB$/mu.exec(status);
-    return match ? Number(match[1]) * 1024 : 0;
-  } catch {
-    return 0;
-  }
-}
-
 async function monitorMemory(
   rootPid: number,
   signal: AbortSignal,
 ): Promise<MemoryObservation> {
-  let peakProcessTreeRssBytes = 0;
+  let peakProcessTreeRssBytes: number | null = null;
   let samples = 0;
   while (!signal.aborted) {
-    const pids = await processTree(rootPid);
-    const values = await Promise.all(pids.map(rssBytes));
-    peakProcessTreeRssBytes = Math.max(
-      peakProcessTreeRssBytes,
-      values.reduce((total, value) => total + value, 0),
-    );
-    samples += 1;
+    const sample = await sampleProcessTreeRss(rootPid);
+    if (sample.status === "available") {
+      peakProcessTreeRssBytes = Math.max(
+        peakProcessTreeRssBytes ?? 0,
+        sample.rssBytes,
+      );
+      samples += 1;
+    }
     await delay(25);
+  }
+  if (peakProcessTreeRssBytes === null) {
+    throw new Error("BENCHMARK_PROCESS_TREE_RSS_UNAVAILABLE");
   }
   return Object.freeze({ peakProcessTreeRssBytes, samples });
 }

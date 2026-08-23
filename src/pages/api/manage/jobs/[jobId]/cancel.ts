@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { createPublishingServer } from "@/composition/server";
+import { createPublishingJobServer } from "@/composition/server/publishing-jobs";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
@@ -25,7 +25,7 @@ export const POST: APIRoute = ({ locals, params, request }) => {
   const { database } = requireRuntimeAdministrator(locals.session);
   requireMutationOrigin(request, getRuntimeEnvironment().publicOrigin);
   const jobId = requireJobId(params.jobId);
-  const publishing = createPublishingServer(database);
+  const publishing = createPublishingJobServer(database);
   if (!publishing.getJob(jobId)) {
     throw new SafeApplicationError(
       "JOB_NOT_FOUND",

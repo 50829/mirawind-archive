@@ -1,8 +1,4 @@
-import {
-  katexCriticalCss,
-  publishingRendererIdentity,
-  rendererStylesheetUrl,
-} from "@/modules/publishing/application/public";
+import { publishingReaderRendererAssets } from "@/modules/publishing/application/public";
 import {
   acceptedReaderAssetPath as acceptAssetPath,
   readerAssetIdentity,
@@ -37,12 +33,12 @@ export {
 };
 
 export const readerRendererAssets = Object.freeze({
-  criticalCss: katexCriticalCss,
-  stylesheetUrl: rendererStylesheetUrl,
+  criticalCss: publishingReaderRendererAssets.criticalCss,
+  stylesheetUrl: publishingReaderRendererAssets.stylesheetUrl,
 });
 
 export function acceptedReaderAssetPath(
   assetPath: string | undefined,
 ): string | null {
-  return acceptAssetPath(assetPath, publishingRendererIdentity);
+  return acceptAssetPath(assetPath, publishingReaderRendererAssets.identity);
 }

@@ -7,7 +7,8 @@ import Busboy, {
 } from "@fastify/busboy";
 import type Database from "better-sqlite3";
 
-import { createPublishingServer } from "@/composition/server";
+import { createPublishingImportServer } from "@/composition/server/publishing-imports";
+import { createPublishingDraftServer } from "@/composition/server/publishing-drafts";
 import { SafeApplicationError } from "@/domain/errors";
 import { hasControlCharacters } from "@/domain/text";
 import {
@@ -17,7 +18,7 @@ import {
 } from "@/modules/publishing/application/public";
 import type { StorageLayout } from "@/platform/filesystem/layout";
 
-type PublishingServer = ReturnType<typeof createPublishingServer>;
+type PublishingServer = ReturnType<typeof createPublishingImportServer>;
 type ImportStore = ReturnType<PublishingServer["storeImport"]>;
 type ImportUploadResult = Awaited<ReturnType<ImportStore["store"]>>;
 
@@ -57,7 +58,8 @@ export async function storeMultipartImport(input: {
   readonly layout: StorageLayout;
   readonly request: Request;
 }): Promise<ImportUploadResult> {
-  const publishing = createPublishingServer(input.database);
+  const publishing = createPublishingImportServer(input.database);
+  const drafts = createPublishingDraftServer(input.database);
   const existing = publishing.findJobByIdempotency(
     importUploadIdempotencyOperation,
     input.idempotencyKey,
@@ -171,7 +173,7 @@ export async function storeMultipartImport(input: {
     );
     parser.on("error", () => fail(multipartError()));
     parser.on("finish", () => {
-      if (targetBookId !== undefined && !publishing.findBook(targetBookId)) {
+      if (targetBookId !== undefined && !drafts.findBook(targetBookId)) {
         fail(multipartError("The target book does not exist."));
       }
       if (parsingError || !fileSeen || !fileResult) {

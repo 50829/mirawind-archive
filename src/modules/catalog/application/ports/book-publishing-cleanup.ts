@@ -3,13 +3,19 @@ export interface BookRemovalInventory {
   readonly jobIds: readonly string[];
 }
 
-export interface BookPublishingCleanupPort {
+export interface BookWorkCancellationPort {
   cancelBookWork(input: {
     readonly bookId: number;
     readonly cleanupJobId: string;
     readonly nowMs: number;
   }): void;
+}
+
+export interface BookRemovalInventoryPort {
   captureRemovalInventory(bookId: number): BookRemovalInventory;
+}
+
+export interface BookPublishingRecordPurgePort {
   purgeBookRecords(input: {
     readonly bookId: number;
     readonly cleanupJobId: string;

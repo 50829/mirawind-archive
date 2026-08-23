@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 
 import { getRuntimeAuth, getRuntimeDatabase } from "@/composition/auth";
-import { createIdentityServer } from "@/composition/server";
+import { createIdentityServer } from "@/composition/server/identity";
 import { parseEnvironment } from "@/config/environment";
 import { validateFallbackPassword } from "@/http/authorization/admin-guard";
 import { requireRecentAdministratorAuthentication } from "@/http/authorization/reauth-guard";

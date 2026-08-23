@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 
 import type { DeletionSafeErrorCode } from "@/domain/book-deletion";
-import type { BookPublishingCleanupPort } from "@/modules/catalog/application/public";
+import type { BookRemovalInventoryPort } from "@/modules/catalog/application/public";
 import {
   removeExactContainedTree,
   UnsafePermanentRemovalTargetError,
@@ -47,7 +47,7 @@ function safeErrorCode(error: unknown): DeletionSafeErrorCode {
 export async function permanentlyCleanupBook(input: {
   readonly bookId: number;
   readonly layout: StorageLayout;
-  readonly publishingCleanup: BookPublishingCleanupPort;
+  readonly publishingCleanup: BookRemovalInventoryPort;
 }): Promise<PermanentBookCleanupResult> {
   try {
     const ids = input.publishingCleanup.captureRemovalInventory(input.bookId);

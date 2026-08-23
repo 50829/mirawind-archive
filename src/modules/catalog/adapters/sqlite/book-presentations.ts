@@ -5,7 +5,6 @@ import type {
   BookVersionPresentationRemover,
   BookVersionPresentationWriter,
 } from "@/modules/catalog/application/public";
-import type { BookVersionRecord } from "@/modules/publishing/application/public";
 
 interface PresentationRow {
   alias: string | null;
@@ -22,30 +21,6 @@ interface PresentationRow {
   toc_entry_count: number;
   toc_preview_json: string;
   version_id: string;
-}
-
-interface CandidateRow {
-  blocking_diagnostic_count: number;
-  book_id: number;
-  compiler_version: string;
-  complete_at: number;
-  config_revision: number;
-  created_by_job_id: string;
-  id: string;
-  manifest_schema_version: number;
-  manifest_sha256: string;
-  preview_version: string;
-  predecessor_version_id: string | null;
-  published_at: number | null;
-  reclaimed_at: number | null;
-  renderer_version: string;
-  reader_version: string;
-  semantic_digest: string;
-  source_id: string;
-  state: BookVersionRecord["state"];
-  verified_at: number | null;
-  version_rel_path: string;
-  version_marker_sha256: string;
 }
 
 function mapPresentation(row: PresentationRow): BookVersionPresentation {
@@ -67,32 +42,6 @@ function mapPresentation(row: PresentationRow): BookVersionPresentation {
     tocEntryCount: row.toc_entry_count,
     tocPreviewJson: row.toc_preview_json,
     versionId: row.version_id,
-  });
-}
-
-function mapCandidate(row: CandidateRow): BookVersionRecord {
-  return Object.freeze({
-    bookId: row.book_id,
-    blockingDiagnosticCount: row.blocking_diagnostic_count,
-    compilerVersion: row.compiler_version,
-    completeAtMs: row.complete_at,
-    configRevision: row.config_revision,
-    createdByJobId: row.created_by_job_id,
-    id: row.id,
-    manifestSchemaVersion: row.manifest_schema_version,
-    manifestSha256: row.manifest_sha256,
-    previewVersion: row.preview_version,
-    predecessorVersionId: row.predecessor_version_id,
-    publishedAtMs: row.published_at,
-    reclaimedAtMs: row.reclaimed_at,
-    rendererVersion: row.renderer_version,
-    readerVersion: row.reader_version,
-    semanticDigest: row.semantic_digest,
-    sourceId: row.source_id,
-    state: row.state,
-    verifiedAtMs: row.verified_at,
-    versionRelativePath: row.version_rel_path,
-    versionMarkerSha256: row.version_marker_sha256,
   });
 }
 
@@ -168,19 +117,53 @@ export class BookPresentationRepository
     );
   }
 
-  listReconciliationCandidates(): readonly BookVersionRecord[] {
+  repairCurrentAliases(input: {
+    readonly excludedVersionIds: readonly string[];
+    readonly nowMs: number;
+  }): readonly number[] {
+    const excluded = new Set(input.excludedVersionIds);
     const rows = this.database
       .prepare(
-        `SELECT book_versions.*
-         FROM book_versions
-         JOIN books ON books.id = book_versions.book_id
-         WHERE book_versions.reclaimed_at IS NULL
+        `SELECT books.id, books.alias, books.current_version_id,
+                presentation.alias AS presentation_alias
+         FROM books
+         JOIN book_version_presentations AS presentation
+           ON presentation.version_id = books.current_version_id
+          AND presentation.book_id = books.id
+         WHERE books.current_version_id IS NOT NULL
            AND books.deletion_requested_at IS NULL
-           AND book_versions.state IN ('ready', 'published', 'superseded')
-         ORDER BY book_versions.book_id, book_versions.complete_at,
-                  book_versions.id`,
+         ORDER BY books.id`,
       )
-      .all() as CandidateRow[];
-    return Object.freeze(rows.map(mapCandidate));
+      .all() as {
+      alias: string | null;
+      current_version_id: string;
+      id: number;
+      presentation_alias: string | null;
+    }[];
+    const repaired: number[] = [];
+    const update = this.database.prepare(
+      `UPDATE books SET alias = ?, updated_at = ?
+       WHERE id = ? AND current_version_id = ?
+         AND deletion_requested_at IS NULL`,
+    );
+    for (const row of rows) {
+      if (
+        excluded.has(row.current_version_id) ||
+        row.alias === row.presentation_alias
+      ) {
+        continue;
+      }
+      if (
+        update.run(
+          row.presentation_alias,
+          input.nowMs,
+          row.id,
+          row.current_version_id,
+        ).changes === 1
+      ) {
+        repaired.push(row.id);
+      }
+    }
+    return Object.freeze(repaired);
   }
 }

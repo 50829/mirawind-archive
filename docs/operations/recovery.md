@@ -81,10 +81,16 @@ Never pass the recovery password on the command line or through an environment v
 Reader traffic remains on the current published version. Do not start an extra worker.
 
 1. inspect bounded worker logs and the administrator task page;
-2. confirm host memory and disk availability;
-3. restart the single worker;
-4. allow startup reconciliation and lease recovery to finish;
-5. inspect the job's safe error category.
+2. inspect the private health snapshot's queue, last phase durations and process-tree RSS;
+3. treat a `null` RSS or unavailable snapshot as missing observation, never as zero use;
+4. confirm host memory and disk availability;
+5. restart the single worker;
+6. allow startup reconciliation and lease recovery to finish;
+7. inspect the job's safe error category.
+
+The worker health file is not recovery authority. Do not edit it or infer task success from
+it. The worker replaces old or malformed health formats on startup; SQLite task state and
+immutable publication pointers remain authoritative.
 
 An expired running lease becomes interrupted. Only a first infrastructure interruption may
 retry automatically. Content, validation, security-limit, timeout, cancellation and second

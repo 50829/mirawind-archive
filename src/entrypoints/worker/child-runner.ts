@@ -9,9 +9,12 @@ import {
   type JobResultMessage,
   type RunJobMessage,
 } from "@/entrypoints/worker/protocol";
+import type { ProcessTreeMemoryObservation } from "@/observability/attempt-observation";
+import { sampleProcessTreeRss } from "@/platform/process/process-tree-rss";
 
 export interface ChildExecution {
   readonly exitCode: number | null;
+  readonly memory: ProcessTreeMemoryObservation;
   readonly result: JobResultMessage;
   readonly signal: NodeJS.Signals | null;
 }
@@ -23,10 +26,12 @@ export interface ChildRunnerOptions {
   readonly storageRoot?: string;
   readonly terminationGraceMs?: number;
   readonly timeoutMs?: number;
+  readonly memorySampleIntervalMs?: number;
 }
 
 export const defaultJobTerminationGraceMs = 10_000;
 export const defaultJobTimeoutMs = 30 * 60 * 1_000;
+export const defaultMemorySampleIntervalMs = 250;
 
 function defaultChildModulePath(): string {
   const extension = fileURLToPath(import.meta.url).endsWith(".ts")
@@ -129,6 +134,14 @@ export async function runJobChild(
     defaultJobTimeoutMs,
     "JOB_TIMEOUT",
   );
+  const memorySampleIntervalMs = checkedDuration(
+    options.memorySampleIntervalMs,
+    defaultMemorySampleIntervalMs,
+    "JOB_MEMORY_SAMPLE_INTERVAL",
+  );
+  if (memorySampleIntervalMs < 1) {
+    throw new RangeError("JOB_MEMORY_SAMPLE_INTERVAL_INVALID");
+  }
   const child = fork(options.childModulePath ?? defaultChildModulePath(), [], {
     detached: process.platform !== "win32",
     env: {
@@ -161,6 +174,35 @@ export async function runJobChild(
   let terminationStarted = false;
   let forceKillTimer: NodeJS.Timeout | undefined;
   let timeoutTimer: NodeJS.Timeout | undefined;
+  let memorySample: Promise<void> | null = null;
+  let peakProcessTreeRssBytes: number | null = null;
+  let memorySamples = 0;
+  let failedMemorySamples = 0;
+
+  const sampleMemory = (): void => {
+    if (memorySample || child.pid === undefined) return;
+    memorySample = sampleProcessTreeRss(child.pid)
+      .then((sample) => {
+        if (sample.status === "available") {
+          memorySamples += 1;
+          peakProcessTreeRssBytes = Math.max(
+            peakProcessTreeRssBytes ?? 0,
+            sample.rssBytes,
+          );
+        } else {
+          failedMemorySamples += 1;
+        }
+      })
+      .catch(() => {
+        failedMemorySamples += 1;
+      })
+      .finally(() => {
+        memorySample = null;
+      });
+  };
+  sampleMemory();
+  const memoryTimer = setInterval(sampleMemory, memorySampleIntervalMs);
+  memoryTimer.unref();
 
   const requestTermination = (cause: "abort" | "failure" | "timeout"): void => {
     if (terminationStarted) return;
@@ -203,13 +245,25 @@ export async function runJobChild(
     child.once("error", () => {
       result = safeFailure(input.jobId, "JOB_CHILD_SPAWN_FAILED");
     });
-    child.once("close", (exitCode, signal) => {
+    child.once("close", async (exitCode, signal) => {
       options.signal?.removeEventListener("abort", onAbort);
       if (forceKillTimer) clearTimeout(forceKillTimer);
       if (timeoutTimer) clearTimeout(timeoutTimer);
+      clearInterval(memoryTimer);
+      await memorySample;
       child.unref();
       resolve({
         exitCode,
+        memory: Object.freeze({
+          failedSamples: failedMemorySamples,
+          peakProcessTreeRssBytes,
+          sampleIntervalMs: memorySampleIntervalMs,
+          samples: memorySamples,
+          status:
+            peakProcessTreeRssBytes === null
+              ? ("unavailable" as const)
+              : ("available" as const),
+        }),
         result:
           result ??
           safeFailure(

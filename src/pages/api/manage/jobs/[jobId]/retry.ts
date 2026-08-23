@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { APIRoute } from "astro";
 
-import { createPublishingServer } from "@/composition/server";
+import { createPublishingJobServer } from "@/composition/server/publishing-jobs";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
@@ -41,7 +41,7 @@ export const POST: APIRoute = ({ locals, params, request }) => {
   requireMutationOrigin(request, getRuntimeEnvironment().publicOrigin);
   const jobId = requireJobId(params.jobId);
   const idempotencyKey = requireIdempotencyKey(request);
-  const publishing = createPublishingServer(database);
+  const publishing = createPublishingJobServer(database);
   const original = publishing.getJob(jobId);
   if (!original) {
     throw new SafeApplicationError(

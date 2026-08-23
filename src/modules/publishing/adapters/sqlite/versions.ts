@@ -96,6 +96,22 @@ export class VersionRepository {
     return Object.freeze(rows.map(mapVersion));
   }
 
+  listPresentationReconciliationCandidates(): readonly BookVersionRecord[] {
+    const rows = this.database
+      .prepare(
+        `SELECT book_versions.*
+         FROM book_versions
+         JOIN books ON books.id = book_versions.book_id
+         WHERE book_versions.reclaimed_at IS NULL
+           AND books.deletion_requested_at IS NULL
+           AND book_versions.state IN ('ready', 'published', 'superseded')
+         ORDER BY book_versions.book_id, book_versions.complete_at,
+                  book_versions.id`,
+      )
+      .all() as VersionRow[];
+    return Object.freeze(rows.map(mapVersion));
+  }
+
   markCorrupt(versionId: string): BookVersionRecord {
     const changed = this.database
       .prepare(
@@ -116,6 +132,24 @@ export class VersionRepository {
       .run(nowMs, versionId);
     if (changed.changes !== 1) throw new Error("VERSION_VERIFY_UPDATE_INVALID");
     return this.require(versionId);
+  }
+
+  promoteRecoveredVersion(input: {
+    readonly bookId: number;
+    readonly nowMs: number;
+    readonly versionId: string;
+  }): BookVersionRecord {
+    const changed = this.database
+      .prepare(
+        `UPDATE book_versions
+         SET state = 'published', verified_at = ?
+         WHERE id = ? AND book_id = ? AND state = 'superseded'`,
+      )
+      .run(input.nowMs, input.versionId, input.bookId);
+    if (changed.changes !== 1) {
+      throw new Error("VERSION_ROLLBACK_PROMOTION_FAILED");
+    }
+    return this.require(input.versionId);
   }
 
   registerReadyWithSearch(input: {

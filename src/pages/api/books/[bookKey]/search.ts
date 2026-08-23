@@ -5,7 +5,7 @@ import type { APIRoute } from "astro";
 import {
   createPublishedBookServer,
   createReaderServer,
-} from "@/composition/server";
+} from "@/composition/server/reader";
 import { normalizeSearchQuery } from "@/modules/reader/application/public";
 import { SafeApplicationError } from "@/domain/errors";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { createPublishingServer } from "@/composition/server";
+import { createPublishingJobServer } from "@/composition/server/publishing-jobs";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
@@ -20,7 +20,7 @@ export const GET: APIRoute = ({ locals, params }) => {
       404,
     );
   }
-  const publishing = createPublishingServer(database);
+  const publishing = createPublishingJobServer(database);
   const job = publishing.getJob(jobId);
   if (!job) {
     throw new SafeApplicationError(

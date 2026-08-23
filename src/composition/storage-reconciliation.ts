@@ -1,9 +1,11 @@
 import type Database from "better-sqlite3";
 
+import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
+
 import {
   reconcileBookVersionPresentations,
   type PresentationReconciliation,
-} from "@/modules/catalog/adapters/filesystem/book-presentation";
+} from "@/modules/publishing/adapters/filesystem/book-presentation";
 import { reconcilePublishingStorage } from "@/modules/publishing/adapters/filesystem/storage-reconciliation";
 import {
   verifyAndRecoverCurrentVersions,
@@ -26,8 +28,10 @@ export async function reconcileStorage(input: {
   readonly nowMs: number;
 }): Promise<StorageReconciliation> {
   const publishing = await reconcilePublishingStorage(input);
-  const presentationReconciliation =
-    await reconcileBookVersionPresentations(input);
+  const presentationReconciliation = await reconcileBookVersionPresentations({
+    ...input,
+    presentations: new BookPresentationRepository(input.database),
+  });
   const recoveredCurrentVersions = await verifyAndRecoverCurrentVersions({
     ...input,
     presentationIntegrityFailures: [

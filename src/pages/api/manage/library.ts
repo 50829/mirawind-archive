@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { createCatalogServer } from "@/composition/server";
+import { createCatalogServer } from "@/composition/server/catalog";
 import { SafeApplicationError } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy } from "@/http/cache/policies";

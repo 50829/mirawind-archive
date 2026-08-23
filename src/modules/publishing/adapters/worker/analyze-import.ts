@@ -59,6 +59,11 @@ export async function analyzeImport(input: {
   readonly archivePath: string;
   readonly extractionLimits?: Partial<ArchiveExtractionLimits>;
   readonly importId?: string;
+  readonly onPhase?: (
+    phase: "identify_document" | "security_check",
+    completed: number,
+    total: number,
+  ) => void;
   readonly sealedExtractionDirectory?: string;
   readonly signal?: AbortSignal;
   readonly stagingDirectory: string;
@@ -72,6 +77,7 @@ export async function analyzeImport(input: {
   try {
     await mkdir(dirname(stagingDirectory), { mode: 0o700, recursive: true });
     await mkdir(stagingDirectory, { mode: 0o700, recursive: false });
+    input.onPhase?.("security_check", 0, 2);
     const extracted = await profilePipelineStage("archive_extract", () =>
       extractZipFile({
         archivePath: input.archivePath,
@@ -85,12 +91,14 @@ export async function analyzeImport(input: {
       archive_files: extracted.files,
       archive_uncompressed_bytes: extracted.totalUncompressedBytes,
     });
+    input.onPhase?.("identify_document", 1, 2);
     const discovered = await profilePipelineStage("candidate_discovery", () =>
       discoverMarkdownCandidates(extractedDirectory),
     );
     recordPipelineProfileMetrics({
       markdown_candidates: discovered.candidates.length,
     });
+    input.onPhase?.("identify_document", 2, 2);
     const artifact: AnalyzeImportArtifact = Object.freeze({
       candidates: discovered.candidates,
       decision: discovered.decision,

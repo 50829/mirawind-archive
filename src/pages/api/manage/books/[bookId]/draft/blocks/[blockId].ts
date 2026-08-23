@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { publishingServerActions } from "@/composition/server";
+import { publishingDraftActions } from "@/composition/server/publishing-drafts";
 import {
   getRuntimeEnvironment,
   getRuntimeStorageLayout,
@@ -39,7 +39,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
     hideExistence: true,
   });
   const target = identity(params);
-  const result = await publishingServerActions.getDraftBlock({
+  const result = await publishingDraftActions.getDraftBlock({
     ...target,
     database,
     layout: await getRuntimeStorageLayout(),
@@ -61,7 +61,7 @@ export const PATCH: APIRoute = async ({ locals, params, request }) => {
   const { database } = requireRuntimeAdministrator(locals.session);
   requireMutationOrigin(request, getRuntimeEnvironment().publicOrigin);
   const target = identity(params);
-  const result = await publishingServerActions.patchDraftBlock({
+  const result = await publishingDraftActions.patchDraftBlock({
     ...target,
     database,
     expectedEtag: request.headers.get("if-match"),

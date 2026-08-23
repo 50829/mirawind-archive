@@ -4,14 +4,17 @@ import type Database from "better-sqlite3";
 
 import { createOpaqueId } from "@/domain/ids";
 import {
+  assertJobProgressUpdate,
   assertJobTransition,
   assertJobPhase,
+  isJobProgress,
   isTerminalJobState,
+  type JobProgress,
   type JobKind,
+  type QueueObservation,
   type JobState,
   type TerminalJobState,
 } from "@/modules/publishing/application/job-state";
-import { isJobProgress, type JobProgress } from "@/entrypoints/worker/protocol";
 
 export type JobErrorClass =
   | "infrastructure"
@@ -312,6 +315,37 @@ export class JobRepository {
     return Object.freeze(rows.map(mapJob));
   }
 
+  observeQueue(nowMs: number): QueueObservation {
+    if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
+      throw new RangeError("QUEUE_OBSERVATION_TIME_INVALID");
+    }
+    const row = this.database
+      .prepare(
+        `SELECT
+           COALESCE(SUM(CASE WHEN state = 'queued' THEN 1 ELSE 0 END), 0) AS queued_count,
+           COALESCE(SUM(CASE WHEN state = 'running' THEN 1 ELSE 0 END), 0) AS running_count,
+           MIN(CASE WHEN state = 'queued' THEN created_at END) AS oldest_queued_at
+         FROM jobs`,
+      )
+      .get() as {
+      oldest_queued_at: number | null;
+      queued_count: number;
+      running_count: number;
+    };
+    if (row.running_count !== 0 && row.running_count !== 1) {
+      throw new Error("QUEUE_RUNNING_COUNT_INVALID");
+    }
+    return Object.freeze({
+      observedAtMs: nowMs,
+      oldestQueuedAgeMs:
+        row.oldest_queued_at === null
+          ? null
+          : Math.max(0, nowMs - row.oldest_queued_at),
+      queuedCount: row.queued_count,
+      runningCount: row.running_count,
+    });
+  }
+
   private getRequired(id: string): JobRecord {
     const job = this.get(id);
     if (!job) throw new Error("JOB_NOT_FOUND");
@@ -365,9 +399,16 @@ export class JobRepository {
     readonly phase?: string;
     readonly progress?: JobProgress;
   }): JobRecord {
-    if (input.phase) {
-      const job = this.getRequired(input.jobId);
-      assertJobPhase(job.kind, input.phase);
+    const job = this.getRequired(input.jobId);
+    if (input.phase) assertJobPhase(job.kind, input.phase);
+    if (input.phase || input.progress) {
+      assertJobProgressUpdate({
+        current: job.progress,
+        currentPhase: job.phase,
+        kind: job.kind,
+        next: input.progress ?? job.progress,
+        nextPhase: input.phase ?? job.phase,
+      });
     }
     const progress = input.progress ? progressJson(input.progress) : null;
     const result = this.database

@@ -22,3 +22,11 @@ export interface BookVersionPresentationWriter {
 export interface BookVersionPresentationRemover {
   delete(versionId: string): boolean;
 }
+
+export interface BookVersionPresentationReconciliationStore extends BookVersionPresentationWriter {
+  find(versionId: string): BookVersionPresentation | null;
+  repairCurrentAliases(input: {
+    readonly excludedVersionIds: readonly string[];
+    readonly nowMs: number;
+  }): readonly number[];
+}

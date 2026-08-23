@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 
+import { CurrentVersionCatalogRepository } from "@/modules/catalog/adapters/sqlite/current-version-recovery";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import {
   verifyAndRecoverCurrentVersions,
@@ -34,13 +35,9 @@ export async function verifyVersion(input: {
   }
 
   repository.markCorrupt(version.id);
-  const current = input.database
-    .prepare(
-      `SELECT 1 FROM books
-       WHERE id = ? AND current_version_id = ?
-         AND deletion_requested_at IS NULL`,
-    )
-    .get(version.bookId, version.id);
+  const current = new CurrentVersionCatalogRepository(
+    input.database,
+  ).isCurrentVersion({ bookId: version.bookId, versionId: version.id });
   const recovery = current
     ? ((
         await verifyAndRecoverCurrentVersions({

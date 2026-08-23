@@ -1172,3 +1172,36 @@
   “原书编号 / 自动编号 / 无编号”选择，并通过既有认证、ETag 和候选构建流程保存。
 - 替代：本决策明确 D-121 的 `generated` 语义，并取代 D-047 和产品规格中要求为无来源编号
   的附录生成 `Appendix A` 或 `附录 A` 的部分；`source` 模式仍可展示附录原书编号。
+
+## D-123：模块依赖、worker 编排与运行观测完成闭环
+
+- 状态：Accepted
+- 模块边界：D-117 的无环要求同时作用于源码文件图和业务模块聚合图。跨模块调用即使只经过
+  `application/public.ts`，也不得形成模块级双向依赖。Publishing 负责解释出版版本与生命周期，
+  Catalog 负责目录展示投影与删除策略；Publishing 可以通过 Catalog 的窄 application port 写入或
+  删除展示投影，Catalog 不读取 Publishing 的版本表、格式解析器或生命周期记录。Reader 只消费
+  Publishing 明确导出的不可变阅读格式投影，不取得完整出版内部能力。
+- application ports：每个跨模块 port 只授予当前用例所需操作。取消图书任务、取得不含路径的
+  删除清单、清除出版记录、写入展示投影和恢复当前版本分别建模；同一个 adapter 可以实现多个窄
+  port，但调用者不得因此获得无关能力。跨模块原子操作继续由 composition 组装共享事务。
+- composition：composition root 只负责构造 adapter、连接 application 用例与控制进程生命周期，
+  不直接持有业务 SQL、版本状态规则或任务终态策略。server 装配按 import、draft、job、publication、
+  catalog、reader 与 identity 的真实消费者拆分；worker 按输入捕获、attempt 执行、唯一终态协调、
+  recovery、health reporting 与 bootstrap 拆分。拆分依据是职责和变更原因，不设置机械行数门槛，
+  不保留旧装配转发层。
+- worker：仍只有一个 worker 串行领取任务；每个任务仍在可终止子进程中执行，页面渲染最多四页
+  在途，租约、30 分钟上限、10 秒终止宽限、自动重试、清理与不可变发布语义不变。child 使用闭合
+  的 handler registry，父进程只有一条 claim、execute、complete 和 recover 路径。
+- 观测：worker 在父进程以有界频率记录队列 queued/running 数量、最老 queued 年龄、attempt 总耗时、
+  每个进入阶段的耗时和任务子进程树峰值 RSS，并原子写入既有私有 worker health 快照供认证管理
+  健康接口读取。RSS 无法采样时记录 unavailable，不得伪造为零，也不得影响任务执行。观测只含不
+  透明任务 ID、安全分类与有界数值，不持久化正文、原始文件名或路径，不引入外部 collector、长期
+  指标数据库或新的运行服务。
+- 格式切换：worker health 是可删除派生状态，直接切换到严格 v2。Web 对旧的无版本格式、未知更新
+  版本、未知字段、超限或损坏文件统一返回 unavailable；worker 启动后从当前 checkpoint、队列和
+  attempt 状态原子重建 v2，不迁移或猜测旧字段。观测采样、序列化或 health 文件写入失败不得改变
+  任务、租约、终态或当前出版版本，只记录安全 warning 并在下次有界刷新重试。
+- 证据：架构门禁必须包含模块级环的负例；worker 测试覆盖单任务领取、单调进度、阶段切换、异常
+  退出、RSS 不可用、取消、超时、失租和终态唯一性。代表性构建不得超过既有
+  `max(5%, 1 s)` wall 与 `max(5%, 64 MiB)` RSS 回退容差，Reader/Search 并发门禁与 reference
+  exact 继续通过。

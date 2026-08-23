@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { createPublishedBookServer } from "@/composition/server";
+import { createPublishedBookServer } from "@/composition/server/reader";
 import { resolveRuntimeAdministrator } from "@/http/authorization/runtime-admin";
 import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
 import { ifNoneMatchMatches } from "@/http/conditional";

@@ -4,7 +4,7 @@ import {
   type TaskView,
 } from "@/web/components/import/TaskMonitor";
 import ManageShell from "@/web/components/manage/ManageShell.astro";
-import { createPublishingServer } from "@/composition/server";
+import { createPublishingJobServer } from "@/composition/server/publishing-jobs";
 import {
   hiddenManagementPage,
   redirectToAdministratorLogin,
@@ -32,7 +32,7 @@ try {
   return hiddenManagementPage();
 }
 applyResponsePolicy(Astro.response.headers, "manage");
-const publishing = createPublishingServer(database);
+const publishing = createPublishingJobServer(database);
 const initialJobs = publishing
   .listRecentJobs(50)
   .map((job) => publishing.serializeJobStatus(job)) as readonly TaskView[];

@@ -199,13 +199,22 @@ Use three layers:
    disk use, read/search percentiles and worker health.
 3. Host monitoring: free filesystem space, RAM pressure, container restarts and backup age.
 
-The authenticated `GET /api/manage/health` response includes active leases, in-process
-metrics, WAL bytes and the latest worker checkpoint record. It is private, non-cacheable and
-must not be published as an anonymous health endpoint.
+The authenticated `GET /api/manage/health` response includes Web-process request metrics,
+WAL bytes and the worker's strict private health snapshot. Worker health schema v2 includes
+queued/running counts, oldest queued age, the current or most recent attempt, contiguous
+phase durations and nullable process-tree peak RSS. It is private, non-cacheable and must
+not be published as an anonymous health endpoint.
+
+The health snapshot is derived and overwrite-only. An old unversioned, unknown, oversized
+or malformed file is reported as unavailable until the worker atomically rebuilds it. A
+queue/RSS sample or health-file write failure never changes task state; RSS `null` means
+unavailable, not zero. Active snapshots refresh at most every five seconds, idle snapshots
+at most every 60 seconds, and repeated state changes are coalesced for one second.
 
 The worker runs a PASSIVE WAL checkpoint about once per minute. Investigate
 `WAL_CHECKPOINT_BUSY` or a WAL at/above 256 MiB; do not run a forceful checkpoint while Web
-or worker is active. Logs contain opaque IDs and safe error codes. Do not paste credentials,
+or worker is active. Logs contain opaque IDs, closed task/phase/state labels, safe error codes
+and bounded numbers. Do not paste credentials,
 cookies, raw ZIP paths or private document content into incident tickets.
 
 ## 8. Quarantine and retention

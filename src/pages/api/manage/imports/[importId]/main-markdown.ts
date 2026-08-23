@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { createPublishingServer } from "@/composition/server";
+import { createPublishingImportServer } from "@/composition/server/publishing-imports";
 import { getRuntimeEnvironment } from "@/composition/storage";
 import { SafeApplicationError } from "@/domain/errors";
 import { isOpaqueId } from "@/domain/ids";
@@ -41,7 +41,7 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       400,
     );
   }
-  const publishing = createPublishingServer(database);
+  const publishing = createPublishingImportServer(database);
   const nowMs = Date.now();
   const job = publishing.confirmImportCandidateAndQueuePreparation({
     candidateId,

@@ -147,6 +147,14 @@ export async function buildCandidateVersion(input: {
             unit: "pages",
           });
         },
+        onSearchFinalizing(total) {
+          report(input.onStage, {
+            completed: 0,
+            phase: "build_search",
+            total,
+            unit: "items",
+          });
+        },
         originalFiles: context.originalFiles,
         preparationDiagnostics: input.preparationDiagnostics,
         resourceResolution: context.resourceResolution,

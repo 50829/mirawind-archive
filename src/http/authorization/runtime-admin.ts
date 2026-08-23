@@ -1,6 +1,6 @@
 import type { RequestSession } from "@/modules/identity/application/public";
 import { getRuntimeDatabase } from "@/composition/auth";
-import { createIdentityServer } from "@/composition/server";
+import { createIdentityServer } from "@/composition/server/identity";
 import { SafeApplicationError } from "@/domain/errors";
 import { authorizeSoleAdministrator } from "@/http/authorization/admin-guard";
 

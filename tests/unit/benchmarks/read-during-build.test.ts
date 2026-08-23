@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import { buildReadDuringBuildReport } from "../../../scripts/benchmarks/read-during-build.js";
+import { retainedFixtureDataRoot } from "../../../scripts/benchmarks/reference.js";
 
 function samples(value: number): readonly number[] {
   return Object.freeze(Array.from({ length: 200 }, () => value));
 }
 
 describe("read-during-build report", () => {
+  it("uses the retained run directory produced by the build benchmark", () => {
+    expect(retainedFixtureDataRoot("/tmp/results", "real-mineru-example")).toBe(
+      "/tmp/results/real-mineru-example/run-001",
+    );
+  });
+
   it("reports and enforces page, resource and search independently", () => {
     const report = buildReadDuringBuildReport({
       normalQuery: "chapter",
