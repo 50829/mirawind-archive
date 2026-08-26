@@ -58,6 +58,13 @@ pnpm dev:web
 pnpm dev:worker
 ```
 
+`pnpm dev:web` 只有在 public origin、允许 Host 和监听地址全部为 loopback 时，
+才自动使用已初始化的唯一管理员身份；打开 `/manage` 不需要登录。该信任不会进入
+`pnpm build` 的正式运行模式。Docker 本地预览运行的是正式构建，因此仍使用登录。
+
+正式部署登录后在受信任设备保持 90 天，并在有活动时每 7 天滚动刷新；Passkey
+敏感操作仍要求最近 5 分钟认证。
+
 生产环境推荐 Docker Compose：
 
 ```bash

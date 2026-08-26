@@ -154,6 +154,13 @@ keys redirect only after resolving and authorizing the current projection.
 Authentication uses a maintained authentication library with database sessions, the Passkey
 plugin, and password fallback. The public runtime permanently disables sign-up.
 
+Authentication policy is mode-closed. Astro development may synthesize a request-local sole-admin
+session only when public origin, every allowed Host and the listener are loopback values. Test and
+production modes never take this branch, even when a built server is reached through localhost;
+they require a Better Auth session for every management representation and mutation. The synthetic
+development session is derived from the initialized installation row and does not create a default
+credential or persisted session.
+
 The offline CLI:
 
 1. creates the sole administrator if none exists;
@@ -174,6 +181,10 @@ authentication within the previous five minutes. Fallback passwords are 16–128
 Deleting the final Passkey additionally verifies that password during the operation.
 Offline complete recovery sets a new password, revokes sessions, and deletes all Passkeys
 without exposing an HTTP recovery endpoint.
+
+Formal sessions and their cookies last 90 days and roll forward after 7 days of activity. Password
+login explicitly remembers the device. The five-minute freshness boundary remains independent from
+the longer session lifetime.
 
 ## 6. Upload and hostile archive handling
 

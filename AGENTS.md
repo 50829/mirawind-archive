@@ -15,8 +15,13 @@ authority artifact. Do not silently choose one.
 
 ## Workflow
 
-- Use Spec Kit in order: specify → plan → checklist → tasks → analyze → implement →
-  converge.
+- For routine fixes, refactors, documentation and UI polish: inspect current evidence, implement
+  the smallest coherent change, run proportionate tests, and synchronize affected docs. Do not
+  create Spec Kit artifacts by default.
+- Use a focused decision/spec/plan only for new product behavior, schema transitions,
+  authentication or authorization boundaries, and substantial cross-module architecture work.
+- Spec Kit is optional and only used when the user explicitly asks for it or an existing active
+  feature genuinely requires its artifacts. No fixed command sequence is mandatory.
 - Do not reopen product grilling for choices already covered by D-001 through D-086.
 - New product decisions go into `docs/decisions/decision-log.md` before code.
 - Schema changes require a version decision, migration, fixtures, and compatibility tests.
@@ -65,5 +70,5 @@ Tests are mandatory for:
 - publication crash boundaries, rollback, orphan recovery, and immutable versions;
 - representative and stress MinerU books, including the 300 ms uncached reading target.
 
-Implementation is not complete until these tests pass and Spec Kit analysis has no
-unmitigated CRITICAL findings.
+Implementation is not complete until these tests pass. When a change actually creates or updates
+Spec Kit artifacts, its consistency review must have no unmitigated CRITICAL findings.

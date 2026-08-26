@@ -25,6 +25,9 @@ need Node.js or OpenSSL.
 Use `./docker/local.sh status`, `./docker/local.sh logs`, and
 `./docker/local.sh stop` for normal local operation. The stop action preserves the volume.
 This local override is not a production deployment and must not be exposed beyond the host.
+It nevertheless runs the built production image, so administrator login remains enabled. The
+credential-free loopback trust path applies only to `pnpm dev:web` / Astro development mode, not to
+Docker preview or any built server.
 
 ## 1. Prerequisites
 

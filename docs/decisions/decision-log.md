@@ -1232,3 +1232,40 @@
 - 替代：本决策取代 D-117 中“源码内部统一使用 `@/`、禁止跨目录相对导入”以及跨模块入口
   固定命名为 `application/public.ts` 的部分；D-117 与 D-123 的分层、窄 port、无环和 composition
   约束继续有效。
+
+## D-125：工程交付改为按风险分级而不强制完整 Spec Kit 流程
+
+- 状态：Accepted
+- 决策：普通 bug 修复、内部重构、文档同步和不改变产品契约的 UI 修整直接执行“读取证据 →
+  实现 → 比例化测试 → 文档同步”，不再强制生成 spec、plan、checklist、tasks、analyze 和
+  converge 全套产物。新产品行为、schema 迁移、认证/授权边界和跨模块架构变化仍先写决策，
+  并在仅靠决策与 diff 无法安全审阅时建立聚焦规格或计划。
+- 仓库工具：删除 `.agents/skills` 中整套 Speckit 副本及 `.specify` 下的 integration、模板、
+  脚本和 workflow 生成物；保留宪法与历史 `specs/` 作为已完成工作的设计和验收记录。全局
+  工具是否安装不再影响本仓库的交付门禁。
+- 原因：仓库本地 Speckit skills 与用户/系统 skills 同名时不会合并，只会重复出现在选择器；
+  更重要的是，强制完整流程使窄改动的过程成本高于风险，诱导大量低信号文档和任务状态维护。
+- 调研依据：[OpenAI Docs：Where Codex loads local skills](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)。
+- 证据：涉及宪法关键路径的负例、集成、恢复、schema 和性能证据要求不变；简化的是固定仪式，
+  不是测试、安全、权威数据或文档一致性标准。
+- 替代：本决策取代 D-040 中要求每项开发使用完整 Spec-Driven Development 流程的部分；已有
+  决策日志、宪法、产品规格和 feature 历史继续有效。
+
+## D-126：本地开发信任与远程构建认证严格分离
+
+- 状态：Accepted
+- 本地开发：只有运行模式为 `development`，并且 public origin、允许 Host 集合和显式监听
+  `HOST`（若设置）全部是 `localhost`、`127.0.0.1` 或 IPv6 loopback 时，Web 才启用
+  `localDevelopmentTrust`。该模式从当前数据库解析唯一管理员并为应用管理路由构造仅进程内的
+  开发 session；`/manage`、草稿、发布和任务操作不再要求登录或输入凭据。没有已初始化的唯一
+  管理员时仍要求先执行离线 bootstrap，不创建默认或万能账号。
+- 远程构建：`production` 与 `test` 模式永远不能启用开发信任；HTTPS 远程部署继续使用 Better
+  Auth、Passkey、备用密码、服务端 session、同源写入保护和每个资源的授权规则。构建产物不会
+  因 origin 使用 localhost 而自动信任，必须由运行模式明确隔离。
+- 正式登录体验：Passkey 或备用密码成功登录后的数据库 session 与浏览器 cookie 使用 90 天
+  有效期，并在有活动时每 7 天滚动刷新。密码客户端显式请求记住本设备。Passkey 管理等远程
+  敏感操作仍要求最近 5 分钟认证；离线完全恢复继续撤销全部 session 和 Passkey。
+- 安全：不增加空密码、弱密码、URL secret、开发账号、匿名生产管理接口或可在 production
+  打开的旁路环境变量。开发信任的三个 loopback 条件中任一个不成立就关闭并回到正式认证。
+- 替代：本决策取代 D-059 中“开发模式也不得绕过认证”的部分；D-002、D-003、D-060、D-061
+  和 D-087 对远程部署、唯一管理员、凭据与恢复的其余约束继续有效。

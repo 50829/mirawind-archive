@@ -1,25 +1,22 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 → 2.0.0
+- Version change: 2.0.0 → 3.0.0
 - Modified principles:
-  - I. Authoritative Sources and Rebuildability: schema evolution may use either an
-    explicit migration or an owner-approved clean switch with tested rejection and
-    remediation.
+  - V. Evidence Before Completion: delivery evidence is proportional to behavioral and
+    architectural risk instead of requiring Spec Kit artifacts for every change.
 - Rationale and impact:
-  - Feature 006 deliberately replaces the publishing format family and database baseline
-    instead of retaining a compatibility path.
-  - D-108 and the owner's explicit clean-switch instruction approve this governance change.
+  - Routine fixes, refactors, documentation and UI polish were paying more process cost than
+    their implementation risk justified.
+  - D-125 and the owner's explicit simplification request approve removal of the repository
+    Spec Kit integration and mandatory full-cycle workflow.
 - Added sections: none
 - Removed sections: none
 - Templates:
-  - ✅ .specify/templates/plan-template.md
-  - ✅ .specify/templates/spec-template.md
-  - ✅ .specify/templates/tasks-template.md
+  - Removed repository-local Spec Kit templates, scripts, workflows and skills.
 - Runtime guidance:
-  - ✅ README.md
+  - No runtime topology change.
 - Operations guidance:
-  - ✅ docs/operations/deployment.md
-  - ✅ docs/operations/recovery.md
+  - No deployment or recovery change.
 - Follow-up TODOs: none
 -->
 
@@ -84,14 +81,16 @@ public product responsive and isolates resource failures.
 
 ### V. Evidence Before Completion
 
-Every feature MUST trace user-visible behavior to a specification requirement and MUST
-include automated evidence for its critical success and failure paths. Parser, schema,
-authorization, publication, recovery, cache, download, migration, and clean-switch changes
-require fixture-based integration tests; security and transaction tests MUST include
-negative and crash-boundary scenarios. Performance claims MUST be measured with
-representative and stress fixtures, not inferred from small examples. A feature is not
-complete while its specification, plan, tasks, implementation, tests, and current
-documentation disagree.
+Every user-visible feature and every high-risk schema, security, publication, recovery or
+architecture change MUST trace intended behavior to an approved decision or focused
+specification and MUST include automated evidence for its critical success and failure paths.
+Routine fixes, refactors, documentation and UI polish MAY proceed directly from repository
+evidence to implementation and tests when they do not change an authoritative contract.
+Parser, schema, authorization, publication, recovery, cache, download, migration, and
+clean-switch changes require fixture-based integration tests; security and transaction tests
+MUST include negative and crash-boundary scenarios. Performance claims MUST be measured with
+representative and stress fixtures, not inferred from small examples. Work is not complete
+while its intended behavior, implementation, tests and current documentation disagree.
 
 Rationale: this product handles hostile archives and durable publications, so happy-path
 unit tests alone cannot establish correctness.
@@ -111,24 +110,26 @@ unit tests alone cannot establish correctness.
 - Complexity MUST be justified against a simpler maintained component or direct design.
   Mature components MUST be preferred for infrastructure and protocols.
 
-## Spec-Driven Delivery Gates
+## Risk-Proportional Delivery Gates
 
-1. A feature starts with an approved feature specification containing independently
-   testable user journeys, explicit exclusions, failure behavior, security boundaries,
-   measurable outcomes, and no unresolved critical clarification markers.
-2. Planning MUST identify authoritative data, derived data, schema transition policy,
-   transaction boundaries, recovery behavior, request-path work, resource budgets, and
+1. Routine maintenance MAY use the direct path: inspect current evidence, implement the
+   smallest coherent change, run proportionate tests, and synchronize affected documentation.
+   It MUST NOT create feature specs, plans, checklists or task ledgers merely to satisfy process.
+2. New product behavior, schema transitions, authentication/authorization changes and
+   cross-module architecture changes MUST first update the decision log and use a focused
+   specification or implementation plan when the change cannot be reviewed safely from the
+   decision and code diff alone.
+3. Planning for high-risk work MUST identify authoritative data, derived data, transition
+   policy, transaction boundaries, recovery behavior, request-path work, resource budgets and
    representative fixtures.
-3. Tasks MUST map to requirements and include required negative, integration, recovery,
-   schema-transition, and performance evidence before implementation tasks are considered
-   complete.
 4. Implementation MUST proceed from failing evidence to passing behavior for
    constitution-critical paths. Generated artifacts and schema transitions MUST be
    validated before any publication pointer changes.
-5. Before implementation begins, Constitution Check MUST pass. After design and task
-   generation, consistency analysis MUST report no unmitigated CRITICAL findings.
-6. Decision changes MUST first update the decision log and affected specification, then
-   propagate to schemas, plans, tasks, tests, and runtime documentation.
+5. When specification, plan or task artifacts are created, they MUST remain consistent with
+   implementation and receive a focused consistency review. A particular workflow product or
+   complete command sequence is not mandatory.
+6. Decision changes MUST first update the decision log, then propagate to affected schemas,
+   tests, runtime documentation and any feature artifacts that actually exist.
 
 ## Governance
 
@@ -149,8 +150,8 @@ Versioning follows semantic versioning:
 - MINOR for adding a principle or materially expanding mandatory governance;
 - PATCH for non-semantic clarification.
 
-Every feature plan and review MUST perform Constitution Check. Violations block delivery
-unless the constitution itself is amended; a plan's Complexity Tracking section may explain
-necessary complexity but cannot waive a MUST requirement.
+Every high-risk feature plan and review MUST perform Constitution Check. Violations block
+delivery unless the constitution itself is amended; a plan's Complexity Tracking section may
+explain necessary complexity but cannot waive a MUST requirement.
 
-**Version**: 2.0.0 | **Ratified**: 2026-07-24 | **Last Amended**: 2026-07-26
+**Version**: 3.0.0 | **Ratified**: 2026-07-24 | **Last Amended**: 2026-08-26
