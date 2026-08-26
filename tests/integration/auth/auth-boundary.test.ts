@@ -11,6 +11,8 @@ import {
 } from "@/http/authorization/admin-guard";
 import { authorizeBookResource } from "@/http/authorization/book-guard";
 import { requireRecentAdministratorAuthentication } from "@/http/authorization/reauth-guard";
+import { createLocalDevelopmentSession } from "@/modules/identity/adapters/sqlite/local-development-session";
+import { InstallationRepository } from "@/modules/identity/adapters/sqlite/installation";
 
 const now = 1_800_000_000_000;
 const environment = {
@@ -101,7 +103,11 @@ describe("sole-administrator authorization", () => {
         minPasswordLength: 16,
       },
       rateLimit: { enabled: true, storage: "database" },
-      session: { freshAge: 300 },
+      session: {
+        expiresIn: 90 * 24 * 60 * 60,
+        freshAge: 300,
+        updateAge: 7 * 24 * 60 * 60,
+      },
       trustedOrigins: ["https://library.example.test"],
     });
 
@@ -114,6 +120,37 @@ describe("sole-administrator authorization", () => {
       enabled: true,
       maxPasswordLength: 128,
       minPasswordLength: 16,
+    });
+    expect(setupContext.options.session).toMatchObject({
+      expiresIn: 90 * 24 * 60 * 60,
+      freshAge: 300,
+      updateAge: 7 * 24 * 60 * 60,
+    });
+    database.close();
+  });
+
+  it("creates a development session only for the registered sole administrator", async () => {
+    const database = new Database(":memory:");
+    applyMigrations(database, await loadMigrationManifest());
+    expect(createLocalDevelopmentSession(database, now)).toBeNull();
+    database
+      .prepare(
+        `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt)
+         VALUES ('local-admin', 'Local Admin', 'local@example.test', 1, ?, ?)`,
+      )
+      .run(now, now);
+    const installation = new InstallationRepository(database);
+    installation.ensure(now);
+    installation.registerSoleAdministrator("local-admin", now);
+    expect(createLocalDevelopmentSession(database, now)).toEqual({
+      authenticatedAtMs: now,
+      expiresAtMs: Number.MAX_SAFE_INTEGER,
+      sessionId: "local-development",
+      user: {
+        email: "local@example.test",
+        id: "local-admin",
+        name: "Local Admin",
+      },
     });
     database.close();
   });

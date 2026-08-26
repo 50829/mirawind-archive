@@ -6,18 +6,20 @@ import { parseEnvironment } from "@/config/environment";
 import type { RequestSession } from "@/modules/identity/application/identity-api";
 import { openDatabase } from "@/platform/sqlite/connection";
 import { createHttpAuth } from "@/modules/identity/adapters/better-auth/http-auth";
+import { createLocalDevelopmentSession } from "@/modules/identity/adapters/sqlite/local-development-session";
 
 let runtime:
   | {
       readonly auth: ReturnType<typeof createHttpAuth>;
       readonly database: Database.Database;
+      readonly environment: ReturnType<typeof parseEnvironment>;
     }
   | undefined;
 
 function runtimeMode(): "development" | "production" | "test" {
-  if (process.env.NODE_ENV === "production") return "production";
   if (process.env.NODE_ENV === "test") return "test";
-  return "development";
+  if (process.env.NODE_ENV === "development") return "development";
+  return "production";
 }
 
 export function getRuntimeAuth(): ReturnType<typeof createHttpAuth> {
@@ -28,7 +30,7 @@ export function getRuntimeAuth(): ReturnType<typeof createHttpAuth> {
     { role: "web" },
   );
   const auth = createHttpAuth({ database, environment });
-  runtime = { auth, database };
+  runtime = { auth, database, environment };
   return auth;
 }
 
@@ -41,9 +43,14 @@ export function getRuntimeDatabase(): Database.Database {
 export async function resolveRequestSession(
   request: Request,
 ): Promise<RequestSession | null> {
+  getRuntimeAuth();
+  if (!runtime) throw new Error("AUTH_RUNTIME_NOT_INITIALIZED");
+  if (runtime.environment.localDevelopmentTrust) {
+    return createLocalDevelopmentSession(runtime.database);
+  }
   const cookie = request.headers.get("cookie");
   if (!cookie || !cookie.includes("better-auth")) return null;
-  const result = await getRuntimeAuth().api.getSession({
+  const result = await runtime.auth.api.getSession({
     headers: request.headers,
   });
   if (!result) return null;

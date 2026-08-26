@@ -20,6 +20,7 @@ describe("parseEnvironment", () => {
     ).toMatchObject({
       allowedHosts: ["library.example.test"],
       dataDirectory: "/srv/mirawind/data",
+      localDevelopmentTrust: false,
       passkeyRpId: "library.example.test",
       publicOrigin: "https://library.example.test",
     });
@@ -47,8 +48,55 @@ describe("parseEnvironment", () => {
           MIRAWIND_PUBLIC_ORIGIN: "http://127.0.0.1:4321",
         },
         { mode: "development" },
-      ).publicOrigin,
-    ).toBe("http://127.0.0.1:4321");
+      ),
+    ).toMatchObject({
+      localDevelopmentTrust: true,
+      publicOrigin: "http://127.0.0.1:4321",
+    });
+  });
+
+  it("never enables local trust in test or production mode", () => {
+    const local = {
+      ...validEnvironment,
+      HOST: "127.0.0.1",
+      MIRAWIND_ALLOWED_HOSTS: "127.0.0.1,localhost",
+      MIRAWIND_PASSKEY_RP_ID: "127.0.0.1",
+      MIRAWIND_PUBLIC_ORIGIN: "https://127.0.0.1:4321",
+    };
+    expect(
+      parseEnvironment(local, { mode: "test" }).localDevelopmentTrust,
+    ).toBe(false);
+    expect(
+      parseEnvironment(local, { mode: "production" }).localDevelopmentTrust,
+    ).toBe(false);
+  });
+
+  it("closes development trust when an allowed or listening host is not loopback", () => {
+    const local = {
+      ...validEnvironment,
+      MIRAWIND_PASSKEY_RP_ID: "127.0.0.1",
+      MIRAWIND_PUBLIC_ORIGIN: "http://127.0.0.1:4321",
+    };
+    expect(
+      parseEnvironment(
+        {
+          ...local,
+          HOST: "0.0.0.0",
+          MIRAWIND_ALLOWED_HOSTS: "127.0.0.1",
+        },
+        { mode: "development" },
+      ).localDevelopmentTrust,
+    ).toBe(false);
+    expect(
+      parseEnvironment(
+        {
+          ...local,
+          HOST: "127.0.0.1",
+          MIRAWIND_ALLOWED_HOSTS: "127.0.0.1,library.example.test",
+        },
+        { mode: "development" },
+      ).localDevelopmentTrust,
+    ).toBe(false);
   });
 
   it.each([

@@ -60,6 +60,7 @@ export default defineConfig({
       MIRAWIND_DATA_DIR: dataRoot,
       MIRAWIND_PASSKEY_RP_ID: "127.0.0.1",
       MIRAWIND_PUBLIC_ORIGIN: baseURL,
+      NODE_ENV: "test",
       HOST: "127.0.0.1",
       PORT: String(port),
     },

@@ -47,6 +47,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     candidate.state !== "ready" ||
     !candidate.versionId ||
     !authorizePreviewResource({
+      allowLocalDevelopmentSession:
+        getRuntimeEnvironment().localDevelopmentTrust === true,
       authorization: new URL(request.url).searchParams.get("authorization"),
       authSecret: getRuntimeEnvironment().authSecret,
       bookId,

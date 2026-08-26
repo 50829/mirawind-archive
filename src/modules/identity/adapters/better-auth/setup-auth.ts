@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 
 import { type AuthFactoryInput } from "./http-auth";
+import { administratorSessionPolicy } from "../../application/session-model";
 
 export function createSetupAuth(input: AuthFactoryInput) {
   return betterAuth({
@@ -18,9 +19,7 @@ export function createSetupAuth(input: AuthFactoryInput) {
       storage: "database",
     },
     secret: input.environment.authSecret,
-    session: {
-      freshAge: 300,
-    },
+    session: administratorSessionPolicy,
     trustedOrigins: [input.environment.publicOrigin],
   });
 }

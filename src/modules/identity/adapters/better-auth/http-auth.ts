@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import type Database from "better-sqlite3";
 
 import type { EnvironmentConfig } from "@/config/environment";
+import { administratorSessionPolicy } from "../../application/session-model";
 import {
   createPasskeyPolicyHooks,
   recordPasskeyUse,
@@ -40,9 +41,7 @@ function sharedOptions(input: AuthFactoryInput) {
       }),
     ],
     secret: input.environment.authSecret,
-    session: {
-      freshAge: 300,
-    },
+    session: administratorSessionPolicy,
     trustedOrigins: [input.environment.publicOrigin],
   };
 }

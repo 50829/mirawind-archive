@@ -4,6 +4,7 @@ export interface EnvironmentConfig {
   readonly allowedHosts: readonly string[];
   readonly authSecret: string;
   readonly dataDirectory: string;
+  readonly localDevelopmentTrust?: boolean;
   readonly passkeyRpId: string;
   readonly publicOrigin: string;
 }
@@ -30,7 +31,10 @@ function required(
 
 function isLocalhost(hostname: string): boolean {
   return (
-    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
   );
 }
 
@@ -109,11 +113,18 @@ export function parseEnvironment(
 
   const authSecret = required(input, "MIRAWIND_AUTH_SECRET");
   validateSecret(authSecret);
+  const listenHost = input.HOST?.trim().toLowerCase();
+  const localDevelopmentTrust =
+    options.mode === "development" &&
+    isLocalhost(publicOrigin.hostname.toLowerCase()) &&
+    allowedHosts.every(isLocalhost) &&
+    (!listenHost || isLocalhost(listenHost));
 
   return Object.freeze({
     allowedHosts: Object.freeze([...new Set(allowedHosts)]),
     authSecret,
     dataDirectory: resolve(dataDirectory),
+    localDevelopmentTrust,
     passkeyRpId,
     publicOrigin: publicOrigin.origin,
   });

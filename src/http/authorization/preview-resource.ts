@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual, type BinaryLike } from "node:crypto";
 import type Database from "better-sqlite3";
 
 import type { RequestSession } from "@/modules/identity/application/identity-api";
+import { localDevelopmentSessionId } from "@/modules/identity/application/identity-api";
 import { isOpaqueId } from "@/domain/ids";
 
 const previewAuthorizationVersion = 1;
@@ -110,6 +111,7 @@ export function issuePreviewResourceAuthorization(input: {
 }
 
 export function authorizePreviewResource(input: {
+  readonly allowLocalDevelopmentSession?: boolean;
   readonly authorization: string | null;
   readonly authSecret: string;
   readonly bookId: number;
@@ -150,6 +152,19 @@ export function authorizePreviewResource(input: {
     claims.expiresAtMs > input.nowMs + previewAuthorizationLifetimeMs
   ) {
     return false;
+  }
+  if (
+    input.allowLocalDevelopmentSession === true &&
+    claims.sessionId === localDevelopmentSessionId
+  ) {
+    const administrator = input.database
+      .prepare(
+        `SELECT 1 FROM installation
+         WHERE id = 1 AND admin_user_id = ?
+         LIMIT 1`,
+      )
+      .get(claims.userId);
+    return Boolean(administrator);
   }
   const active = input.database
     .prepare(

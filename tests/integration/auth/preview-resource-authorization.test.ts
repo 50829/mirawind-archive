@@ -96,6 +96,27 @@ describe("sandboxed preview resource authorization", () => {
         .prepare("DELETE FROM session WHERE id = ?")
         .run(session.sessionId);
       expect(authorizePreviewResource(base)).toBe(false);
+
+      const localSession = {
+        ...session,
+        sessionId: "local-development",
+      };
+      const localAuthorization = issuePreviewResourceAuthorization({
+        authSecret,
+        bookId: 7,
+        nowMs,
+        resourceId,
+        revision: 3,
+        session: localSession,
+      });
+      const localBase = { ...base, authorization: localAuthorization };
+      expect(authorizePreviewResource(localBase)).toBe(false);
+      expect(
+        authorizePreviewResource({
+          ...localBase,
+          allowLocalDevelopmentSession: true,
+        }),
+      ).toBe(true);
     } finally {
       migrated.close();
       await dataRoot.cleanup();

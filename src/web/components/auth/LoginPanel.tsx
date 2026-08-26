@@ -39,6 +39,7 @@ export function LoginPanel({ nextPath }: LoginPanelProps) {
     const result = await authClient.signIn.email({
       email: String(form.get("email") ?? ""),
       password: String(form.get("password") ?? ""),
+      rememberMe: true,
     });
     setBusy(false);
     if (result.error) {
@@ -53,6 +54,7 @@ export function LoginPanel({ nextPath }: LoginPanelProps) {
       <p className="eyebrow">管理员入口</p>
       <h1 id="login-title">登录 Mirawind</h1>
       <p className="lede">优先使用已登记的 Passkey。</p>
+      <p className="session-note">登录后在此设备保持登录 90 天。</p>
       <button
         className="primary"
         disabled={busy}
