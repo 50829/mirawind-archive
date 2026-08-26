@@ -92,7 +92,7 @@ describe("job retry policy", () => {
     await withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const repository = new JobRepository(database);
       const original = repository.create({
-        kind: "reconcile",
+        kind: "analyze_import",
         nowMs: 1_000,
       });
       repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });

@@ -5,12 +5,9 @@ type JobState =
 
 const operationLabels: Readonly<Record<string, string>> = Object.freeze({
   analyze_import: "分析导入",
-  build_candidate: "构建预览",
+  build_candidate: "生成阅读预览",
   permanent_book_deletion: "永久删除图书",
   prepare_draft: "整理草稿",
-  reclaim: "回收旧版本",
-  reconcile: "存储协调",
-  verify_version: "验证版本",
 });
 
 const phaseLabels: Readonly<Record<string, string>> = Object.freeze({
@@ -25,12 +22,9 @@ const phaseLabels: Readonly<Record<string, string>> = Object.freeze({
   organize_structure: "整理结构",
   permanent_book_deletion: "永久删除",
   queued: "等待后台处理",
-  reclaim_storage: "回收存储",
-  reconcile_storage: "核对存储",
   render_pages: "渲染页面",
   security_check: "安全检查",
   starting: "正在启动",
-  verify_manifest: "验证版本",
 });
 
 const unitLabels: Readonly<Record<JobProgress["unit"], string>> = Object.freeze(

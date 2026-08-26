@@ -11,6 +11,7 @@ import {
   isKnownJobPhase,
   isJobProgress,
   jobKinds,
+  userJobKinds,
 } from "./job-state";
 import { evaluateJobRetry } from "./retry-policy";
 import {
@@ -28,7 +29,6 @@ import {
 } from "./commands/build-candidate";
 import { finalizeCandidate } from "./commands/finalize-candidate";
 import { publishCandidate } from "./commands/publish-candidate";
-import { scheduleStartupPublishingMaintenance } from "./commands/schedule-startup-maintenance";
 import { deriveBookVersionPresentation } from "./derive-book-version-presentation";
 import {
   currentDraftCandidateStates,
@@ -49,6 +49,7 @@ export type {
   JobProgressUnit,
   JobKind,
   JobPhase,
+  UserJobKind,
   TerminalJobState,
   QueueObservation,
 } from "./job-state";
@@ -59,7 +60,6 @@ export type {
   CandidateBuildArtifact,
 } from "./commands/build-candidate";
 export type { CandidateRegistrationPort } from "./commands/finalize-candidate";
-export type { StartupMaintenanceJobPort } from "./commands/schedule-startup-maintenance";
 export type {
   CandidatePublicationCapture,
   CandidatePublicationPort,
@@ -85,6 +85,7 @@ export {
   isJobProgress,
   isKnownJobPhase,
   jobKinds,
+  userJobKinds,
   m1ImportExpiryMs,
   m1PublishPolicy,
   maximumCoverUploadBytes,
@@ -92,7 +93,6 @@ export {
   parseBuildCandidateCommand,
   parseCandidateBuildArtifact,
   publishCandidate,
-  scheduleStartupPublishingMaintenance,
   canonicalJson,
   parseBookConfigYaml,
   parseReaderManifestProjection,

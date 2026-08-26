@@ -40,10 +40,41 @@ describe("durable job repository", () => {
     secondDatabase.close();
   });
 
+  it("retires old maintenance rows and excludes them from queue health", async () => {
+    const [database, secondDatabase] = await connections();
+    const repository = new JobRepository(database);
+    database.exec(`
+      INSERT INTO jobs (
+        id, kind, state, attempt, automatic_retry_count, phase,
+        progress_json, created_at, lease_owner, lease_until
+      ) VALUES
+        ('job_legacy_reconcile_0001', 'reconcile', 'queued', 1, 0, 'queued',
+         '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}', 1000,
+         NULL, NULL),
+        ('job_legacy_reclaim_000001', 'reclaim_versions', 'running', 1, 0, 'starting',
+         '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}', 1001,
+         'worker:legacy', 9999)
+    `);
+
+    expect(repository.observeQueue(2_000)).toMatchObject({
+      queuedCount: 0,
+      runningCount: 0,
+    });
+    expect(repository.retireMaintenanceJobs(3_000)).toBe(2);
+    expect(
+      database.prepare("SELECT DISTINCT state FROM jobs ORDER BY state").all(),
+    ).toEqual([{ state: "canceled" }]);
+    expect(
+      repository.claimNext({ leaseOwner: "worker-a", nowMs: 3_001 }),
+    ).toBeNull();
+    database.close();
+    secondDatabase.close();
+  });
+
   it("uses a 10-second heartbeat and expires a lease after 60 seconds", async () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);
-    repository.create({ kind: "reconcile" });
+    repository.create({ kind: "analyze_import" });
     const claimed = repository.claimNext({
       leaseOwner: "worker-a",
       nowMs: 1_000,
@@ -66,7 +97,7 @@ describe("durable job repository", () => {
   it("creates an immutable retry attempt instead of overwriting history", async () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);
-    const original = repository.create({ kind: "reconcile" });
+    const original = repository.create({ kind: "analyze_import" });
     repository.fail(original.id, {
       errorClass: "infrastructure",
       errorCode: "WORKER_EXIT",
@@ -122,7 +153,7 @@ describe("durable job repository", () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);
     const queued = repository.create({
-      kind: "reconcile",
+      kind: "analyze_import",
       nowMs: 1_000,
     });
     expect(repository.requestCancellation(queued.id, 2_000)).toMatchObject({
@@ -134,7 +165,7 @@ describe("durable job repository", () => {
     });
 
     const running = repository.create({
-      kind: "reconcile",
+      kind: "analyze_import",
       nowMs: 3_000,
     });
     repository.claimNext({ leaseOwner: "worker-a", nowMs: 4_000 });
@@ -160,7 +191,7 @@ describe("durable job repository", () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);
     const job = repository.create({
-      kind: "reconcile",
+      kind: "analyze_import",
       nowMs: 1_000,
     });
     repository.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
@@ -169,7 +200,7 @@ describe("durable job repository", () => {
         jobId: job.id,
         leaseOwner: "worker-a",
         nowMs: 12_000,
-        phase: "reconcile_storage",
+        phase: "security_check",
         progress: {
           completed: 12,
           processed_bytes: null,
@@ -178,7 +209,7 @@ describe("durable job repository", () => {
         },
       }),
     ).toMatchObject({
-      phase: "reconcile_storage",
+      phase: "security_check",
       progress: { completed: 12, total: 20, unit: "items" },
     });
     expect(() =>
@@ -302,8 +333,8 @@ describe("durable job repository", () => {
       queuedCount: 0,
       runningCount: 0,
     });
-    const first = repository.create({ kind: "reconcile", nowMs: 1_100 });
-    repository.create({ kind: "reclaim_versions", nowMs: 1_200 });
+    const first = repository.create({ kind: "analyze_import", nowMs: 1_100 });
+    repository.create({ kind: "prepare_draft", nowMs: 1_200 });
     expect(repository.observeQueue(2_000)).toMatchObject({
       oldestQueuedAgeMs: 900,
       queuedCount: 2,
@@ -333,7 +364,7 @@ describe("durable job repository", () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);
     const original = repository.create({
-      kind: "reconcile",
+      kind: "analyze_import",
       nowMs: 1_000,
     });
     repository.fail(original.id, {

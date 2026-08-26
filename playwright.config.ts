@@ -53,7 +53,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm build && pnpm start",
+    command:
+      "pnpm exec tsx tests/helpers/clean-e2e-data.ts && MIRAWIND_E2E_PREPARE_ONLY=1 pnpm exec tsx tests/helpers/global-setup.ts && pnpm build && pnpm start",
     env: {
       MIRAWIND_ALLOWED_HOSTS: "127.0.0.1,localhost",
       MIRAWIND_AUTH_SECRET: "test-only-secret-0123456789-abcdef",

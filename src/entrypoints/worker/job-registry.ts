@@ -24,11 +24,5 @@ export function dispatchJobCommand<Result>(
       return registry.prepare_draft(command);
     case "purge_book":
       return registry.purge_book(command);
-    case "reclaim_versions":
-      return registry.reclaim_versions(command);
-    case "reconcile":
-      return registry.reconcile(command);
-    case "verify_version":
-      return registry.verify_version(command);
   }
 }

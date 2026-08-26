@@ -2,17 +2,16 @@ import { isOpaqueId } from "@/domain/ids";
 import {
   isKnownJobPhase,
   isJobProgress,
-  jobKinds,
+  userJobKinds,
   parseBuildCandidateCommand,
   type BuildCandidateCommand,
-  type JobKind,
   type JobPhase,
   type JobProgress,
   type JobProgressUnit,
   type TypographyProfile,
 } from "@/modules/publishing/application/publishing-api";
 
-export const jobChildProtocolVersion = 4;
+export const jobChildProtocolVersion = 5;
 
 interface FrozenJobCommandBase {
   readonly attempt: number;
@@ -40,19 +39,6 @@ export interface PrepareDraftCommand extends FrozenJobCommandBase {
   readonly typographyProfile?: TypographyProfile | null;
 }
 
-export interface VerifyVersionCommand extends FrozenJobCommandBase {
-  readonly kind: "verify_version";
-  readonly versionId: string;
-}
-
-export interface ReconcileCommand extends FrozenJobCommandBase {
-  readonly kind: "reconcile";
-}
-
-export interface ReclaimVersionsCommand extends FrozenJobCommandBase {
-  readonly kind: "reclaim_versions";
-}
-
 export interface PurgeBookCommand extends FrozenJobCommandBase {
   readonly bookId: number;
   readonly kind: "purge_book";
@@ -62,10 +48,7 @@ export type FrozenJobInput =
   | AnalyzeImportCommand
   | BuildCandidateCommand
   | PrepareDraftCommand
-  | PurgeBookCommand
-  | ReclaimVersionsCommand
-  | ReconcileCommand
-  | VerifyVersionCommand;
+  | PurgeBookCommand;
 
 export interface RunJobMessage {
   readonly input: FrozenJobInput;
@@ -184,7 +167,7 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
   ] as const;
   if (!(
     isOpaqueId("job", String(input.jobId)) &&
-    jobKinds.includes(input.kind as JobKind) &&
+    userJobKinds.includes(input.kind as (typeof userJobKinds)[number]) &&
     Number.isSafeInteger(input.attempt) &&
     Number(input.attempt) >= 1 &&
     Number.isSafeInteger(input.createdAtMs) &&
@@ -193,21 +176,11 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
   )) {
     return false;
   }
-  if (input.kind === "reconcile" || input.kind === "reclaim_versions") {
-    return exactKeys(input, baseKeys);
-  }
   if (input.kind === "purge_book") {
     return (
       exactKeys(input, [...baseKeys, "bookId"]) &&
       isNullablePositiveInteger(input.bookId) &&
       input.bookId !== null
-    );
-  }
-  if (input.kind === "verify_version") {
-    return (
-      exactKeys(input, [...baseKeys, "versionId"]) &&
-      typeof input.versionId === "string" &&
-      isOpaqueId("version", input.versionId)
     );
   }
   if (input.kind === "analyze_import") {

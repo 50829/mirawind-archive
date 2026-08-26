@@ -45,18 +45,16 @@ volume、执行迁移，并在当前终端安全询问管理员邮箱、显示�
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
-cp .env.example .env
-pnpm db:migrate
-pnpm mirawind admin bootstrap --data-dir /srv/mirawind/data
+pnpm dev
 ```
 
-管理员初始化命令必须在交互式 TTY 中运行；密码不会通过参数、环境变量或日志
-传递。开发时分别启动两个进程：
+默认打开 <http://127.0.0.1:4322/manage>。源码开发数据保存在 Git 忽略的
+`.cache/dev-data`；首次运行自动迁移并建立仅供 loopback 开发信任使用的本地管理员，
+不需要复制生产 `.env`、登录或输入密码。显式 shell 环境变量可以覆盖这些开发默认值。
 
-```bash
-pnpm dev:web
-pnpm dev:worker
-```
+`pnpm dev:web` 和 `pnpm dev:worker` 仅用于定向调试。只运行 `dev:web` 时上传任务没有
+消费者，会保持排队，而且两个诊断命令都要求调用者提供完整环境配置，因此不要把它们
+作为日常启动方式。
 
 `pnpm dev:web` 只有在 public origin、允许 Host 和监听地址全部为 loopback 时，
 才自动使用已初始化的唯一管理员身份；打开 `/manage` 不需要登录。该信任不会进入

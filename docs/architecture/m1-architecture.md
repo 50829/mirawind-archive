@@ -292,19 +292,25 @@ On restart:
 - validation, limit, content, and second-interruption failures require manual retry;
 - `ready` versions remain unpublished until an administrator repeats the publish action.
 
-`reclaim_versions` owns global retained-version and quarantine maintenance. `purge_book`
-owns one permanent deletion. Once a task belongs to a book, `jobs.book_id` is its only
-ownership scope; status and retry do not infer meaning through import/source/version joins.
-The generic job repository changes only task rows. Candidate terminalization/retry belongs to
-the Publishing candidate use case, and deletion terminalization/retry belongs to Catalog;
-composition coordinates each subject row and task row in one immediate transaction.
+The durable queue contains only user-initiated import, draft preparation, candidate build and
+permanent deletion work. After restart recovery, the worker drains that FIFO before running
+one internal storage reconciliation and retention pass. Reconciliation verifies and safely
+recovers current versions; retention removes eligible old versions and quarantine entries.
+Neither operation creates a task row or child-process command. `purge_book` still owns one
+permanent deletion. Once a task belongs to a book, `jobs.book_id` is its only ownership scope;
+status and retry do not infer meaning through import/source/version joins. The generic job
+repository changes only task rows. Candidate terminalization/retry belongs to the Publishing
+candidate use case, and deletion terminalization/retry belongs to Catalog; composition
+coordinates each subject row and task row in one immediate transaction.
 
 Worker composition has one path for frozen input capture, isolated attempt execution,
 terminal completion and expired-lease recovery. Bootstrap, the serial claim loop and worker
 health reporting are separate composition responsibilities. Child IPC dispatches the closed
 task-kind union through an exhaustive registry; task handlers do not create a second terminal
 state path. Server routes likewise use focused Catalog, Publishing, Reader and Identity
-composition roots instead of a shared facade.
+composition roots instead of a shared facade. Historical maintenance kinds remain only in the
+current immutable SQLite baseline; startup retires active rows and queue operations exclude
+them until the next approved schema clean switch.
 
 Catalog owns the book visibility barrier, ordinary book row and retained deletion tombstone.
 Publishing owns jobs, candidates, imports, sources, configs, originals, versions and search

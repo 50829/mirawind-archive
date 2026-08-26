@@ -517,7 +517,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           <h1 className="truncate text-base font-bold">{draft.title}</h1>
           {candidateState === "building" && (
             <p className="text-xs text-amber-800" role="status">
-              正在构建预览
+              正在生成阅读预览
             </p>
           )}
           {["canceled", "failed", "interrupted"].includes(candidateState) && (
@@ -551,7 +551,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             </a>
             <button
               aria-label={`${draft.diagnostics.length} 个问题`}
-              className={`${manageSecondaryButton} workbench-issues-mobile hidden max-[850px]:flex max-[480px]:col-start-2 max-[480px]:row-start-1 max-[480px]:justify-self-end`}
+              className={`${manageSecondaryButton} workbench-issues-mobile min-[851px]:hidden max-[850px]:flex max-[480px]:col-start-2 max-[480px]:row-start-1 max-[480px]:justify-self-end`}
               onClick={() => diagnosticsDialog.current?.showModal()}
               ref={diagnosticsDialogTrigger}
               title={`${draft.diagnostics.length} 个问题`}

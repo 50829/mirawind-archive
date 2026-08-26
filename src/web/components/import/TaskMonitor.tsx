@@ -61,6 +61,11 @@ const actionableStates = new Set<JobState>([
   "interrupted",
 ]);
 const completedHistoryLimit = 8;
+const quietMaintenanceKinds = new Set([
+  "reclaim",
+  "reconcile",
+  "verify_version",
+]);
 
 const stateLabels: Readonly<Record<JobState, string>> = {
   canceled: "已取消",
@@ -74,6 +79,12 @@ const stateLabels: Readonly<Record<JobState, string>> = {
 function newestFirst(jobs: readonly TaskView[]): readonly TaskView[] {
   return [...jobs].sort(
     (left, right) => Date.parse(right.created_at) - Date.parse(left.created_at),
+  );
+}
+
+function visibleJobs(jobs: readonly TaskView[]): readonly TaskView[] {
+  return newestFirst(jobs).filter(
+    (job) => !quietMaintenanceKinds.has(job.kind),
   );
 }
 
@@ -235,7 +246,7 @@ function TaskGroup(props: {
 export function TaskMonitor(props: {
   readonly initialJobs: readonly TaskView[];
 }) {
-  const [jobs, setJobs] = useState(() => newestFirst(props.initialJobs));
+  const [jobs, setJobs] = useState(() => visibleJobs(props.initialJobs));
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [showAllCompleted, setShowAllCompleted] = useState(false);
@@ -275,7 +286,7 @@ export function TaskMonitor(props: {
     if (!response.ok) throw new Error("JOB_STATUS_FAILED");
     const next = (await response.json()) as TaskView;
     setJobs((current) =>
-      newestFirst(
+      visibleJobs(
         current.map((job) => (job.job_id === next.job_id ? next : job)),
       ),
     );
@@ -307,8 +318,10 @@ export function TaskMonitor(props: {
     } else if (action === "cancel") {
       const canceled = body as TaskView;
       setJobs((current) =>
-        current.map((item) =>
-          item.job_id === canceled.job_id ? canceled : item,
+        visibleJobs(
+          current.map((item) =>
+            item.job_id === canceled.job_id ? canceled : item,
+          ),
         ),
       );
       setMessage("取消请求已记录；运行中的子进程关闭后才会进入最终状态。");
@@ -319,7 +332,7 @@ export function TaskMonitor(props: {
       });
       if (statusResponse.ok) {
         const retry = (await statusResponse.json()) as TaskView;
-        setJobs((current) => newestFirst([retry, ...current]));
+        setJobs((current) => visibleJobs([retry, ...current]));
       }
       setMessage("新的重试尝试已进入队列；原尝试记录保持不变。");
     }

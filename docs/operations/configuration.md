@@ -21,6 +21,12 @@ builds served on localhost.
 Formal Better Auth sessions last 90 days and refresh after 7 days of activity. Session freshness for
 sensitive credential operations remains 5 minutes.
 
+Use `pnpm dev` for the complete local runtime. It owns both Astro Web and the worker, defaults to
+`http://127.0.0.1:4322` with persistent `.cache/dev-data`, applies migrations and initializes an
+uncredentialed local-only administrator when the directory is new. These defaults belong only to
+the source development supervisor; explicit shell variables override them. The separate `dev:web`
+and `dev:worker` scripts are diagnostic tools and intentionally require explicit configuration.
+
 Web and worker receive the same data directory and schema-compatible configuration. Only
 the Web process receives public traffic. Caddy overwrites trusted forwarding headers and
 the Node origin is not published directly.

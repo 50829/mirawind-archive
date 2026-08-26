@@ -17,7 +17,7 @@ describe("worker attempt observation", () => {
     const tracker = new AttemptObservationTracker({
       attempt: 1,
       jobId: createOpaqueId("job"),
-      kind: "reconcile",
+      kind: "analyze_import",
       startedAtMs: Date.now(),
     });
     expect(tracker.snapshot()).toMatchObject({ state: "running" });

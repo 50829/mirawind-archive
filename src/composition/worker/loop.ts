@@ -51,6 +51,7 @@ export async function runWorkerLoop(input: {
   readonly drafts: DraftRepository;
   readonly imports: ImportRepository;
   readonly layout: StorageLayout;
+  readonly onIdle?: () => Promise<void>;
   readonly onAttemptObservation?: (observation: AttemptObservation) => void;
   readonly onCheckpoint?: (health: WorkerStorageHealth, nowMs: number) => void;
   readonly onQueueObservation?: (observation: QueueObservation) => void;
@@ -60,6 +61,7 @@ export async function runWorkerLoop(input: {
   readonly sources: SourceRepository;
   readonly workerId: string;
 }): Promise<void> {
+  let idleMaintenancePending = Boolean(input.onIdle);
   while (!input.shutdownSignal.aborted) {
     const loopNowMs = Date.now();
     await recoverWorkerAttempts({
@@ -77,6 +79,11 @@ export async function runWorkerLoop(input: {
       nowMs: loopNowMs,
     });
     if (!job) {
+      if (idleMaintenancePending && input.onIdle) {
+        idleMaintenancePending = false;
+        await input.onIdle();
+        continue;
+      }
       await delay(workerPollIntervalMs, input.shutdownSignal);
       continue;
     }

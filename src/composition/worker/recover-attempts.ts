@@ -5,7 +5,10 @@ import {
   retryJobAttempt,
 } from "./attempt-lifecycle";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
-import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import {
+  JobRepository,
+  type UserJobRecord,
+} from "@/modules/publishing/adapters/sqlite/jobs";
 import { recoverExpiredJobLeases } from "@/modules/publishing/application/recover-expired-jobs";
 import { operationalMetrics } from "@/observability/metrics";
 
@@ -34,7 +37,7 @@ export async function recoverWorkerAttempts(input: {
         job,
         jobs: input.repository,
         nowMs,
-      }),
+      }) as UserJobRecord,
     storageRoot: input.storageRoot,
   });
   for (const item of recovered) {

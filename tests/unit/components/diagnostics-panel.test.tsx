@@ -57,4 +57,20 @@ describe("workbench diagnostics", () => {
     expect(html).toContain("按原文重新处理");
     expect(html).toMatch(/disabled=""[^>]*>[^<]*(?:<[^>]+>)*按原文重新处理/u);
   });
+
+  it("bounds the initial diagnostic DOM and reveals the remaining count", () => {
+    const html = renderToStaticMarkup(
+      <DiagnosticsPanel
+        diagnostics={Array.from({ length: 25 }, (_value, index) => ({
+          code: `TEST_DIAGNOSTIC_${index}`,
+          message: `Diagnostic ${index}`,
+        }))}
+      />,
+    );
+
+    expect(html.match(/<li class=/gu)).toHaveLength(20);
+    expect(html).toContain("显示 20 / 25");
+    expect(html).toContain("再显示 5 条");
+    expect(html).not.toContain("TEST_DIAGNOSTIC_24");
+  });
 });

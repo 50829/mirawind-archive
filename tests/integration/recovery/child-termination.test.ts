@@ -37,9 +37,10 @@ function input(suffix: string): FrozenJobInput {
   const jobId = `job_0123456789abcdef${suffix}`;
   return {
     attempt: 1,
+    bookId: 1,
     createdAtMs: 1_000,
     jobId,
-    kind: "reconcile",
+    kind: "purge_book",
     stagingRelativePath: `staging/${jobId}`,
   };
 }

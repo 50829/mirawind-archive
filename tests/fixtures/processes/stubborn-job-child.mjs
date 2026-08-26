@@ -16,14 +16,14 @@ function event(name) {
 function progress() {
   process.send?.({
     jobId,
-    phase: "reconcile_storage",
+    phase: "permanent_book_deletion",
     progress: {
       completed: 0,
       processed_bytes: null,
       total: 1,
       unit: "steps",
     },
-    protocolVersion: 4,
+    protocolVersion: 5,
     type: "progress",
   });
 }

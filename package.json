@@ -27,7 +27,7 @@
     "build": "astro build && vite build --config vite.processes.config.ts && node scripts/copy-runtime-schemas.mjs",
     "commitlint": "commitlint",
     "db:migrate": "tsx src/entrypoints/cli/index.ts db migrate",
-    "dev": "NODE_ENV=development astro dev",
+    "dev": "NODE_ENV=development node scripts/dev.mjs",
     "dev:web": "NODE_ENV=development astro dev",
     "dev:worker": "NODE_ENV=development tsx src/entrypoints/worker/index.ts",
     "format": "prettier --check package.json pnpm-workspace.yaml tsconfig.json tsconfig.processes.json astro.config.mjs eslint.config.js commitlint.config.mjs vitest.config.ts playwright.config.ts CONTRIBUTING.md .github/workflows src tests scripts docs/operations docs/third-party",

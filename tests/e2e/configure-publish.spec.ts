@@ -65,7 +65,7 @@ test("edits structure boundaries and publishes the ready candidate", async ({
   await selectStructure("Details");
   await selectedEditor.getByLabel("显示层级").selectOption("2");
   await page.getByRole("button", { name: "保存并更新预览" }).click();
-  await expect(page.getByText("正在构建预览")).toBeVisible();
+  await expect(page.getByText("正在生成阅读预览")).toBeVisible();
   await expect(page.getByRole("button", { name: "发布当前修订" })).toBeEnabled({
     timeout: 30_000,
   });

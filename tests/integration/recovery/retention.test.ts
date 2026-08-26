@@ -41,7 +41,7 @@ describe("published version and orphan retention", () => {
         (versionId, index) => {
           const job = jobs.create({
             bookId: fixture.book.id,
-            kind: "verify_version",
+            kind: "build_candidate",
             nowMs: 400 + index,
           });
           jobs.fail(job.id, {

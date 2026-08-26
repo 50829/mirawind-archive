@@ -3,12 +3,7 @@ import {
   buildCandidateHandler,
   prepareDraftHandler,
 } from "./handlers/publishing";
-import {
-  purgeBookHandler,
-  reclaimVersionsHandler,
-  reconcileHandler,
-  verifyVersionHandler,
-} from "./handlers/maintenance";
+import { purgeBookHandler } from "./handlers/purge-book";
 import type { WorkerChildContext, WorkerChildOutcome } from "./job-handler";
 import {
   dispatchJobCommand,
@@ -25,9 +20,6 @@ export function executeWorkerChildCommand(
     build_candidate: (input) => buildCandidateHandler(input, context),
     prepare_draft: (input) => prepareDraftHandler(input, context),
     purge_book: (input) => purgeBookHandler(input, context),
-    reclaim_versions: (input) => reclaimVersionsHandler(input, context),
-    reconcile: (input) => reconcileHandler(input, context),
-    verify_version: (input) => verifyVersionHandler(input, context),
   } satisfies JobCommandRegistry<Promise<WorkerChildOutcome>>;
   return Promise.resolve(dispatchJobCommand(command, registry));
 }

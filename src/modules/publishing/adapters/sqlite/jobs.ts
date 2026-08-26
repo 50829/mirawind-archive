@@ -8,12 +8,14 @@ import {
   assertJobTransition,
   assertJobPhase,
   isJobProgress,
+  isUserJobKind,
   isTerminalJobState,
   type JobProgress,
   type JobKind,
   type QueueObservation,
   type JobState,
   type TerminalJobState,
+  type UserJobKind,
 } from "../../application/job-state";
 
 export type JobErrorClass =
@@ -80,6 +82,10 @@ export interface JobRecord {
   readonly versionId: string | null;
 }
 
+export type UserJobRecord = Omit<JobRecord, "kind"> & {
+  readonly kind: UserJobKind;
+};
+
 export interface CreateJobInput {
   readonly bookId?: number;
   readonly candidateId?: string;
@@ -91,7 +97,7 @@ export interface CreateJobInput {
     readonly operation: string;
   };
   readonly importId?: string;
-  readonly kind: JobKind;
+  readonly kind: UserJobKind;
   readonly nowMs?: number;
   readonly phase?: string;
   readonly versionId?: string;
@@ -147,6 +153,12 @@ function mapJob(row: JobRow): JobRecord {
   };
 }
 
+function mapUserJob(row: JobRow): UserJobRecord {
+  const job = mapJob(row);
+  if (!isUserJobKind(job.kind)) throw new Error("JOB_KIND_NOT_USER_INITIATED");
+  return job as UserJobRecord;
+}
+
 function boundedJson(value: object): string {
   const json = JSON.stringify(value);
   if (Buffer.byteLength(json, "utf8") > 65_536) {
@@ -193,7 +205,7 @@ function validateOperation(operation: string): void {
 export class JobRepository {
   constructor(private readonly database: Database.Database) {}
 
-  findByIdempotency(operation: string, key: string): JobRecord | null {
+  findByIdempotency(operation: string, key: string): UserJobRecord | null {
     validateOperation(operation);
     const row = this.database
       .prepare(
@@ -202,23 +214,15 @@ export class JobRepository {
          WHERE operation = ? AND key_sha256 = ?`,
       )
       .get(operation, idempotencyHash(key)) as JobRow | undefined;
-    return row ? mapJob(row) : null;
+    return row && isUserJobKind(row.kind) ? mapUserJob(row) : null;
   }
 
-  create(input: CreateJobInput): JobRecord {
+  create(input: CreateJobInput): UserJobRecord {
     if (
-      ["build_candidate", "purge_book", "verify_version"].includes(
-        input.kind,
-      ) &&
+      ["build_candidate", "purge_book"].includes(input.kind) &&
       input.bookId === undefined
     ) {
       throw new Error("JOB_BOOK_SCOPE_REQUIRED");
-    }
-    if (
-      ["reclaim_versions", "reconcile"].includes(input.kind) &&
-      input.bookId !== undefined
-    ) {
-      throw new Error("JOB_BOOK_SCOPE_FORBIDDEN");
     }
     const nowMs = input.nowMs ?? Date.now();
     const operation = input.idempotency?.operation;
@@ -237,7 +241,7 @@ export class JobRepository {
              WHERE operation = ? AND key_sha256 = ?`,
             )
             .get(operation, keySha256) as JobRow | undefined;
-          if (existing) return mapJob(existing);
+          if (existing) return mapUserJob(existing);
         }
 
         const id = createOpaqueId("job");
@@ -277,7 +281,10 @@ export class JobRepository {
             )
             .run(operation, keySha256, id, nowMs);
         }
-        return this.getRequired(id);
+        const created = this.database
+          .prepare("SELECT * FROM jobs WHERE id = ?")
+          .get(id) as JobRow;
+        return mapUserJob(created);
       })
       .immediate();
   }
@@ -325,7 +332,8 @@ export class JobRepository {
            COALESCE(SUM(CASE WHEN state = 'queued' THEN 1 ELSE 0 END), 0) AS queued_count,
            COALESCE(SUM(CASE WHEN state = 'running' THEN 1 ELSE 0 END), 0) AS running_count,
            MIN(CASE WHEN state = 'queued' THEN created_at END) AS oldest_queued_at
-         FROM jobs`,
+         FROM jobs
+         WHERE kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')`,
       )
       .get() as {
       oldest_queued_at: number | null;
@@ -355,12 +363,17 @@ export class JobRepository {
   claimNext(input: {
     readonly leaseOwner: string;
     readonly nowMs: number;
-  }): JobRecord | null {
+  }): UserJobRecord | null {
     return this.database
       .transaction(() => {
         if (
           this.database
-            .prepare("SELECT 1 FROM jobs WHERE state = 'running' LIMIT 1")
+            .prepare(
+              `SELECT 1 FROM jobs
+               WHERE state = 'running'
+                 AND kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')
+               LIMIT 1`,
+            )
             .get()
         ) {
           return null;
@@ -368,8 +381,10 @@ export class JobRepository {
         const candidate = this.database
           .prepare(
             `SELECT id FROM jobs
-           WHERE state = 'queued'
-           ORDER BY created_at, id LIMIT 1`,
+             WHERE state = 'queued'
+               AND kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')
+             ORDER BY created_at, id
+             LIMIT 1`,
           )
           .get() as { id: string } | undefined;
         if (!candidate) return null;
@@ -387,9 +402,30 @@ export class JobRepository {
             input.nowMs,
             candidate.id,
           );
-        return result.changes === 1 ? this.getRequired(candidate.id) : null;
+        if (result.changes !== 1) return null;
+        const row = this.database
+          .prepare("SELECT * FROM jobs WHERE id = ?")
+          .get(candidate.id) as JobRow;
+        return mapUserJob(row);
       })
       .immediate();
+  }
+
+  retireMaintenanceJobs(nowMs: number): number {
+    if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
+      throw new RangeError("JOB_RETIREMENT_TIME_INVALID");
+    }
+    return this.database
+      .prepare(
+        `UPDATE jobs
+         SET state = 'canceled', phase = 'canceled',
+             error_class = 'canceled', error_code = 'MAINTENANCE_MOVED_INTERNAL',
+             cancellation_requested_at = ?, finished_at = ?,
+             lease_owner = NULL, lease_until = NULL
+         WHERE kind IN ('verify_version', 'reconcile', 'reclaim_versions')
+           AND state IN ('queued', 'running')`,
+      )
+      .run(nowMs, nowMs).changes;
   }
 
   heartbeat(input: {
@@ -572,27 +608,32 @@ export class JobRepository {
 
   interruptExpired(input: {
     readonly nowMs: number;
-    readonly onInterrupted?: (job: JobRecord) => void;
-  }): readonly JobRecord[] {
+    readonly onInterrupted?: (job: UserJobRecord) => void;
+  }): readonly UserJobRecord[] {
     return this.database
       .transaction(() => {
         const rows = this.database
           .prepare(
             `SELECT id FROM jobs
-           WHERE state = 'running' AND lease_until < ?
-           ORDER BY id`,
+             WHERE state = 'running' AND lease_until < ?
+               AND kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')
+             ORDER BY id`,
           )
           .all(input.nowMs) as { id: string }[];
         const update = this.database.prepare(
           `UPDATE jobs SET state = 'interrupted', phase = 'interrupted',
-         error_class = 'infrastructure', error_code = 'JOB_LEASE_EXPIRED',
-         finished_at = ?, lease_owner = NULL, lease_until = NULL
-         WHERE id = ? AND state = 'running' AND lease_until < ?`,
+           error_class = 'infrastructure', error_code = 'JOB_LEASE_EXPIRED',
+           finished_at = ?, lease_owner = NULL, lease_until = NULL
+           WHERE id = ? AND state = 'running' AND lease_until < ?
+             AND kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')`,
         );
-        const interrupted: JobRecord[] = [];
+        const interrupted: UserJobRecord[] = [];
         for (const row of rows) {
           if (update.run(input.nowMs, row.id, input.nowMs).changes === 1) {
-            const job = this.getRequired(row.id);
+            const stored = this.database
+              .prepare("SELECT * FROM jobs WHERE id = ?")
+              .get(row.id) as JobRow;
+            const job = mapUserJob(stored);
             input.onInterrupted?.(job);
             interrupted.push(job);
           }
@@ -602,11 +643,12 @@ export class JobRepository {
       .immediate();
   }
 
-  listPendingAutomaticRetries(): readonly JobRecord[] {
+  listPendingAutomaticRetries(): readonly UserJobRecord[] {
     const rows = this.database
       .prepare(
         `SELECT jobs.* FROM jobs
          WHERE jobs.state = 'interrupted'
+           AND jobs.kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')
            AND jobs.error_class = 'infrastructure'
            AND jobs.error_code IN ('JOB_LEASE_EXPIRED', 'WORKER_SHUTDOWN')
            AND jobs.automatic_retry_count = 0
@@ -618,7 +660,7 @@ export class JobRepository {
          ORDER BY jobs.finished_at, jobs.id`,
       )
       .all() as JobRow[];
-    return Object.freeze(rows.map(mapJob));
+    return Object.freeze(rows.map(mapUserJob));
   }
 
   fail(
@@ -669,13 +711,14 @@ export class JobRepository {
         readonly versionId: string;
       };
     },
-  ): JobRecord {
+  ): UserJobRecord {
     return this.database
       .transaction(() => {
         const original = this.getRequired(id);
         if (
           original.state === "succeeded" ||
-          !isTerminalJobState(original.state)
+          !isTerminalJobState(original.state) ||
+          !isUserJobKind(original.kind)
         ) {
           throw new Error("JOB_NOT_RETRYABLE");
         }
@@ -701,7 +744,7 @@ export class JobRepository {
              WHERE operation = ? AND key_sha256 = ?`,
             )
             .get(operation, keySha256) as JobRow | undefined;
-          if (existing) return mapJob(existing);
+          if (existing) return mapUserJob(existing);
         }
 
         const retryId = createOpaqueId("job");
@@ -753,12 +796,15 @@ export class JobRepository {
             )
             .run(operation, keySha256, retryId, input.nowMs);
         }
-        return this.getRequired(retryId);
+        const retry = this.database
+          .prepare("SELECT * FROM jobs WHERE id = ?")
+          .get(retryId) as JobRow;
+        return mapUserJob(retry);
       })
       .immediate();
   }
 
-  attachCandidate(id: string, candidateId: string): JobRecord {
+  attachCandidate(id: string, candidateId: string): UserJobRecord {
     const result = this.database
       .prepare(
         `UPDATE jobs SET candidate_id = ?
@@ -769,6 +815,9 @@ export class JobRepository {
     if (result.changes !== 1) {
       throw new Error("CANDIDATE_JOB_ATTACHMENT_INVALID");
     }
-    return this.getRequired(id);
+    const row = this.database
+      .prepare("SELECT * FROM jobs WHERE id = ?")
+      .get(id) as JobRow;
+    return mapUserJob(row);
   }
 }

@@ -3,19 +3,16 @@ import { rm } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 
-import { reconcileStorage } from "../storage-reconciliation";
 import { recoverWorkerAttempts } from "./recover-attempts";
 import { WorkerHealthReporter } from "./health-reporter";
 import { runWorkerLoop } from "./loop";
+import { runWorkerMaintenance } from "./maintenance";
 import { parseEnvironment } from "@/config/environment";
-import { CurrentVersionCatalogRepository } from "@/modules/catalog/adapters/sqlite/current-version-recovery";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
-import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
-import { scheduleStartupPublishingMaintenance } from "@/modules/publishing/application/publishing-api";
 import { WorkerCheckpointScheduler } from "@/entrypoints/worker/checkpoint";
 import { operationalMetrics } from "@/observability/metrics";
 import { createStorageLayout } from "@/platform/filesystem/storage-layout";
@@ -46,60 +43,13 @@ export async function runWorkerMain(): Promise<void> {
     const workerId = `worker:${hostname()}:${process.pid}:${bootId}`;
     const repository = new JobRepository(database);
     const candidates = new DraftCandidateRepository(database);
+    repository.retireMaintenanceJobs(Date.now());
     await recoverWorkerAttempts({
       candidates,
       database,
       nowMs: Date.now(),
       repository,
       storageRoot: layout.root,
-    });
-    const reconciliation = await reconcileStorage({
-      database,
-      layout,
-      nowMs: Date.now(),
-    });
-    if (
-      reconciliation.corruptDatabaseVersions.length > 0 ||
-      reconciliation.quarantinedDirectories.length > 0 ||
-      reconciliation.recoveredCurrentVersions.length > 0 ||
-      reconciliation.removedOrphanPaths.length > 0 ||
-      reconciliation.removedStagingDirectories.length > 0
-    ) {
-      operationalMetrics.recordTransition("recovery.startup_changed");
-    }
-    const versions = new VersionRepository(database);
-    const currentVersions = new CurrentVersionCatalogRepository(
-      database,
-    ).listCurrentVersions();
-    scheduleStartupPublishingMaintenance({
-      bootId,
-      currentVersions,
-      jobs: {
-        queueReclamation: ({ idempotencyKey, nowMs }) =>
-          repository.create({
-            idempotency: {
-              key: idempotencyKey,
-              operation: "storage.reclaim",
-            },
-            kind: "reclaim_versions",
-            nowMs,
-          }),
-        queueVersionVerification: (version) =>
-          repository.create({
-            bookId: version.bookId,
-            capturedConfigRevision: version.configRevision,
-            capturedSourceId: version.sourceId,
-            idempotency: {
-              key: version.idempotencyKey,
-              operation: "version.verify",
-            },
-            kind: "verify_version",
-            nowMs: version.nowMs,
-            versionId: version.versionId,
-          }),
-      },
-      nowMs: Date.now(),
-      requireVersion: (versionId) => versions.require(versionId),
     });
     const scheduler = new WorkerCheckpointScheduler({
       database,
@@ -124,6 +74,7 @@ export async function runWorkerMain(): Promise<void> {
       drafts: new DraftRepository(database),
       imports: new ImportRepository(database),
       layout,
+      onIdle: () => runWorkerMaintenance({ database, layout }),
       onAttemptObservation: (observation) =>
         healthReporter.recordAttempt(observation),
       onCheckpoint: (health, nowMs) =>

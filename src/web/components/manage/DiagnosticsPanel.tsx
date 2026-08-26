@@ -1,4 +1,4 @@
-import { FilePenLine, LocateFixed, RotateCcw } from "lucide-react";
+import { ChevronDown, FilePenLine, LocateFixed, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { DiagnosticTarget } from "@/domain/errors";
@@ -9,6 +9,8 @@ import {
   manageQuietText,
 } from "../ui/manage-classes";
 import type { PreviewDiagnostic } from "../../contracts/publishing";
+
+const diagnosticPageSize = 20;
 
 function targetPage(diagnostic: PreviewDiagnostic): number | null {
   const target = diagnostic.targets?.find(
@@ -36,6 +38,7 @@ export function DiagnosticsPanel(props: {
     "all" | "error" | "info" | "warning"
   >("all");
   const [pageId, setPageId] = useState<"all" | number>("all");
+  const [visibleCount, setVisibleCount] = useState(diagnosticPageSize);
   const pageIds = useMemo(
     () =>
       [
@@ -54,6 +57,8 @@ export function DiagnosticsPanel(props: {
     if (pageId === "all") return true;
     return targetPage(diagnostic) === pageId;
   });
+  const visible = filtered.slice(0, visibleCount);
+  const hiddenCount = filtered.length - visible.length;
   return (
     <section
       className="diagnostics-panel mt-6"
@@ -71,9 +76,10 @@ export function DiagnosticsPanel(props: {
               严重度
               <select
                 className={manageField}
-                onChange={(event) =>
-                  setSeverity(event.currentTarget.value as typeof severity)
-                }
+                onChange={(event) => {
+                  setSeverity(event.currentTarget.value as typeof severity);
+                  setVisibleCount(diagnosticPageSize);
+                }}
                 value={severity}
               >
                 <option value="all">全部</option>
@@ -86,13 +92,14 @@ export function DiagnosticsPanel(props: {
               页面
               <select
                 className={manageField}
-                onChange={(event) =>
+                onChange={(event) => {
                   setPageId(
                     event.currentTarget.value === "all"
                       ? "all"
                       : Number(event.currentTarget.value),
-                  )
-                }
+                  );
+                  setVisibleCount(diagnosticPageSize);
+                }}
                 value={pageId}
               >
                 <option value="all">全部</option>
@@ -104,8 +111,11 @@ export function DiagnosticsPanel(props: {
               </select>
             </label>
           </div>
+          <p className={`mt-3 ${manageQuietText}`}>
+            显示 {visible.length} / {filtered.length}
+          </p>
           <ul className="grid gap-3 p-0">
-            {filtered.map((diagnostic, index) => (
+            {visible.map((diagnostic, index) => (
               <li
                 className={`list-none border-l-4 p-3 text-sm ${
                   diagnostic.severity === "error"
@@ -172,6 +182,20 @@ export function DiagnosticsPanel(props: {
               </li>
             ))}
           </ul>
+          {hiddenCount > 0 && (
+            <div className="flex justify-center">
+              <button
+                className={manageQuietButton}
+                onClick={() =>
+                  setVisibleCount((current) => current + diagnosticPageSize)
+                }
+                type="button"
+              >
+                <ChevronDown aria-hidden="true" size={16} />
+                再显示 {Math.min(diagnosticPageSize, hiddenCount)} 条
+              </button>
+            </div>
+          )}
         </>
       )}
     </section>

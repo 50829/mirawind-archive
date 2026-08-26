@@ -1,12 +1,12 @@
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
-import type { JobRecord } from "@/modules/publishing/adapters/sqlite/jobs";
+import type { UserJobRecord } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import type { FrozenJobInput } from "@/entrypoints/worker/protocol";
 
 export function captureFrozenJobInput(
-  job: JobRecord,
+  job: UserJobRecord,
   candidates: DraftCandidateRepository,
   drafts: DraftRepository,
   imports: ImportRepository,
@@ -48,20 +48,9 @@ export function captureFrozenJobInput(
     jobId: job.id,
     stagingRelativePath: `staging/${job.id}`,
   });
-  if (job.kind === "reconcile" || job.kind === "reclaim_versions") {
-    return Object.freeze({ ...common, kind: job.kind });
-  }
   if (job.kind === "purge_book") {
     if (job.bookId === null) throw new Error("PURGE_BOOK_INPUT_INVALID");
     return Object.freeze({ ...common, bookId: job.bookId, kind: job.kind });
-  }
-  if (job.kind === "verify_version") {
-    if (!job.versionId) throw new Error("VERIFY_VERSION_INPUT_INVALID");
-    return Object.freeze({
-      ...common,
-      kind: job.kind,
-      versionId: job.versionId,
-    });
   }
   if (job.kind === "analyze_import") {
     if (!imported || !job.importId)

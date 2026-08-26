@@ -81,7 +81,7 @@ const workflowStages = [
   ["security_check", "安全检查"],
   ["identify_document", "识别正文"],
   ["organize_structure", "整理结构"],
-  ["build_candidate", "构建预览"],
+  ["build_candidate", "生成阅读预览"],
 ] as const;
 
 function workflowStage(

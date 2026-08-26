@@ -1,12 +1,19 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+import { createOpaqueId } from "@/domain/ids";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { openDatabase } from "@/platform/sqlite/connection";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 
-import { e2eDataRoot, e2eOrigin } from "../helpers/global-setup.js";
+import {
+  e2eDataRoot,
+  e2eFixtureRoot,
+  e2eOrigin,
+} from "../helpers/global-setup.js";
 import { loginAsAdministrator } from "../helpers/e2e-login.js";
 import { startWorkerProcess } from "../helpers/processes.js";
 
@@ -53,6 +60,33 @@ function pointerSnapshot(): readonly {
   }
 }
 
+async function createAnalyzeJob(input: {
+  readonly archive: Buffer;
+  readonly database: ReturnType<typeof openDatabase>;
+  readonly name: string;
+  readonly nowMs: number;
+}) {
+  const importId = createOpaqueId("import");
+  const uploadRelativePath = `tmp/uploads/${importId}/original.zip`;
+  const uploadDirectory = resolve(e2eDataRoot, "tmp", "uploads", importId);
+  await mkdir(uploadDirectory, { recursive: true });
+  await writeFile(resolve(uploadDirectory, "original.zip"), input.archive);
+  new ImportRepository(input.database).createUploaded({
+    expiresAtMs: input.nowMs + 86_400_000,
+    id: importId,
+    nowMs: input.nowMs,
+    originalName: input.name,
+    uploadRelativePath,
+    uploadSha256: createHash("sha256").update(input.archive).digest("hex"),
+    uploadSizeBytes: input.archive.byteLength,
+  });
+  return new JobRepository(input.database).create({
+    importId,
+    kind: "analyze_import",
+    nowMs: input.nowMs,
+  });
+}
+
 test("shows, cancels, retries and recovers durable work without changing publication", async ({
   page,
 }) => {
@@ -79,8 +113,13 @@ test("shows, cancels, retries and recovers durable work without changing publica
   });
   const jobs = new JobRepository(database);
   const nowMs = Date.now();
-  const expired = jobs.create({
-    kind: "reclaim_versions",
+  const archive = await readFile(
+    resolve(e2eFixtureRoot, "high-confidence.zip"),
+  );
+  const expired = await createAnalyzeJob({
+    archive,
+    database,
+    name: "recovery-expired.zip",
     nowMs: nowMs - 80_000,
   });
   jobs.claimNext({
@@ -90,17 +129,22 @@ test("shows, cancels, retries and recovers durable work without changing publica
   await mkdir(resolve(e2eDataRoot, "staging", expired.id), {
     recursive: true,
   });
-  const queued = jobs.create({ kind: "reconcile", nowMs });
+  const queued = await createAnalyzeJob({
+    archive,
+    database,
+    name: "recovery-manual.zip",
+    nowMs,
+  });
   database.close();
 
   await page.goto("/manage/tasks");
-  const queuedCard = page.locator(".task-card").filter({
-    hasText: queued.id,
+  const queuedCard = page.getByRole("listitem").filter({
+    hasText: "recovery-manual.zip",
   });
+  await expect(queuedCard).toBeVisible();
   await expect(
-    queuedCard.getByRole("heading", { name: "存储协调" }),
+    queuedCard.getByRole("heading", { exact: true, name: "分析导入" }),
   ).toBeVisible();
-  await expect(queuedCard.getByText("系统维护", { exact: true })).toBeVisible();
   await expect(queuedCard).toContainText("排队中");
   await queuedCard.getByRole("button", { name: "请求取消" }).click();
   await expect(queuedCard).toContainText("已取消");
@@ -173,11 +217,14 @@ test("shows, cancels, retries and recovers durable work without changing publica
     } finally {
       check.close();
     }
-    expect(pointerSnapshot()).toEqual(before);
+    expect(
+      pointerSnapshot().filter((book) =>
+        before.some((existing) => existing.id === book.id),
+      ),
+    ).toEqual(before);
     await page.reload();
-    await expect(page.locator(`[data-job-id="${expired.id}"]`)).toContainText(
-      "已中断",
-    );
+    const expiredCard = page.locator(`[data-job-id="${expired.id}"]`);
+    await expect(expiredCard).toContainText("已中断");
     type HealthBody = {
       worker: {
         queue: { queuedCount: number; runningCount: number };

@@ -706,7 +706,7 @@ test("edits a selected preview block and keeps the last preview while rebuilding
 
   expect(patchBody).toEqual({ markdown: "Updated paragraph" });
   expect(patchEtag).toBe('"block-one"');
-  await expect(page.getByText("正在构建预览")).toBeVisible();
+  await expect(page.getByText("正在生成阅读预览")).toBeVisible();
   await expect(preview.getByText("Original paragraph")).toBeVisible();
   await expect(preview.getByText("Updated paragraph")).toBeVisible({
     timeout: 3_000,

@@ -31,11 +31,11 @@ describe("two real worker connections sharing one SQLite queue", () => {
     const firstWorker = new JobRepository(firstDatabase);
     const secondWorker = new JobRepository(secondDatabase);
     const firstJob = firstWorker.create({
-      kind: "reconcile",
+      kind: "analyze_import",
       nowMs: 1_000,
     });
     const secondJob = firstWorker.create({
-      kind: "reclaim_versions",
+      kind: "prepare_draft",
       nowMs: 2_000,
     });
     expect(
@@ -48,7 +48,7 @@ describe("two real worker connections sharing one SQLite queue", () => {
         { kind: "system", label: "系统维护" },
       ),
     ).toMatchObject({
-      kind: "reclaim",
+      kind: "prepare_draft",
       progress: { completed: 1, total: 1 },
     });
 
@@ -77,7 +77,7 @@ describe("two real worker connections sharing one SQLite queue", () => {
         jobId: firstJob.id,
         leaseOwner: "worker-a",
         nowMs: 13_000,
-        phase: "reconcile_storage",
+        phase: "security_check",
         progress: {
           completed: 12,
           processed_bytes: null,
@@ -88,7 +88,7 @@ describe("two real worker connections sharing one SQLite queue", () => {
     ).toMatchObject({
       heartbeatAtMs: 13_000,
       leaseUntilMs: 73_000,
-      phase: "reconcile_storage",
+      phase: "security_check",
       progress: { completed: 12, total: 40, unit: "pages" },
     });
     expect(secondWorker.interruptExpired({ nowMs: 73_000 })).toEqual([]);

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, lstat, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 
@@ -270,31 +270,7 @@ async function seedPublishedLibraryBookInIsolatedRuntime(): Promise<void> {
   );
 }
 
-async function removeLockedE2eTree(path: string): Promise<void> {
-  const expectedParent = resolve(".cache");
-  if (dirname(path) !== expectedParent) {
-    throw new Error("Refusing to clean a non-E2E data root");
-  }
-  const metadata = await lstat(path).catch(() => null);
-  if (!metadata) return;
-  const unlock = async (directory: string): Promise<void> => {
-    await chmod(directory, 0o700);
-    const entries = await readdir(directory, { withFileTypes: true });
-    await Promise.all(
-      entries
-        .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink())
-        .map((entry) => unlock(resolve(directory, entry.name))),
-    );
-  };
-  if (metadata.isDirectory() && !metadata.isSymbolicLink()) {
-    await unlock(path);
-  }
-  await rm(path, { force: true, recursive: true });
-}
-
-export default async function globalSetup(): Promise<() => Promise<void>> {
-  await removeLockedE2eTree(e2eDataRoot);
-  await removeLockedE2eTree(e2eFixtureRoot);
+async function prepareE2eData(): Promise<void> {
   const layout = await createStorageLayout(e2eDataRoot);
   await mkdir(e2eFixtureRoot, { mode: 0o700, recursive: true });
   const database = openDatabase(
@@ -451,7 +427,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
       }),
     ),
   ]);
+}
 
+export default async function globalSetup(): Promise<() => Promise<void>> {
   const worker = await startWorkerProcess({
     dataRoot: e2eDataRoot,
     environment: {
@@ -473,4 +451,6 @@ if (process.env.MIRAWIND_E2E_SEED_ONLY === "1") {
   } finally {
     database.close();
   }
+} else if (process.env.MIRAWIND_E2E_PREPARE_ONLY === "1") {
+  await prepareE2eData();
 }

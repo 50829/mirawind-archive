@@ -46,9 +46,10 @@ describe("job child IPC protocol", () => {
     const message = {
       input: {
         attempt: 1,
+        bookId: 1,
         createdAtMs: 1,
         jobId,
-        kind: "reconcile",
+        kind: "purge_book",
         stagingRelativePath: `staging/${jobId}`,
       },
       protocolVersion: jobChildProtocolVersion,
@@ -80,9 +81,6 @@ describe("job child IPC protocol", () => {
       build_candidate: handler,
       prepare_draft: handler,
       purge_book: handler,
-      reclaim_versions: handler,
-      reconcile: handler,
-      verify_version: handler,
     } satisfies JobCommandRegistry<string>;
     const jobId = createOpaqueId("job");
 
@@ -90,15 +88,16 @@ describe("job child IPC protocol", () => {
       dispatchJobCommand(
         {
           attempt: 1,
+          bookId: 1,
           createdAtMs: 1,
           jobId,
-          kind: "reconcile",
+          kind: "purge_book",
           stagingRelativePath: `staging/${jobId}`,
         },
         registry,
       ),
-    ).toBe("reconcile");
-    expect(handled).toEqual(["reconcile"]);
+    ).toBe("purge_book");
+    expect(handled).toEqual(["purge_book"]);
   });
 
   it("binds analyze jobs to the matching durable import upload path", () => {

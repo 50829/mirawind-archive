@@ -7,7 +7,7 @@ import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import {
   JobRepository,
-  type JobRecord,
+  type UserJobRecord,
 } from "@/modules/publishing/adapters/sqlite/jobs";
 import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import {
@@ -57,7 +57,7 @@ export async function executeWorkerAttempt(input: {
   readonly candidates: DraftCandidateRepository;
   readonly childRunner?: typeof runJobChild;
   readonly database: Database.Database;
-  readonly job: JobRecord;
+  readonly job: UserJobRecord;
   readonly drafts: DraftRepository;
   readonly imports: ImportRepository;
   readonly leaseOwner: string;

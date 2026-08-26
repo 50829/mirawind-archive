@@ -1,14 +1,20 @@
-export const jobKinds = [
+export const userJobKinds = [
   "analyze_import",
   "prepare_draft",
   "build_candidate",
-  "verify_version",
-  "reconcile",
-  "reclaim_versions",
   "purge_book",
 ] as const;
 
+export const maintenanceJobKinds = [
+  "verify_version",
+  "reconcile",
+  "reclaim_versions",
+] as const;
+
+export const jobKinds = [...userJobKinds, ...maintenanceJobKinds] as const;
+
 export type JobKind = (typeof jobKinds)[number];
+export type UserJobKind = (typeof userJobKinds)[number];
 export type JobState =
   "queued" | "running" | "succeeded" | "failed" | "canceled" | "interrupted";
 export type TerminalJobState = Extract<
@@ -86,6 +92,10 @@ const knownJobPhases = new Set<string>(Object.values(jobPhases).flat());
 
 export function isKnownJobPhase(phase: string): phase is JobPhase {
   return knownJobPhases.has(phase);
+}
+
+export function isUserJobKind(kind: JobKind): kind is UserJobKind {
+  return userJobKinds.includes(kind as UserJobKind);
 }
 
 export function isJobPhase(kind: JobKind, phase: string): phase is JobPhase {

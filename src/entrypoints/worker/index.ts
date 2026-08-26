@@ -1,1 +1,3 @@
-import "@/composition/worker";
+import { runWorkerMain } from "@/composition/worker/bootstrap";
+
+await runWorkerMain();

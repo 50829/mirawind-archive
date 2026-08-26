@@ -18,7 +18,22 @@ describe("worker attempt terminal coordinator", () => {
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const jobs = new JobRepository(database);
       const candidates = new DraftCandidateRepository(database);
-      const job = jobs.create({ kind: "reconcile", nowMs: 1_000 });
+      const imports = new ImportRepository(database);
+      const imported = imports.createUploaded({
+        expiresAtMs: 100_000,
+        id: "imp_worker_attempt_000001",
+        nowMs: 900,
+        originalName: "worker-attempt.zip",
+        uploadRelativePath:
+          "tmp/uploads/imp_worker_attempt_000001/original.zip",
+        uploadSha256: "a".repeat(64),
+        uploadSizeBytes: 1,
+      });
+      const job = jobs.create({
+        importId: imported.id,
+        kind: "analyze_import",
+        nowMs: 1_000,
+      });
       const claimed = jobs.claimNext({
         leaseOwner: "worker-a",
         nowMs: 2_000,
@@ -37,16 +52,17 @@ describe("worker attempt terminal coordinator", () => {
           },
           result: {
             jobId: command.jobId,
-            ok: true,
-            protocolVersion: 4,
-            result: {},
+            ok: false,
+            protocolVersion: 5,
+            safeErrorClass: "content",
+            safeErrorCode: "TEST_CHILD_FAILURE",
             type: "result",
           },
           signal: null,
         }),
         database,
         drafts: new DraftRepository(database),
-        imports: new ImportRepository(database),
+        imports,
         job: claimed,
         layout: dataRoot.layout,
         leaseOwner: "worker-a",
@@ -55,7 +71,7 @@ describe("worker attempt terminal coordinator", () => {
         sources: new SourceRepository(database),
       });
       expect(outcome).toMatchObject({
-        execution: { result: { ok: true } },
+        execution: { result: { ok: false } },
         kind: "child_closed",
       });
       expect(jobs.get(job.id)?.state).toBe("running");
@@ -63,14 +79,14 @@ describe("worker attempt terminal coordinator", () => {
       await completeWorkerAttempt({
         candidates,
         database,
-        imports: new ImportRepository(database),
+        imports,
         job: claimed,
         layout: dataRoot.layout,
         leaseOwner: "worker-a",
         outcome,
         repository: jobs,
       });
-      expect(jobs.get(job.id)?.state).toBe("succeeded");
+      expect(jobs.get(job.id)?.state).toBe("failed");
     }));
 
   it.each([
@@ -83,7 +99,7 @@ describe("worker attempt terminal coordinator", () => {
       withMigratedTestDatabase(async ({ database }) => {
         const jobs = new JobRepository(database);
         const candidates = new DraftCandidateRepository(database);
-        const job = jobs.create({ kind: "reconcile", nowMs: 1_000 });
+        const job = jobs.create({ kind: "analyze_import", nowMs: 1_000 });
         jobs.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
         expect(
           completeJobFailure({
@@ -116,7 +132,7 @@ describe("worker attempt terminal coordinator", () => {
     withMigratedTestDatabase(async ({ database }) => {
       const jobs = new JobRepository(database);
       const candidates = new DraftCandidateRepository(database);
-      const job = jobs.create({ kind: "reconcile", nowMs: 1_000 });
+      const job = jobs.create({ kind: "analyze_import", nowMs: 1_000 });
       jobs.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
       expect(
         completeJobInterruption({
@@ -145,7 +161,7 @@ describe("worker attempt terminal coordinator", () => {
   it("records generic success exactly once", () =>
     withMigratedTestDatabase(async ({ database }) => {
       const jobs = new JobRepository(database);
-      const job = jobs.create({ kind: "reconcile", nowMs: 1_000 });
+      const job = jobs.create({ kind: "analyze_import", nowMs: 1_000 });
       jobs.claimNext({ leaseOwner: "worker-a", nowMs: 2_000 });
       expect(
         jobs.completeSuccess({
