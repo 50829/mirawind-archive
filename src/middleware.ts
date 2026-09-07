@@ -1,6 +1,8 @@
 import { defineMiddleware } from "astro:middleware";
 
 import { resolveRequestSession } from "@/composition/auth";
+import { getRuntimeEnvironment } from "@/composition/storage";
+import { localDevelopmentSessionId } from "@/modules/identity/application/identity-api";
 import {
   createSafeHtmlError,
   createSafeJsonError,
@@ -22,6 +24,23 @@ export const onRequest = defineMiddleware(async ({ locals, request }, next) => {
   let response: Response;
   try {
     locals.session = await resolveRequestSession(request);
+    if (
+      locals.session?.sessionId === localDevelopmentSessionId &&
+      ["GET", "HEAD"].includes(request.method) &&
+      !requestPath.startsWith("/api/") &&
+      request.headers.get("accept")?.includes("text/html")
+    ) {
+      const requested = new URL(request.url);
+      const origin = getRuntimeEnvironment().publicOrigin;
+      if (requested.origin !== origin) {
+        const headers = new Headers({
+          Location: `${origin}${requested.pathname}${requested.search}`,
+          "X-Request-ID": requestContext.id,
+        });
+        applyResponsePolicy(headers, "manage");
+        return new Response(null, { status: 303, headers });
+      }
+    }
     response = await next();
   } catch (cause) {
     const safe = safeErrorInputFromUnknown({

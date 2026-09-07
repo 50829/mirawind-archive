@@ -142,14 +142,17 @@ test("shows, cancels, retries and recovers durable work without changing publica
     hasText: "recovery-manual.zip",
   });
   await expect(queuedCard).toBeVisible();
-  await expect(
-    queuedCard.getByRole("heading", { exact: true, name: "分析导入" }),
-  ).toBeVisible();
-  await expect(queuedCard).toContainText("排队中");
-  await queuedCard.getByRole("button", { name: "请求取消" }).click();
-  await expect(queuedCard).toContainText("已取消");
-  await queuedCard.getByRole("button", { name: "显式重试" }).click();
-  await expect(page.getByText("新的重试尝试已进入队列")).toBeVisible();
+  await expect(queuedCard.locator("[data-state]")).toHaveAttribute(
+    "data-state",
+    "queued",
+  );
+  await queuedCard.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(queuedCard.locator("[data-state]")).toHaveAttribute(
+    "data-state",
+    "canceled",
+  );
+  await queuedCard.getByRole("button", { name: "重试", exact: true }).click();
+  await expect(page.locator('[data-state="queued"]')).toHaveCount(1);
 
   const replacementWorker = await startWorkerProcess({
     dataRoot: e2eDataRoot,
@@ -224,7 +227,10 @@ test("shows, cancels, retries and recovers durable work without changing publica
     ).toEqual(before);
     await page.reload();
     const expiredCard = page.locator(`[data-job-id="${expired.id}"]`);
-    await expect(expiredCard).toContainText("已中断");
+    await expect(expiredCard.locator("[data-state]")).toHaveAttribute(
+      "data-state",
+      "interrupted",
+    );
     type HealthBody = {
       worker: {
         queue: { queuedCount: number; runningCount: number };

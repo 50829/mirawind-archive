@@ -10,10 +10,8 @@ export function LibraryScene({
     <section aria-labelledby="library-heading" className="library-scene">
       <header className="library-heading">
         <div>
-          <p className="eyebrow">MIRAWIND LIBRARY</p>
           <h1 id="library-heading">书库</h1>
         </div>
-        <p>从一本书开始，沿着章节、搜索与引用继续阅读。</p>
       </header>
       {library.hasUnavailableBooks ? (
         <p className="library-notice" role="status">
@@ -22,8 +20,7 @@ export function LibraryScene({
       ) : null}
       {library.entries.length === 0 ? (
         <div className="library-empty">
-          <h2>书库还是空的</h2>
-          <p>第一本公开图书发布后，会在这里出现。</p>
+          <h2>暂无公开图书</h2>
         </div>
       ) : (
         <div className="library-grid">

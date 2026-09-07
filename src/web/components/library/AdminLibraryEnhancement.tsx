@@ -120,7 +120,9 @@ export function AdminLibraryEnhancement() {
         setDeletionError(
           body.code === "DELETION_CONFIRMATION_STALE"
             ? "图书已发生变化，请关闭窗口并刷新后重试。"
-            : `永久删除未被接受：${body.code ?? response.status}`,
+            : body.code === "INVALID_ORIGIN"
+              ? "页面地址已变化，请刷新后重试。"
+              : "删除失败，请稍后重试。",
         );
         return;
       }
@@ -142,14 +144,13 @@ export function AdminLibraryEnhancement() {
     <aside aria-labelledby="admin-library-heading" className="admin-library">
       <header>
         <div>
-          <p className="eyebrow">ADMIN</p>
           <h2 id="admin-library-heading">管理中的图书</h2>
         </div>
         <a href="/manage">导入新书</a>
       </header>
       {acceptedTask && (
         <p role="status">
-          永久删除已接受，图书已隐藏。<a href={acceptedTask}>查看清理任务</a>
+          已删除。<a href={acceptedTask}>查看任务</a>
         </p>
       )}
       {entries.length === 0 ? (
@@ -239,7 +240,7 @@ export function BookDeletionDialog(props: {
   return (
     <dialog
       aria-labelledby="delete-book-title"
-      className="fixed inset-0 z-50 m-auto max-w-lg rounded-xl border border-stone-300 bg-white p-6 text-stone-900 shadow-xl backdrop:bg-stone-950/60"
+      className="fixed inset-0 z-50 m-auto w-[min(32rem,calc(100%-2rem))] rounded-lg border border-stone-300 bg-white p-6 text-stone-900 shadow-xl backdrop:bg-stone-950/60"
       onCancel={(event) => {
         event.preventDefault();
         props.onCancel();
@@ -249,9 +250,6 @@ export function BookDeletionDialog(props: {
       <h3 className="text-xl font-bold" id="delete-book-title">
         永久删除《{props.book.title}》
       </h3>
-      <p className="mt-3">
-        此操作立即生效、不可撤销，没有回收站，也无法恢复。相关后台任务会被取消，文件由清理任务删除。
-      </p>
       <label
         className="mt-5 block font-medium"
         htmlFor="delete-book-confirmation"
@@ -259,7 +257,6 @@ export function BookDeletionDialog(props: {
         输入完整书名以确认
       </label>
       <input
-        aria-describedby="delete-book-warning"
         className="mt-2 w-full rounded-md border border-stone-400 bg-white px-3 py-2 text-stone-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-800"
         id="delete-book-confirmation"
         onChange={(event) => props.onChange(event.currentTarget.value)}
@@ -267,9 +264,6 @@ export function BookDeletionDialog(props: {
         type="text"
         value={props.confirmationTitle}
       />
-      <p className="mt-2 text-sm text-red-800" id="delete-book-warning">
-        必须与当前显示的书名完全一致。
-      </p>
       {props.error && (
         <p className="mt-3 text-red-800" role="alert">
           {props.error}
@@ -290,7 +284,7 @@ export function BookDeletionDialog(props: {
           onClick={props.onConfirm}
           type="button"
         >
-          {props.busy ? "正在提交…" : "永久删除，无法恢复"}
+          {props.busy ? "正在删除…" : "永久删除"}
         </button>
       </div>
     </dialog>

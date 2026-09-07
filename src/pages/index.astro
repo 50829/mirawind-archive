@@ -13,9 +13,7 @@ const title = "Mirawind Library";
   </head>
   <body>
     <main>
-      <p class="eyebrow">MIRAWIND</p>
       <h1>{title}</h1>
-      <p>把复杂文档整理成一座安静、可检索、可持续阅读的书库。</p>
       <a class="library-link" href="/library">查看书库</a>
     </main>
   </body>
@@ -47,22 +45,11 @@ const title = "Mirawind Library";
     width: min(42rem, calc(100vw - 3rem));
   }
 
-  .eyebrow {
-    color: var(--color-amber-500);
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.2em;
-  }
-
   h1 {
     margin: 0.35rem 0 0.75rem;
     font-family: Georgia, "Times New Roman", serif;
     font-size: clamp(2.5rem, 8vw, 5rem);
     line-height: 0.95;
-  }
-
-  p:last-child {
-    color: var(--color-stone-400);
   }
 
   .library-link {

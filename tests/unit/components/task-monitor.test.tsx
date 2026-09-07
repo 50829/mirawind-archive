@@ -1,10 +1,13 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   TaskMonitor,
   type TaskView,
 } from "@/web/components/import/TaskMonitor";
+
+afterEach(cleanup);
 
 function task(
   index: number,
@@ -47,18 +50,18 @@ describe("task monitor history", () => {
         task(18 - index, "succeeded", "build_candidate"),
       ),
     ];
-    const html = renderToStaticMarkup(<TaskMonitor initialJobs={jobs} />);
-
-    expect(html).toContain(">活动任务<");
-    expect(html).toContain(">需要处理<");
-    expect(html).toContain(">最近完成<");
-    expect(html).toContain("显式重试");
-    expect(html.match(/class="task-card /gu)).toHaveLength(10);
-    expect(html).toContain("显示其余 4 个已完成任务");
+    const view = render(<TaskMonitor initialJobs={jobs} />);
+    const rows = () => view.container.querySelectorAll("[data-job-id]");
+    expect(rows()).toHaveLength(10);
+    expect(
+      Array.from(rows(), (row) => row.getAttribute("data-job-id")),
+    ).toEqual(jobs.slice(0, 10).map((job) => job.job_id));
+    fireEvent.click(view.getByRole("button", { name: /显示其余/ }));
+    expect(rows()).toHaveLength(jobs.length);
   });
 
   it("keeps all internal maintenance out of the user task list", () => {
-    const html = renderToStaticMarkup(
+    const view = render(
       <TaskMonitor
         initialJobs={[
           task(3, "succeeded", "verify_version"),
@@ -68,10 +71,7 @@ describe("task monitor history", () => {
       />,
     );
 
-    expect(html).not.toContain("检查已发布内容");
-    expect(html).not.toContain("清理过期文件");
-    expect(html).not.toContain("检查存储状态");
-    expect(html).not.toContain("显式重试");
-    expect(html).toContain("暂时没有后台任务");
+    expect(view.queryAllByRole("listitem")).toHaveLength(0);
+    expect(view.queryAllByRole("button")).toHaveLength(0);
   });
 });

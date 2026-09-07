@@ -1,6 +1,20 @@
 import { isOpaqueId } from "./ids";
 
+const safeApplicationErrorBrand = Symbol.for("mirawind.SafeApplicationError");
+
 export class SafeApplicationError extends Error {
+  readonly [safeApplicationErrorBrand] = true;
+
+  // Vite can reload this class while existing request handlers still reference it.
+  static override [Symbol.hasInstance](value: unknown): boolean {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      Object.getOwnPropertyDescriptor(value, safeApplicationErrorBrand)
+        ?.value === true
+    );
+  }
+
   constructor(
     readonly code: string,
     message: string,

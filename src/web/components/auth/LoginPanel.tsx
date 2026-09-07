@@ -51,10 +51,7 @@ export function LoginPanel({ nextPath }: LoginPanelProps) {
 
   return (
     <section className="login-panel" aria-labelledby="login-title">
-      <p className="eyebrow">管理员入口</p>
       <h1 id="login-title">登录 Mirawind</h1>
-      <p className="lede">优先使用已登记的 Passkey。</p>
-      <p className="session-note">登录后在此设备保持登录 90 天。</p>
       <button
         className="primary"
         disabled={busy}
@@ -96,9 +93,6 @@ export function LoginPanel({ nextPath }: LoginPanelProps) {
           {message}
         </p>
       )}
-      <p className="recovery">
-        本站不提供注册或网页找回；完全恢复只能在服务器终端执行。
-      </p>
     </section>
   );
 }

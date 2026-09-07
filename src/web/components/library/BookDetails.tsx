@@ -35,7 +35,6 @@ export function BookDetails({
           </div>
           <header>
             <div>
-              <p className="eyebrow">BOOK DETAILS</p>
               <h1 id="book-details-title">{details.title}</h1>
               {details.subtitle ? (
                 <p className="book-details-subtitle">{details.subtitle}</p>
@@ -121,11 +120,11 @@ export function BookDetails({
               ))}
             </ol>
           ) : (
-            <p>这本书没有单独的目录项，可以直接开始阅读。</p>
+            <p>暂无目录</p>
           )}
           {tocIsTruncated ? (
             <a className="details-full-toc" href={details.startUrl}>
-              在阅读器中查看完整目录
+              完整目录
             </a>
           ) : null}
         </section>

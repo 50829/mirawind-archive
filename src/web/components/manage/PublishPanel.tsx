@@ -1,7 +1,7 @@
 import { Upload } from "lucide-react";
 import { useState } from "react";
 
-import { managePrimaryButton, manageQuietText } from "../ui/manage-classes";
+import { managePrimaryButton } from "../ui/manage-classes";
 
 export function PublishPanel(props: {
   readonly blocked?: boolean;
@@ -94,15 +94,8 @@ export function PublishPanel(props: {
           开始阅读
         </a>
       )}
-      {!props.previewReady && (
-        <p className={`quiet max-w-72 ${manageQuietText}`}>
-          预览完成并通过校验后才能发布。
-        </p>
-      )}
       {props.previewStale && (
-        <p className="stale max-w-72 text-sm text-amber-800">
-          当前预览已过期，请等待最新修订重建完成。
-        </p>
+        <p className="stale max-w-72 text-sm text-amber-800">预览已过期</p>
       )}
       {message && (
         <p className="max-w-72 text-sm text-red-800" role="alert">

@@ -237,7 +237,7 @@ export function ImportUploader() {
       setMessage(
         error instanceof Error && error.message === "UPLOAD_ABORTED"
           ? "上传已取消。"
-          : "网络中断，重新提交会安全续用本次请求标识。",
+          : "网络中断，请重试。",
       );
     } finally {
       uploadRequest.current = null;
@@ -296,24 +296,13 @@ export function ImportUploader() {
     : null;
 
   return (
-    <div className="import-workspace grid gap-6 min-[761px]:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+    <div
+      className={`import-workspace grid gap-6 ${importView ? "min-[761px]:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]" : "max-w-2xl"}`}
+    >
       <form className={`upload-card ${managePanel}`} onSubmit={upload}>
-        <p className="eyebrow text-sm font-semibold text-emerald-800">
-          MinerU 导入
-        </p>
         <h1 className="mt-2 text-2xl font-bold text-stone-900">准备一本书</h1>
-        <p className="mt-3 text-stone-700">
-          一包一本书 · MinerU 3.4.4 · ZIP 最大 2 GiB · 后台最长 30 分钟
-        </p>
-        <details className="mt-4 border-y border-stone-200 py-3">
-          <summary className="cursor-pointer font-medium">安全限制</summary>
-          <p className="mt-2 text-sm text-stone-600">
-            解压后最多 8 GiB、20,000
-            个文件或目录条目。符号链接、特殊文件、越界路径和不完整压缩包会被拒绝。
-          </p>
-        </details>
         <div className={manageFieldLabel}>
-          <span>MinerU ZIP</span>
+          <span>MinerU ZIP（最大 2 GiB）</span>
           <div className="flex min-h-11 items-center gap-3 rounded-md border border-stone-400 bg-white p-1.5">
             <label
               className={`${manageSecondaryButton} shrink-0 cursor-pointer`}
@@ -406,46 +395,42 @@ export function ImportUploader() {
         )}
       </form>
 
-      <section className={`status-card ${managePanel}`} aria-live="polite">
-        <h2 className="text-lg font-bold text-stone-900">处理进度</h2>
-        <ol className="import-stages mt-4 grid list-none grid-cols-1 gap-2 p-0 min-[761px]:grid-cols-5">
-          {workflowStages.map(([key, label]) => (
-            <li
-              aria-current={currentStage === key ? "step" : undefined}
-              className={`border-t-4 pt-2 text-sm ${
-                currentStage === key
-                  ? "border-emerald-700 font-semibold text-stone-900"
-                  : "border-stone-300 text-stone-600"
-              }`}
-              data-active={currentStage === key}
-              key={key}
-            >
-              {label}
-            </li>
-          ))}
-        </ol>
-        {!importView ? (
-          <p className="mt-4 text-stone-600">
-            选择 ZIP 后，处理进度会显示在这里。
-          </p>
-        ) : (
-          <>
-            <div className="mt-4 flex min-w-0 items-center gap-2">
-              <FileArchive
-                aria-hidden="true"
-                className="shrink-0 text-emerald-800"
-                size={20}
-              />
-              <strong className="truncate text-stone-900">
-                {importView.source_name}
-              </strong>
-            </div>
-            {importView.error_code && (
-              <p className="diagnostic mt-4 text-red-800">
-                {importView.error_code}
-              </p>
-            )}
-            {importView.current_job && (
+      {importView && (
+        <section className={`status-card ${managePanel}`} aria-live="polite">
+          <h2 className="text-lg font-bold text-stone-900">处理进度</h2>
+          <ol className="import-stages mt-4 grid list-none grid-cols-1 gap-2 p-0 min-[761px]:grid-cols-5">
+            {workflowStages.map(([key, label]) => (
+              <li
+                aria-current={currentStage === key ? "step" : undefined}
+                className={`border-t-4 pt-2 text-sm ${
+                  currentStage === key
+                    ? "border-emerald-700 font-semibold text-stone-900"
+                    : "border-stone-300 text-stone-600"
+                }`}
+                data-active={currentStage === key}
+                key={key}
+              >
+                {label}
+              </li>
+            ))}
+          </ol>
+          <div className="mt-4 flex min-w-0 items-center gap-2">
+            <FileArchive
+              aria-hidden="true"
+              className="shrink-0 text-emerald-800"
+              size={20}
+            />
+            <strong className="truncate text-stone-900">
+              {importView.source_name}
+            </strong>
+          </div>
+          {importView.error_code && (
+            <p className="diagnostic mt-4 text-red-800">
+              {importView.error_code}
+            </p>
+          )}
+          {importView.current_job &&
+            importView.current_job.state !== "succeeded" && (
               <div className="job-progress mt-4">
                 <div
                   aria-label={
@@ -488,23 +473,26 @@ export function ImportUploader() {
                 )}
               </div>
             )}
-            {importView.preview.url && (
-              <a
-                className="mt-4 inline-flex font-semibold text-emerald-800 hover:text-emerald-900"
-                href={importView.preview.url}
-              >
-                打开出版工作台
-              </a>
-            )}
+          {importView.preview.url && (
+            <a
+              className="mt-4 inline-flex font-semibold text-emerald-800 hover:text-emerald-900"
+              href={importView.preview.url}
+            >
+              打开出版工作台
+            </a>
+          )}
+          {["needs_main_confirmation", "rejected"].includes(
+            importView.state,
+          ) && (
             <CandidateReview
               candidates={importView.candidates}
               confirmable={importView.state === "needs_main_confirmation"}
               disabled={busy}
               onConfirm={confirm}
             />
-          </>
-        )}
-      </section>
+          )}
+        </section>
+      )}
     </div>
   );
 }

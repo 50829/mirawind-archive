@@ -26,7 +26,6 @@ test("publishes the registered 97-page MinerU fixture through the browser loop",
     timeout: 60_000,
   });
   await expect(page.getByText(realFixtureName, { exact: true })).toBeVisible();
-  await expect(page.getByLabel("后台处理进度 100%")).toBeVisible();
 
   const workbenchHref = await page
     .getByRole("link", { name: "打开出版工作台" })
@@ -44,7 +43,7 @@ test("publishes the registered 97-page MinerU fixture through the browser loop",
     has: page.getByText(String(bookTitle), { exact: true }),
   });
   await expect(bookTasks).toHaveCount(3);
-  await expect(bookTasks.getByLabel("任务进度 100%")).toHaveCount(3);
+  await expect(bookTasks.locator('[data-state="succeeded"]')).toHaveCount(3);
   await expect(bookTasks.locator("code:visible")).toHaveCount(0);
 
   await page.goto(String(workbenchHref));

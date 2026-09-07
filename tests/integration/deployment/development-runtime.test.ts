@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 
@@ -57,6 +57,25 @@ it("owns local Web and worker through upload, restart and process failures", asy
     ).toBe(200);
     expect(security.headers.get("cache-control")).toBe("private, no-store");
 
+    const alias = `http://localhost:${port}`;
+    const redirected = await fetch(`${alias}/library`, {
+      headers: { Accept: "text/html" },
+      redirect: "manual",
+    });
+    expect(redirected.status).toBe(303);
+    expect(redirected.headers.get("location")).toBe(`${origin}/library`);
+    for (const [requestOrigin, code] of [
+      [alias, 403],
+      [origin, 400],
+    ] as const) {
+      const invalid = await fetch(`${origin}/api/manage/books/0`, {
+        method: "DELETE",
+        headers: { Origin: requestOrigin, "Content-Type": "application/json" },
+        body: "{}",
+      });
+      expect(invalid.status).toBe(code);
+    }
+
     const duplicate = start();
     try {
       await duplicate.waitForOutput(
@@ -73,7 +92,7 @@ it("owns local Web and worker through upload, restart and process failures", asy
     page.setDefaultNavigationTimeout(15_000);
     const browserErrors: string[] = [];
     page.on("pageerror", (error) => browserErrors.push(error.message));
-    await page.goto(`${origin}/manage`);
+    await page.goto(`${alias}/manage`);
     expect(page.url()).toBe(`${origin}/manage`);
     await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
     await page.getByLabel("MinerU ZIP", { exact: true }).setInputFiles({
@@ -137,6 +156,70 @@ it("owns local Web and worker through upload, restart and process failures", asy
         )
       ).state,
     ).toBe("draft_ready");
+
+    const library = (await fetch(`${origin}/api/manage/library`).then(
+      (response) => response.json(),
+    )) as {
+      entries: { book_id: number; title: string }[];
+    };
+    const book = library.entries.at(0);
+    if (!book) throw new Error("Imported book is missing from the library");
+    const draftResponse = await fetch(
+      `${origin}/api/manage/books/${book.book_id}/draft`,
+    );
+    const draftEtag = draftResponse.headers.get("etag");
+    if (!draftEtag) throw new Error("Draft response is missing its ETag");
+    const published = await fetch(
+      `${origin}/api/manage/books/${book.book_id}/publish`,
+      {
+        method: "POST",
+        headers: {
+          Origin: origin,
+          "Content-Type": "application/json",
+          "If-Match": draftEtag,
+        },
+        body: "{}",
+      },
+    );
+    expect(published.ok).toBe(true);
+    await page.goto(`${alias}/library`);
+    await page
+      .getByRole("button", { name: `永久删除《${book.title}》`, exact: true })
+      .click();
+    const deletionDialog = page.getByRole("dialog");
+    expect(
+      await deletionDialog
+        .getByRole("button", { name: "永久删除", exact: true })
+        .isEnabled(),
+    ).toBe(false);
+    await deletionDialog.getByLabel("输入完整书名以确认").fill(book.title);
+    const deletionResponse = page.waitForResponse(
+      (response) => response.request().method() === "DELETE",
+    );
+    await deletionDialog
+      .getByRole("button", { name: "永久删除", exact: true })
+      .click();
+    const deletion = await deletionResponse;
+    expect(deletion.status()).toBe(202);
+    const { jobId: cleanupId } = (await deletion.json()) as { jobId: string };
+    await expect
+      .poll(
+        async () =>
+          (
+            await fetch(`${origin}/api/manage/jobs/${cleanupId}`).then(
+              (response) => response.json(),
+            )
+          ).state,
+        { timeout: 15_000 },
+      )
+      .toBe("succeeded");
+    await expect(
+      stat(resolve(root.path, "books", String(book.book_id))),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    expect(
+      (await fetch(`${origin}/api/manage/books/${book.book_id}/draft`)).status,
+    ).toBe(404);
+    await deletionDialog.waitFor({ state: "detached" });
 
     process.kill(await readWorkerPid(), "SIGTERM");
     await exited();

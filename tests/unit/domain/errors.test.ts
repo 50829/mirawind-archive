@@ -1,6 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createSafeDiagnostic } from "@/domain/errors";
+
+it("preserves safe errors across module reloads without trusting JSON lookalikes", async () => {
+  const { SafeApplicationError } = await import("@/domain/errors");
+  const previousError = new SafeApplicationError(
+    "INVALID_ORIGIN",
+    "Origin rejected.",
+    403,
+  );
+  vi.resetModules();
+  const { safeErrorInputFromUnknown } = await import("@/http/errors/responses");
+  expect(
+    safeErrorInputFromUnknown({ cause: previousError, requestId: "req_test" }),
+  ).toMatchObject({
+    status: 403,
+    code: "INVALID_ORIGIN",
+  });
+  expect(
+    safeErrorInputFromUnknown({
+      cause: JSON.parse(JSON.stringify(previousError)),
+      requestId: "req_test",
+    }),
+  ).toMatchObject({ status: 500, code: "INTERNAL_SERVER_ERROR" });
+});
 
 describe("safe locatable diagnostics", () => {
   it("retains bounded evidence, location and executable targets", () => {

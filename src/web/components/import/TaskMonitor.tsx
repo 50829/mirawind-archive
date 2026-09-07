@@ -133,20 +133,26 @@ function TaskCard(props: {
         </span>
       </div>
 
-      <div
-        aria-label={percent === null ? "任务进度未知" : `任务进度 ${percent}%`}
-        className="mt-4"
-      >
-        <progress
-          className="h-2 w-full accent-emerald-700"
-          max={100}
-          {...(percent === null ? {} : { value: percent })}
-        />
-        <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2">
-          <strong className="text-stone-800">{jobProgressSummary(job)}</strong>
-          {detail && <span className="text-sm text-stone-600">{detail}</span>}
+      {!terminalStates.has(job.state) && (
+        <div
+          aria-label={
+            percent === null ? "任务进度未知" : `任务进度 ${percent}%`
+          }
+          className="mt-4"
+        >
+          <progress
+            className="h-2 w-full accent-emerald-700"
+            max={100}
+            {...(percent === null ? {} : { value: percent })}
+          />
+          <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2">
+            <strong className="text-stone-800">
+              {jobProgressSummary(job)}
+            </strong>
+            {detail && <span className="text-sm text-stone-600">{detail}</span>}
+          </div>
         </div>
-      </div>
+      )}
 
       <p className="mt-3 text-sm text-stone-600">
         第 {job.attempt} 次 · {new Date(job.created_at).toLocaleString("zh-CN")}
@@ -194,7 +200,7 @@ function TaskCard(props: {
             type="button"
           >
             <XCircle aria-hidden="true" size={18} />
-            请求取消
+            取消
           </button>
         )}
         {actionableStates.has(job.state) && (
@@ -205,7 +211,7 @@ function TaskCard(props: {
             type="button"
           >
             <RotateCcw aria-hidden="true" size={18} />
-            显式重试
+            重试
           </button>
         )}
       </div>
@@ -324,7 +330,7 @@ export function TaskMonitor(props: {
           ),
         ),
       );
-      setMessage("取消请求已记录；运行中的子进程关闭后才会进入最终状态。");
+      setMessage(canceled.state === "canceled" ? "" : "正在取消…");
     } else if ("job_id" in body && body.job_id) {
       const statusResponse = await fetch(`/api/manage/jobs/${body.job_id}`, {
         cache: "no-store",
@@ -334,7 +340,7 @@ export function TaskMonitor(props: {
         const retry = (await statusResponse.json()) as TaskView;
         setJobs((current) => visibleJobs([retry, ...current]));
       }
-      setMessage("新的重试尝试已进入队列；原尝试记录保持不变。");
+      setMessage("已重新排队");
     }
     setBusyId(null);
   }
@@ -343,9 +349,6 @@ export function TaskMonitor(props: {
     <section className="task-monitor" aria-labelledby="task-monitor-title">
       <header className="flex items-center justify-between gap-4">
         <div>
-          <p className="eyebrow text-sm font-semibold text-emerald-800">
-            后台工作
-          </p>
           <h1 className="mt-1 text-2xl font-bold" id="task-monitor-title">
             任务与恢复
           </h1>

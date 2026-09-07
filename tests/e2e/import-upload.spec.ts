@@ -131,23 +131,21 @@ test("keeps upload progress honest across retry, acceptance and abort", async ({
     name: "controlled.zip",
   });
   await page.getByRole("button", { name: "上传并分析" }).click();
-  await expect(
-    page.getByText("网络中断，重新提交会安全续用本次请求标识。"),
-  ).toBeVisible();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("button", { name: "上传并分析" })).toBeEnabled();
 
   await page.evaluate(() => {
     const testWindow = window as unknown as Window & {
       __uploadProgress: number[];
     };
     const record = () => {
-      const label = document
-        .querySelector("[aria-label^='上传进度']")
-        ?.getAttribute("aria-label");
-      const percent = label?.match(/\d+/u)?.[0];
-      if (percent) testWindow.__uploadProgress.push(Number(percent));
+      const progress = document.querySelector("form progress");
+      if (progress instanceof HTMLProgressElement) {
+        testWindow.__uploadProgress.push(progress.value);
+      }
     };
     new MutationObserver(record).observe(document.body, {
-      attributeFilter: ["aria-label"],
+      attributeFilter: ["value"],
       attributes: true,
       childList: true,
       subtree: true,
@@ -155,10 +153,12 @@ test("keeps upload progress honest across retry, acceptance and abort", async ({
   });
 
   await page.getByRole("button", { name: "上传并分析" }).click();
-  await expect(page.getByText("正在安全保存并排队")).toBeVisible();
+  await expect(page.locator("form progress")).toHaveJSProperty("value", 100);
   await expect(page.getByText("controlled.zip", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("后台处理进度 25%")).toBeVisible();
-  await expect(page.getByText("识别正文 · 25%", { exact: true })).toBeVisible();
+  await expect(page.locator(".job-progress progress")).toHaveJSProperty(
+    "value",
+    25,
+  );
   await expect(
     page.getByRole("link", { name: "打开出版工作台" }),
   ).toBeVisible();
@@ -185,9 +185,10 @@ test("keeps upload progress honest across retry, acceptance and abort", async ({
     name: "cancel.zip",
   });
   await page.getByRole("button", { name: "上传并分析" }).click();
-  await expect(page.getByLabel(/上传进度 35%/u)).toBeVisible();
+  await expect(page.locator("form progress")).toHaveJSProperty("value", 35);
   await page.getByRole("button", { exact: true, name: "取消" }).click();
-  await expect(page.getByText("上传已取消。")).toBeVisible();
+  await expect(page.locator("form progress")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "上传并分析" })).toBeEnabled();
 
   const finalKeys = await page.evaluate(
     () =>

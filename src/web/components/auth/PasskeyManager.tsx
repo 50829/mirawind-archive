@@ -133,7 +133,7 @@ export function PasskeyManager({ initialPasskeys }: PasskeyManagerProps) {
     } else {
       form.reset();
       await refresh();
-      setMessage("最后一把 Passkey 已删除；备用密码仍可登录。");
+      setMessage("Passkey 已删除。");
     }
     setBusy(false);
   }
@@ -142,16 +142,11 @@ export function PasskeyManager({ initialPasskeys }: PasskeyManagerProps) {
     <section aria-labelledby="passkey-heading">
       <div className="heading-row">
         <div>
-          <p className="eyebrow">安全设置</p>
           <h1 id="passkey-heading">Passkey</h1>
         </div>
         <span className="count">{passkeys.length} / 10</span>
       </div>
-      <p>
-        建议登记至少两把、分属不同故障域的 Passkey。新增、重命名和删除要求最近 5
-        分钟内完成登录。
-      </p>
-      <a href="/login?next=/manage/security">重新登录以刷新验证</a>
+      <a href="/login?next=/manage/security">重新验证</a>
 
       <form className="add-form" onSubmit={addPasskey}>
         <label>
@@ -227,9 +222,7 @@ export function PasskeyManager({ initialPasskeys }: PasskeyManagerProps) {
           </li>
         ))}
       </ul>
-      {passkeys.length === 0 && (
-        <p className="empty">尚未登记 Passkey；当前可使用备用密码登录。</p>
-      )}
+      {passkeys.length === 0 && <p className="empty">暂无 Passkey</p>}
       {message && (
         <p aria-live="polite" className="message">
           {message}
