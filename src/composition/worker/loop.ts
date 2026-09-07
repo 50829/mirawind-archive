@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { setTimeout as wait } from "node:timers/promises";
 
 import { executeWorkerAttempt } from "./execute-attempt";
 import { completeWorkerAttempt } from "./complete-attempt";
@@ -26,20 +27,6 @@ import { operationalMetrics } from "@/observability/metrics";
 import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 
 export const workerPollIntervalMs = 1_000;
-
-function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, milliseconds);
-    signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
-  });
-}
 
 function terminalState(state: string): state is TerminalJobState {
   return ["succeeded", "failed", "canceled", "interrupted"].includes(state);
@@ -84,7 +71,11 @@ export async function runWorkerLoop(input: {
         await input.onIdle();
         continue;
       }
-      await delay(workerPollIntervalMs, input.shutdownSignal);
+      await wait(workerPollIntervalMs, undefined, {
+        signal: input.shutdownSignal,
+      }).catch((error) => {
+        if (error.name !== "AbortError") throw error;
+      });
       continue;
     }
     input.onQueueObservation?.(input.repository.observeQueue(loopNowMs));

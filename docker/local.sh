@@ -66,10 +66,10 @@ create_environment() {
   fi
   umask 077
   {
-    printf '%s\n' 'MIRAWIND_DATA_DIR=/var/lib/mirawind'
-    printf '%s\n' 'MIRAWIND_PUBLIC_ORIGIN=http://localhost:4321'
-    printf '%s\n' 'MIRAWIND_PASSKEY_RP_ID=localhost'
-    printf '%s\n' 'MIRAWIND_ALLOWED_HOSTS=localhost,127.0.0.1'
+    printf '%s\n' 'MIRAWIND_DATA_DIR=./data/development'
+    printf '%s\n' 'MIRAWIND_PUBLIC_ORIGIN=http://127.0.0.1:4322'
+    printf '%s\n' 'MIRAWIND_PASSKEY_RP_ID=127.0.0.1'
+    printf '%s\n' 'MIRAWIND_ALLOWED_HOSTS=127.0.0.1,localhost'
     printf 'MIRAWIND_AUTH_SECRET=%s\n' "${authentication_secret}"
   } >"${environment_file}"
   chmod 0600 "${environment_file}"
@@ -121,7 +121,7 @@ start_stack() {
 
   printf '%s\n' \
     'Mirawind is ready at http://localhost:4321' \
-    'Log in at http://localhost:4321/login'
+    'Open management at http://localhost:4321/manage'
 }
 
 usage() {

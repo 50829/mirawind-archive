@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 
 import {
   EnvironmentValidationError,
@@ -14,6 +15,18 @@ const validEnvironment = {
 };
 
 describe("parseEnvironment", () => {
+  it("resolves local data paths with the shared parser and preserves the configured secret", () => {
+    const environment = parseEnvironment(
+      {
+        ...validEnvironment,
+        MIRAWIND_DATA_DIR: "./data/development",
+      },
+      { mode: "development" },
+    );
+    expect(environment.dataDirectory).toBe(resolve("data/development"));
+    expect(environment.authSecret).toBe(validEnvironment.MIRAWIND_AUTH_SECRET);
+  });
+
   it("accepts an exact HTTPS production origin and RP ID", () => {
     expect(
       parseEnvironment(validEnvironment, { mode: "production" }),
@@ -38,12 +51,31 @@ describe("parseEnvironment", () => {
     ).toThrow(EnvironmentValidationError);
   });
 
-  it("allows HTTP only for an exact localhost development origin", () => {
+  it("allows localhost HTTP without inferring local trust", () => {
     expect(
       parseEnvironment(
         {
           ...validEnvironment,
           MIRAWIND_ALLOWED_HOSTS: "127.0.0.1",
+          MIRAWIND_PASSKEY_RP_ID: "127.0.0.1",
+          MIRAWIND_PUBLIC_ORIGIN: "http://127.0.0.1:4321",
+        },
+        { mode: "development" },
+      ),
+    ).toMatchObject({
+      localDevelopmentTrust: false,
+      publicOrigin: "http://127.0.0.1:4321",
+    });
+  });
+
+  it("enables explicit local trust for a loopback-only Docker development boundary", () => {
+    expect(
+      parseEnvironment(
+        {
+          ...validEnvironment,
+          HOST: "0.0.0.0",
+          MIRAWIND_ALLOWED_HOSTS: "127.0.0.1,localhost",
+          MIRAWIND_LOCAL_DEVELOPMENT_TRUST: "1",
           MIRAWIND_PASSKEY_RP_ID: "127.0.0.1",
           MIRAWIND_PUBLIC_ORIGIN: "http://127.0.0.1:4321",
         },
@@ -60,6 +92,7 @@ describe("parseEnvironment", () => {
       ...validEnvironment,
       HOST: "127.0.0.1",
       MIRAWIND_ALLOWED_HOSTS: "127.0.0.1,localhost",
+      MIRAWIND_LOCAL_DEVELOPMENT_TRUST: "1",
       MIRAWIND_PASSKEY_RP_ID: "127.0.0.1",
       MIRAWIND_PUBLIC_ORIGIN: "https://127.0.0.1:4321",
     };
@@ -71,9 +104,10 @@ describe("parseEnvironment", () => {
     ).toBe(false);
   });
 
-  it("closes development trust when an allowed or listening host is not loopback", () => {
+  it("closes explicit development trust when an allowed host is not loopback", () => {
     const local = {
       ...validEnvironment,
+      MIRAWIND_LOCAL_DEVELOPMENT_TRUST: "1",
       MIRAWIND_PASSKEY_RP_ID: "127.0.0.1",
       MIRAWIND_PUBLIC_ORIGIN: "http://127.0.0.1:4321",
     };
@@ -81,17 +115,6 @@ describe("parseEnvironment", () => {
       parseEnvironment(
         {
           ...local,
-          HOST: "0.0.0.0",
-          MIRAWIND_ALLOWED_HOSTS: "127.0.0.1",
-        },
-        { mode: "development" },
-      ).localDevelopmentTrust,
-    ).toBe(false);
-    expect(
-      parseEnvironment(
-        {
-          ...local,
-          HOST: "127.0.0.1",
           MIRAWIND_ALLOWED_HOSTS: "127.0.0.1,library.example.test",
         },
         { mode: "development" },

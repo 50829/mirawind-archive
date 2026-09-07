@@ -8,6 +8,8 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   {
     ignores: [
+      ".cache/**",
+      "data/**",
       ".astro/**",
       "coverage/**",
       "dist/**",

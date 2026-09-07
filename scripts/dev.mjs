@@ -1,109 +1,144 @@
-import { spawn, spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { execFile, fork } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { promisify } from "node:util";
 
-const port = process.env.PORT ?? "4322";
-if (!/^[0-9]+$/.test(port) || Number(port) < 1_024 || Number(port) > 65_535) {
-  throw new Error("PORT must be an integer from 1024 to 65535");
-}
-const environment = Object.freeze({
-  HOST: "127.0.0.1",
-  MIRAWIND_ALLOWED_HOSTS: "127.0.0.1,localhost",
-  MIRAWIND_AUTH_SECRET: randomBytes(48).toString("base64url"),
-  MIRAWIND_DATA_DIR: resolve(".cache/dev-data"),
-  MIRAWIND_PASSKEY_RP_ID: "127.0.0.1",
-  MIRAWIND_PUBLIC_ORIGIN: `http://127.0.0.1:${port}`,
-  PORT: port,
-  ...process.env,
-  NODE_ENV: "development",
-});
-const commands = Object.freeze([
-  Object.freeze({
-    args: ["dev", "--host", environment.HOST, "--port", environment.PORT],
-    label: "web",
-    program: resolve("node_modules/.bin/astro"),
+import { parseEnvironment } from "../src/config/environment.ts";
+
+const environment = parseEnvironment(process.env, { mode: "development" });
+const origin = new URL(environment.publicOrigin);
+
+const existingPid = Number(
+  await readFile(
+    resolve(environment.dataDirectory, "tmp/worker.pid"),
+    "utf8",
+  ).catch((error) => {
+    if (error.code === "ENOENT") return "";
+    throw error;
   }),
-  Object.freeze({
-    args: ["--import", "tsx", "src/entrypoints/worker/index.ts"],
-    label: "worker",
-    program: process.execPath,
-  }),
-]);
-const children = new Map();
-let stopping = false;
-
-spawnSync(commands[0].program, ["dev", "stop"], {
-  env: environment,
-  shell: false,
-  stdio: "ignore",
-});
-
-const preparation = spawnSync(
-  process.execPath,
-  ["--import", "tsx", "scripts/prepare-development.ts"],
-  {
-    env: environment,
-    shell: false,
-    stdio: "inherit",
-  },
 );
-if (preparation.error) throw preparation.error;
-if (preparation.status !== 0) {
-  process.exit(preparation.status ?? 1);
-}
-
-function stop(signal = "SIGTERM") {
-  if (stopping) return;
-  stopping = true;
-  spawnSync(commands[0].program, ["dev", "stop"], {
-    env: environment,
-    shell: false,
-    stdio: "ignore",
-  });
-  for (const child of children.values()) {
-    if (child.exitCode === null && child.signalCode === null) {
-      try {
-        process.kill(-child.pid, signal);
-      } catch {
-        child.kill(signal);
-      }
-    }
+if (Number.isSafeInteger(existingPid) && existingPid > 0) {
+  try {
+    process.kill(existingPid, 0);
+    throw new Error(
+      `A worker is already using this data directory (pid ${existingPid}). Stop that development runtime first.`,
+    );
+  } catch (error) {
+    if (error.code !== "ESRCH") throw error;
   }
 }
 
-for (const command of commands) {
-  const child = spawn(command.program, command.args, {
-    detached: true,
-    env: environment,
-    shell: false,
-    stdio: "inherit",
-  });
-  children.set(command.label, child);
-  child.once("error", (error) => {
-    process.stderr.write(
-      `${command.label} failed to start: ${error.message}\n`,
-    );
-    process.exitCode = 1;
-    stop();
-  });
-  child.once("exit", (code, signal) => {
-    children.delete(command.label);
-    if (stopping) {
-      if (children.size === 0) process.exit(process.exitCode ?? 0);
-      return;
+await promisify(execFile)(process.execPath, [
+  "--import",
+  "tsx",
+  "scripts/prepare-development.ts",
+]);
+
+const worker = fork(resolve("src/entrypoints/worker/index.ts"), [], {
+  detached: true,
+  execArgv: ["--import", "tsx"],
+  stdio: ["ignore", "pipe", "pipe", "ipc"],
+});
+worker.stdout.pipe(process.stdout);
+worker.stderr.pipe(process.stderr);
+
+let server;
+let stopping;
+const workerClosed = new Promise((resolveExit) =>
+  worker.once("exit", resolveExit),
+);
+let finish;
+const finished = new Promise((resolveFinish) => {
+  finish = resolveFinish;
+});
+
+function stop(exitCode = 0) {
+  if (stopping) return stopping;
+  stopping = (async () => {
+    process.exitCode = exitCode;
+    worker.kill("SIGTERM");
+    const force = setTimeout(() => {
+      try {
+        process.kill(-worker.pid, "SIGKILL");
+      } catch {
+        /* Already closed. */
+      }
+      process.stderr.write("Development shutdown timed out; forcing exit.\n");
+      process.exit(exitCode || 1);
+    }, 15_000);
+    force.unref();
+    try {
+      await Promise.all([server?.stop(), workerClosed]);
+    } finally {
+      clearTimeout(force);
+      finish();
     }
-    if (command.label === "web" && code === 0) {
-      return;
-    }
-    process.stderr.write(
-      `${command.label} stopped${signal ? ` by ${signal}` : ` with code ${code ?? 1}`}\n`,
-    );
-    process.exitCode = code && code > 0 ? code : 1;
-    stop();
+  })();
+  return stopping;
+}
+
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(signal, () => {
+    void stop();
   });
 }
 
-process.once("SIGINT", () => stop("SIGINT"));
-process.once("SIGTERM", () => stop("SIGTERM"));
+worker.once("exit", (code, signal) => {
+  if (!stopping) {
+    process.stderr.write(
+      `Worker stopped (${signal ?? code}); closing development server.\n`,
+    );
+    void stop(1);
+  }
+});
 
-await new Promise((resolveExit) => process.once("exit", resolveExit));
+try {
+  await new Promise((resolveReady, rejectReady) => {
+    const timeout = setTimeout(
+      () => rejectReady(new Error("Worker startup timed out")),
+      30_000,
+    );
+    const cleanup = () => clearTimeout(timeout);
+    worker.once("message", (message) => {
+      cleanup();
+      if (message?.type === "ready") resolveReady();
+      else rejectReady(new Error("Unexpected worker startup message"));
+    });
+    worker.once("error", (error) => {
+      cleanup();
+      rejectReady(error);
+    });
+    worker.once("exit", () => {
+      cleanup();
+      rejectReady(new Error("Worker exited before startup completed"));
+    });
+  });
+  if (!stopping) {
+    const { dev } = await import("astro");
+    server = await dev({
+      server: { host: origin.hostname, port: Number(origin.port || 80) },
+      vite: {
+        cacheDir: resolve(
+          "node_modules/.vite-development",
+          createHash("sha256")
+            .update(environment.dataDirectory)
+            .digest("hex")
+            .slice(0, 16),
+        ),
+        server: { strictPort: true },
+      },
+    });
+    if (stopping) await server.stop();
+    else
+      process.stdout.write(
+        `Mirawind development ready: ${environment.publicOrigin}/manage\n`,
+      );
+  }
+  await finished;
+  process.exit(process.exitCode ?? 0);
+} catch (error) {
+  process.stderr.write(`${error.message}\n`);
+  await stop(1);
+  process.exit(1);
+}

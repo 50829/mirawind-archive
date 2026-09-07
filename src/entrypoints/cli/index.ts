@@ -81,7 +81,7 @@ if (group === undefined || command === undefined) {
   process.exitCode = 2;
 } else if (group === "db" && command === "migrate") {
   const dataDirectory = process.env.MIRAWIND_DATA_DIR;
-  if (!dataDirectory?.startsWith("/")) {
+  if (!dataDirectory?.trim()) {
     process.stderr.write("INVALID_DATA_DIRECTORY\n");
     process.exitCode = 2;
   } else {

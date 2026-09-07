@@ -3,6 +3,7 @@ import type { Passkey } from "@better-auth/passkey";
 
 import { getRuntimeAuth, getRuntimeDatabase } from "@/composition/auth";
 import { createIdentityServer } from "@/composition/server/identity";
+import { localDevelopmentSessionId } from "@/modules/identity/application/identity-api";
 import {
   PasskeyManager,
   type ManagedPasskey,
@@ -33,9 +34,12 @@ if (!adminUserId || session.user.id !== adminUserId) {
   return hiddenManagementPage();
 }
 
-const passkeys = await getRuntimeAuth().api.listPasskeys({
-  headers: Astro.request.headers,
-});
+const localDevelopment = session.sessionId === localDevelopmentSessionId;
+const passkeys = localDevelopment
+  ? []
+  : await getRuntimeAuth().api.listPasskeys({
+      headers: Astro.request.headers,
+    });
 const lastUsedByPasskey = new Map(
   (
     getRuntimeDatabase()
@@ -67,11 +71,34 @@ const initialPasskeys: ManagedPasskey[] = (passkeys as Passkey[]).map(
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Passkey 安全设置 · Mirawind</title>
+    <title>安全设置 · Mirawind</title>
   </head>
   <body class="m-0 bg-stone-100 font-sans text-stone-800">
     <ManageShell currentSection="security">
-      <PasskeyManager client:load initialPasskeys={initialPasskeys} />
+      {
+        localDevelopment ? (
+          <section aria-labelledby="local-security-title" class="max-w-2xl">
+            <h1
+              id="local-security-title"
+              class="text-2xl font-bold text-stone-900"
+            >
+              安全设置
+            </h1>
+            <dl class="mt-6 grid gap-4 text-stone-700">
+              <div>
+                <dt class="text-sm text-stone-500">当前环境</dt>
+                <dd class="m-0 mt-1 font-medium">本地开发</dd>
+              </div>
+              <div>
+                <dt class="text-sm text-stone-500">登录状态</dt>
+                <dd class="m-0 mt-1 font-medium">本地管理员免登录</dd>
+              </div>
+            </dl>
+          </section>
+        ) : (
+          <PasskeyManager client:load initialPasskeys={initialPasskeys} />
+        )
+      }
     </ManageShell>
   </body>
 </html>
@@ -95,7 +122,7 @@ const initialPasskeys: ManagedPasskey[] = (passkeys as Passkey[]).map(
     letter-spacing: 0.18em;
   }
 
-  :global(h1) {
+  :global(#passkey-heading) {
     margin: 0.2rem 0;
     font-family: Georgia, serif;
     font-size: 3rem;

@@ -7,6 +7,7 @@ const localComposePath = new URL(
   "../../docker/compose.local.yaml",
   import.meta.url,
 );
+const astroConfigPath = new URL("../../astro.config.mjs", import.meta.url);
 const localScriptPath = new URL("../../docker/local.sh", import.meta.url);
 
 describe("local Docker launcher", () => {
@@ -26,6 +27,7 @@ describe("local Docker launcher", () => {
       environment: {
         MIRAWIND_ALLOWED_HOSTS: "localhost,127.0.0.1",
         MIRAWIND_DATA_DIR: "/var/lib/mirawind",
+        MIRAWIND_LOCAL_DEVELOPMENT_TRUST: "1",
         MIRAWIND_PASSKEY_RP_ID: "localhost",
         MIRAWIND_PUBLIC_ORIGIN: "http://localhost:4321",
         NODE_ENV: "development",
@@ -38,6 +40,14 @@ describe("local Docker launcher", () => {
       NODE_ENV: "development",
     });
     expect(compose.services.caddy?.profiles).toEqual(["production-proxy"]);
+  });
+
+  it("isolates native development dependencies from tooling cache invalidation", async () => {
+    const astroConfig = await readFile(astroConfigPath, "utf8");
+
+    expect(astroConfig).toContain('MIRAWIND_LOCAL_DEVELOPMENT_TRUST === "1"');
+    expect(astroConfig).toContain('"./node_modules/.vite-development/"');
+    expect(astroConfig).toContain('"./node_modules/.vite-tooling/"');
   });
 
   it("uses an interactive offline bootstrap and never accepts a password variable", async () => {

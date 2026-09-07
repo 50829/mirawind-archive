@@ -33,6 +33,20 @@ async function temporaryFiles(
 }
 
 describe("MinerU main-document candidate discovery", () => {
+  it("automatically selects MinerU CLI exports with mixed-case book names", async () => {
+    const root = await temporaryFiles({
+      "Book/hybrid_auto/Elements of Statistical Learning.md":
+        "# Statistical Learning\n\nBody.",
+      "Book/hybrid_auto/Elements of Statistical Learning_content_list.json":
+        "[]",
+    });
+    await expect(discoverMarkdownCandidates(root)).resolves.toMatchObject({
+      decision: "automatic",
+      reason: "cli-high-confidence",
+      candidates: [expect.objectContaining({ confidence: "high" })],
+    });
+  });
+
   it.each([
     ["cloud", "automatic", "cloud-high-confidence", "wrapper/result/full.md"],
     ["cli", "automatic", "cli-high-confidence", "exports/book/auto/book.md"],

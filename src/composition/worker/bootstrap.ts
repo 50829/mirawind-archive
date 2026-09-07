@@ -32,6 +32,8 @@ export async function runWorkerMain(): Promise<void> {
   };
   process.once("SIGINT", requestShutdown);
   process.once("SIGTERM", requestShutdown);
+  // A supervised development worker must not outlive its Web process.
+  process.once("disconnect", () => requestShutdown("SIGTERM"));
 
   const environment = parseEnvironment(process.env, { mode: runtimeMode() });
   const layout = await createStorageLayout(environment.dataDirectory);
@@ -68,6 +70,7 @@ export async function runWorkerMain(): Promise<void> {
     await operationalMetrics.collectDiskUsage(layout.root);
     await atomicWriteFile(pidPath, `${process.pid}\n`, { mode: 0o600 });
     process.stdout.write("Mirawind worker ready\n");
+    process.send?.({ type: "ready" });
     await runWorkerLoop({
       candidates,
       database,
@@ -91,5 +94,6 @@ export async function runWorkerMain(): Promise<void> {
   } finally {
     await rm(pidPath, { force: true });
     database.close();
+    if (process.connected) process.disconnect();
   }
 }

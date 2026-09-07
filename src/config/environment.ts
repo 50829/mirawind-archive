@@ -51,7 +51,10 @@ export function parseEnvironment(
   options: { readonly mode: "development" | "production" | "test" },
 ): EnvironmentConfig {
   const dataDirectory = required(input, "MIRAWIND_DATA_DIR");
-  if (!isAbsolute(dataDirectory) || resolve(dataDirectory) === "/") {
+  if (
+    (options.mode !== "development" && !isAbsolute(dataDirectory)) ||
+    resolve(dataDirectory) === "/"
+  ) {
     throw new EnvironmentValidationError(
       "MIRAWIND_DATA_DIR must be a non-root absolute path",
     );
@@ -113,12 +116,11 @@ export function parseEnvironment(
 
   const authSecret = required(input, "MIRAWIND_AUTH_SECRET");
   validateSecret(authSecret);
-  const listenHost = input.HOST?.trim().toLowerCase();
   const localDevelopmentTrust =
+    input.MIRAWIND_LOCAL_DEVELOPMENT_TRUST === "1" &&
     options.mode === "development" &&
     isLocalhost(publicOrigin.hostname.toLowerCase()) &&
-    allowedHosts.every(isLocalhost) &&
-    (!listenHost || isLocalhost(listenHost));
+    allowedHosts.every(isLocalhost);
 
   return Object.freeze({
     allowedHosts: Object.freeze([...new Set(allowedHosts)]),

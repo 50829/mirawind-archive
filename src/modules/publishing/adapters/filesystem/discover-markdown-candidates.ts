@@ -169,7 +169,7 @@ function companionConfidence(
   readonly confidence: "generic" | "high";
   readonly reason: "cli-high-confidence" | "cloud-high-confidence" | null;
 } {
-  const name = basename(markdownPath);
+  const name = basename(markdownPath).toLowerCase();
   const lowerNames = names.map((value) => value.toLowerCase());
   if (
     name === "full.md" &&
