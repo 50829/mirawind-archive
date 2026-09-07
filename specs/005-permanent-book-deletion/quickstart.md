@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 22 and the repository's pnpm version.
+- Node.js 24 and the repository's pnpm version.
 - A disposable local data root and SQLite database.
 - Never use production book storage for destructive tests.
 - Use environment-managed test credentials; do not commit passwords or session secrets.
@@ -32,7 +32,7 @@ Expected results:
 ## Focused feature validation
 
 ```bash
-pnpm vitest run tests/unit/library/book-deletion-dialog.test.tsx
+pnpm vitest run tests/integration/deployment/development-runtime.test.ts
 pnpm vitest run tests/integration/deletion/book-deletion-service.test.ts
 pnpm vitest run tests/integration/deletion/permanent-book-cleanup.test.ts
 pnpm vitest run tests/integration/auth/full-route-matrix.test.ts
@@ -70,5 +70,5 @@ pnpm build
 pnpm playwright test
 ```
 
-Then run Spec Kit analysis and convergence. Delivery requires no unmitigated CRITICAL
-finding and no remaining unchecked implementation task.
+Validate real deletion behavior with disposable data, not fixed confirmation copy or HTML
+snapshots (D-135).

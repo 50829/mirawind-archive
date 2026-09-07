@@ -28,7 +28,8 @@ SQLite WAL 和本地持久化存储。不要横向扩容 Web/worker，也不要�
 volume、执行迁移，并在当前终端安全询问管理员邮箱、显示名称和备用密码。以后
 再次运行同一命令会保留管理员、图书和已发布版本并直接启动。
 
-打开 <http://localhost:4321/login> 登录。常用管理命令：
+打开 <http://localhost:4321/manage>。本地 Docker 启动器使用现有唯一管理员身份，不要求
+Passkey、备用密码或登录 Cookie。常用管理命令：
 
 ```bash
 ./docker/local.sh status
@@ -45,20 +46,26 @@ volume、执行迁移，并在当前终端安全询问管理员邮箱、显示�
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
+cp -n .env.example .env
 pnpm dev
 ```
 
 默认打开 <http://127.0.0.1:4322/manage>。源码开发数据保存在 Git 忽略的
-`.cache/dev-data`；首次运行自动迁移并建立仅供 loopback 开发信任使用的本地管理员，
-不需要复制生产 `.env`、登录或输入密码。显式 shell 环境变量可以覆盖这些开发默认值。
+`data/development`；首次运行自动迁移并建立仅供 loopback 开发信任使用的本地管理员，
+不需要登录或输入密码。已有 `.env` 时保留原文件；首次配置需设置随机 `MIRAWIND_AUTH_SECRET`。
+开发和生产共用 `.env` 中同一组变量：`MIRAWIND_DATA_DIR` 指定数据目录，
+`MIRAWIND_PUBLIC_ORIGIN` 指定地址与端口。部署时修改对应的值即可。
+
+保持此终端运行；按 `Ctrl+C` 同时停止 Web 和 worker。启动成功会输出
+`Mirawind development ready`，此时 worker 已就绪。重复启动或端口占用会明确报错。
 
 `pnpm dev:web` 和 `pnpm dev:worker` 仅用于定向调试。只运行 `dev:web` 时上传任务没有
 消费者，会保持排队，而且两个诊断命令都要求调用者提供完整环境配置，因此不要把它们
 作为日常启动方式。
 
-`pnpm dev:web` 只有在 public origin、允许 Host 和监听地址全部为 loopback 时，
-才自动使用已初始化的唯一管理员身份；打开 `/manage` 不需要登录。该信任不会进入
-`pnpm build` 的正式运行模式。Docker 本地预览运行的是正式构建，因此仍使用登录。
+普通 `pnpm dev` 和 `docker/local.sh` 都显式启用受 loopback 条件约束的本地开发信任；打开
+`/manage` 不需要登录。单独运行 `dev:web` 不会隐式获得该身份。`test`、production 和远程
+Compose 永远忽略本地标记并继续使用正式认证。
 
 正式部署登录后在受信任设备保持 90 天，并在有活动时每 7 天滚动刷新；Passkey
 敏感操作仍要求最近 5 分钟认证。

@@ -1312,17 +1312,124 @@
 ## D-129：Node 本地开发使用自包含的 loopback 运行配置
 
 - 状态：Accepted
-- 默认值：`pnpm dev` 在未显式覆盖时固定监听 `127.0.0.1:4322`，使用 Git 忽略的
-  `.cache/dev-data` 和仅存于本次 supervisor 进程树的随机高熵 auth secret。它在启动 Web/worker
-  前执行当前数据库迁移；不读取面向 Docker/远程部署的 `.env`，避免容器路径和正式 origin 污染
-  本机 Node 开发。显式 shell 环境变量仍可覆盖这些开发默认值。
+- 配置（按 D-134 修订）：`pnpm dev` 读取共享 `.env`，示例值为 `127.0.0.1:4322` 和 Git
+  忽略的 `data/development`。数据目录与认证 secret 使用现有配置，不由启动器覆盖或重复生成。
+  启动 Web/worker 前执行当前数据库迁移；容器挂载路径由 Compose 声明。
 - 本地身份：全新的开发数据目录自动创建唯一的 `Local Developer` 管理员，密码随机生成后立即
   丢弃且不输出。该账号只能在满足 D-126 全部 loopback 条件的 `development` 进程内通过
   `localDevelopmentTrust` 使用，没有可共享的默认凭据。已有唯一管理员和数据保持不变。
 - 隔离：自动迁移、开发管理员和默认值只存在于 `scripts/dev.mjs` 启动的源码开发路径。
   `pnpm build`、`pnpm start`、Docker、test 与 production 不调用开发准备脚本，继续要求完整显式
-  配置和正式认证。`dev:web`、`dev:worker` 仍是需要调用者自行提供配置的诊断入口。
+  配置和正式认证。源码开发与检查/测试使用独立 Vite 依赖缓存，后者不得使运行中页面的 React
+  island 失效。`dev:web`、`dev:worker` 仍是需要调用者自行提供配置的诊断入口。
 - 原因：要求开发者复制生产式 `.env`、手工迁移和交互式 bootstrap 后，`pnpm dev` 仍不是可用的
   单命令入口；容器 `.env` 中的 `/var/lib/mirawind` 对本机 Node 也不是有效默认数据目录。
 - 替代：本决策取代 D-126 中“未初始化管理员时本地开发必须先离线 bootstrap”的部分；正式环境
   禁止默认账号、空密码和认证旁路的约束不变。
+
+## D-130：出版工作台以本地目录试排和行动信息为中心
+
+- 状态：Accepted
+- 试排：编号模式、标题文本、标题层级、目录可见性和目录折叠必须在浏览器内立即形成目录
+  试排，不发送草稿 PATCH、不创建 revision、不入队也不运行 worker。目录试排复用与正式编译
+  相同的正文边界和编号规则；本地修改以“试排中，尚未保存”标识，返回已接纳状态后恢复。
+- 保存：只有管理员显式保存才原子写入新的 `book.yaml` revision 并排一个现有
+  `build_candidate`。正式正文 HTML、分页、manifest、搜索和展示投影继续只来自 worker
+  构建的 ready candidate；未保存试排不可发布，也不进入 reader、搜索或公共缓存。
+- 信息架构：主工作台只保留书籍结构、当前标题操作、正文预览、可行动诊断和保存/发布状态。
+  typography profile、空格/标点计数、保护节点数和其他源处理遥测继续保存在可重建证据中，
+  但不得出现在日常工作台。没有可行动诊断时不渲染空诊断板块。
+- 诊断：`error` 表达需要修复且阻止发布的事项；非排版 `warning` 表达建议检查；机器 code、
+  phase、confidence、byte range 和 region 只放入按需技术详情。`TYPOGRAPHY_*` 自动处理记录不计入
+  “问题”，不得逐条重复整书 reprocess 操作。恢复原文属于书籍高级重处理能力，不是单条诊断动作。
+- 性能：本地目录试排必须保持线性、有界并继续使用虚拟列表；任何切换、隐藏、折叠和层级试排
+  都不得触发整书 Markdown、搜索或页面构建。只有虚拟列表当前可见标题和当前选中公式块可以在
+  管理端使用既有 Markdown/KaTeX 依赖即时渲染；不得遍历渲染全书标题。全局单 worker、最多四页
+  在途、正式候选一致性、300 ms reader 门禁和不可变发布边界不变。
+- 替代：本决策补充 D-109、D-121 和 D-122 的工作台交互；D-122 中“切换模式只创建新的
+  revision 和候选构建”修订为只有保存已选择模式时才创建，未保存试排不产生持久化副作用。
+
+## D-131：本地开发信任由受控启动入口显式声明
+
+- 状态：Accepted
+- 标记：`pnpm dev` 与 `docker/local.sh` 管理的 Web 进程显式设置
+  `MIRAWIND_LOCAL_DEVELOPMENT_TRUST=1`。运行时只有同时满足该标记、`development` 模式、
+  public origin 为 loopback 且全部 allowed Host 为 loopback 时，才构造本地唯一管理员 session。
+  标记缺失或任一边界不满足时使用正式登录。
+- Docker：本地 Compose 继续只向宿主 `127.0.0.1:4321` 发布端口。容器内 Web 为 Docker NAT
+  监听 `0.0.0.0` 是传输实现，不再参与应用认证判断；`docker/local.sh` 打开的 `/manage` 与
+  `/login?next=/manage` 均直接进入管理界面，不要求 Passkey 或备用密码。
+- 远程：`test` 和 `production` 无条件忽略本地标记。生产 Compose、Dockerfile 默认值、Caddy、
+  HTTPS、Better Auth session、Passkey、备用密码和近期重新认证保持不变。本地标记不进入
+  `.env.example`，也不能单独覆盖非 loopback origin 或 allowed Host。
+- 简化：删除从 `HOST` 推断本地信任的条件及其专用单元测试。监听地址属于进程传输配置；本地
+  入口身份、外部 loopback 暴露和请求 Host 才是该开发信任的安全边界，避免把容器内部通配监听
+  错当成公网发布。
+- 替代：本决策取代 D-126 中要求显式监听 `HOST` 也必须为 loopback、以及 Docker 本地预览仍需
+  正式登录的部分；D-126 对 production/test、唯一管理员、远程认证和恢复的其余要求继续有效。
+
+## D-132：出版工作台只保留一套结构导航与正文画布
+
+- 状态：Accepted
+- 导航：工作台左侧目录试排是草稿预览的唯一结构导航。点击标题必须使用 ready preview 已有的
+  `page_id` 与 `block_id` 立即载入中间对应页面并定位标题，不保存配置、不请求 worker；移动端
+  选择标题后切回正文画布。
+- 预览：草稿 iframe 继续使用与发布相同的语义正文、KaTeX、代码、图片和分页产物，但不再渲染
+  Reader 顶栏、面包屑、全书目录、页内提纲、移动“目录/本文”按钮及对应抽屉。上一页/下一页和
+  正文块选择继续工作。公开 Reader 的完整导航与响应行为不变。
+- 检查器：右侧只显示一次当前标题表示。删除顶部 `preview_title + source H` 复述；标题输入下保留
+  一份富文本/KaTeX 即时试排，原书编号仍由独立字段编辑，避免同一编号重复出现。
+- 密度：左侧目录使用无逐行分隔线的紧凑树，稳定行高从 44 px 降为 36 px，折叠按钮、缩进、选中
+  和隐藏状态仍清晰可达；虚拟列表继续只渲染可视行。三个桌面面板从同一网格顶部开始，不再用
+  各自 sticky offset 改变标题基线。
+- 性能：标题点击只切换现有不可变 preview 页面，目录压缩不增加 DOM；草稿嵌入壳删除重复导航后
+  减少 HTML 与客户端初始化工作。正式编译、单 worker、页面并发、reader p95 与发布边界不变。
+- 替代：本决策细化 D-109、D-121 与 D-130 的工作台布局；“预览与发布共享 ReaderShell”解释为
+  共享同一组件和正文语义，但 preview 使用该组件的嵌入模式，不能复制公开 Reader 导航。
+
+## D-133：本地启动器拥有完整生命周期，安全页表达开发身份
+
+- 状态：Accepted
+- 启动：`pnpm dev` 通过 Astro 官方 `dev()` API 在启动器内运行 Web，先等 worker ready 再
+  开放 HTTP。不再调用可能自动后台化的 Astro CLI，也不复用其他进程的 Web。worker 通过 IPC
+  感知启动器退出并终止当前 attempt；正常退出等待 Web 和 worker 关闭，超时终止任务进程组。
+  同一个开发数据目录已有活跃 worker 时拒绝重复启动，端口占用时失败，不静默换端口。
+- 热更新：导入数据、缓存、测试结果和大型原始样本不进入文件监听；多个隔离开发数据目录的
+  Vite 依赖缓存按目录身份分开，避免验证进程清理用户正在使用的依赖。
+- 数据：本地数据库与图书保存到 Git 忽略的 `data/development`，不得放在可清理的 `.cache`。
+  已有 `.cache/dev-data` 在停机后完整复制到新位置并保留原副本；不修改出版格式和数据库 schema。
+- 安全页：已授权的本地开发 session 只显示当前免登录状态，不调用要求真实 Cookie 的 Passkey
+  API，也不显示无法执行的凭据管理控件。正式 session 继续走原有 Passkey 管理与认证策略。
+- 导入：MinerU 配套文件与 Markdown 文件名的大小写比较必须一致；保留原始文件路径，仅在
+  识别配套关系时统一大小写。单本高置信度自动继续，真正缺少证据的普通 Markdown 仍需确认。
+- 证据：源码 dev 的真实进程测试覆盖上传到预览、启动器退出、worker 退出、重复启动和安全页；
+  不以生产 build 的 E2E 替代本地启动入口验证。
+
+## D-134：开发与部署共用环境变量及解析器
+
+- 状态：Accepted
+- 配置：开发、CLI 和部署使用同一组 `MIRAWIND_*` 变量及 `parseEnvironment`。Node 启动命令
+  通过标准 `--env-file-if-exists=.env` 加载配置，显式进程环境按 Node 规则优先。不再维护
+  `DevelopmentEnvironment`、`createDevelopmentEnvironment` 或专用的 `MIRAWIND_DEV_*`。
+- 差异：`pnpm dev` 只声明 development 模式和本地信任标记；数据目录、origin、RP ID、允许 Host
+  与 auth secret 都从配置读取。Web 地址直接使用配置的 origin，secret 跨重启保持不变。
+- 存储：本机 `.env` 使用 `MIRAWIND_DATA_DIR=./data/development`，development 解析相对路径；
+  部署仍要求绝对路径。Compose 在服务配置中声明容器挂载路径，不把 `/var/lib/mirawind` 写成
+  本机 Node 默认值。`.env.example` 提供本机示例，部署修改同名变量的值即可。
+- 替代：本决策取代 D-129 中忽略 `.env`、覆盖环境变量、每次生成 auth secret 和专用开发变量
+  的约定。D-131 的本地信任边界、D-133 的生命周期和持久数据位置继续有效。
+
+## D-135：界面采用静默反馈，本地页面使用统一来源
+
+- 状态：Accepted
+- 文案：界面只保留操作名称、字段标签、必要状态和可处理的错误。不重复解释相同操作，不展示
+  操作教程、后台实现或营销式引导。删除弹窗保留书名确认字段和“永久删除”操作，去除重复的
+  不可恢复、无回收站和精确匹配说明；权限、书名校验、同源保护与删除语义不变。
+- 展示：自动完成的选择不再要求用户复核；候选证据和技术诊断按需展开。没有数据时使用一个
+  简短空状态，异步进度与成功状态不重复呈现同一个结果。
+- 本地来源：本地免登录模式下的页面 GET/HEAD 统一重定向到配置的 public origin，避免通过
+  localhost 和 127.0.0.1 分别打开页面后产生写入来源不一致。API 写入仍严格检查来源。
+- 错误：受信任应用错误在开发模块重载后仍保留明确的状态码和错误代码，不能把正常的同源或
+  输入校验失败转换成 500；普通异常继续净化，客户端提交的错误形状对象不视作受信任错误。
+- 测试：不把固定界面文案、CSS 类或序列化 HTML 当作契约。删除仅锁定这些内容的测试；关键
+  流程验证交互、状态、请求和数据结果。文档渲染、净化、授权与私有内容隔离的输出验证保留。

@@ -14,8 +14,8 @@ title, automatically cancel related work, and do not require recent reauthentica
 
 ### User Story 1 - Deliberately delete one book forever (Priority: P1)
 
-As the sole administrator, I can select one book in the library, review an explicit
-irreversible warning, type the book's current displayed title, and permanently delete it
+As the sole administrator, I can select one book in the library, review the target of the
+permanent-delete action, type the book's current displayed title, and permanently delete it
 without first visiting a separate storage or recycle-bin page.
 
 **Why this priority**: The administrator needs a direct way to remove books and reclaim
@@ -28,8 +28,8 @@ immediately disappears from every ordinary book surface while a cleanup task is 
 **Acceptance Scenarios**:
 
 1. **Given** an active book and an authenticated administrator, **When** the administrator
-   chooses delete, **Then** a clearly named dialog identifies the book, states that the
-   operation cannot be undone, and requires the current displayed title before enabling the
+   chooses delete, **Then** a clearly named permanent-delete dialog identifies the book
+   and requires the current displayed title before enabling the
    final action.
 2. **Given** the exact current title and an unchanged book, **When** the administrator
    confirms, **Then** deletion is accepted once, the alias is released, and the book
@@ -127,9 +127,9 @@ hidden, all content is eventually removed, and only the approved minimal tombsto
 
 - **FR-001**: The system MUST allow only the sole authenticated administrator to request
   permanent deletion of one active book at a time from the library management enhancement.
-- **FR-002**: The confirmation surface MUST identify the current displayed title, state
-  that deletion is permanent and has no recycle bin or recovery path, and require the
-  administrator to enter that title before submission.
+- **FR-002**: The confirmation surface MUST identify the current displayed title, name
+  the permanent-delete action, and require the administrator to enter that title before
+  submission. Per D-135, it MUST NOT repeat irreversibility or title-matching explanations.
 - **FR-003**: Title confirmation MUST compare the submitted title with the current
   administrator-visible title after Unicode NFC normalization and MUST reject a title or
   book state that changed after the confirmation surface was opened.
@@ -207,7 +207,7 @@ hidden, all content is eventually removed, and only the approved minimal tombsto
   contain credentials, complete private content, book titles, original filenames or storage
   paths for a deleting or deleted book.
 - **NFR-008**: The confirmation flow MUST be keyboard operable, have a programmatic name,
-  visible focus, an explicit irreversible warning and no serious or critical automated
+  visible focus, an explicitly named permanent-delete action and no serious or critical automated
   accessibility finding at desktop and 360-pixel mobile widths.
 
 ### Key Entities

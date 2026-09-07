@@ -72,7 +72,7 @@ recoverable-to-completion deletion contract before implementation.
   [Spec §NFR-002–NFR-003; NFR-006]
 - [x] CHK024 Are migration, foreign-key, compatibility and repeat-run requirements explicit?
   [Spec §NFR-004]
-- [x] CHK025 Are keyboard, naming, focus, warning and mobile accessibility requirements
+- [x] CHK025 Are keyboard, naming, focus, confirmation and mobile accessibility requirements
   measurable? [Spec §NFR-008]
 - [x] CHK026 Does completion require zero content/files and exactly one approved tombstone?
   [Spec §SC-005]

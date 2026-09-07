@@ -154,9 +154,11 @@ keys redirect only after resolving and authorizing the current projection.
 Authentication uses a maintained authentication library with database sessions, the Passkey
 plugin, and password fallback. The public runtime permanently disables sign-up.
 
-Authentication policy is mode-closed. Astro development may synthesize a request-local sole-admin
-session only when public origin, every allowed Host and the listener are loopback values. Test and
-production modes never take this branch, even when a built server is reached through localhost;
+Authentication policy is mode-closed. A controlled local launcher may explicitly request a synthetic
+request-local sole-admin session only in development mode when public origin and every allowed Host are
+loopback values. Container-internal wildcard listening used by Docker NAT is not an authentication input;
+the local Compose contract separately fixes the published host listener to `127.0.0.1`. Test and production
+modes never take this branch, even when a built server is reached through localhost or carries the marker;
 they require a Better Auth session for every management representation and mutation. The synthetic
 development session is derived from the initialized installation row and does not create a default
 credential or persisted session.

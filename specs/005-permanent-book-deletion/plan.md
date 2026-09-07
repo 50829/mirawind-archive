@@ -161,8 +161,8 @@ tombstone and succeeds idempotently.
 
 The private library API returns a strong mutation token and deletion capability for each
 active entry. The React enhancement adds a keyboard-operable destructive dialog with the
-current displayed title, irreversible/no-recycle-bin warning, exact-title input and explicit
-final action. Acceptance removes the entry locally and links to the existing task-status
+current displayed title, exact-title input and explicit permanent-delete action, without
+repeated explanatory copy (D-135). Acceptance removes the entry locally and links to the existing task-status
 experience. Public HTML remains byte-identical and gains no management controls.
 
 ## Project Structure
