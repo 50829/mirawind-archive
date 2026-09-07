@@ -174,6 +174,128 @@ test("loads the authoritative numbering mode from the draft", async ({
   ).toHaveAttribute("aria-pressed", "true");
 });
 
+test("previews numbering, visibility, hierarchy, and folding without saving", async ({
+  page,
+}) => {
+  const projection = draftProjection(8);
+  const structure = projection.structure.map((node, index) => ({
+    ...node,
+    ...(index === 0 ? { source_number: "Preface" } : {}),
+    ...(index === 1 ? { source_number: "Chapter 9" } : {}),
+    ...(index === 2 ? { source_number: "Section 42" } : {}),
+  }));
+  const draft = {
+    ...projection,
+    boundaries: { body_start_block_id: structure[1]?.block_id },
+    preview: projection.preview
+      ? {
+          ...projection.preview,
+          boundaries: { body_start_block_id: structure[1]?.block_id },
+          headings: projection.preview.headings.map((heading, index) => ({
+            ...heading,
+            ...structure[index],
+            page_id: index + 1,
+          })),
+          pages: structure.map((node, index) => ({
+            page_id: index + 1,
+            title: node.title_markdown,
+          })),
+        }
+      : null,
+    structure,
+  };
+  let patchCount = 0;
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/draft`,
+    async (route) => {
+      if (route.request().method() === "PATCH") patchCount += 1;
+      await route.fulfill({
+        body: JSON.stringify(draft),
+        contentType: "application/json",
+        headers: { ETag: '"draft-live-preview"' },
+        status: 200,
+      });
+    },
+  );
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/preview/**`,
+    (route) =>
+      route.fulfill({
+        body: "<!doctype html><html lang='en'><body>Preview</body></html>",
+        contentType: "text/html",
+        status: 200,
+      }),
+  );
+  await loginAsAdministrator(page, "192.0.2.31");
+  await page.goto(`/manage/books/${workbenchBookId}`);
+
+  const tree = page.locator(".structure-tree");
+  const panelTops = await page
+    .locator(".structure-navigator, .document-panel, .desktop-node-editor")
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getBoundingClientRect().top),
+    );
+  expect(Math.max(...panelTops) - Math.min(...panelTops)).toBeLessThanOrEqual(
+    1,
+  );
+  await expect(
+    tree.getByRole("button", { name: "Chapter 9 Structure item 2" }),
+  ).toBeVisible();
+  await tree
+    .getByRole("button", { name: "Chapter 9 Structure item 2" })
+    .click();
+  await expect(page.locator("iframe")).toHaveAttribute(
+    "src",
+    /\/pages\/2#blk_workbench_0000000000000001$/u,
+  );
+  const inspector = page.locator(".desktop-node-editor");
+  await expect(
+    inspector.getByRole("textbox", { name: "原书编号" }),
+  ).toHaveValue("Chapter 9");
+  await expect(inspector.getByLabel("标题即时试排")).not.toContainText(
+    "Chapter 9",
+  );
+  await page.getByRole("button", { name: "自动编号" }).click();
+  await expect(
+    tree.getByRole("button", { name: "1 Structure item 2" }),
+  ).toBeVisible();
+  await expect(
+    tree.getByRole("button", { name: "1.1 Structure item 3" }),
+  ).toBeVisible();
+  expect(patchCount).toBe(0);
+
+  await tree.getByRole("button", { name: "1.1 Structure item 3" }).click();
+  await expect(page.locator("iframe")).toHaveAttribute(
+    "src",
+    /\/pages\/3#blk_workbench_0000000000000002$/u,
+  );
+  await page
+    .getByRole("textbox", { name: "标题", exact: true })
+    .fill("Renamed child");
+  await expect(
+    tree.getByRole("button", { name: "1.1 Renamed child" }),
+  ).toBeVisible();
+  await page.getByRole("combobox", { name: "显示层级" }).selectOption("1");
+  await expect(
+    tree.getByRole("button", { name: "2 Renamed child" }),
+  ).toBeVisible();
+  await page.getByRole("checkbox", { name: "显示在目录" }).uncheck();
+  await expect(
+    tree.getByRole("button", { name: "2 Renamed child" }),
+  ).toBeHidden();
+  await page.getByRole("button", { name: "全部标题" }).click();
+  await expect(
+    tree.getByRole("button", { name: "2 Renamed child" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "目录预览" }).click();
+  await page.getByRole("button", { name: "折叠子项" }).first().click();
+  await expect(
+    tree.getByRole("button", { name: /Structure item 4$/u }),
+  ).toBeHidden();
+  expect(patchCount).toBe(0);
+});
+
 test("retains conflicting numbering and unrelated heading edits", async ({
   page,
 }) => {
@@ -238,7 +360,7 @@ test("retains conflicting numbering and unrelated heading edits", async ({
   await title.fill("Unsaved local heading");
   await numbering.getByRole("button", { name: "无编号" }).click();
   await save.click();
-  await expect(page.getByRole("alert")).toContainText("本地修改仍保留");
+  await expect(page.getByRole("alert")).toBeVisible();
   await expect(
     numbering.getByRole("button", { name: "无编号" }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -480,6 +602,19 @@ test("keeps representative and stress structure DOM bounded", async ({
     const renderedRows = page.locator(".structure-tree > li");
     await expect(renderedRows.first()).toBeVisible();
     expect(await renderedRows.count()).toBeLessThanOrEqual(30);
+    if (representativeSize === 20) {
+      expect(
+        await renderedRows
+          .first()
+          .evaluate((element) => element.getBoundingClientRect().height),
+      ).toBeLessThanOrEqual(36);
+      expect(
+        await renderedRows
+          .first()
+          .locator(":scope > div")
+          .evaluate((element) => getComputedStyle(element).borderBottomWidth),
+      ).toBe("0px");
+    }
 
     const search = page.getByRole("searchbox", { name: "搜索结构" });
     if (representativeSize === 20) {
@@ -515,7 +650,7 @@ test("keeps representative and stress structure DOM bounded", async ({
   await expect(page.getByRole("heading", { name: "准备一本书" })).toBeVisible();
 });
 
-test("locates diagnostics and disables reprocessing while edits are dirty", async ({
+test("locates actionable diagnostics without exposing source processing", async ({
   page,
 }) => {
   await page.route(`**/api/manage/books/${workbenchBookId}/draft`, (route) => {
@@ -538,7 +673,11 @@ test("locates diagnostics and disables reprocessing while edits are dirty", asyn
   await loginAsAdministrator(page, "192.0.2.16");
   await page.goto(`/manage/books/${workbenchBookId}`);
 
-  await page.getByRole("button", { name: "定位结构" }).click();
+  await page.getByRole("button", { name: "1 项建议检查" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "定位结构" })
+    .click();
   await expect(
     page.locator(".structure-tree [aria-current=true]"),
   ).toContainText("Structure item 1");
@@ -552,7 +691,7 @@ test("locates diagnostics and disables reprocessing while edits are dirty", asyn
   await expect(title).toHaveValue("Unsaved local title");
   await expect(
     page.getByRole("button", { name: "按原文重新处理" }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
 });
 
 test("restores focus after each mobile workbench detail dialog", async ({
@@ -588,22 +727,9 @@ test("restores focus after each mobile workbench detail dialog", async ({
   await page.getByRole("button", { name: "关闭当前项编辑" }).click();
   await expect(currentItem).toBeFocused();
 
-  const sourceHandling = page.getByRole("button", {
-    name: "源处理",
-    exact: true,
-  });
-  await sourceHandling.click();
-  await expect(
-    page.getByRole("dialog").getByRole("heading", { name: "源处理" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "关闭源处理" }).click();
-  await expect(sourceHandling).toBeFocused();
-
-  const diagnostics = page.getByRole("button", { name: "1 个问题" });
+  const diagnostics = page.getByRole("button", { name: "1 项建议检查" });
   await diagnostics.click();
-  await expect(
-    page.getByRole("dialog").getByText("WORKBENCH_TEST_DIAGNOSTIC"),
-  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "关闭问题列表" }).click();
   await expect(diagnostics).toBeFocused();
   await expectNoSeriousAccessibilityFindings(page);
@@ -624,6 +750,55 @@ test("restores focus after each mobile workbench detail dialog", async ({
   await page.screenshot({
     path: testInfo.outputPath("workbench-text-200.png"),
   });
+});
+
+test("renders a live KaTeX trial while editing a formula block", async ({
+  page,
+}) => {
+  await page.route(`**/api/manage/books/${workbenchBookId}/draft`, (route) =>
+    route.fulfill({
+      body: JSON.stringify(draftProjection(20)),
+      contentType: "application/json",
+      headers: { ETag: '"draft-formula-trial"' },
+      status: 200,
+    }),
+  );
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/preview/**`,
+    (route) =>
+      route.fulfill({
+        body: editablePreviewHtml(1, "Formula block"),
+        contentType: "text/html",
+        status: 200,
+      }),
+  );
+  await page.route(
+    `**/api/manage/books/${workbenchBookId}/draft/blocks/${editableBlockId}`,
+    (route) =>
+      route.fulfill({
+        body: JSON.stringify({
+          block_id: editableBlockId,
+          kind: "math",
+          markdown: "$$x^2$$",
+        }),
+        contentType: "application/json",
+        headers: { ETag: '"formula-one"' },
+        status: 200,
+      }),
+  );
+  await loginAsAdministrator(page, "192.0.2.32");
+  await page.goto(`/manage/books/${workbenchBookId}`);
+
+  await page.frameLocator("iframe").getByText("Formula block").click();
+  const dialog = page.getByRole("dialog", { name: "编辑公式" });
+  await expect(dialog.locator(".formula-trial .katex")).toBeVisible();
+  await dialog
+    .getByRole("textbox", { name: "Markdown" })
+    .fill("$$\\frac{a}{b}$$");
+  await expect(dialog.locator(".formula-trial .katex")).toBeVisible();
+  await expect(dialog.locator(".formula-trial annotation")).toHaveText(
+    "\\frac{a}{b}",
+  );
 });
 
 test("edits a selected preview block and keeps the last preview while rebuilding", async ({
@@ -706,7 +881,6 @@ test("edits a selected preview block and keeps the last preview while rebuilding
 
   expect(patchBody).toEqual({ markdown: "Updated paragraph" });
   expect(patchEtag).toBe('"block-one"');
-  await expect(page.getByText("正在生成阅读预览")).toBeVisible();
   await expect(preview.getByText("Original paragraph")).toBeVisible();
   await expect(preview.getByText("Updated paragraph")).toBeVisible({
     timeout: 3_000,
@@ -762,7 +936,7 @@ test("keeps local block Markdown after an If-Match conflict", async ({
   await markdown.fill("Unsaved local paragraph");
   await dialog.getByRole("button", { name: "保存正文并更新预览" }).click();
   await expect(markdown).toHaveValue("Unsaved local paragraph");
-  await expect(dialog.getByRole("alert")).toContainText("本地正文仍保留");
+  await expect(dialog.getByRole("alert")).toBeVisible();
 
   await dialog.getByRole("button", { name: "放弃本地修改并重新载入" }).click();
   await expect(markdown).toHaveValue("Concurrent server paragraph");

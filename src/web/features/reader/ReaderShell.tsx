@@ -48,6 +48,63 @@ function PageOutline(props: {
 export function ReaderShell(props: ReaderPageModel) {
   const breadcrumbs = readerBreadcrumbs(props.toc, props.currentTocHeadingId);
   const published = props.mode !== "preview";
+  const readerMain = (
+    <main
+      className={published ? "reader-main" : "reader-main reader-preview-main"}
+      id="main-content"
+      style={
+        published
+          ? undefined
+          : {
+              margin: "0 auto",
+              maxWidth: "52rem",
+              padding: "0.75rem 1.5rem 2.5rem",
+            }
+      }
+    >
+      <article
+        className="reader-document"
+        dangerouslySetInnerHTML={{ __html: props.bodyHtml }}
+      />
+      <nav aria-label="翻页" className="reader-page-nav">
+        {props.previousHref ? (
+          <a href={props.previousHref} rel="prev">
+            ← 上一页
+          </a>
+        ) : (
+          <span />
+        )}
+        {props.nextHref ? (
+          <a href={props.nextHref} rel="next">
+            下一页 →
+          </a>
+        ) : (
+          <span />
+        )}
+      </nav>
+    </main>
+  );
+  if (!published) {
+    return (
+      <>
+        <a className="reader-skip-link" href="#main-content">
+          跳到正文
+        </a>
+        <div
+          className="reader-preview-root"
+          data-preview-revision={props.previewRevision}
+          data-reader-mermaid-script={readerMermaidScriptUrl}
+          data-reader-mode="preview"
+          data-reader-page-id={props.currentPageId}
+          data-reader-page-owner={props.pageOwnerHeadingId ?? undefined}
+          style={{ minHeight: "100vh" }}
+        >
+          {readerMain}
+        </div>
+        <script defer src={readerScriptUrl} />
+      </>
+    );
+  }
   return (
     <>
       <a className="reader-skip-link" href="#main-content">
@@ -55,21 +112,14 @@ export function ReaderShell(props: ReaderPageModel) {
       </a>
       <header
         className="reader-topbar"
-        data-preview-revision={
-          props.mode === "preview" ? props.previewRevision : undefined
-        }
         data-reader-mermaid-script={readerMermaidScriptUrl}
-        data-reader-mode={props.mode ?? "published"}
+        data-reader-mode="published"
         data-reader-page-id={props.currentPageId}
         data-reader-page-owner={props.pageOwnerHeadingId ?? undefined}
       >
-        {published ? (
-          <a className="reader-library-link" href="/library">
-            返回书库
-          </a>
-        ) : (
-          <span className="reader-library-link">草稿预览</span>
-        )}
+        <a className="reader-library-link" href="/library">
+          返回书库
+        </a>
         <nav aria-label="当前位置" className="reader-breadcrumb">
           <a className="reader-book-title" href={props.firstPageHref}>
             {props.bookTitle}
@@ -90,32 +140,21 @@ export function ReaderShell(props: ReaderPageModel) {
             </span>
           ))}
         </nav>
-        {published && (
-          <div className="reader-desktop-tools">
-            <BookSearch bookKey={props.bookKey} />
-            {props.originalDownloads.map((download) => (
-              <a
-                download
-                href={download.href}
-                key={download.href}
-                rel="nofollow"
-              >
-                {download.label}
-              </a>
-            ))}
-          </div>
-        )}
+        <div className="reader-desktop-tools">
+          <BookSearch bookKey={props.bookKey} />
+          {props.originalDownloads.map((download) => (
+            <a download href={download.href} key={download.href} rel="nofollow">
+              {download.label}
+            </a>
+          ))}
+        </div>
       </header>
       <nav aria-label="阅读工具" className="reader-mobile-actions">
         {[
           ["reader-mobile-toc", "目录"],
           ["reader-mobile-outline", "本文"],
-          ...(published
-            ? ([
-                ["reader-mobile-search", "搜索"],
-                ["reader-mobile-downloads", "下载"],
-              ] as const)
-            : []),
+          ["reader-mobile-search", "搜索"],
+          ["reader-mobile-downloads", "下载"],
         ].map(([id, label]) => (
           <button
             aria-controls={id}
@@ -134,28 +173,7 @@ export function ReaderShell(props: ReaderPageModel) {
           currentPageId={props.currentPageId}
           toc={props.toc}
         />
-        <main className="reader-main" id="main-content">
-          <article
-            className="reader-document"
-            dangerouslySetInnerHTML={{ __html: props.bodyHtml }}
-          />
-          <nav aria-label="翻页" className="reader-page-nav">
-            {props.previousHref ? (
-              <a href={props.previousHref} rel="prev">
-                ← 上一页
-              </a>
-            ) : (
-              <span />
-            )}
-            {props.nextHref ? (
-              <a href={props.nextHref} rel="next">
-                下一页 →
-              </a>
-            ) : (
-              <span />
-            )}
-          </nav>
-        </main>
+        {readerMain}
         <PageOutline
           currentHeadingId={props.pageOwnerHeadingId}
           outline={props.outline}
@@ -196,48 +214,44 @@ export function ReaderShell(props: ReaderPageModel) {
           showHeading={false}
         />
       </dialog>
-      {published && (
-        <>
-          <dialog
-            aria-labelledby="reader-mobile-search-heading"
-            data-reader-drawer
-            id="reader-mobile-search"
-          >
-            <div className="reader-drawer-heading">
-              <h2 id="reader-mobile-search-heading">搜索</h2>
-              <form method="dialog">
-                <button type="submit">关闭</button>
-              </form>
-            </div>
-            <BookSearch bookKey={props.bookKey} />
-          </dialog>
-          <dialog
-            aria-labelledby="reader-mobile-downloads-heading"
-            data-reader-drawer
-            id="reader-mobile-downloads"
-          >
-            <div className="reader-drawer-heading">
-              <h2 id="reader-mobile-downloads-heading">下载</h2>
-              <form method="dialog">
-                <button type="submit">关闭</button>
-              </form>
-            </div>
-            {props.originalDownloads.length > 0 ? (
-              <ul>
-                {props.originalDownloads.map((download) => (
-                  <li key={download.href}>
-                    <a download href={download.href} rel="nofollow">
-                      {download.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>这本书没有可下载的原始文件。</p>
-            )}
-          </dialog>
-        </>
-      )}
+      <dialog
+        aria-labelledby="reader-mobile-search-heading"
+        data-reader-drawer
+        id="reader-mobile-search"
+      >
+        <div className="reader-drawer-heading">
+          <h2 id="reader-mobile-search-heading">搜索</h2>
+          <form method="dialog">
+            <button type="submit">关闭</button>
+          </form>
+        </div>
+        <BookSearch bookKey={props.bookKey} />
+      </dialog>
+      <dialog
+        aria-labelledby="reader-mobile-downloads-heading"
+        data-reader-drawer
+        id="reader-mobile-downloads"
+      >
+        <div className="reader-drawer-heading">
+          <h2 id="reader-mobile-downloads-heading">下载</h2>
+          <form method="dialog">
+            <button type="submit">关闭</button>
+          </form>
+        </div>
+        {props.originalDownloads.length > 0 ? (
+          <ul>
+            {props.originalDownloads.map((download) => (
+              <li key={download.href}>
+                <a download href={download.href} rel="nofollow">
+                  {download.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>暂无下载</p>
+        )}
+      </dialog>
       <script defer src={readerScriptUrl} />
     </>
   );

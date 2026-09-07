@@ -85,15 +85,6 @@ test("closes typography, formula and printed contents preview-to-publication beh
     timeout: 30_000,
   });
   await page.getByRole("link", { name: "打开出版工作台" }).click();
-  const sourceHandling = page.locator(".desktop-source-regions");
-  await sourceHandling.locator("summary").click();
-  await expect(sourceHandling).toContainText("zh-smart-v2");
-  await expect(sourceHandling).toContainText("补齐空格");
-  await expect(sourceHandling).toContainText("2");
-  await expect(sourceHandling).toContainText("转换标点");
-  await expect(sourceHandling).toContainText("3");
-  await expect(sourceHandling).toContainText("保护节点");
-  await expect(sourceHandling).toContainText("4");
 
   await expect(page.locator("iframe")).toHaveAttribute(
     "sandbox",

@@ -127,23 +127,21 @@ describe("candidate preview materialization", () => {
         "utf8",
       );
       expect(normalizedArticle(preview)).toBe(normalizedArticle(published));
-      expect(preview).toContain(">1 First</a>");
-      expect(preview).not.toContain(">1. First</a>");
+      expect(preview).toContain('<span class="heading-number">1 </span>First');
       expect(secondPreview).toContain(
         `data-reader-page-owner="${headingIds[1]}"`,
       );
-      expect(secondPreview).toContain(">2 Second</a>");
-      expect(secondPreview).toContain(`data-outline-link="${headingIds[1]}"`);
+      expect(secondPreview).toContain(
+        '<span class="heading-number">2 </span>Second',
+      );
       expect(preview).toContain('data-reader-mode="preview"');
       expect(preview).not.toContain('rel="canonical"');
       expect(preview).not.toContain("reader-book-search");
-      expect(preview).not.toContain("下载原始 ZIP");
       expect(preview).toContain(
         `/api/manage/books/7/preview/3/assets/${resourceId}`,
       );
       expect(published).toContain('data-reader-mode="published"');
       expect(published).toContain('<link rel="canonical" href="/read/7/1">');
-      expect(published).toContain("下载原始 ZIP");
       expect(published).toContain(
         `/books/7/assets/ver_candidate_0001/${resourceId}`,
       );

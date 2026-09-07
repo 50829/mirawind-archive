@@ -2,10 +2,11 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
   ChevronRight,
+  Eye,
+  EyeOff,
   FilePenLine,
   RotateCcw,
   Search,
-  SlidersHorizontal,
   X,
 } from "lucide-react";
 import {
@@ -23,17 +24,21 @@ import {
   manageDialogHeader,
   manageField,
   manageFieldLabel,
+  managePanel,
   manageQuietButton,
+  manageQuietText,
   manageSecondaryButton,
 } from "../ui/manage-classes";
 
 import {
+  buildStructurePreview,
   changeDisplayLevel,
   mergeAcceptedNodes,
   mergeAcceptedNumbering,
   type EditableStructureNode as StructureNode,
   type HeadingNumberingMode,
 } from "./structure-editor-state";
+import { RichStructureTitle } from "./RichStructureTitle";
 
 interface HeadingContext {
   readonly block_id: string;
@@ -42,24 +47,17 @@ interface HeadingContext {
   readonly title: string;
 }
 
-interface TypographySummary {
-  readonly profile: "verbatim-v1" | "zh-smart-v2";
-  readonly protected_nodes: number;
-  readonly punctuation_converted: number;
-  readonly spaces_normalized: number;
-}
-
 interface ContentBoundaries {
   readonly appendix_start_block_id?: string;
   readonly backmatter_start_block_id?: string;
   readonly body_start_block_id: string;
 }
 
-function withoutCollapsedDescendants(
-  nodes: readonly StructureNode[],
+function withoutCollapsedDescendants<Node extends StructureNode>(
+  nodes: readonly Node[],
   collapsedIds: ReadonlySet<string>,
-): readonly StructureNode[] {
-  const visible: StructureNode[] = [];
+): readonly Node[] {
+  const visible: Node[] = [];
   let hiddenBelowLevel: number | null = null;
   for (const node of nodes) {
     if (hiddenBelowLevel !== null && node.display_level > hiddenBelowLevel) {
@@ -92,13 +90,14 @@ export const StructureEditor = forwardRef<
     readonly etag: string;
     readonly focusedBlockId?: string | null;
     readonly headings: readonly HeadingContext[];
+    readonly mobileHidden?: boolean;
     readonly onSaved: () => Promise<void>;
+    readonly onSelectHeading?: (blockId: string) => void;
     readonly onStateChange: (state: StructureEditorState) => void;
     readonly numbering: HeadingNumberingMode;
     readonly revision: number;
     readonly saveDisabled?: boolean;
     readonly structure: readonly StructureNode[];
-    readonly typography?: TypographySummary | undefined;
   }
 >(function StructureEditor(props, ref) {
   const initialNodes = props.structure;
@@ -106,6 +105,7 @@ export const StructureEditor = forwardRef<
   const [boundaries, setBoundaries] = useState(props.boundaries);
   const [numbering, setNumbering] = useState(props.numbering);
   const [query, setQuery] = useState("");
+  const [treeMode, setTreeMode] = useState<"all" | "toc">("toc");
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -130,8 +130,6 @@ export const StructureEditor = forwardRef<
   });
   const selectedDialog = useRef<HTMLDialogElement>(null);
   const selectedDialogTrigger = useRef<HTMLButtonElement>(null);
-  const sourceDialog = useRef<HTMLDialogElement>(null);
-  const sourceDialogTrigger = useRef<HTMLButtonElement>(null);
   const lastRevision = useRef(props.revision);
   nodesRef.current = nodes;
   numberingRef.current = numbering;
@@ -139,49 +137,58 @@ export const StructureEditor = forwardRef<
     () => new Map(props.headings.map((heading) => [heading.block_id, heading])),
     [props.headings],
   );
+  const previewNodes = useMemo(
+    () => buildStructurePreview(nodes, boundaries, numbering),
+    [boundaries, nodes, numbering],
+  );
+  const treeNodes = useMemo(
+    () =>
+      treeMode === "toc"
+        ? previewNodes.filter((node) => node.include_in_toc)
+        : previewNodes,
+    [previewNodes, treeMode],
+  );
   const filteredNodes = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("zh-CN");
-    if (!normalized) return nodes;
-    return nodes.filter((node) => {
+    if (!normalized) return treeNodes;
+    return previewNodes.filter((node) => {
       const heading = headingById.get(node.block_id);
       return [
         node.title_markdown,
+        node.preview_title,
         heading?.source_title,
         heading?.title,
         node.block_id,
       ].some((value) => value?.toLocaleLowerCase("zh-CN").includes(normalized));
     });
-  }, [headingById, nodes, query]);
+  }, [headingById, previewNodes, query, treeNodes]);
   const expandableIds = useMemo(
     () =>
       new Set(
-        nodes.flatMap((node, index) =>
-          (nodes[index + 1]?.display_level ?? 0) > node.display_level
+        treeNodes.flatMap((node, index) =>
+          (treeNodes[index + 1]?.display_level ?? 0) > node.display_level
             ? [node.block_id]
             : [],
         ),
       ),
-    [nodes],
+    [treeNodes],
   );
   const visibleNodes = useMemo(
     () =>
       query.trim()
         ? filteredNodes
-        : withoutCollapsedDescendants(nodes, collapsedIds),
-    [collapsedIds, filteredNodes, nodes, query],
+        : withoutCollapsedDescendants(treeNodes, collapsedIds),
+    [collapsedIds, filteredNodes, query, treeNodes],
   );
   const listParent = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: visibleNodes.length,
-    estimateSize: () => 44,
+    estimateSize: () => 36,
     getScrollElement: () => listParent.current,
     overscan: 8,
   });
   const selectedIndex = nodes.findIndex((node) => node.block_id === selectedId);
   const selected = selectedIndex >= 0 ? nodes[selectedIndex] : undefined;
-  const selectedHeading = selected
-    ? headingById.get(selected.block_id)
-    : undefined;
 
   useEffect(() => {
     if (props.revision === lastRevision.current) return;
@@ -238,19 +245,22 @@ export const StructureEditor = forwardRef<
   function renderSelectedNode(titleId: string) {
     return (
       <>
-        <h2 className="text-base font-bold" id={titleId}>
+        <h2
+          className="flex min-h-12 items-center text-base font-bold"
+          id={titleId}
+        >
           当前结构项
         </h2>
         {!selected ? (
           <p>没有匹配的结构项。</p>
         ) : (
           <>
-            <p className="source-heading mt-3 font-semibold">
-              {selectedHeading?.source_title ??
-                selectedHeading?.title ??
-                selected.block_id}
-              {selectedHeading ? ` · 源 H${selectedHeading.source_level}` : ""}
-            </p>
+            {!selected.include_in_toc && (
+              <p className="mt-2 flex items-center gap-2 text-sm text-stone-600">
+                <EyeOff aria-hidden="true" size={16} />
+                <span>不在目录中</span>
+              </p>
+            )}
             <label className={manageFieldLabel}>
               标题
               <input
@@ -262,6 +272,12 @@ export const StructureEditor = forwardRef<
                 value={selected.title_markdown}
               />
             </label>
+            <div
+              aria-label="标题即时试排"
+              className="mb-4 rounded-md border border-stone-200 bg-stone-50 p-3 text-sm"
+            >
+              <RichStructureTitle markdown={selected.title_markdown} />
+            </div>
             <div className="structure-fields grid grid-cols-2 gap-3">
               <label className={manageFieldLabel}>
                 显示层级
@@ -381,42 +397,6 @@ export const StructureEditor = forwardRef<
     );
   }
 
-  function renderSourceHandling(titleId: string) {
-    return (
-      <>
-        <h2 className="text-base font-bold" id={titleId}>
-          源处理
-        </h2>
-        {props.typography && (
-          <dl className="source-processing-summary my-4 grid grid-cols-2 gap-2">
-            <div className="bg-stone-100 p-3">
-              <dt className="text-xs text-stone-600">排版方式</dt>
-              <dd className="mt-1 font-semibold">{props.typography.profile}</dd>
-            </div>
-            <div className="bg-stone-100 p-3">
-              <dt className="text-xs text-stone-600">补齐空格</dt>
-              <dd className="mt-1 font-semibold">
-                {props.typography.spaces_normalized}
-              </dd>
-            </div>
-            <div className="bg-stone-100 p-3">
-              <dt className="text-xs text-stone-600">转换标点</dt>
-              <dd className="mt-1 font-semibold">
-                {props.typography.punctuation_converted}
-              </dd>
-            </div>
-            <div className="bg-stone-100 p-3">
-              <dt className="text-xs text-stone-600">保护节点</dt>
-              <dd className="mt-1 font-semibold">
-                {props.typography.protected_nodes}
-              </dd>
-            </div>
-          </dl>
-        )}
-      </>
-    );
-  }
-
   const dirtyChanges = nodes.flatMap((node, index) => {
     const initial = initialNodes[index];
     if (!initial || JSON.stringify(initial) === JSON.stringify(node)) return [];
@@ -508,154 +488,204 @@ export const StructureEditor = forwardRef<
   }, [conflict, dirty, onStateChange, saving]);
 
   return (
-    <section
-      className="structure-editor mt-8 border-t border-stone-200 pt-4"
-      aria-label="结构编辑"
-    >
-      <fieldset className="mb-4">
-        <legend className="mb-2 font-semibold">标题编号</legend>
+    <div className="structure-editor-contents contents">
+      <section
+        aria-label="目录试排"
+        className={`${managePanel} structure-navigator col-start-1 row-start-1 self-start overflow-hidden ${
+          props.mobileHidden ? "max-[850px]:hidden" : ""
+        }`}
+      >
+        <div className="mb-3 flex min-h-12 items-center justify-between gap-3">
+          <h2 className="text-base font-bold">目录试排</h2>
+          {dirty && (
+            <span className="shrink-0 rounded-sm bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">
+              试排中，尚未保存
+            </span>
+          )}
+        </div>
+        <fieldset className="mb-2">
+          <legend className="sr-only">标题编号</legend>
+          <div
+            aria-label="标题编号方式"
+            className="grid grid-cols-3 gap-1"
+            role="group"
+          >
+            {(
+              [
+                ["source", "原书编号"],
+                ["generated", "自动编号"],
+                ["none", "无编号"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                aria-pressed={numbering === mode}
+                className={`${manageQuietButton} min-h-9 min-w-0 px-2 py-1 text-sm`}
+                key={mode}
+                onClick={() => setNumbering(mode)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <div
-          aria-label="标题编号方式"
-          className="grid grid-cols-3 gap-1"
+          aria-label="目录显示范围"
+          className="mb-2 grid grid-cols-2 gap-1"
           role="group"
         >
-          {(
-            [
-              ["source", "原书编号"],
-              ["generated", "自动编号"],
-              ["none", "无编号"],
-            ] as const
-          ).map(([mode, label]) => (
-            <button
-              aria-pressed={numbering === mode}
-              className={`${manageQuietButton} min-w-0 px-2 text-sm`}
-              key={mode}
-              onClick={() => setNumbering(mode)}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </fieldset>
-      <div className="structure-search grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
-        <Search aria-hidden="true" size={18} />
-        <label className="m-0">
-          <span className="sr-only">搜索结构</span>
-          <input
-            className={manageField}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder="搜索标题"
-            type="search"
-            value={query}
-          />
-        </label>
-      </div>
-      <div
-        className="structure-virtual-list my-4 h-88 overflow-auto rounded-lg border border-stone-200"
-        ref={listParent}
-      >
-        <ol
-          className="structure-tree relative m-0 list-none p-0"
-          role="tree"
-          style={{ height: `${virtualizer.getTotalSize()}px` }}
-        >
-          {virtualizer.getVirtualItems().map((item) => {
-            const node = visibleNodes[item.index];
-            if (!node) return null;
-            const heading = headingById.get(node.block_id);
-            const expandable = expandableIds.has(node.block_id);
-            const expanded = expandable && !collapsedIds.has(node.block_id);
-            return (
-              <li
-                aria-expanded={expandable ? expanded : undefined}
-                aria-level={node.display_level}
-                className="absolute inset-x-0 w-full"
-                key={node.block_id}
-                role="treeitem"
-                style={{
-                  height: `${item.size}px`,
-                  transform: `translateY(${item.start}px)`,
-                }}
-              >
-                <div className="flex h-full border-b border-stone-200 bg-white">
-                  {expandable ? (
-                    <button
-                      aria-label={expanded ? "折叠子项" : "展开子项"}
-                      className="grid size-11 shrink-0 place-items-center text-stone-600 hover:bg-stone-100"
-                      onClick={() =>
-                        setCollapsedIds((current) => {
-                          const next = new Set(current);
-                          if (expanded) next.add(node.block_id);
-                          else next.delete(node.block_id);
-                          return next;
-                        })
-                      }
-                      type="button"
-                    >
-                      {expanded ? (
-                        <ChevronDown aria-hidden="true" size={18} />
-                      ) : (
-                        <ChevronRight aria-hidden="true" size={18} />
-                      )}
-                    </button>
-                  ) : (
-                    <span className="size-11 shrink-0" />
-                  )}
-                  <button
-                    aria-current={node.block_id === selectedId}
-                    className="h-full min-w-0 flex-1 truncate bg-white pe-2 text-start text-stone-800 hover:bg-stone-50 aria-[current=true]:bg-emerald-50 aria-[current=true]:text-emerald-900"
-                    onClick={() => setSelectedId(node.block_id)}
-                    style={{
-                      paddingInlineStart: `${Math.max(0, node.display_level - 1) * 16 + 8}px`,
-                    }}
-                    type="button"
-                  >
-                    {node.title_markdown ||
-                      heading?.source_title ||
-                      heading?.title ||
-                      node.block_id}
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-
-      <div className="mobile-detail-actions mt-4 hidden items-center gap-2 max-[850px]:flex">
-        <button
-          className={manageSecondaryButton}
-          onClick={() => selectedDialog.current?.showModal()}
-          ref={selectedDialogTrigger}
-          type="button"
-        >
-          <FilePenLine aria-hidden="true" size={18} />
-          当前项
-        </button>
-        {props.typography && (
           <button
-            className={manageSecondaryButton}
-            onClick={() => sourceDialog.current?.showModal()}
-            ref={sourceDialogTrigger}
+            aria-pressed={treeMode === "toc"}
+            className={`${manageQuietButton} min-h-9 min-w-0 px-2 py-1 text-sm`}
+            onClick={() => setTreeMode("toc")}
             type="button"
           >
-            <SlidersHorizontal aria-hidden="true" size={18} />
-            源处理
+            <Eye aria-hidden="true" size={16} />
+            目录预览
           </button>
-        )}
-      </div>
+          <button
+            aria-pressed={treeMode === "all"}
+            className={`${manageQuietButton} min-h-9 min-w-0 px-2 py-1 text-sm`}
+            onClick={() => setTreeMode("all")}
+            type="button"
+          >
+            <EyeOff aria-hidden="true" size={16} />
+            全部标题
+          </button>
+        </div>
+        <div className="structure-search grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
+          <Search aria-hidden="true" size={18} />
+          <label className="m-0">
+            <span className="sr-only">搜索结构</span>
+            <input
+              className={`${manageField} min-h-9 py-1.5`}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              placeholder="搜索标题"
+              type="search"
+              value={query}
+            />
+          </label>
+        </div>
+        <div
+          className="structure-virtual-list my-3 h-[calc(100vh-25rem)] min-h-72 max-h-[38rem] overflow-auto rounded-md bg-stone-50 py-1"
+          ref={listParent}
+        >
+          {visibleNodes.length === 0 && (
+            <p className={`p-4 ${manageQuietText}`}>
+              {query ? "没有匹配的标题。" : "当前目录没有可见标题。"}
+            </p>
+          )}
+          <ol
+            className="structure-tree relative m-0 list-none p-0"
+            role="tree"
+            style={{ height: `${virtualizer.getTotalSize() + 8}px` }}
+          >
+            {virtualizer.getVirtualItems().map((item) => {
+              const node = visibleNodes[item.index];
+              if (!node) return null;
+              const expandable = expandableIds.has(node.block_id);
+              const expanded = expandable && !collapsedIds.has(node.block_id);
+              return (
+                <li
+                  aria-expanded={expandable ? expanded : undefined}
+                  aria-level={node.display_level}
+                  className="absolute inset-x-0 w-full px-1"
+                  key={node.block_id}
+                  role="treeitem"
+                  style={{
+                    height: `${item.size}px`,
+                    transform: `translateY(${item.start}px)`,
+                  }}
+                >
+                  <div className="flex h-full items-center rounded-sm">
+                    {expandable ? (
+                      <button
+                        aria-label={expanded ? "折叠子项" : "展开子项"}
+                        className="grid size-8 shrink-0 place-items-center rounded-sm text-stone-500 hover:bg-stone-200"
+                        onClick={() =>
+                          setCollapsedIds((current) => {
+                            const next = new Set(current);
+                            if (expanded) next.add(node.block_id);
+                            else next.delete(node.block_id);
+                            return next;
+                          })
+                        }
+                        type="button"
+                      >
+                        {expanded ? (
+                          <ChevronDown aria-hidden="true" size={18} />
+                        ) : (
+                          <ChevronRight aria-hidden="true" size={18} />
+                        )}
+                      </button>
+                    ) : (
+                      <span className="size-8 shrink-0" />
+                    )}
+                    <button
+                      aria-current={node.block_id === selectedId}
+                      aria-label={node.preview_title || node.block_id}
+                      className="h-8 min-w-0 flex-1 truncate rounded-sm bg-transparent pe-2 text-start text-sm text-stone-800 hover:bg-stone-200 aria-[current=true]:bg-emerald-100 aria-[current=true]:font-semibold aria-[current=true]:text-emerald-900"
+                      onClick={() => {
+                        setSelectedId(node.block_id);
+                        props.onSelectHeading?.(node.block_id);
+                      }}
+                      style={{
+                        paddingInlineStart: `${Math.max(0, node.display_level - 1) * 12 + 4}px`,
+                      }}
+                      type="button"
+                    >
+                      <span className="truncate">
+                        {node.number && (
+                          <span className="font-medium">{node.number} </span>
+                        )}
+                        <RichStructureTitle markdown={node.title_markdown} />
+                      </span>
+                    </button>
+                    {!node.include_in_toc && treeMode === "all" && (
+                      <span className="flex shrink-0 items-center gap-1 px-2 text-xs text-stone-500">
+                        <EyeOff aria-hidden="true" size={14} />
+                        不在目录中
+                      </span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
 
-      <div className="selected-node-editor desktop-node-editor min-h-80 border-t border-stone-200 pt-4 max-[850px]:hidden">
+        <div className="mobile-detail-actions mt-4 hidden items-center gap-2 max-[1180px]:flex">
+          <button
+            className={manageSecondaryButton}
+            onClick={() => selectedDialog.current?.showModal()}
+            ref={selectedDialogTrigger}
+            type="button"
+          >
+            <FilePenLine aria-hidden="true" size={18} />
+            当前项
+          </button>
+        </div>
+        <div className="editor-actions mt-4 flex flex-wrap gap-2">
+          {status && (
+            <button
+              className={manageQuietButton}
+              onClick={() => void discardAndReload()}
+              type="button"
+            >
+              <RotateCcw aria-hidden="true" size={18} />
+              放弃本地修改并重新载入
+            </button>
+          )}
+        </div>
+        {status && <p role="alert">{status}</p>}
+      </section>
+
+      <aside
+        aria-label="当前结构项"
+        className={`${managePanel} selected-node-editor desktop-node-editor col-start-3 row-start-1 max-h-[calc(100vh-12rem)] self-start overflow-auto max-[1180px]:hidden`}
+      >
         {renderSelectedNode("desktop-editor-title")}
-      </div>
-
-      {props.typography && (
-        <details className="desktop-source-regions max-[850px]:hidden">
-          <summary>源处理</summary>
-          <div>{renderSourceHandling("desktop-source-title")}</div>
-        </details>
-      )}
+      </aside>
 
       <dialog
         aria-labelledby="mobile-editor-title"
@@ -679,48 +709,6 @@ export const StructureEditor = forwardRef<
           {renderSelectedNode("mobile-editor-title")}
         </div>
       </dialog>
-
-      {props.typography && (
-        <dialog
-          aria-labelledby="mobile-source-title"
-          className={`workbench-mobile-dialog ${manageDialog}`}
-          onClose={() => sourceDialogTrigger.current?.focus()}
-          ref={sourceDialog}
-        >
-          <header className={manageDialogHeader}>
-            <span>源处理</span>
-            <button
-              aria-label="关闭源处理"
-              className={manageDialogClose}
-              onClick={() => sourceDialog.current?.close()}
-              title="关闭"
-              type="button"
-            >
-              <X aria-hidden="true" size={20} />
-            </button>
-          </header>
-          <div className="workbench-dialog-body p-4 max-[850px]:min-h-[calc(100dvh-3.5rem)] max-[850px]:overflow-auto">
-            {renderSourceHandling("mobile-source-title")}
-          </div>
-        </dialog>
-      )}
-
-      <div className="editor-actions mt-4 flex flex-wrap gap-2">
-        {status && (
-          <button
-            className={manageQuietButton}
-            onClick={() => void discardAndReload()}
-            type="button"
-          >
-            <RotateCcw aria-hidden="true" size={18} />
-            放弃本地修改并重新载入
-          </button>
-        )}
-      </div>
-      {dirty && props.saveDisabled && (
-        <p role="status">本地修改尚未反映；当前预览完成前不能再次保存。</p>
-      )}
-      {status && <p role="alert">{status}</p>}
-    </section>
+    </div>
   );
 });

@@ -13,25 +13,19 @@ import {
 import { usePolling } from "./use-polling";
 
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import {
+  actionableDiagnostics,
+  diagnosticSummary,
+} from "./diagnostic-presentation";
 import { BookSettingsDialog } from "./BookSettingsDialog";
+import { FormulaTrial } from "./RichStructureTitle";
 import { PublishPanel } from "./PublishPanel";
 import {
   StructureEditor,
   type StructureEditorHandle,
   type StructureEditorState,
 } from "./StructureEditor";
-import type {
-  DraftView,
-  PreviewPage,
-  RecoveryJob,
-} from "../../contracts/publishing";
-
-const terminalJobStates = new Set<RecoveryJob["state"]>([
-  "canceled",
-  "failed",
-  "interrupted",
-  "succeeded",
-]);
+import type { DraftView, PreviewPage } from "../../contracts/publishing";
 
 type PreviewFrameMessageType =
   | "mirawind-preview-location"
@@ -117,6 +111,17 @@ const blockKindLabels: Readonly<Record<string, string>> = Object.freeze({
   table: "表格",
 });
 
+function editableFormulaSource(markdown: string): string {
+  const source = markdown.trim();
+  if (source.startsWith("$$") && source.endsWith("$$")) {
+    return source.slice(2, -2).trim();
+  }
+  if (source.startsWith("\\[") && source.endsWith("\\]")) {
+    return source.slice(2, -2).trim();
+  }
+  return source;
+}
+
 export function PublishingWorkbench(props: { readonly bookId: number }) {
   const [draft, setDraft] = useState<DraftView | null>(null);
   const [displayedPreview, setDisplayedPreview] =
@@ -126,7 +131,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   const [selectedFragment, setSelectedFragment] = useState<string | null>(null);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
-  const [reprocessJob, setReprocessJob] = useState<RecoveryJob | null>(null);
   const [frameReady, setFrameReady] = useState(false);
   const [navigationSerial, setNavigationSerial] = useState(0);
   const [mobileMode, setMobileMode] = useState<"preview" | "structure">(
@@ -182,6 +186,20 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   const preview = draft?.preview ?? displayedPreview;
   const previewIsCurrent = Boolean(
     draft?.preview && draft.preview.config_revision === draft.config_revision,
+  );
+  const selectPreviewHeading = useCallback(
+    (blockId: string) => {
+      const heading = preview?.headings.find(
+        (candidate) => candidate.block_id === blockId,
+      );
+      if (!heading || heading.page_id === null) return;
+      setFrameReady(false);
+      setSelectedPage(heading.page_id);
+      setSelectedFragment(blockId);
+      setNavigationSerial((value) => value + 1);
+      setMobileMode("preview");
+    },
+    [preview],
   );
 
   const loadBlock = useCallback(
@@ -299,38 +317,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     1_000,
   );
 
-  usePolling(
-    Boolean(reprocessJob && !terminalJobStates.has(reprocessJob.state)),
-    async () => {
-      if (!reprocessJob) return;
-      try {
-        const response = await fetch(
-          `/api/manage/jobs/${reprocessJob.job_id}`,
-          { cache: "no-store", credentials: "same-origin" },
-        );
-        if (!response.ok) throw new Error("REPROCESS_STATUS_FAILED");
-        const next = (await response.json()) as RecoveryJob;
-        setReprocessJob(next);
-        if (next.state === "succeeded") {
-          setReprocessJob(null);
-          setMessage("");
-          await refresh();
-        } else if (
-          next.state === "failed" ||
-          next.state === "interrupted" ||
-          next.state === "canceled"
-        ) {
-          setMessage(
-            `按原文重新处理未完成（${next.error_code ?? next.state}）。`,
-          );
-        }
-      } catch {
-        setMessage("重新处理状态刷新失败；可稍后重新载入。");
-      }
-    },
-    1_000,
-  );
-
   useEffect(() => {
     if (!preview) return;
     const receivePreviewMessage = (event: MessageEvent<unknown>) => {
@@ -365,38 +351,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     async (target: DiagnosticTarget) => {
       diagnosticsDialog.current?.close();
       if (target.kind === "reprocess_verbatim") {
-        setMessage("");
-        if (
-          !draft ||
-          editorState.dirty ||
-          editorState.conflict ||
-          editorState.saving ||
-          blockDirty ||
-          blockEditor?.saving ||
-          blockEditor?.conflict
-        ) {
-          setMessage("本地修改或冲突尚未处理，不能开始重新处理。");
-          return;
-        }
-        try {
-          const response = await fetch(
-            `/api/manage/books/${draft.book_id}/reprocess`,
-            {
-              body: JSON.stringify({
-                expected_config_revision: draft.config_revision,
-                profile: "verbatim-v1",
-              }),
-              cache: "no-store",
-              credentials: "same-origin",
-              headers: { "Content-Type": "application/json" },
-              method: "POST",
-            },
-          );
-          if (!response.ok) throw new Error("REPROCESS_FAILED");
-          setReprocessJob((await response.json()) as RecoveryJob);
-        } catch {
-          setMessage("无法开始按原文重新处理。");
-        }
         return;
       }
       setFrameReady(false);
@@ -411,7 +365,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         await loadBlock(target.blockId);
       }
     },
-    [blockDirty, blockEditor, draft, editorState, loadBlock],
+    [loadBlock],
   );
 
   const saveBlock = useCallback(async () => {
@@ -497,7 +451,17 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   const pageId = preview?.pages.some((page) => page.page_id === selectedPage)
     ? selectedPage
     : (preview?.pages.at(0)?.page_id ?? null);
-  const blockingDiagnostics = draft.diagnostics.filter(
+  const actionable = actionableDiagnostics(draft.diagnostics);
+  const issues = diagnosticSummary(actionable);
+  const issueLabel = [
+    issues.errors > 0 ? `${issues.errors} 项需要修复` : "",
+    issues.warnings + issues.information > 0
+      ? `${issues.warnings + issues.information} 项建议检查`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const blockingDiagnostics = actionable.filter(
     (diagnostic) => diagnostic.severity === "error",
   );
   const candidateState = draft.candidate?.state ?? "failed";
@@ -506,7 +470,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     preview?.config_revision === draft.config_revision;
   return (
     <div className="preview-workspace" data-mobile-mode={mobileMode}>
-      <header className="preview-header sticky top-0 z-10 mb-4 grid min-h-18 grid-cols-[auto_minmax(12rem,1fr)_auto_auto_auto_auto] items-center gap-3 rounded-lg border border-stone-300 bg-white px-6 py-3 max-[850px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[480px]:grid-cols-[minmax(0,1fr)_auto] max-[480px]:gap-2 max-[480px]:px-3">
+      <header className="preview-header sticky top-0 z-10 mb-4 grid min-h-18 grid-cols-[auto_minmax(12rem,1fr)_auto_auto_auto_auto] items-center gap-3 rounded-lg border border-stone-300 bg-white px-6 py-3 max-[850px]:static max-[850px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[480px]:grid-cols-[minmax(0,1fr)_auto] max-[480px]:gap-2 max-[480px]:px-3">
         <a
           className="workbench-back font-semibold text-emerald-800 hover:text-emerald-900 max-[480px]:col-start-1 max-[480px]:row-start-1"
           href="/library"
@@ -525,14 +489,9 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
               预览构建失败
             </p>
           )}
-          {(editorState.dirty || blockDirty) && (
+          {blockDirty && (
             <p className="text-xs text-amber-800" role="status">
-              本地修改尚未反映
-            </p>
-          )}
-          {reprocessJob && !terminalJobStates.has(reprocessJob.state) && (
-            <p className="text-xs text-amber-800" role="status">
-              正在按原文重新处理
+              正文修改尚未保存
             </p>
           )}
           {message && (
@@ -541,27 +500,18 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             </p>
           )}
         </div>
-        {draft.diagnostics.length > 0 && (
-          <>
-            <a
-              className="workbench-issues workbench-issues-desktop font-semibold text-emerald-800 hover:text-emerald-900 max-[850px]:hidden"
-              href="#workbench-diagnostics"
-            >
-              {draft.diagnostics.length} 个问题
-            </a>
-            <button
-              aria-label={`${draft.diagnostics.length} 个问题`}
-              className={`${manageSecondaryButton} workbench-issues-mobile min-[851px]:hidden max-[850px]:flex max-[480px]:col-start-2 max-[480px]:row-start-1 max-[480px]:justify-self-end`}
-              onClick={() => diagnosticsDialog.current?.showModal()}
-              ref={diagnosticsDialogTrigger}
-              title={`${draft.diagnostics.length} 个问题`}
-              type="button"
-            >
-              <CircleAlert aria-hidden="true" size={18} />
-              <span aria-hidden="true">{draft.diagnostics.length}</span>
-              <span className="sr-only">个问题</span>
-            </button>
-          </>
+        {actionable.length > 0 && (
+          <button
+            aria-label={issueLabel}
+            className={`${manageQuietButton} workbench-issues max-[480px]:col-start-2 max-[480px]:row-start-1 max-[480px]:justify-self-end`}
+            onClick={() => diagnosticsDialog.current?.showModal()}
+            ref={diagnosticsDialogTrigger}
+            title={issueLabel}
+            type="button"
+          >
+            <CircleAlert aria-hidden="true" size={18} />
+            <span>{issueLabel}</span>
+          </button>
         )}
         <BookSettingsDialog
           disabled={
@@ -638,60 +588,35 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         </div>
       </header>
 
-      <div className="preview-grid grid grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)] gap-4 max-[850px]:grid-cols-1">
-        <aside
-          className={`structure-panel ${managePanel} ${
-            mobileMode === "preview" ? "max-[850px]:hidden" : ""
-          }`}
-          aria-labelledby="structure-title"
-        >
-          <h2 className="sr-only" id="structure-title">
-            出版结构
-          </h2>
-          {etag && (
-            <StructureEditor
-              ref={editorRef}
-              bookId={draft.book_id}
-              boundaries={draft.boundaries}
-              etag={etag}
-              focusedBlockId={focusedBlockId}
-              headings={preview?.headings ?? []}
-              onSaved={async () => {
-                await refresh();
-              }}
-              onStateChange={updateEditorState}
-              numbering={draft.numbering}
-              revision={draft.config_revision}
-              saveDisabled={
-                candidateState === "building" ||
-                blockDirty ||
-                Boolean(blockEditor?.saving || blockEditor?.conflict)
-              }
-              structure={draft.structure}
-              typography={preview?.typography}
-            />
-          )}
-          <div
-            className="desktop-diagnostics max-[850px]:hidden"
-            id="workbench-diagnostics"
-          >
-            <DiagnosticsPanel
-              diagnostics={draft.diagnostics}
-              onTarget={(target) => void activateDiagnosticTarget(target)}
-              reprocessDisabled={
-                editorState.dirty ||
-                editorState.conflict ||
-                editorState.saving ||
-                blockDirty ||
-                Boolean(blockEditor?.saving || blockEditor?.conflict)
-              }
-            />
-          </div>
-        </aside>
+      <div className="preview-grid grid grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(18rem,22rem)] gap-4 max-[1180px]:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] max-[850px]:grid-cols-1">
+        {etag && (
+          <StructureEditor
+            ref={editorRef}
+            bookId={draft.book_id}
+            boundaries={draft.boundaries}
+            etag={etag}
+            focusedBlockId={focusedBlockId}
+            headings={preview?.headings ?? []}
+            mobileHidden={mobileMode === "preview"}
+            onSaved={async () => {
+              await refresh();
+            }}
+            onSelectHeading={selectPreviewHeading}
+            onStateChange={updateEditorState}
+            numbering={draft.numbering}
+            revision={draft.config_revision}
+            saveDisabled={
+              candidateState === "building" ||
+              blockDirty ||
+              Boolean(blockEditor?.saving || blockEditor?.conflict)
+            }
+            structure={draft.structure}
+          />
+        )}
 
         <section
           aria-labelledby="document-title"
-          className={`document-panel ${managePanel} sticky top-40 h-[calc(100vh-12rem)] overflow-hidden max-[850px]:static max-[850px]:h-[70vh] ${
+          className={`document-panel ${managePanel} col-start-2 row-start-1 h-[calc(100vh-12rem)] self-start overflow-hidden max-[850px]:col-start-1 max-[850px]:h-[70vh] ${
             mobileMode === "structure" ? "max-[850px]:hidden" : ""
           }`}
           data-preview-width={previewWidth}
@@ -738,14 +663,12 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
               title={`修订 ${preview.config_revision}：${preview.pages.find((page) => page.page_id === pageId)?.title ?? "正文预览"}`}
             />
           ) : (
-            <p className="quiet text-sm text-stone-600">
-              后台完成后将在这里显示净化后的正文。
-            </p>
+            <p className="quiet text-sm text-stone-600">预览生成中…</p>
           )}
         </section>
       </div>
 
-      {draft.diagnostics.length > 0 && (
+      {actionable.length > 0 && (
         <dialog
           aria-labelledby="mobile-diagnostics-title"
           className={`workbench-mobile-dialog ${manageDialog}`}
@@ -753,7 +676,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           ref={diagnosticsDialog}
         >
           <header className={manageDialogHeader}>
-            <span id="mobile-diagnostics-title">问题</span>
+            <span id="mobile-diagnostics-title">问题与建议</span>
             <button
               aria-label="关闭问题列表"
               className={manageDialogClose}
@@ -766,15 +689,8 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
           </header>
           <div className="workbench-dialog-body p-4 max-[850px]:min-h-[calc(100dvh-3.5rem)] max-[850px]:overflow-auto">
             <DiagnosticsPanel
-              diagnostics={draft.diagnostics}
+              diagnostics={actionable}
               onTarget={(target) => void activateDiagnosticTarget(target)}
-              reprocessDisabled={
-                editorState.dirty ||
-                editorState.conflict ||
-                editorState.saving ||
-                blockDirty ||
-                Boolean(blockEditor?.saving || blockEditor?.conflict)
-              }
             />
           </div>
         </dialog>
@@ -827,6 +743,19 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
                   value={blockEditor.markdown}
                 />
               </label>
+              {blockEditor.kind === "math" && (
+                <section aria-labelledby="formula-trial-title">
+                  <h3
+                    className="mb-2 text-sm font-semibold"
+                    id="formula-trial-title"
+                  >
+                    公式即时试排
+                  </h3>
+                  <FormulaTrial
+                    source={editableFormulaSource(blockEditor.markdown)}
+                  />
+                </section>
+              )}
               {blockEditor.error && (
                 <p className="text-sm text-red-800" role="alert">
                   {blockEditor.error}
