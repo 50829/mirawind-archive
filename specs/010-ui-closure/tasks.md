@@ -19,7 +19,7 @@
 
 - [x] T003 [US2] Render cover/fallback, place downloads before the bounded TOC, and expose the full-reading link in `src/web/components/library/BookDetails.tsx`
 - [x] T004 [US2] Correct detail CSS and implement bounded desktop/full-viewport mobile layout in `src/pages/books/[bookKey]/index.astro`
-- [x] T005 [US2] Extend existing detail component and browser behavior coverage in `tests/unit/library/book-details-interaction.test.tsx` and `tests/e2e/library-reading.spec.ts`
+- [x] T005 [US2] Keep detail navigation coverage in `tests/unit/library/details-navigation.test.ts` and `tests/e2e/library-reading.spec.ts`; static detail markup/copy assertions removed per D-135
 
 ## Phase 3: Shared Management Shell
 

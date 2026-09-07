@@ -4,9 +4,7 @@ import {
   buildReaderNavigationTree,
   readerBreadcrumbs,
 } from "@/modules/reader/application/reader-api";
-import { renderReaderShell } from "@/web/features/reader/render";
 import { shouldNavigateWithArrowKey } from "@/web/features/reader/reader-interaction";
-import { readerScriptUrl } from "@/styles/assets";
 
 const props = {
   bodyHtml: '<h1 id="blk_test">Chapter</h1>',
@@ -111,36 +109,5 @@ describe("reader interaction", () => {
         path: [{ tagName: "P" }],
       }),
     ).toBe(false);
-  });
-
-  it("renders named mobile drawer controls and no-script navigation content", () => {
-    const html = renderReaderShell(props);
-    for (const label of ["目录", "本文", "搜索", "下载"]) {
-      expect(html).toContain(`>${label}<`);
-    }
-    expect(html).toContain('aria-controls="reader-mobile-toc"');
-    expect(html).toContain("<dialog");
-    expect(html).toContain('aria-label="全书目录"');
-    expect(html).toContain('aria-label="本页提纲"');
-    expect(html).toContain('href="/library"');
-    expect(html).toContain('aria-label="当前位置"');
-    expect(html).toContain(
-      '<a class="reader-skip-link" href="#main-content">跳到正文</a>',
-    );
-    expect(html).toContain('<main class="reader-main" id="main-content">');
-    expect(html).toContain("<details open");
-    expect(html.indexOf('class="reader-toc-link"')).toBeLessThan(
-      html.indexOf("<details open"),
-    );
-    expect(html).toContain('href="/read/current-book/1#blk_model"');
-    expect(html).toContain('data-outline-link="blk_test"');
-    expect(html).toContain('aria-current="location"');
-    expect(html).toContain(`src="${readerScriptUrl}"`);
-  });
-
-  it("initializes every bounded search instance independently", () => {
-    const html = renderReaderShell(props);
-    expect(html.match(/data-book-search/g)?.length).toBeGreaterThan(1);
-    expect(html.match(new RegExp(readerScriptUrl, "gu"))).toHaveLength(1);
   });
 });

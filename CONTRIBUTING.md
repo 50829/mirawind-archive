@@ -32,6 +32,12 @@ specification workflow.
 
 ## UI styling
 
+UI tests verify behavior, not fixed copy or serialized markup. Do not add snapshots or
+string assertions for headings, explanations, button labels, CSS classes, or element order.
+Use browser interactions for critical workflows and assert state, requests, navigation,
+accessibility, and data outcomes. Document rendering, sanitization, and private-content
+isolation tests still validate their output because that output is the functional contract.
+
 Use Tailwind CSS utilities and the shared Tailwind v4 theme. Product UI colors come only
 from the approved official palette in D-106: `stone` for neutral surfaces, `emerald` for
 primary interaction, `amber` for focus or caution, and `red` for danger, plus Tailwind

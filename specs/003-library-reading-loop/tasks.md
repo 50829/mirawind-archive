@@ -53,7 +53,7 @@ appear with working reading and details links.
 
 - [x] T014 [P] [US1] Add failing public/private/version/filter/empty/partial-unavailable library service tests in `tests/integration/library/library-service.test.ts`
 - [x] T015 [P] [US1] Add failing library HTML, ETag, canonical, cache, indexing and session-byte-identity contract tests in `tests/contract/library-reading.contract.test.ts`
-- [x] T016 [P] [US1] Add failing semantic card, placeholder and optional-metadata component tests in `tests/unit/library/library-components.test.tsx`
+- [x] T016 [P] [US1] Static card/copy tests removed per D-135; discovery and navigation remain covered by `tests/e2e/library-reading.spec.ts`
 - [x] T017 [US1] Implement bounded public and administrator library view models and representation digests in `src/services/library.ts`
 - [x] T018 [P] [US1] Implement semantic book cards, title placeholders, empty and partial-unavailable states in `src/components/library/BookCard.tsx` and `src/components/library/LibraryScene.tsx`
 - [x] T019 [P] [US1] Implement public HTML conditional response helpers and public JSON noindex policy in `src/http/cache/library-response.ts` and `src/http/cache/policies.ts`
@@ -77,7 +77,7 @@ states.
 
 - [x] T023 [P] [US2] Add failing current projection, bounded TOC/originals, alias, 404/503 and conditional details service tests in `tests/integration/library/book-details.test.ts`
 - [x] T024 [P] [US2] Extend failing HTML/JSON route contracts for details authorization, cache, indexing and canonical behavior in `tests/contract/library-reading.contract.test.ts`
-- [x] T025 [P] [US2] Add failing dialog semantics, close fallback and context-record validation tests in `tests/unit/library/book-details-interaction.test.tsx`
+- [x] T025 [P] [US2] Context validation remains in `tests/unit/library/details-navigation.test.ts`; real dialog navigation is covered by `tests/e2e/library-reading.spec.ts`, without static markup assertions (D-135)
 - [x] T026 [US2] Implement bounded public/private details resolution from projection, originals and canonical key in `src/services/library.ts`
 - [x] T027 [P] [US2] Implement details content, TOC preview, download labels and accessible native dialog markup in `src/components/library/BookDetails.tsx`
 - [x] T028 [P] [US2] Implement same-origin expiring scroll/focus history enhancement in `src/components/library/details-navigation.ts`
@@ -119,7 +119,7 @@ only after atomic cutover.
 success action and confirm all surfaces use the new version; inject stale/failure/cancel
 outcomes and confirm the old version remains the only live destination.
 
-- [x] T037 [P] [US4] Add failing progress-label, success-action and terminal-failure component tests in `tests/unit/library/publish-outcome.test.tsx`
+- [x] T037 [P] [US4] Static publication-label tests removed per D-135; publication controls and outcomes remain covered by `tests/e2e/publishing-workbench.spec.ts` and `tests/e2e/configure-publish.spec.ts`
 - [x] T038 [P] [US4] Add publish-to-library/current-version and stale/failure browser evidence in `tests/e2e/configure-publish.spec.ts` and `tests/e2e/library-reading.spec.ts`
 - [x] T039 [US4] Expose only bounded canonical publication outcome fields after committed success in `src/services/job-status.ts` and `src/pages/api/manage/jobs/[jobId]/index.ts`
 - [x] T040 [US4] Implement reader-facing phase labels and post-cutover details/read/library actions in `src/components/preview/PublishPanel.tsx`

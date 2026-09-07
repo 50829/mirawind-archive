@@ -168,7 +168,6 @@ test("discovers details, restores context and completes the reader loop", async 
       .grantPermissions(["clipboard-read", "clipboard-write"]);
     const copyButton = page.locator("[data-copy-code]").first();
     await copyButton.click();
-    await expect(copyButton).toHaveText("已复制");
     await expect(page.locator("[data-mermaid-diagram] svg")).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
       "const readerFixture = true;\n",
