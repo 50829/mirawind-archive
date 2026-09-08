@@ -1,31 +1,30 @@
 openapi: 3.1.0
 info:
   title: Mirawind MinerU Publishing API
-  version: 0.1.0
+  version: 0.2.0
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
-  description: |
-    M1 contract for public reading/search/download and sole-administrator import,
-    preview, job and publication operations. Better Auth owns `/api/auth/*`; those
-    protocol endpoints are intentionally not re-specified here. Application policy around
-    those endpoints is defined in `contracts/passkey-policy.md`.
+  description:
+    Single MinerU content-list v2 ZIP ingestion into editable IR v1, timestamped saves and
+    candidate-bound publication. Management responses require the sole administrator and prohibit
+    caching and indexing. Better Auth owns its authentication protocol endpoints.
 servers:
   - url: https://library.example.test
 tags:
   - name: Public
     description: Anonymous current-public reading, search, asset and original-file routes.
   - name: Imports
-    description: Sole-administrator ZIP upload, analysis and main-document confirmation.
+    description: Single-book MinerU v2 ZIP upload and analysis.
   - name: Drafts
-    description: Sole-administrator configuration, preview, access and publication.
+    description: Structured drafts, asynchronous saves, candidate previews and publication.
   - name: Jobs
     description: Sole-administrator durable task inspection and control.
-
 paths:
   /read/{bookKey}/{pageKey}:
     get:
-      tags: [Public]
+      tags:
+        - Public
       operationId: readPublishedPage
       summary: Read one pre-generated page from the current visible version
       security:
@@ -44,18 +43,21 @@ paths:
               schema:
                 type: string
                 enum:
-                  ["public, max-age=0, must-revalidate", "private, no-store"]
+                  - public, max-age=0, must-revalidate
+                  - private, no-store
             ETag:
               $ref: "#/components/headers/ETag"
           content:
             text/html:
-              schema: { type: string }
+              schema:
+                type: string
         "304":
           description: Authorized current representation is unchanged
           headers:
             Cache-Control:
               schema:
-                { type: string, const: "public, max-age=0, must-revalidate" }
+                type: string
+                const: public, max-age=0, must-revalidate
             ETag:
               $ref: "#/components/headers/ETag"
         "404":
@@ -64,16 +66,21 @@ paths:
           description: This book has no verified recoverable current version
           headers:
             Cache-Control:
-              schema: { type: string, const: no-store }
+              schema:
+                type: string
+                const: no-store
             Retry-After:
-              schema: { type: integer, minimum: 1 }
+              schema:
+                type: integer
+                minimum: 1
           content:
             text/html:
-              schema: { type: string }
-
+              schema:
+                type: string
   /books/{bookKey}/assets/{versionId}/{resourceId}:
     get:
-      tags: [Public]
+      tags:
+        - Public
       operationId: readPublishedAsset
       summary: Read a version-pinned generated reading asset
       security:
@@ -96,14 +103,19 @@ paths:
               schema:
                 type: string
                 enum:
-                  ["private, max-age=31536000, immutable", "private, no-store"]
+                  - private, max-age=31536000, immutable
+                  - private, no-store
             ETag:
               $ref: "#/components/headers/ETag"
             X-Content-Type-Options:
-              schema: { type: string, const: nosniff }
+              schema:
+                type: string
+                const: nosniff
           content:
             image/*:
-              schema: { type: string, contentEncoding: binary }
+              schema:
+                type: string
+                contentEncoding: binary
         "304":
           description: Authorized immutable representation is unchanged
           headers:
@@ -111,17 +123,20 @@ paths:
               schema:
                 type: string
                 enum:
-                  ["private, max-age=31536000, immutable", "private, no-store"]
+                  - private, max-age=31536000, immutable
+                  - private, no-store
             ETag:
               $ref: "#/components/headers/ETag"
             X-Content-Type-Options:
-              schema: { type: string, const: nosniff }
+              schema:
+                type: string
+                const: nosniff
         "404":
           $ref: "#/components/responses/HiddenOrMissingBinary"
-
   /books/{bookKey}/originals/{fileId}:
     get:
-      tags: [Public]
+      tags:
+        - Public
       operationId: downloadOriginal
       summary: Download or resume one registered original file
       security:
@@ -136,11 +151,12 @@ paths:
           required: false
           schema:
             type: string
-            pattern: "^bytes=(?:[0-9]+-[0-9]*|-[0-9]+)$"
+            pattern: ^bytes=(?:[0-9]+-[0-9]*|-[0-9]+)$
         - name: If-Range
           in: header
           required: false
-          schema: { type: string }
+          schema:
+            type: string
         - $ref: "#/components/parameters/IfNoneMatch"
       responses:
         "200":
@@ -149,50 +165,72 @@ paths:
           description: Authorized single byte range
           headers:
             Accept-Ranges:
-              schema: { type: string, const: bytes }
+              schema:
+                type: string
+                const: bytes
             Content-Range:
-              schema: { type: string }
+              schema:
+                type: string
             Content-Length:
-              schema: { type: integer, minimum: 0 }
+              schema:
+                type: integer
+                minimum: 0
             Content-Disposition:
-              schema: { type: string }
+              schema:
+                type: string
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
             ETag:
               $ref: "#/components/headers/ETag"
             X-Content-Type-Options:
-              schema: { type: string, const: nosniff }
+              schema:
+                type: string
+                const: nosniff
             X-Robots-Tag:
               schema:
                 type: string
-                const: "noindex, nofollow, noarchive, nosnippet"
+                const: noindex, nofollow, noarchive, nosnippet
           content:
             application/octet-stream:
-              schema: { type: string, contentEncoding: binary }
+              schema:
+                type: string
+                contentEncoding: binary
         "304":
           description: Authorized full representation is unchanged
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
             ETag:
               $ref: "#/components/headers/ETag"
             X-Content-Type-Options:
-              schema: { type: string, const: nosniff }
+              schema:
+                type: string
+                const: nosniff
         "404":
           $ref: "#/components/responses/HiddenOrMissingBinary"
         "416":
           description: Unsatisfiable or unsupported range
           headers:
             Content-Range:
-              schema: { type: string, pattern: "^bytes \\*/[0-9]+$" }
+              schema:
+                type: string
+                pattern: ^bytes \*/[0-9]+$
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
             X-Content-Type-Options:
-              schema: { type: string, const: nosniff }
-
+              schema:
+                type: string
+                const: nosniff
   /api/books/{bookKey}/search:
     get:
-      tags: [Public]
+      tags:
+        - Public
       operationId: searchPublishedBook
       summary: Search the current visible version of one book
       security:
@@ -203,15 +241,24 @@ paths:
         - name: q
           in: query
           required: true
-          schema: { type: string, minLength: 1, maxLength: 200 }
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
         - name: limit
           in: query
           required: false
-          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
         - name: cursor
           in: query
           required: false
-          schema: { type: string, maxLength: 500 }
+          schema:
+            type: string
+            maxLength: 500
       responses:
         "200":
           description: Current-version results only
@@ -220,7 +267,8 @@ paths:
               schema:
                 type: string
                 enum:
-                  ["public, max-age=0, must-revalidate", "private, no-store"]
+                  - public, max-age=0, must-revalidate
+                  - private, no-store
           content:
             application/json:
               schema:
@@ -229,10 +277,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/HiddenOrMissingJson"
-
   /api/manage/imports:
     post:
-      tags: [Imports]
+      tags:
+        - Imports
       operationId: createImport
       summary: Stream one MinerU ZIP and enqueue analysis
       security:
@@ -242,7 +290,10 @@ paths:
         - name: Idempotency-Key
           in: header
           required: true
-          schema: { type: string, minLength: 16, maxLength: 200 }
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 200
       requestBody:
         required: true
         content:
@@ -250,22 +301,21 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [file]
+              required:
+                - file
               properties:
                 file:
                   type: string
                   contentMediaType: application/zip
                   contentEncoding: binary
-                target_book_id:
-                  type: integer
-                  minimum: 1
-                  description: Omit for a new book; update-by-title is never inferred.
       responses:
         "202":
           description: Upload is durable and analysis is queued
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
               schema:
@@ -282,14 +332,17 @@ paths:
           description: Actual streamed upload exceeded 2 GiB
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/manage/imports/{importId}:
     get:
-      tags: [Imports]
+      tags:
+        - Imports
       operationId: getImport
       summary: Inspect import state, safe candidates and diagnostics
       security:
@@ -301,57 +354,19 @@ paths:
           description: Import state
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Import" }
+              schema:
+                $ref: "#/components/schemas/Import"
         "404":
           $ref: "#/components/responses/HiddenOrMissingJson"
-
-  /api/manage/imports/{importId}/main-markdown:
-    put:
-      tags: [Imports]
-      operationId: confirmMainMarkdown
-      summary: Confirm one offered generic candidate and enqueue draft preparation
-      security:
-        - cookieAuth: []
-      parameters:
-        - $ref: "#/components/parameters/ImportId"
-        - $ref: "#/components/parameters/Origin"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [candidate_id]
-              properties:
-                candidate_id:
-                  type: string
-                  pattern: "^cand_[A-Za-z0-9_-]{16,80}$"
-      responses:
-        "202":
-          description: Confirmation accepted and preparation queued
-          headers:
-            Cache-Control:
-              schema: { type: string, const: "private, no-store" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/JobAccepted" }
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFoundJson"
-        "409":
-          $ref: "#/components/responses/Conflict"
   /api/manage/books/{bookId}:
     delete:
-      tags: [Drafts]
+      tags:
+        - Drafts
       operationId: permanentlyDeleteBook
       summary: Irreversibly hide one book and enqueue contained permanent cleanup
       description: |
@@ -366,12 +381,18 @@ paths:
         - name: Idempotency-Key
           in: header
           required: true
-          schema: { type: string, minLength: 16, maxLength: 200 }
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 200
         - name: If-Match
           in: header
           required: true
           description: Strong mutation token returned by the private library API.
-          schema: { type: string, minLength: 20, maxLength: 200 }
+          schema:
+            type: string
+            minLength: 20
+            maxLength: 200
       requestBody:
         required: true
         content:
@@ -379,18 +400,24 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [confirmationTitle]
+              required:
+                - confirmationTitle
               properties:
-                confirmationTitle: { type: string, maxLength: 500 }
+                confirmationTitle:
+                  type: string
+                  maxLength: 500
       responses:
         "202":
           description: Deletion barrier committed and durable cleanup accepted
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/BookDeletionAccepted" }
+              schema:
+                $ref: "#/components/schemas/BookDeletionAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -405,16 +432,19 @@ paths:
           description: Title, mutation token, or current book state is stale
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/manage/books/{bookId}/draft:
     get:
-      tags: [Drafts]
+      tags:
+        - Drafts
       operationId: getBookDraft
-      summary: Read the current draft config, preview model and diagnostics
+      summary: Read the bounded editable IR view, timestamp, current candidate and diagnostics
       security:
         - cookieAuth: []
       parameters:
@@ -424,304 +454,20 @@ paths:
           description: Current draft representation
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
-            ETag:
-              $ref: "#/components/headers/ETag"
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Draft" }
+              schema:
+                $ref: "#/components/schemas/Draft"
         "404":
           $ref: "#/components/responses/HiddenOrMissingJson"
     patch:
-      tags: [Drafts]
-      operationId: patchDraftConfig
-      summary: Merge draft presentation changes into a new validated revision
-      security:
-        - cookieAuth: []
-      parameters:
-        - $ref: "#/components/parameters/BookId"
-        - $ref: "#/components/parameters/Origin"
-        - name: If-Match
-          in: header
-          required: true
-          description: Strong ETag returned by GET; prevents lost updates.
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [changes]
-              properties:
-                alias:
-                  oneOf:
-                    - type: string
-                      pattern: "^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$"
-                      maxLength: 120
-                    - { type: "null" }
-                boundaries:
-                  type: object
-                  additionalProperties: false
-                  properties:
-                    body_start_block_id:
-                      { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
-                    appendix_start_block_id:
-                      oneOf:
-                        - {
-                            type: string,
-                            pattern: "^blk_[A-Za-z0-9_-]{16,80}$",
-                          }
-                        - { type: "null" }
-                    backmatter_start_block_id:
-                      oneOf:
-                        - {
-                            type: string,
-                            pattern: "^blk_[A-Za-z0-9_-]{16,80}$",
-                          }
-                        - { type: "null" }
-                numbering:
-                  type: string
-                  enum: [source, generated, none]
-                changes:
-                  type: array
-                  maxItems: 20000
-                  items:
-                    type: object
-                    additionalProperties: false
-                    required: [block_id]
-                    properties:
-                      alias:
-                        oneOf:
-                          - type: string
-                            pattern: "^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$"
-                            maxLength: 120
-                          - { type: "null" }
-                      block_id:
-                        { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
-                      display_level: { type: integer, minimum: 1, maximum: 4 }
-                      include_in_toc: { type: boolean }
-                      source_number:
-                        oneOf:
-                          - { type: string, minLength: 1, maxLength: 100 }
-                          - { type: "null" }
-                      starts_page: { type: boolean }
-                      title_markdown:
-                        { type: string, minLength: 1, maxLength: 2000 }
-                metadata:
-                  type: object
-                  additionalProperties: false
-                  properties:
-                    title:
-                      oneOf:
-                        - { type: string, minLength: 1, maxLength: 500 }
-                        - { type: "null" }
-                    subtitle:
-                      oneOf:
-                        - { type: string, maxLength: 500 }
-                        - { type: "null" }
-                    authors:
-                      oneOf:
-                        - type: array
-                          items: { type: string, minLength: 1, maxLength: 200 }
-                          uniqueItems: true
-                          maxItems: 100
-                        - { type: "null" }
-                    contributors:
-                      oneOf:
-                        - type: array
-                          items: { type: string, minLength: 1, maxLength: 200 }
-                          uniqueItems: true
-                          maxItems: 100
-                        - { type: "null" }
-                    description:
-                      oneOf:
-                        - { type: string, maxLength: 10000 }
-                        - { type: "null" }
-                    language:
-                      oneOf:
-                        - type: string
-                          pattern: "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
-                        - { type: "null" }
-                    publisher:
-                      oneOf:
-                        - { type: string, maxLength: 300 }
-                        - { type: "null" }
-                    year:
-                      oneOf:
-                        - { type: integer, minimum: 1, maximum: 9999 }
-                        - { type: "null" }
-                    edition:
-                      oneOf:
-                        - { type: string, maxLength: 100 }
-                        - { type: "null" }
-                    isbn_10:
-                      oneOf:
-                        - { type: string, pattern: "^[0-9]{9}[0-9X]$" }
-                        - { type: "null" }
-                    isbn_13:
-                      oneOf:
-                        - { type: string, pattern: "^[0-9]{13}$" }
-                        - { type: "null" }
-                    cover_path:
-                      oneOf:
-                        - { type: string, minLength: 1, maxLength: 2048 }
-                        - { type: "null" }
-      responses:
-        "202":
-          description: New config revision selected and its preview build queued
-          headers:
-            Cache-Control:
-              schema: { type: string, const: "private, no-store" }
-            ETag:
-              $ref: "#/components/headers/ETag"
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/DraftUpdateAccepted" }
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFoundJson"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "412":
-          description: Draft changed since the supplied ETag
-          headers:
-            Cache-Control:
-              schema: { type: string, const: "private, no-store" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-
-  /api/manage/books/{bookId}/preview/{configRevision}/pages/{pageId}:
-    get:
-      tags: [Drafts]
-      operationId: readDraftPreviewPage
-      summary: Read one authenticated non-cacheable draft preview page
-      security:
-        - cookieAuth: []
-      parameters:
-        - $ref: "#/components/parameters/BookId"
-        - $ref: "#/components/parameters/ConfigRevision"
-        - $ref: "#/components/parameters/PageId"
-      responses:
-        "200":
-          description: Sanitized preview HTML
-          headers:
-            Cache-Control:
-              schema: { type: string, const: "private, no-store" }
-            X-Robots-Tag:
-              schema:
-                {
-                  type: string,
-                  const: "noindex, nofollow, noarchive, nosnippet",
-                }
-          content:
-            text/html:
-              schema: { type: string }
-        "404":
-          $ref: "#/components/responses/HiddenOrMissingHtml"
-
-  /api/manage/books/{bookId}/preview/{configRevision}/assets/{resourceId}:
-    get:
-      tags: [Drafts]
-      operationId: readDraftPreviewAsset
-      summary: Read one authenticated revision-pinned draft preview asset
-      security:
-        - cookieAuth: []
-      parameters:
-        - $ref: "#/components/parameters/BookId"
-        - $ref: "#/components/parameters/ConfigRevision"
-        - $ref: "#/components/parameters/ResourceId"
-      responses:
-        "200":
-          description: Preview resource
-          headers:
-            Cache-Control:
-              schema: { type: string, const: "private, no-store" }
-            X-Content-Type-Options:
-              schema: { type: string, const: nosniff }
-            X-Robots-Tag:
-              schema:
-                {
-                  type: string,
-                  const: "noindex, nofollow, noarchive, nosnippet",
-                }
-          content:
-            image/*:
-              schema: { type: string, contentEncoding: binary }
-        "404":
-          $ref: "#/components/responses/HiddenOrMissingBinary"
-
-  /api/manage/books/{bookId}/publish:
-    post:
-      tags: [Drafts]
-      operationId: publishBook
-      summary: Promote the current ready candidate
-      description: |
-        Publishing atomically promotes the server-selected current ready candidate and
-        preserves the book's existing private or public access.
-      security:
-        - cookieAuth: []
-      parameters:
-        - $ref: "#/components/parameters/BookId"
-        - $ref: "#/components/parameters/Origin"
-        - name: If-Match
-          in: header
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              properties: {}
-      responses:
-        "200":
-          description: Candidate published atomically
-          headers:
-            Cache-Control:
-              schema: { type: string, const: "private, no-store" }
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: false
-                required: [published_at, state, version_id]
-                properties:
-                  published_at: { type: integer, minimum: 0 }
-                  state: { type: string, const: published }
-                  version_id: { type: string }
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFoundJson"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "412":
-          $ref: "#/components/responses/Conflict"
-
-  /api/manage/books/{bookId}/reprocess:
-    post:
-      tags: [Drafts]
-      operationId: reprocessDraftSource
-      summary: Create a new draft source and configuration revision from a retained original
-      description: |
-        Applies a versioned Markdown typography profile in a durable worker job. The
-        accepted source, existing configuration revisions and every published version
-        remain immutable; successful completion advances only the draft pointers and
-        queues a new preview.
+      tags:
+        - Drafts
+      operationId: saveDraft
+      summary: Queue a timestamp-checked structured draft save
       security:
         - cookieAuth: []
       parameters:
@@ -735,22 +481,178 @@ paths:
               type: object
               additionalProperties: false
               required:
-                - expected_config_revision
-                - profile
+                - expected_updated_at
               properties:
-                expected_config_revision: { type: integer, minimum: 1 }
-                profile:
+                alias:
+                  oneOf:
+                    - type: string
+                      pattern: ^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$
+                      maxLength: 120
+                    - type: "null"
+                boundaries:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    body_start_block_id:
+                      type: string
+                      pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+                    appendix_start_block_id:
+                      oneOf:
+                        - type: string
+                          pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+                        - type: "null"
+                    backmatter_start_block_id:
+                      oneOf:
+                        - type: string
+                          pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+                        - type: "null"
+                numbering:
                   type: string
-                  enum: [verbatim-v1, zh-smart-v2]
+                  enum:
+                    - source
+                    - generated
+                    - none
+                changes:
+                  type: array
+                  maxItems: 20000
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required:
+                      - block_id
+                    properties:
+                      alias:
+                        oneOf:
+                          - type: string
+                            pattern: ^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$
+                            maxLength: 120
+                          - type: "null"
+                      block_id:
+                        type: string
+                        pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+                      display_level:
+                        type: integer
+                        minimum: 1
+                        maximum: 4
+                      include_in_toc:
+                        type: boolean
+                      source_number:
+                        oneOf:
+                          - type: string
+                            minLength: 1
+                            maxLength: 100
+                          - type: "null"
+                      starts_page:
+                        type: boolean
+                      title_markdown:
+                        type: string
+                        minLength: 1
+                        maxLength: 2000
+                      exclude_from_numbering:
+                        type: boolean
+                metadata:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    title:
+                      type: string
+                      minLength: 1
+                      maxLength: 500
+                    subtitle:
+                      oneOf:
+                        - type: string
+                          maxLength: 500
+                        - type: "null"
+                    authors:
+                      oneOf:
+                        - type: array
+                          items:
+                            type: string
+                            minLength: 1
+                            maxLength: 200
+                          uniqueItems: true
+                          maxItems: 100
+                        - type: "null"
+                    contributors:
+                      oneOf:
+                        - type: array
+                          items:
+                            type: string
+                            minLength: 1
+                            maxLength: 200
+                          uniqueItems: true
+                          maxItems: 100
+                        - type: "null"
+                    description:
+                      oneOf:
+                        - type: string
+                          maxLength: 10000
+                        - type: "null"
+                    language:
+                      oneOf:
+                        - type: string
+                          pattern: ^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$
+                        - type: "null"
+                    publisher:
+                      oneOf:
+                        - type: string
+                          maxLength: 300
+                        - type: "null"
+                    year:
+                      oneOf:
+                        - type: integer
+                          minimum: 1
+                          maximum: 9999
+                        - type: "null"
+                    edition:
+                      oneOf:
+                        - type: string
+                          maxLength: 100
+                        - type: "null"
+                    isbn_10:
+                      oneOf:
+                        - type: string
+                          pattern: ^[0-9]{9}[0-9X]$
+                        - type: "null"
+                    isbn_13:
+                      oneOf:
+                        - type: string
+                          pattern: ^[0-9]{13}$
+                        - type: "null"
+                    cover_resource_id:
+                      oneOf:
+                        - type: string
+                          pattern: ^res_[A-Za-z0-9_-]{16,80}$
+                        - type: "null"
+                expected_updated_at:
+                  type: integer
+                  minimum: 0
+                  maximum: 8640000000000000
+                block:
+                  type: object
+                  additionalProperties: false
+                  required:
+                    - block_id
+                    - markdown
+                  properties:
+                    block_id:
+                      type: string
+                      pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+                    markdown:
+                      type: string
+                      maxLength: 4194304
       responses:
         "202":
-          description: Source reprocessing job queued
+          description: Durable save queued; body acceptance and preview building happen asynchronously.
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/JobAccepted" }
+              schema:
+                $ref: "#/components/schemas/DraftUpdateAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -761,10 +663,148 @@ paths:
           $ref: "#/components/responses/NotFoundJson"
         "409":
           $ref: "#/components/responses/Conflict"
-
+        "412":
+          description: The expected_updated_at value is stale; local changes must be retained.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/manage/books/{bookId}/publish:
+    post:
+      tags:
+        - Drafts
+      operationId: publishBook
+      summary: Promote the current ready candidate
+      description:
+        Promotes only the submitted current ready candidate. Pending saves, mismatched source
+        timestamps and failed integrity checks prevent publication. Published content and book
+        access remain unchanged on failure.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - expected_updated_at
+                - candidate_id
+              properties:
+                expected_updated_at:
+                  type: integer
+                  minimum: 0
+                  maximum: 8640000000000000
+                candidate_id:
+                  type: string
+                  pattern: ^candidate_[A-Za-z0-9_-]{16,80}$
+      responses:
+        "200":
+          description: Candidate published atomically
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - published_at
+                  - state
+                  - version_id
+                properties:
+                  published_at:
+                    type: integer
+                    minimum: 0
+                  state:
+                    type: string
+                    const: published
+                  version_id:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/Conflict"
+  /api/manage/books/{bookId}/reprocess:
+    post:
+      tags:
+        - Drafts
+      operationId: reprocessDraftSource
+      summary: Queue an IR draft save prepared again from its retained original MinerU ZIP
+      description:
+        Reprocessing uses the save conflict and recovery protocol; published versions remain
+        immutable.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - expected_updated_at
+                - profile
+              properties:
+                profile:
+                  type: string
+                  enum:
+                    - verbatim-v1
+                    - zh-smart-v2
+                expected_updated_at:
+                  type: integer
+                  minimum: 0
+                  maximum: 8640000000000000
+      responses:
+        "202":
+          description: Durable save queued; body acceptance and preview building happen asynchronously.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftUpdateAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /api/manage/books/{bookId}/access:
     patch:
-      tags: [Drafts]
+      tags:
+        - Drafts
       operationId: setBookAccess
       summary: Change private or public access independently from publication
       description: Public access requires an existing published version.
@@ -780,25 +820,37 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [access]
+              required:
+                - access
               properties:
                 access:
                   type: string
-                  enum: [private, public]
+                  enum:
+                    - private
+                    - public
       responses:
         "200":
           description: Access changed atomically
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
               schema:
                 type: object
-                required: [book_id, access]
+                required:
+                  - book_id
+                  - access
                 properties:
-                  book_id: { type: integer }
-                  access: { type: string, enum: [private, public] }
+                  book_id:
+                    type: integer
+                  access:
+                    type: string
+                    enum:
+                      - private
+                      - public
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -807,10 +859,10 @@ paths:
           $ref: "#/components/responses/NotFoundJson"
         "409":
           $ref: "#/components/responses/Conflict"
-
   /api/manage/jobs/{jobId}:
     get:
-      tags: [Jobs]
+      tags:
+        - Jobs
       operationId: getJob
       summary: Inspect durable task status and safe diagnostics
       security:
@@ -822,16 +874,19 @@ paths:
           description: Task state
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Job" }
+              schema:
+                $ref: "#/components/schemas/Job"
         "404":
           $ref: "#/components/responses/HiddenOrMissingJson"
-
   /api/manage/jobs/{jobId}/cancel:
     post:
-      tags: [Jobs]
+      tags:
+        - Jobs
       operationId: cancelJob
       summary: Request cancellation of queued or running work
       security:
@@ -844,10 +899,13 @@ paths:
           description: Cancellation recorded
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Job" }
+              schema:
+                $ref: "#/components/schemas/Job"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -856,10 +914,10 @@ paths:
           $ref: "#/components/responses/NotFoundJson"
         "409":
           $ref: "#/components/responses/Conflict"
-
   /api/manage/jobs/{jobId}/retry:
     post:
-      tags: [Jobs]
+      tags:
+        - Jobs
       operationId: retryJob
       summary: Explicitly enqueue an eligible terminal job as a new attempt
       security:
@@ -870,16 +928,22 @@ paths:
         - name: Idempotency-Key
           in: header
           required: true
-          schema: { type: string, minLength: 16, maxLength: 200 }
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 200
       responses:
         "202":
           description: New attempt queued; prior history is retained
           headers:
             Cache-Control:
-              schema: { type: string, const: "private, no-store" }
+              schema:
+                type: string
+                const: private, no-store
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/JobAccepted" }
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -888,7 +952,278 @@ paths:
           $ref: "#/components/responses/NotFoundJson"
         "409":
           $ref: "#/components/responses/Conflict"
-
+  /api/manage/books/{bookId}/preview/{candidateId}/pages/{pageId}:
+    get:
+      tags:
+        - Drafts
+      operationId: readDraftPreviewPage
+      summary: Read one authenticated non-cacheable draft preview page
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/CandidateId"
+        - $ref: "#/components/parameters/PageId"
+      responses:
+        "200":
+          description: Sanitized preview HTML
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+            X-Robots-Tag:
+              schema:
+                type: string
+                const: noindex, nofollow, noarchive, nosnippet
+          content:
+            text/html:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/HiddenOrMissingHtml"
+  /api/manage/books/{bookId}/preview/{candidateId}/assets/{resourceId}:
+    get:
+      tags:
+        - Drafts
+      operationId: readDraftPreviewAsset
+      summary: Read a candidate-bound resource using a session-bound signed authorization
+      security:
+        - previewAuthorization: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/CandidateId"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Preview resource
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+            X-Content-Type-Options:
+              schema:
+                type: string
+                const: nosniff
+            X-Robots-Tag:
+              schema:
+                type: string
+                const: noindex, nofollow, noarchive, nosnippet
+          content:
+            image/*:
+              schema:
+                type: string
+                contentEncoding: binary
+        "404":
+          $ref: "#/components/responses/HiddenOrMissingBinary"
+  /api/manage/books/{bookId}/draft/blocks/{blockId}:
+    get:
+      tags:
+        - Drafts
+      operationId: getDraftBlock
+      summary: Read one block in the local Markdown editing syntax
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/BlockId"
+      responses:
+        "200":
+          description: Current draft representation
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - block_id
+                  - updated_at
+                  - kind
+                  - markdown
+                properties:
+                  block_id:
+                    type: string
+                    pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+                  updated_at:
+                    type: integer
+                    minimum: 0
+                    maximum: 8640000000000000
+                  kind:
+                    type: string
+                  markdown:
+                    type: string
+                    maxLength: 4194304
+        "404":
+          $ref: "#/components/responses/HiddenOrMissingJson"
+    patch:
+      tags:
+        - Drafts
+      operationId: saveDraftBlock
+      summary: Queue a timestamp-checked block edit
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/BlockId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - expected_updated_at
+                - markdown
+              properties:
+                expected_updated_at:
+                  type: integer
+                  minimum: 0
+                  maximum: 8640000000000000
+                markdown:
+                  type: string
+                  maxLength: 4194304
+      responses:
+        "202":
+          description: Durable save queued; body acceptance and preview building happen asynchronously.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - job_id
+                  - state
+                  - expected_updated_at
+                  - selected_block_id
+                properties:
+                  job_id:
+                    type: string
+                    pattern: ^job_[A-Za-z0-9_-]{16,80}$
+                  state:
+                    type: string
+                    const: queued
+                  expected_updated_at:
+                    type: integer
+                    minimum: 0
+                    maximum: 8640000000000000
+                  selected_block_id:
+                    type: string
+                    pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          description: The expected_updated_at value is stale; local changes must be retained.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/manage/books/{bookId}/draft/cover:
+    post:
+      tags:
+        - Drafts
+      operationId: uploadDraftCover
+      summary: Queue an uploaded cover as a draft save
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - file
+                - expected_updated_at
+              properties:
+                file:
+                  type: string
+                  contentEncoding: binary
+                expected_updated_at:
+                  type: string
+                  pattern: ^[0-9]+$
+      responses:
+        "202":
+          description: Durable save queued; body acceptance and preview building happen asynchronously.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - job_id
+                  - state
+                  - expected_updated_at
+                  - resource_id
+                properties:
+                  job_id:
+                    type: string
+                    pattern: ^job_[A-Za-z0-9_-]{16,80}$
+                  state:
+                    type: string
+                    const: queued
+                  expected_updated_at:
+                    type: integer
+                    minimum: 0
+                    maximum: 8640000000000000
+                  resource_id:
+                    type: string
+                    pattern: ^res_[A-Za-z0-9_-]{16,80}$
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFoundJson"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          description: The expected_updated_at value is stale; local changes must be retained.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   securitySchemes:
     cookieAuth:
@@ -898,7 +1233,13 @@ components:
       description: |
         Better Auth database session cookie. Production may add the standard Secure
         cookie prefix; clients should use the Set-Cookie value rather than hard-code it.
-
+    previewAuthorization:
+      type: apiKey
+      in: query
+      name: authorization
+      description:
+        Time-limited HMAC authorization bound to the active administrator session, book,
+        candidate and resource.
   parameters:
     BookKey:
       name: bookKey
@@ -906,183 +1247,254 @@ components:
       required: true
       schema:
         type: string
-        pattern: "^(?:[1-9][0-9]*|[a-z0-9]+(?:-[a-z0-9]+)*)$"
+        pattern: ^(?:[1-9][0-9]*|[a-z0-9]+(?:-[a-z0-9]+)*)$
     PageKey:
       name: pageKey
       in: path
       required: true
       schema:
         type: string
-        pattern: "^(?:[1-9][0-9]*|[a-z0-9]+(?:-[a-z0-9]+)*)$"
+        pattern: ^(?:[1-9][0-9]*|[a-z0-9]+(?:-[a-z0-9]+)*)$
     BookId:
       name: bookId
       in: path
       required: true
-      schema: { type: integer, minimum: 1 }
+      schema:
+        type: integer
+        minimum: 1
     PageId:
       name: pageId
       in: path
       required: true
-      schema: { type: integer, minimum: 1 }
-    ConfigRevision:
-      name: configRevision
-      in: path
-      required: true
-      schema: { type: integer, minimum: 1 }
+      schema:
+        type: integer
+        minimum: 1
     VersionId:
       name: versionId
       in: path
       required: true
-      schema: { type: string, pattern: "^ver_[A-Za-z0-9_-]{16,80}$" }
+      schema:
+        type: string
+        pattern: ^ver_[A-Za-z0-9_-]{16,80}$
     ResourceId:
       name: resourceId
       in: path
       required: true
-      schema: { type: string, pattern: "^res_[A-Za-z0-9_-]{16,80}$" }
+      schema:
+        type: string
+        pattern: ^res_[A-Za-z0-9_-]{16,80}$
     FileId:
       name: fileId
       in: path
       required: true
-      schema: { type: string, pattern: "^file_[A-Za-z0-9_-]{16,80}$" }
+      schema:
+        type: string
+        pattern: ^file_[A-Za-z0-9_-]{16,80}$
     ImportId:
       name: importId
       in: path
       required: true
-      schema: { type: string, pattern: "^imp_[A-Za-z0-9_-]{16,80}$" }
+      schema:
+        type: string
+        pattern: ^imp_[A-Za-z0-9_-]{16,80}$
     JobId:
       name: jobId
       in: path
       required: true
-      schema: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
+      schema:
+        type: string
+        pattern: ^job_[A-Za-z0-9_-]{16,80}$
     IfNoneMatch:
       name: If-None-Match
       in: header
       required: false
-      schema: { type: string }
+      schema:
+        type: string
     Origin:
       name: Origin
       in: header
       required: true
       description: Exact configured Web origin; state-changing browser requests are origin checked.
-      schema: { type: string, format: uri }
-
+      schema:
+        type: string
+        format: uri
+    CandidateId:
+      name: candidateId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^candidate_[A-Za-z0-9_-]{16,80}$
+    BlockId:
+      name: blockId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^blk_[A-Za-z0-9_-]{16,80}$
   headers:
     ETag:
-      schema: { type: string }
-
+      schema:
+        type: string
   responses:
     OriginalFile:
       description: Authorized complete registered original
       headers:
         Accept-Ranges:
-          schema: { type: string, const: bytes }
+          schema:
+            type: string
+            const: bytes
         Content-Length:
-          schema: { type: integer, minimum: 0 }
+          schema:
+            type: integer
+            minimum: 0
         Content-Disposition:
-          schema: { type: string }
+          schema:
+            type: string
         Cache-Control:
-          schema: { type: string, const: "private, no-store" }
+          schema:
+            type: string
+            const: private, no-store
         ETag:
           $ref: "#/components/headers/ETag"
         X-Content-Type-Options:
-          schema: { type: string, const: nosniff }
+          schema:
+            type: string
+            const: nosniff
         X-Robots-Tag:
           schema:
             type: string
-            const: "noindex, nofollow, noarchive, nosnippet"
+            const: noindex, nofollow, noarchive, nosnippet
       content:
         application/zip:
-          schema: { type: string, contentEncoding: binary }
+          schema:
+            type: string
+            contentEncoding: binary
     BadRequest:
       description: Invalid input or semantic validation failure
       headers:
         Cache-Control:
-          schema: { type: string, const: "private, no-store" }
+          schema:
+            type: string
+            const: private, no-store
       content:
         application/json:
-          schema: { $ref: "#/components/schemas/Error" }
+          schema:
+            $ref: "#/components/schemas/Error"
     Unauthorized:
       description: No valid administrator session
       headers:
         Cache-Control:
-          schema: { type: string, const: "private, no-store" }
+          schema:
+            type: string
+            const: private, no-store
       content:
         application/json:
-          schema: { $ref: "#/components/schemas/Error" }
+          schema:
+            $ref: "#/components/schemas/Error"
     Forbidden:
-      description: Valid session is not the sole administrator or the required 300-second freshness/password reauthentication policy is not satisfied
+      description:
+        Valid session is not the sole administrator or the required 300-second
+        freshness/password reauthentication policy is not satisfied
       headers:
         Cache-Control:
-          schema: { type: string, const: "private, no-store" }
+          schema:
+            type: string
+            const: private, no-store
       content:
         application/json:
-          schema: { $ref: "#/components/schemas/Error" }
+          schema:
+            $ref: "#/components/schemas/Error"
     Conflict:
       description: State, revision, active-job or idempotency conflict
       headers:
         Cache-Control:
-          schema: { type: string, const: "private, no-store" }
+          schema:
+            type: string
+            const: private, no-store
       content:
         application/json:
-          schema: { $ref: "#/components/schemas/Error" }
+          schema:
+            $ref: "#/components/schemas/Error"
     NotFoundJson:
       description: Management resource does not exist
       headers:
         Cache-Control:
-          schema: { type: string, const: no-store }
+          schema:
+            type: string
+            const: no-store
       content:
         application/json:
-          schema: { $ref: "#/components/schemas/Error" }
+          schema:
+            $ref: "#/components/schemas/Error"
     NotFoundHtml:
       description: Management representation does not exist
       headers:
         Cache-Control:
-          schema: { type: string, const: no-store }
+          schema:
+            type: string
+            const: no-store
       content:
         text/html:
-          schema: { type: string }
+          schema:
+            type: string
     HiddenOrMissingJson:
       description: Public resource is missing or not anonymously visible
       headers:
         Cache-Control:
-          schema: { type: string, const: no-store }
+          schema:
+            type: string
+            const: no-store
         X-Robots-Tag:
           schema:
-            { type: string, const: "noindex, nofollow, noarchive, nosnippet" }
+            type: string
+            const: noindex, nofollow, noarchive, nosnippet
       content:
         application/json:
-          schema: { $ref: "#/components/schemas/Error" }
+          schema:
+            $ref: "#/components/schemas/Error"
     HiddenOrMissingHtml:
       description: Public resource is missing or not anonymously visible
       headers:
         Cache-Control:
-          schema: { type: string, const: no-store }
+          schema:
+            type: string
+            const: no-store
         X-Robots-Tag:
           schema:
-            { type: string, const: "noindex, nofollow, noarchive, nosnippet" }
+            type: string
+            const: noindex, nofollow, noarchive, nosnippet
       content:
         text/html:
-          schema: { type: string }
+          schema:
+            type: string
     HiddenOrMissingBinary:
       description: Binary resource is missing or not anonymously visible
       headers:
         Cache-Control:
-          schema: { type: string, const: no-store }
+          schema:
+            type: string
+            const: no-store
         X-Content-Type-Options:
-          schema: { type: string, const: nosniff }
+          schema:
+            type: string
+            const: nosniff
         X-Robots-Tag:
           schema:
-            { type: string, const: "noindex, nofollow, noarchive, nosnippet" }
-
+            type: string
+            const: noindex, nofollow, noarchive, nosnippet
   schemas:
     Error:
       type: object
       additionalProperties: false
-      required: [code, message, request_id]
+      required:
+        - code
+        - message
+        - request_id
       properties:
         code:
           type: string
-          pattern: "^[A-Z][A-Z0-9_]{2,80}$"
+          pattern: ^[A-Z][A-Z0-9_]{2,80}$
         message:
           type: string
           maxLength: 500
@@ -1095,87 +1507,147 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [code]
+            required:
+              - code
             properties:
-              code: { type: string, maxLength: 80 }
-              block_id: { type: string, maxLength: 100 }
-              candidate_id: { type: string, maxLength: 100 }
-              field: { type: string, maxLength: 200 }
-              message: { type: string, maxLength: 500 }
+              code:
+                type: string
+                maxLength: 80
+              block_id:
+                type: string
+                maxLength: 100
+              candidate_id:
+                type: string
+                maxLength: 100
+              field:
+                type: string
+                maxLength: 200
+              message:
+                type: string
+                maxLength: 500
     ImportAccepted:
       type: object
       additionalProperties: false
-      required: [import_id, job_id, state]
+      required:
+        - import_id
+        - job_id
+        - state
       properties:
-        import_id: { type: string, pattern: "^imp_[A-Za-z0-9_-]{16,80}$" }
-        job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
-        state: { type: string, const: uploaded }
+        import_id:
+          type: string
+          pattern: ^imp_[A-Za-z0-9_-]{16,80}$
+        job_id:
+          type: string
+          pattern: ^job_[A-Za-z0-9_-]{16,80}$
+        state:
+          type: string
+          const: uploaded
     JobAccepted:
       type: object
       additionalProperties: false
-      required: [job_id, state]
+      required:
+        - job_id
+        - state
       properties:
-        job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
-        state: { type: string, const: queued }
+        job_id:
+          type: string
+          pattern: ^job_[A-Za-z0-9_-]{16,80}$
+        state:
+          type: string
+          const: queued
     BookDeletionAccepted:
       type: object
       additionalProperties: false
-      required: [deletionId, jobId, state, taskUrl]
+      required:
+        - deletionId
+        - jobId
+        - state
+        - taskUrl
       properties:
-        deletionId: { type: string, pattern: "^del_[A-Za-z0-9_-]{16,80}$" }
-        jobId: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
-        state: { type: string, enum: [pending, purging, failed, completed] }
-        taskUrl: { type: string, const: "/manage/tasks" }
+        deletionId:
+          type: string
+          pattern: ^del_[A-Za-z0-9_-]{16,80}$
+        jobId:
+          type: string
+          pattern: ^job_[A-Za-z0-9_-]{16,80}$
+        state:
+          type: string
+          enum:
+            - pending
+            - purging
+            - failed
+            - completed
+        taskUrl:
+          type: string
+          const: /manage/tasks
     Candidate:
       type: object
       additionalProperties: false
-      required: [candidate_id, display_path, confidence, evidence, diagnostics]
+      required:
+        - candidate_id
+        - display_path
+        - confidence
+        - evidence
+        - diagnostics
       properties:
-        candidate_id: { type: string, pattern: "^cand_[A-Za-z0-9_-]{16,80}$" }
-        display_path: { type: string, maxLength: 2048 }
-        confidence: { type: string, enum: [high, generic, ambiguous] }
+        candidate_id:
+          type: string
+          pattern: ^cand_[A-Za-z0-9_-]{16,80}$
+        display_path:
+          type: string
+          maxLength: 2048
+        confidence:
+          type: string
+          enum:
+            - high
+            - ambiguous
         evidence:
           type: array
           maxItems: 100
-          items: { type: string, maxLength: 500 }
+          items:
+            type: string
+            maxLength: 500
         diagnostics:
           type: array
           maxItems: 1000
-          items: { type: string, maxLength: 500 }
+          items:
+            type: string
+            maxLength: 500
     Import:
       type: object
       additionalProperties: false
       required:
-        [
-          import_id,
-          state,
-          candidates,
-          current_job,
-          source_name,
-          preview,
-          created_at,
-          updated_at,
-        ]
+        - import_id
+        - state
+        - candidates
+        - current_job
+        - source_name
+        - preview
+        - created_at
+        - updated_at
       properties:
-        import_id: { type: string, pattern: "^imp_[A-Za-z0-9_-]{16,80}$" }
-        source_name: { type: string, minLength: 1, maxLength: 255 }
+        import_id:
+          type: string
+          pattern: ^imp_[A-Za-z0-9_-]{16,80}$
+        source_name:
+          type: string
+          minLength: 1
+          maxLength: 255
         state:
           type: string
           enum:
-            [
-              uploaded,
-              analyzing,
-              needs_main_confirmation,
-              preparing,
-              draft_ready,
-              rejected,
-              canceled,
-              expired,
-            ]
+            - uploaded
+            - analyzing
+            - preparing
+            - draft_ready
+            - rejected
+            - canceled
+            - expired
         candidates:
           type: array
           maxItems: 20000
-          items: { $ref: "#/components/schemas/Candidate" }
+          items:
+            $ref: "#/components/schemas/Candidate"
         current_job:
           anyOf:
             - $ref: "#/components/schemas/Job"
@@ -1183,141 +1655,222 @@ components:
         preview:
           type: object
           additionalProperties: false
-          required: [state, revision, url]
+          required:
+            - state
+            - source_updated_at
+            - url
           properties:
             state:
               type: string
-              enum: [building, failed, ready, unavailable]
-            revision: { type: [integer, "null"], minimum: 1 }
-            url: { type: [string, "null"], maxLength: 500 }
-        selected_candidate_id: { type: [string, "null"] }
-        book_id: { type: [integer, "null"], minimum: 1 }
-        error_code: { type: [string, "null"], maxLength: 80 }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
+              enum:
+                - building
+                - failed
+                - ready
+                - unavailable
+            url:
+              type:
+                - string
+                - "null"
+              maxLength: 500
+            source_updated_at:
+              type:
+                - integer
+                - "null"
+              minimum: 0
+              maximum: 8640000000000000
+        selected_candidate_id:
+          type:
+            - string
+            - "null"
+        book_id:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+        error_code:
+          type:
+            - string
+            - "null"
+          maxLength: 80
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Draft:
       type: object
       additionalProperties: false
       required:
-        [
-          access,
-          alias,
-          boundaries,
-          book_id,
-          candidate,
-          candidate_published,
-          config_revision,
-          diagnostics,
-          metadata,
-          numbering,
-          published,
-          preview,
-          structure,
-          title,
-        ]
+        - access
+        - alias
+        - boundaries
+        - book_id
+        - candidate
+        - candidate_published
+        - updated_at
+        - diagnostics
+        - metadata
+        - numbering
+        - published
+        - preview
+        - structure
+        - title
+        - pending_save
       properties:
-        access: { type: string, enum: [private, public] }
+        access:
+          type: string
+          enum:
+            - private
+            - public
         alias:
           oneOf:
             - type: string
-              pattern: "^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$"
+              pattern: ^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$
               maxLength: 120
-            - { type: "null" }
+            - type: "null"
         boundaries:
           type: object
           additionalProperties: false
-          required: [body_start_block_id]
+          required:
+            - body_start_block_id
           properties:
             body_start_block_id:
-              { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
+              type: string
+              pattern: ^blk_[A-Za-z0-9_-]{16,80}$
             appendix_start_block_id:
-              { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
+              type: string
+              pattern: ^blk_[A-Za-z0-9_-]{16,80}$
             backmatter_start_block_id:
-              { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
-        book_id: { type: integer, minimum: 1 }
+              type: string
+              pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+        book_id:
+          type: integer
+          minimum: 1
         candidate:
           oneOf:
             - type: object
               additionalProperties: false
               required:
-                [
-                  attempt_id,
-                  preview_url,
-                  revision,
-                  safe_error_code,
-                  semantic_digest,
-                  state,
-                  version_id,
-                ]
+                - attempt_id
+                - preview_url
+                - source_updated_at
+                - safe_error_code
+                - semantic_digest
+                - state
+                - version_id
               properties:
                 attempt_id:
-                  { type: string, pattern: "^candidate_[A-Za-z0-9_-]{16,80}$" }
+                  type: string
+                  pattern: ^candidate_[A-Za-z0-9_-]{16,80}$
                 preview_url:
                   oneOf:
-                    - { type: string, maxLength: 500 }
-                    - { type: "null" }
-                revision: { type: integer, minimum: 1 }
+                    - type: string
+                      maxLength: 500
+                    - type: "null"
                 safe_error_code:
                   oneOf:
-                    - { type: string, pattern: "^[A-Z][A-Z0-9_]{2,79}$" }
-                    - { type: "null" }
+                    - type: string
+                      pattern: ^[A-Z][A-Z0-9_]{2,79}$
+                    - type: "null"
                 semantic_digest:
                   oneOf:
-                    - { type: string, pattern: "^[a-f0-9]{64}$" }
-                    - { type: "null" }
+                    - type: string
+                      pattern: ^[a-f0-9]{64}$
+                    - type: "null"
                 state:
                   type: string
-                  enum: [building, ready, failed, canceled, interrupted]
+                  enum:
+                    - building
+                    - ready
+                    - failed
+                    - canceled
+                    - interrupted
                 version_id:
                   oneOf:
-                    - { type: string, pattern: "^ver_[A-Za-z0-9_-]{16,80}$" }
-                    - { type: "null" }
-            - { type: "null" }
-        candidate_published: { type: boolean }
-        config_revision: { type: integer, minimum: 1 }
+                    - type: string
+                      pattern: ^ver_[A-Za-z0-9_-]{16,80}$
+                    - type: "null"
+                source_updated_at:
+                  type: integer
+                  minimum: 0
+                  maximum: 8640000000000000
+            - type: "null"
+        candidate_published:
+          type: boolean
         numbering:
           type: string
-          enum: [source, generated, none]
-        title: { type: string, minLength: 1, maxLength: 500 }
+          enum:
+            - source
+            - generated
+            - none
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
         diagnostics:
           type: array
           maxItems: 10000
           items:
             type: object
             additionalProperties: false
-            required: [code, message]
+            required:
+              - code
+              - message
             properties:
-              blockId: { type: string, maxLength: 100 }
-              code: { type: string, pattern: "^[A-Z][A-Z0-9_]{2,79}$" }
-              confidence: { type: string, enum: [high, low, medium] }
+              blockId:
+                type: string
+                maxLength: 100
+              code:
+                type: string
+                pattern: ^[A-Z][A-Z0-9_]{2,79}$
+              confidence:
+                type: string
+                enum:
+                  - high
+                  - low
+                  - medium
               evidence:
                 type: array
                 maxItems: 10
-                items: { type: string, maxLength: 200 }
+                items:
+                  type: string
+                  maxLength: 200
               location:
                 type: object
                 additionalProperties: false
                 properties:
-                  blockId: { type: string, maxLength: 100 }
-                  endByte: { type: integer, minimum: 1 }
-                  pageIndex: { type: integer, minimum: 0 }
-                  regionId: { type: string, maxLength: 100 }
-                  startByte: { type: integer, minimum: 0 }
-              message: { type: string, maxLength: 500 }
-              path: { type: string, maxLength: 500 }
+                  blockId:
+                    type: string
+                    maxLength: 100
+                  pageIndex:
+                    type: integer
+                    minimum: 0
+                  regionId:
+                    type: string
+                    maxLength: 100
+              message:
+                type: string
+                maxLength: 500
+              path:
+                type: string
+                maxLength: 500
               phase:
                 type: string
                 enum:
-                  [
-                    contents,
-                    matching,
-                    ocr,
-                    selection,
-                    splitting,
-                    structure,
-                    typography,
-                  ]
-              severity: { type: string, enum: [error, info, warning] }
+                  - contents
+                  - matching
+                  - ocr
+                  - selection
+                  - splitting
+                  - structure
+                  - typography
+              severity:
+                type: string
+                enum:
+                  - error
+                  - info
+                  - warning
               targets:
                 type: array
                 maxItems: 10
@@ -1325,44 +1878,86 @@ components:
                   oneOf:
                     - type: object
                       additionalProperties: false
-                      required: [blockId, kind, pageId]
+                      required:
+                        - blockId
+                        - kind
+                        - pageId
                       properties:
-                        blockId: { type: string, maxLength: 100 }
+                        blockId:
+                          type: string
+                          maxLength: 100
                         kind:
-                          { type: string, enum: [edit_block, select_structure] }
-                        pageId: { type: integer, minimum: 1 }
+                          type: string
+                          enum:
+                            - edit_block
+                            - select_structure
+                        pageId:
+                          type: integer
+                          minimum: 1
                     - type: object
                       additionalProperties: false
-                      required: [kind]
+                      required:
+                        - kind
                       properties:
-                        kind: { type: string, const: reprocess_verbatim }
+                        kind:
+                          type: string
+                          const: reprocess_verbatim
         metadata:
           type: object
           additionalProperties: false
-          required: [title]
+          required:
+            - title
           properties:
-            title: { type: string, minLength: 1, maxLength: 500 }
-            subtitle: { type: string, maxLength: 500 }
+            title:
+              type: string
+              minLength: 1
+              maxLength: 500
+            subtitle:
+              type: string
+              maxLength: 500
             authors:
               type: array
-              items: { type: string, minLength: 1, maxLength: 200 }
+              items:
+                type: string
+                minLength: 1
+                maxLength: 200
               uniqueItems: true
               maxItems: 100
             contributors:
               type: array
-              items: { type: string, minLength: 1, maxLength: 200 }
+              items:
+                type: string
+                minLength: 1
+                maxLength: 200
               uniqueItems: true
               maxItems: 100
-            description: { type: string, maxLength: 10000 }
+            description:
+              type: string
+              maxLength: 10000
             language:
-              { type: string, pattern: "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$" }
-            publisher: { type: string, maxLength: 300 }
-            year: { type: integer, minimum: 1, maximum: 9999 }
-            edition: { type: string, maxLength: 100 }
-            isbn_10: { type: string, pattern: "^[0-9]{9}[0-9X]$" }
-            isbn_13: { type: string, pattern: "^[0-9]{13}$" }
-            cover_path: { type: string, minLength: 1, maxLength: 2048 }
-        published: { type: boolean }
+              type: string
+              pattern: ^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$
+            publisher:
+              type: string
+              maxLength: 300
+            year:
+              type: integer
+              minimum: 1
+              maximum: 9999
+            edition:
+              type: string
+              maxLength: 100
+            isbn_10:
+              type: string
+              pattern: ^[0-9]{9}[0-9X]$
+            isbn_13:
+              type: string
+              pattern: ^[0-9]{13}$
+            cover_resource_id:
+              type: string
+              pattern: ^res_[A-Za-z0-9_-]{16,80}$
+        published:
+          type: boolean
         structure:
           type: array
           maxItems: 20000
@@ -1370,78 +1965,96 @@ components:
             type: object
             additionalProperties: false
             required:
-              [
-                block_id,
-                display_level,
-                include_in_toc,
-                starts_page,
-                title_markdown,
-              ]
+              - block_id
+              - display_level
+              - include_in_toc
+              - starts_page
+              - title_markdown
+              - exclude_from_numbering
             properties:
               alias:
                 type: string
-                pattern: "^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$"
+                pattern: ^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$
                 maxLength: 120
-              block_id: { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
-              display_level: { type: integer, minimum: 1, maximum: 4 }
-              include_in_toc: { type: boolean }
-              source_number: { type: string, minLength: 1, maxLength: 100 }
-              starts_page: { type: boolean }
-              title_markdown: { type: string, minLength: 1, maxLength: 2000 }
+              block_id:
+                type: string
+                pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+              display_level:
+                type: integer
+                minimum: 1
+                maximum: 4
+              include_in_toc:
+                type: boolean
+              source_number:
+                type: string
+                minLength: 1
+                maxLength: 100
+              starts_page:
+                type: boolean
+              title_markdown:
+                type: string
+                minLength: 1
+                maxLength: 2000
+              exclude_from_numbering:
+                type: boolean
         preview:
           oneOf:
             - type: object
               additionalProperties: false
               required:
-                [
-                  boundaries,
-                  compiler_version,
-                  config_revision,
-                  config_sha256,
-                  headings,
-                  is_stale,
-                  pages,
-                  renderer_version,
-                  semantic_digest,
-                  source_sha256,
-                ]
+                - boundaries
+                - compiler_version
+                - source_updated_at
+                - headings
+                - is_stale
+                - pages
+                - renderer_version
+                - semantic_digest
+                - candidate_id
+                - version
               properties:
                 boundaries:
                   type: object
                   additionalProperties: false
-                  required: [body_start_block_id]
+                  required:
+                    - body_start_block_id
                   properties:
                     body_start_block_id:
-                      { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
+                      type: string
+                      pattern: ^blk_[A-Za-z0-9_-]{16,80}$
                     appendix_start_block_id:
-                      { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
+                      type: string
+                      pattern: ^blk_[A-Za-z0-9_-]{16,80}$
                     backmatter_start_block_id:
-                      { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
-                compiler_version: { type: string, const: compiler-v6 }
-                config_revision: { type: integer, minimum: 1 }
-                config_sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
-                content_cleanup:
-                  type: object
-                  additionalProperties: false
-                  required: [helper_blocks_removed, printed_toc_regions_removed]
-                  properties:
-                    helper_blocks_removed: { type: integer, minimum: 0 }
-                    printed_toc_regions_removed: { type: integer, minimum: 0 }
-                is_stale: { type: boolean }
+                      type: string
+                      pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+                compiler_version:
+                  type: string
+                  const: compiler-v7
+                is_stale:
+                  type: boolean
                 renderer_version:
-                  { type: string, const: semantic-html-v6-katex-0.18.1 }
-                semantic_digest: { type: string, pattern: "^[a-f0-9]{64}$" }
-                source_sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                  type: string
+                  const: semantic-html-v7-katex-0.18.1
+                semantic_digest:
+                  type: string
+                  pattern: ^[a-f0-9]{64}$
                 pages:
                   type: array
                   maxItems: 20000
                   items:
                     type: object
                     additionalProperties: false
-                    required: [page_id, title]
+                    required:
+                      - page_id
+                      - title
                     properties:
-                      page_id: { type: integer, minimum: 1 }
-                      title: { type: string, maxLength: 500 }
+                      page_id:
+                        type: integer
+                        minimum: 1
+                      title:
+                        type: string
+                        maxLength: 500
                 headings:
                   type: array
                   maxItems: 20000
@@ -1449,154 +2062,252 @@ components:
                     type: object
                     additionalProperties: false
                     required:
-                      [
-                        block_id,
-                        title,
-                        title_markdown,
-                        source_level,
-                        display_level,
-                        include_in_toc,
-                        starts_page,
-                        page_id,
-                      ]
+                      - block_id
+                      - title
+                      - title_markdown
+                      - display_level
+                      - include_in_toc
+                      - starts_page
+                      - page_id
+                      - number
+                      - exclude_from_numbering
                     properties:
                       block_id:
-                        { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
-                      title: { type: string, maxLength: 500 }
-                      title_markdown: { type: string, maxLength: 2000 }
+                        type: string
+                        pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+                      title:
+                        type: string
+                        maxLength: 500
+                      title_markdown:
+                        type: string
+                        maxLength: 2000
                       source_number:
                         oneOf:
-                          - { type: string, minLength: 1, maxLength: 100 }
-                          - { type: "null" }
-                      source_level: { type: integer, minimum: 1, maximum: 6 }
-                      display_level: { type: integer, minimum: 1, maximum: 4 }
-                      include_in_toc: { type: boolean }
-                      starts_page: { type: boolean }
+                          - type: string
+                            minLength: 1
+                            maxLength: 100
+                          - type: "null"
+                      display_level:
+                        type: integer
+                        minimum: 1
+                        maximum: 4
+                      include_in_toc:
+                        type: boolean
+                      starts_page:
+                        type: boolean
                       page_id:
                         oneOf:
-                          - { type: integer, minimum: 1 }
-                          - { type: "null" }
-                      source_title: { type: string, maxLength: 500 }
-                typography:
-                  type: object
-                  additionalProperties: false
-                  required:
-                    [
-                      profile,
-                      protected_nodes,
-                      punctuation_converted,
-                      spaces_normalized,
-                    ]
-                  properties:
-                    profile: { type: string, enum: [verbatim-v1, zh-smart-v2] }
-                    protected_nodes: { type: integer, minimum: 0 }
-                    punctuation_converted: { type: integer, minimum: 0 }
-                    spaces_normalized: { type: integer, minimum: 0 }
-            - { type: "null" }
+                          - type: integer
+                            minimum: 1
+                          - type: "null"
+                      number:
+                        type:
+                          - string
+                          - "null"
+                        maxLength: 120
+                      exclude_from_numbering:
+                        type: boolean
+                source_updated_at:
+                  type: integer
+                  minimum: 0
+                  maximum: 8640000000000000
+                candidate_id:
+                  type: string
+                  pattern: ^candidate_[A-Za-z0-9_-]{16,80}$
+                version:
+                  type: string
+                  const: draft-preview-v7
+            - type: "null"
+        updated_at:
+          type: integer
+          minimum: 0
+          maximum: 8640000000000000
+        pending_save:
+          type: boolean
     DraftUpdateAccepted:
       type: object
       additionalProperties: false
-      required: [book_id, candidate, config_revision]
+      required:
+        - job_id
+        - state
+        - expected_updated_at
       properties:
-        book_id: { type: integer, minimum: 1 }
-        candidate:
-          type: object
-          additionalProperties: false
-          required: [attempt_id, job_id, state]
-          properties:
-            attempt_id:
-              { type: string, pattern: "^candidate_[A-Za-z0-9_-]{16,80}$" }
-            job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
-            state: { type: string, const: building }
-        config_revision: { type: integer, minimum: 1 }
+        job_id:
+          type: string
+          pattern: ^job_[A-Za-z0-9_-]{16,80}$
+        state:
+          type: string
+          const: queued
+        expected_updated_at:
+          type: integer
+          minimum: 0
+          maximum: 8640000000000000
     Job:
       type: object
       additionalProperties: false
       required:
-        [
-          job_id,
-          kind,
-          state,
-          attempt,
-          automatic_retry_count,
-          retry_of_job_id,
-          phase,
-          progress,
-          error_code,
-          error_class,
-          cancellation_requested_at,
-          created_at,
-          started_at,
-          finished_at,
-          subject,
-        ]
+        - job_id
+        - kind
+        - state
+        - attempt
+        - automatic_retry_count
+        - retry_of_job_id
+        - phase
+        - progress
+        - error_code
+        - error_class
+        - cancellation_requested_at
+        - created_at
+        - started_at
+        - finished_at
+        - subject
       properties:
-        job_id: { type: string, pattern: "^job_[A-Za-z0-9_-]{16,80}$" }
+        job_id:
+          type: string
+          pattern: ^job_[A-Za-z0-9_-]{16,80}$
         kind:
           type: string
           enum:
-            [
-              analyze_import,
-              prepare_draft,
-              build_candidate,
-              verify_version,
-              reconcile,
-              reclaim,
-              permanent_book_deletion,
-            ]
+            - analyze_import
+            - prepare_draft
+            - save_draft
+            - build_candidate
+            - permanent_book_deletion
         state:
           type: string
-          enum: [queued, running, succeeded, failed, canceled, interrupted]
-        attempt: { type: integer, minimum: 1 }
-        automatic_retry_count: { type: integer, minimum: 0, maximum: 1 }
+          enum:
+            - queued
+            - running
+            - succeeded
+            - failed
+            - canceled
+            - interrupted
+        attempt:
+          type: integer
+          minimum: 1
+        automatic_retry_count:
+          type: integer
+          minimum: 0
+          maximum: 1
         retry_of_job_id:
-          type: [string, "null"]
-          pattern: "^job_[A-Za-z0-9_-]{16,80}$"
-        phase: { type: string, maxLength: 80 }
+          type:
+            - string
+            - "null"
+          pattern: ^job_[A-Za-z0-9_-]{16,80}$
+        phase:
+          type: string
+          maxLength: 80
         progress:
           type: object
           additionalProperties: false
-          required: [completed, processed_bytes, total, unit]
+          required:
+            - completed
+            - processed_bytes
+            - total
+            - unit
           properties:
-            completed: { type: integer, minimum: 0 }
-            processed_bytes: { type: [integer, "null"], minimum: 0 }
-            total: { type: [integer, "null"], minimum: 0 }
-            unit: { type: string, enum: [bytes, items, pages, steps] }
-        cancellation_requested_at: { type: [string, "null"], format: date-time }
-        error_code: { type: [string, "null"], maxLength: 80 }
+            completed:
+              type: integer
+              minimum: 0
+            processed_bytes:
+              type:
+                - integer
+                - "null"
+              minimum: 0
+            total:
+              type:
+                - integer
+                - "null"
+              minimum: 0
+            unit:
+              type: string
+              enum:
+                - bytes
+                - items
+                - pages
+                - steps
+        cancellation_requested_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        error_code:
+          type:
+            - string
+            - "null"
+          maxLength: 80
         error_class:
-          type: [string, "null"]
+          type:
+            - string
+            - "null"
           enum:
-            [
-              null,
-              infrastructure,
-              content,
-              validation,
-              security_limit,
-              timeout,
-              canceled,
-            ]
-        created_at: { type: string, format: date-time }
-        started_at: { type: [string, "null"], format: date-time }
-        finished_at: { type: [string, "null"], format: date-time }
+            - null
+            - infrastructure
+            - content
+            - validation
+            - security_limit
+            - timeout
+            - canceled
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        finished_at:
+          type:
+            - string
+            - "null"
+          format: date-time
         subject:
           type: object
           additionalProperties: false
-          required: [kind, label]
+          required:
+            - kind
+            - label
           properties:
-            kind: { type: string, enum: [book, import, system] }
-            label: { type: string, minLength: 1, maxLength: 500 }
+            kind:
+              type: string
+              enum:
+                - book
+                - import
+                - system
+            label:
+              type: string
+              minLength: 1
+              maxLength: 500
+        accepted_updated_at:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+          maximum: 8640000000000000
+        retry_job_id:
+          type:
+            - string
+            - "null"
+          pattern: ^job_[A-Za-z0-9_-]{16,80}$
     SearchResponse:
       type: object
       additionalProperties: false
-      required: [query, scope, results]
+      required:
+        - query
+        - scope
+        - results
       properties:
-        query: { type: string }
+        query:
+          type: string
         scope:
           type: string
-          enum: [metadata_heading_body, metadata_heading_only]
+          enum:
+            - metadata_heading_body
+            - metadata_heading_only
         notice:
-          type: [string, "null"]
+          type:
+            - string
+            - "null"
           description: Explains the short-query limitation when scope is metadata_heading_only.
         results:
           type: array
@@ -1604,13 +2315,41 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [book_id, page_id, block_id, kind, title, snippet, href]
+            required:
+              - book_id
+              - page_id
+              - block_id
+              - kind
+              - title
+              - snippet
+              - href
             properties:
-              book_id: { type: integer, minimum: 1 }
-              page_id: { type: integer, minimum: 1 }
-              block_id: { type: string, pattern: "^blk_[A-Za-z0-9_-]{16,80}$" }
-              kind: { type: string, enum: [title, author, heading, body] }
-              title: { type: string, maxLength: 500 }
-              snippet: { type: string, maxLength: 1000 }
-              href: { type: string, format: uri-reference }
-        next_cursor: { type: [string, "null"] }
+              book_id:
+                type: integer
+                minimum: 1
+              page_id:
+                type: integer
+                minimum: 1
+              block_id:
+                type: string
+                pattern: ^blk_[A-Za-z0-9_-]{16,80}$
+              kind:
+                type: string
+                enum:
+                  - title
+                  - author
+                  - heading
+                  - body
+              title:
+                type: string
+                maxLength: 500
+              snippet:
+                type: string
+                maxLength: 1000
+              href:
+                type: string
+                format: uri-reference
+        next_cursor:
+          type:
+            - string
+            - "null"

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -8,58 +7,54 @@ import { authorizePreviewHtmlResources } from "@/http/authorization/preview-reso
 import { responsePolicyFor } from "@/http/cache/policies";
 import { materializeCandidatePages } from "@/modules/publishing/adapters/reader-html/candidate-materializer";
 import { createCandidateFileInventory } from "@/modules/publishing/adapters/filesystem/candidate-file-inventory";
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
 import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import { buildManifestPageRecord } from "@/modules/publishing/core/publication/manifest";
 import { renderSemanticDocument } from "@/modules/publishing/core/publication/render-document";
 import { buildSearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
-import {
-  createBookConfigV4,
-  structureForDocument,
-} from "../../helpers/book-config";
+import { smallBook, headingBlock, paragraphBlock } from "../../helpers/ir-book";
 
 const headingIds = [
   "blk_candidate_preview_0001",
   "blk_candidate_preview_0002",
 ] as const;
 const resourceId = "res_candidate_preview_0001";
+const candidateId = "candidate_preview_00000001";
 
 function compiledFixture() {
-  const markdown =
-    "# First\n\n[Go to second](#second)\n\n![Diagram](diagram.png)\n\n# Second\n\nBody.\n";
-  const sourceSha256 = createHash("sha256").update(markdown).digest("hex");
-  let headingOrdinal = 0;
-  let contentOrdinal = 0;
-  const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown), {
-    idFactory: (node) =>
-      node.type === "heading"
-        ? (headingIds[headingOrdinal++] ?? "blk_candidate_preview_overflow")
-        : `blk_candidate_preview_content_${String(++contentOrdinal).padStart(4, "0")}`,
-  });
-  const structure = structureForDocument(document).map((node, index) => ({
-    ...node,
-    include_in_toc: index === 0,
-  }));
-  const config = createBookConfigV4({
-    bookId: 7,
-    document,
-    metadata: { authors: ["Author"], language: "en" },
-    numbering: "generated",
-    revision: 3,
-    sourceSha256,
-    structure,
+  const document = smallBook(7);
+  document.metadata = {
     title: "Candidate Preview",
-  });
-  return {
-    book: compileBook({
-      config,
-      configSha256: "b".repeat(64),
-      markdownBytes: markdown,
-    }),
-    config,
+    authors: ["Author"],
+    language: "en",
   };
+  document.publishing.numbering = "generated";
+  document.publishing.boundaries.body_start_block_id = headingIds[0];
+  document.resources = [
+    { id: resourceId, path: "assets/diagram.png", media_type: "image/png" },
+  ];
+  document.blocks = [
+    { ...headingBlock("First"), id: headingIds[0] },
+    {
+      ...paragraphBlock(""),
+      content: [
+        {
+          type: "link",
+          target: { type: "block", block_id: headingIds[1] },
+          content: [{ type: "text", text: "Go to second" }],
+        },
+      ],
+    },
+    {
+      id: "blk_candidate_preview_image0001",
+      type: "image",
+      resource_id: resourceId,
+      alt: "Diagram",
+    },
+    { ...headingBlock("Second"), id: headingIds[1], include_in_toc: false },
+    paragraphBlock("Body."),
+  ];
+  return { book: compileBook(document), document };
 }
 
 function article(html: string): string {
@@ -70,9 +65,9 @@ function article(html: string): string {
 
 function normalizedArticle(html: string): string {
   return article(html)
-    .replaceAll(/\/api\/manage\/books\/7\/preview\/3\/pages\/2/gu, "/page/2")
+    .replaceAll(`/api/manage/books/7/preview/${candidateId}/pages/2`, "/page/2")
     .replaceAll(/\/read\/7\/2/gu, "/page/2")
-    .replaceAll(/\/api\/manage\/books\/7\/preview\/3\/assets\//gu, "/asset/")
+    .replaceAll(`/api/manage/books/7/preview/${candidateId}/assets/`, "/asset/")
     .replaceAll(/\/books\/7\/assets\/ver_candidate_0001\//gu, "/asset/");
 }
 
@@ -80,27 +75,28 @@ describe("candidate preview materialization", () => {
   it("renders semantic pages once and applies isolated preview/public policies", async () => {
     const dataRoot = await createTemporaryDataRoot("candidate-preview");
     try {
-      const { book, config } = compiledFixture();
+      const { book, document } = compiledFixture();
       const candidateDirectory = resolve(dataRoot.path, "candidate");
       const renderPage = vi.fn(renderSemanticDocument);
       const result = await materializeCandidatePages({
         bookId: 7,
         candidateDirectory,
         compiled: book,
-        config,
-        configRevision: 3,
+        bookDocument: document,
+        sourceUpdatedAt: document.updated_at,
+        candidateId,
         files: createCandidateFileInventory(candidateDirectory),
         originalFiles: [{ id: "orig_candidate_0001", role: "mineru_zip" }],
         renderPage,
         resourceResolution: {
           diagnostics: [],
-          references: [{ originalUrl: "diagram.png", resourceId }],
+          references: [{ originalUrl: "assets/diagram.png", resourceId }],
           resources: [
             {
               absolutePath: resolve(dataRoot.path, "diagram.png"),
               id: resourceId,
-              originalUrl: "diagram.png",
-              relativePath: "diagram.png",
+              originalUrl: "assets/diagram.png",
+              relativePath: "assets/diagram.png",
             },
           ],
         },
@@ -111,7 +107,7 @@ describe("candidate preview materialization", () => {
       expect(result).toMatchObject({
         manifestPageCount: 2,
         pageCount: 2,
-        searchFtsRowCount: 6,
+        searchFtsRowCount: 5,
         searchShortRowCount: 4,
       });
       const preview = await readFile(
@@ -138,7 +134,7 @@ describe("candidate preview materialization", () => {
       expect(preview).not.toContain('rel="canonical"');
       expect(preview).not.toContain("reader-book-search");
       expect(preview).toContain(
-        `/api/manage/books/7/preview/3/assets/${resourceId}`,
+        `/api/manage/books/7/preview/${candidateId}/assets/${resourceId}`,
       );
       expect(published).toContain('data-reader-mode="published"');
       expect(published).toContain('<link rel="canonical" href="/read/7/1">');
@@ -152,7 +148,7 @@ describe("candidate preview materialization", () => {
         bookId: 7,
         html: preview,
         nowMs: 1_700_000_000_000,
-        revision: 3,
+        candidateId,
         session: {
           authenticatedAtMs: 1_700_000_000_000,
           expiresAtMs: 1_700_003_600_000,

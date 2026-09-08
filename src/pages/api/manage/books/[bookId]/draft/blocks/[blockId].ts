@@ -44,12 +44,12 @@ export const GET: APIRoute = async ({ locals, params }) => {
     database,
     layout: await getRuntimeStorageLayout(),
   });
-  const headers = new Headers({ ETag: result.etag });
+  const headers = new Headers();
   applyResponsePolicy(headers, "private-api");
   return Response.json(
     {
       block_id: result.block_id,
-      config_revision: result.config_revision,
+      updated_at: result.updated_at,
       kind: result.kind,
       markdown: result.markdown,
     },
@@ -61,27 +61,40 @@ export const PATCH: APIRoute = async ({ locals, params, request }) => {
   const { database } = requireRuntimeAdministrator(locals.session);
   requireMutationOrigin(request, getRuntimeEnvironment().publicOrigin);
   const target = identity(params);
-  const result = await publishingDraftActions.patchDraftBlock({
+  const body = await readBoundedJson(request);
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body) ||
+    Object.keys(body).length !== 2
+  )
+    throw new SafeApplicationError(
+      "DRAFT_PATCH_INVALID",
+      "A block edit is required.",
+      400,
+    );
+  const value = body as Record<string, unknown>;
+  if (
+    typeof value.expected_updated_at !== "number" ||
+    typeof value.markdown !== "string"
+  )
+    throw new SafeApplicationError(
+      "DRAFT_PATCH_INVALID",
+      "A block edit is required.",
+      400,
+    );
+  const result = publishingDraftActions.patchDraftBlock({
     ...target,
     database,
-    expectedEtag: request.headers.get("if-match"),
+    expectedUpdatedAt: value.expected_updated_at,
+    markdown: value.markdown,
     layout: await getRuntimeStorageLayout(),
     nowMs: Date.now(),
-    patch: await readBoundedJson(request, 4 * 1024 * 1024),
   });
-  const headers = new Headers({ ETag: result.etag });
+  const headers = new Headers();
   applyResponsePolicy(headers, "private-api");
   return Response.json(
-    {
-      book_id: target.bookId,
-      candidate: {
-        attempt_id: result.candidate.attemptId,
-        job_id: result.candidate.jobId,
-        state: result.candidate.state,
-      },
-      config_revision: result.revision,
-      selected_block_id: result.selectedBlockId,
-    },
+    { ...result, selected_block_id: target.blockId },
     { headers, status: 202 },
   );
 };

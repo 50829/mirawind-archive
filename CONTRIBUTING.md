@@ -21,7 +21,7 @@ Examples:
 
 ```text
 feat(import): stream uploads into durable staging
-fix(publish): reject a stale config revision
+fix(publish): reject a stale draft timestamp
 test(archive): cover normalized path collisions
 docs: record the publication recovery decision
 ```

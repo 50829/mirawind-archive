@@ -20,8 +20,7 @@ interface DeletableBookRow {
   current_candidate_id: string | null;
   current_version_id: string | null;
   deletion_requested_at: number | null;
-  draft_config_revision: number | null;
-  draft_source_id: string | null;
+  draft_import_id: string | null;
   id: number;
   title_cache: string;
   updated_at: number;
@@ -159,8 +158,7 @@ export function acceptBookDeletion(input: {
       bookId: book.id,
       currentCandidateId: book.current_candidate_id,
       currentVersionId: book.current_version_id,
-      draftConfigRevision: book.draft_config_revision,
-      draftSourceId: book.draft_source_id,
+      draftImportId: book.draft_import_id,
       title: book.title_cache,
       updatedAtMs: book.updated_at,
     });

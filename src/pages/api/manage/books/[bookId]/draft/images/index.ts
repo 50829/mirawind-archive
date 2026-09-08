@@ -32,9 +32,8 @@ export const GET: APIRoute = async ({ locals, params }) => {
   const book = publishing.findBook(bookId);
   const candidate = publishing.findCurrentCandidate(bookId);
   if (
-    !book?.draftConfigRevision ||
+    !book?.draftImportId ||
     !candidate?.versionId ||
-    candidate.configRevision !== book.draftConfigRevision ||
     candidate.state !== "ready"
   ) {
     throw new SafeApplicationError(
@@ -44,10 +43,14 @@ export const GET: APIRoute = async ({ locals, params }) => {
     );
   }
   const layout = await getRuntimeStorageLayout();
-  const config = await createPublishingArtifactServer(layout).readBookConfig(
-    publishing.requireConfig(bookId, book.draftConfigRevision).yamlRelativePath,
-  );
-  const metadata = config.metadata as Readonly<Record<string, unknown>>;
+  const view =
+    await createPublishingArtifactServer(layout).readDraftView(bookId);
+  if (candidate.sourceUpdatedAt !== view.updated_at)
+    throw new SafeApplicationError(
+      "NOT_FOUND",
+      "The images were not found.",
+      404,
+    );
   const artifacts = createPublishingArtifactServer(layout);
   const images = await artifacts.listCandidateImages({
     bookId,
@@ -62,7 +65,8 @@ export const GET: APIRoute = async ({ locals, params }) => {
         height: image.height,
         media_type: image.mediaType,
         path: image.path,
-        selected: metadata.cover_path === image.path,
+        resource_id: image.resourceId,
+        selected: view.metadata.cover_resource_id === image.resourceId,
         size_bytes: image.sizeBytes,
         url: `/api/manage/books/${bookId}/draft/images/${image.resourceId}`,
         width: image.width,

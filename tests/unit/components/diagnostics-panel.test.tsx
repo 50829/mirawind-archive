@@ -33,10 +33,8 @@ describe("workbench diagnostics", () => {
           {
             code: "PDF_CONTENTS_OCR_LOW_CONFIDENCE",
             location: {
-              endByte: 40,
               pageIndex: 2,
               regionId: "region_abcdefghijklmnop",
-              startByte: 20,
             },
             message: "Bounded OCR evidence was insufficient.",
             phase: "ocr",

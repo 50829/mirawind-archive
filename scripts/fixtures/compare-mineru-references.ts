@@ -1,31 +1,26 @@
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import katex from "katex";
+import { parseFragment, type DefaultTreeAdapterMap } from "parse5";
 
 import {
   readMineruReference,
   type MineruReference,
-  type ReferenceAnchor,
   type ReferenceContentsRegion,
   type ReferenceContentsEntry,
-  type ReferenceExpectedDiagnostic,
-  type ReferenceHeadingAccounting,
-  type ReferenceProtectedRange,
 } from "./mineru-reference.js";
 
-export interface ObservedProtectedRange extends ReferenceProtectedRange {
-  readonly output_sha256: string;
-}
+import type { SourceFidelity } from "./source-content-fidelity.js";
 
 export interface ObservedMineruOutcome {
+  readonly schema_version: 3;
   readonly archive_sha256: string;
-  readonly diagnostics: readonly ReferenceExpectedDiagnostic[];
   readonly fixture_id: string;
-  readonly main_markdown: MineruReference["main_markdown"];
+  readonly content_json: MineruReference["content_json"];
   readonly original_pdf: MineruReference["original_pdf"];
   readonly printed_contents: MineruReference["printed_contents"];
-  readonly protected_ranges: readonly ObservedProtectedRange[];
-  readonly raw_heading_accounting: readonly ReferenceHeadingAccounting[];
+  readonly source_fidelity: SourceFidelity;
 }
 
 export interface ReferenceComparisonIssue {
@@ -45,22 +40,37 @@ export interface ReferenceComparisonReport {
   readonly schema_version: 1;
 }
 
-function anchorKey(anchor: ReferenceAnchor): string {
-  return `${anchor.root_index}:${anchor.sha256}`;
-}
-
 function same(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function diagnosticKey(diagnostic: ReferenceExpectedDiagnostic): string {
-  return `${diagnostic.code}:${JSON.stringify(diagnostic.location)}`;
-}
-
 function comparableTitle(value: string): string {
+  function text(node: DefaultTreeAdapterMap["node"]): string {
+    if ("tagName" in node && node.tagName === "annotation") return "";
+    if ("value" in node) return node.value;
+    return "childNodes" in node ? node.childNodes.map(text).join("") : "";
+  }
+  if (/<(?:sub|sup|em|strong)\b/iu.test(value))
+    value = text(parseFragment(value));
+  if (/\\[A-Za-z]+/u.test(value)) {
+    try {
+      value = text(
+        parseFragment(
+          katex.renderToString(value, {
+            output: "mathml",
+            throwOnError: true,
+            strict: "ignore",
+            trust: false,
+            maxExpand: 1000,
+          }),
+        ),
+      );
+    } catch {
+      /* Unrecognized notation remains literal evidence. */
+    }
+  }
   return value
     .normalize("NFKC")
-    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "")
     .replace(/(?<!\\)\$/gu, "")
     .replace(/[\p{P}\p{S}\s]/gu, "")
     .toLocaleLowerCase("und");
@@ -97,17 +107,10 @@ function entryAlignmentScore(
   expectedTitle: TitleProfile,
   actualTitle: TitleProfile,
 ): number | undefined {
-  const sameAnchor =
-    expected.body_heading_anchor !== null &&
-    actual.body_heading_anchor !== null &&
-    anchorKey(expected.body_heading_anchor) ===
-      anchorKey(actual.body_heading_anchor);
-  const similarity = sameAnchor
-    ? 0
-    : titleSimilarity(expectedTitle, actualTitle);
-  if (!sameAnchor && similarity < 0.58) return;
+  const similarity = titleSimilarity(expectedTitle, actualTitle);
+  if (similarity < 0.58) return;
   return (
-    (sameAnchor ? 20 : similarity * 10) +
+    similarity * 10 +
     (expected.page_label === actual.page_label ? 1 : 0) +
     (expected.kind === actual.kind ? 1 : 0) +
     (expected.level === actual.level ? 1 : 0)
@@ -223,8 +226,8 @@ function compareRegion(
   if (!same(expected.pdf_page_indices, actual.pdf_page_indices)) {
     add("REGION_PDF_PAGES_MISMATCH", path);
   }
-  if (!same(expected.markdown_range, actual.markdown_range)) {
-    add("REGION_MARKDOWN_RANGE_MISMATCH", path);
+  if (!same(expected.source_range, actual.source_range)) {
+    add("REGION_SOURCE_RANGE_MISMATCH", path);
   }
   const expectedTitles = expected.entries.map((entry) =>
     titleProfile(entry.title),
@@ -261,12 +264,6 @@ function compareRegion(
     if (entry.page_label !== observed.page_label) {
       add("ENTRY_PAGE_LABEL_MISMATCH", entryPath);
     }
-    if (entry.expected_match !== observed.expected_match) {
-      add("ENTRY_MATCH_MISMATCH", entryPath);
-    }
-    if (!same(entry.body_heading_anchor, observed.body_heading_anchor)) {
-      add("ENTRY_BODY_MISMATCH", entryPath);
-    }
   }
   for (const expectedIndex of alignment.unmatchedExpected) {
     const entry = expected.entries[expectedIndex];
@@ -278,49 +275,12 @@ function compareRegion(
   }
 }
 
-function compareHeading(
-  expected: ReferenceHeadingAccounting,
-  actual: ReferenceHeadingAccounting,
-  add: (code: string, path: string) => void,
-): void {
-  const path = `headings/${expected.anchor.root_index}`;
-  if (expected.disposition.kind !== actual.disposition.kind) {
-    add("HEADING_DISPOSITION_MISMATCH", path);
-    return;
-  }
-  if (expected.disposition.kind === "excluded") {
-    if (
-      actual.disposition.kind !== "excluded" ||
-      expected.disposition.region_key !== actual.disposition.region_key
-    ) {
-      add("HEADING_EXCLUDED_REGION_MISMATCH", path);
-    }
-    return;
-  }
-  if (actual.disposition.kind !== "expected_body") return;
-  if (expected.disposition.display_level !== actual.disposition.display_level) {
-    add("HEADING_LEVEL_MISMATCH", path);
-  }
-  if (expected.disposition.display_title !== actual.disposition.display_title) {
-    add("HEADING_DISPLAY_TITLE_MISMATCH", path);
-  }
-  if (
-    expected.disposition.include_in_toc !== actual.disposition.include_in_toc
-  ) {
-    add("HEADING_TOC_MISMATCH", path);
-  }
-  if (expected.disposition.role !== actual.disposition.role) {
-    add("HEADING_ROLE_MISMATCH", path);
-  }
-  if (expected.disposition.starts_page !== actual.disposition.starts_page) {
-    add("HEADING_SPLIT_MISMATCH", path);
-  }
-}
-
 export function compareMineruReference(
   expected: MineruReference,
   actual: ObservedMineruOutcome,
 ): ReferenceComparison {
+  if (actual.schema_version !== 3)
+    throw new Error("OBSERVED_REFERENCE_SCHEMA_INVALID");
   const issues: ReferenceComparisonIssue[] = [];
   const add = (code: string, path: string) => {
     issues.push(Object.freeze({ code, path }));
@@ -332,14 +292,12 @@ export function compareMineruReference(
     add("ARCHIVE_HASH_MISMATCH", "archive");
   }
   if (
-    expected.main_markdown.relative_path !== actual.main_markdown.relative_path
+    expected.content_json.relative_path !== actual.content_json.relative_path
   ) {
-    add("MAIN_MARKDOWN_PATH_MISMATCH", "main_markdown");
+    add("CONTENT_JSON_PATH_MISMATCH", "content_json");
   }
-  if (
-    expected.main_markdown.input_sha256 !== actual.main_markdown.input_sha256
-  ) {
-    add("MAIN_MARKDOWN_HASH_MISMATCH", "main_markdown");
+  if (expected.content_json.input_sha256 !== actual.content_json.input_sha256) {
+    add("CONTENT_JSON_HASH_MISMATCH", "content_json");
   }
   if (
     expected.original_pdf.relative_path !== actual.original_pdf.relative_path
@@ -389,89 +347,11 @@ export function compareMineruReference(
     }
   }
 
-  const expectedHeadingKeys = expected.raw_heading_accounting.map((heading) =>
-    anchorKey(heading.anchor),
-  );
-  const actualHeadingKeys = actual.raw_heading_accounting.map((heading) =>
-    anchorKey(heading.anchor),
-  );
-  if (!same(expectedHeadingKeys, actualHeadingKeys)) {
-    add("HEADING_ORDER_MISMATCH", "headings");
-  }
-  const actualHeadings = new Map(
-    actual.raw_heading_accounting.map(
-      (heading) => [anchorKey(heading.anchor), heading] as const,
-    ),
-  );
-  const expectedHeadings = new Set(expectedHeadingKeys);
-  for (const heading of expected.raw_heading_accounting) {
-    const observed = actualHeadings.get(anchorKey(heading.anchor));
-    if (!observed) {
-      add("HEADING_MISSING", `headings/${heading.anchor.root_index}`);
-      continue;
-    }
-    compareHeading(heading, observed, add);
-  }
-  for (const heading of actual.raw_heading_accounting) {
-    if (!expectedHeadings.has(anchorKey(heading.anchor))) {
-      add("HEADING_EXTRA", `headings/${heading.anchor.root_index}`);
-    }
-  }
-
-  const protectedKey = (range: ReferenceProtectedRange) =>
-    `${range.start_byte}:${range.end_byte}:${range.kind}`;
-  const actualRanges = new Map(
-    actual.protected_ranges.map(
-      (range) => [protectedKey(range), range] as const,
-    ),
-  );
-  const expectedRangeKeys = new Set(
-    expected.protected_ranges.map(protectedKey),
-  );
-  for (const range of expected.protected_ranges) {
-    const key = protectedKey(range);
-    const observed = actualRanges.get(key);
-    if (!observed) {
-      add("PROTECTED_RANGE_MISSING", `protected_ranges/${key}`);
-      continue;
-    }
-    if (range.sha256 !== observed.sha256) {
-      add("PROTECTED_RANGE_INPUT_MISMATCH", `protected_ranges/${key}`);
-    }
-    if (range.sha256 !== observed.output_sha256) {
-      add("PROTECTED_RANGE_CHANGED", `protected_ranges/${key}`);
-    }
-  }
-  for (const range of actual.protected_ranges) {
-    const key = protectedKey(range);
-    if (!expectedRangeKeys.has(key)) {
-      add("PROTECTED_RANGE_EXTRA", `protected_ranges/${key}`);
-    }
-  }
-
-  const expectedDiagnostics = new Map(
-    expected.expected_diagnostics.map(
-      (diagnostic) => [diagnosticKey(diagnostic), diagnostic] as const,
-    ),
-  );
-  const actualDiagnostics = new Map(
-    actual.diagnostics.map(
-      (diagnostic) => [diagnosticKey(diagnostic), diagnostic] as const,
-    ),
-  );
-  for (const [key, diagnostic] of expectedDiagnostics) {
-    const observed = actualDiagnostics.get(key);
-    if (!observed) {
-      add("DIAGNOSTIC_MISSING", `diagnostics/${diagnostic.code}`);
-    } else if (!same(diagnostic, observed)) {
-      add("DIAGNOSTIC_DETAIL_MISMATCH", `diagnostics/${diagnostic.code}`);
-    }
-  }
-  for (const [key, diagnostic] of actualDiagnostics) {
-    if (!expectedDiagnostics.has(key)) {
-      add("DIAGNOSTIC_EXTRA", `diagnostics/${diagnostic.code}`);
-    }
-  }
+  if (!actual.source_fidelity || actual.source_fidelity.checked_blocks < 1)
+    add("SOURCE_FIDELITY_MISSING", "source");
+  else
+    for (const issue of actual.source_fidelity.issues)
+      add(issue.code, issue.path);
 
   return Object.freeze({
     fixture_id: expected.fixture_id,
@@ -483,12 +363,12 @@ export function compareMineruReference(
 const fixtureIdPattern = /^real-mineru-[a-z0-9]{6,32}$/u;
 
 function selectedFixtureIds(fixtureIds: readonly string[]): readonly string[] {
-  if (fixtureIds.length < 1) throw new Error("REFERENCE_V2_SUBSET_EMPTY");
+  if (fixtureIds.length < 1) throw new Error("REFERENCE_V3_SUBSET_EMPTY");
   if (
     fixtureIds.some((fixtureId) => !fixtureIdPattern.test(fixtureId)) ||
     new Set(fixtureIds).size !== fixtureIds.length
   ) {
-    throw new Error("REFERENCE_V2_SUBSET_INVALID");
+    throw new Error("REFERENCE_V3_SUBSET_INVALID");
   }
   return Object.freeze(
     fixtureIds.toSorted((left, right) => left.localeCompare(right, "en")),
@@ -510,13 +390,13 @@ export async function compareMineruReferenceSet(input: {
         .filter((name) => name.endsWith(".json") && basename(name) === name)
         .sort((left, right) => left.localeCompare(right, "en"));
   if (!input.fixtureIds && files.length !== 15) {
-    throw new Error("REFERENCE_V2_SET_MUST_CONTAIN_FIFTEEN_FILES");
+    throw new Error("REFERENCE_V3_SET_MUST_CONTAIN_FIFTEEN_FILES");
   }
   const comparisons: ReferenceComparison[] = [];
   for (const file of files) {
     const expected = await readMineruReference(join(references, file));
     if (`${expected.fixture_id}.json` !== file) {
-      throw new Error("REFERENCE_V2_FILENAME_BINDING_MISMATCH");
+      throw new Error("REFERENCE_V3_FILENAME_BINDING_MISMATCH");
     }
     const actual = JSON.parse(
       await readFile(join(observed, file), "utf8"),

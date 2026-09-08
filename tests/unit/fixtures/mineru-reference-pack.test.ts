@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { buildZip } from "../../../scripts/fixtures/zip-builder";
 import { createReferencePackFromArchive } from "../../../scripts/fixtures/create-mineru-reference-pack";
+import { mineruTitle, mineruParagraph } from "../../helpers/mineru-v2";
 
 const roots: string[] = [];
 
@@ -31,20 +32,12 @@ async function fixture() {
     buildZip({
       entries: [
         {
-          data: "# Book\n\n## Contents\n\n## Chapter One .... 1\n\n## Chapter One\n\nBody.\n",
-          name: "bundle/full.md",
+          data: JSON.stringify([
+            [mineruTitle("Book"), mineruParagraph("Body")],
+          ]),
+          name: "bundle/content_list_v2.json",
         },
         { data: "%PDF synthetic", name: "bundle/origin.pdf" },
-        {
-          data: JSON.stringify([
-            {
-              page_idx: 2,
-              text: "Contents",
-              type: "text",
-            },
-          ]),
-          name: "bundle/full_content_list.json",
-        },
       ],
     }),
   );
@@ -73,17 +66,10 @@ describe("MinerU reference review pack", () => {
 
     expect(result).toMatchObject({
       fixture_id: "real-mineru-a7f31c",
-      markdown_documents: [
-        {
-          headings: [
-            { depth: 1, root_index: 0, text: "Book" },
-            { depth: 2, root_index: 1, text: "Contents" },
-            { depth: 2, root_index: 2, text: "Chapter One .... 1" },
-            { depth: 2, root_index: 3, text: "Chapter One" },
-          ],
-          relative_path: "bundle/full.md",
-        },
-      ],
+      content_json: {
+        relative_path: "bundle/content_list_v2.json",
+        input_sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      },
       pdf_documents: [
         {
           page_count: 12,
@@ -95,11 +81,9 @@ describe("MinerU reference review pack", () => {
           relative_path: "bundle/origin.pdf",
         },
       ],
-      schema_version: 1,
+      schema_version: 2,
     });
-    expect(JSON.stringify(result)).not.toMatch(
-      /canonical|display_level|starts_page|expected_match/u,
-    );
+    expect(result.content_json.records).toHaveLength(2);
     expect(
       JSON.parse(
         await readFile(join(outputDirectory, "observations.json"), "utf8"),
@@ -126,17 +110,5 @@ describe("MinerU reference review pack", () => {
     ).rejects.toThrow("invalid PDF");
     await expect(access(outputDirectory)).rejects.toThrow();
     expect(await readdir(temporaryParent)).toEqual([]);
-  });
-
-  it("does not import production contents or structure proposals", async () => {
-    const source = await readFile(
-      new URL(
-        "../../../scripts/fixtures/create-mineru-reference-pack.ts",
-        import.meta.url,
-      ),
-      "utf8",
-    );
-
-    expect(source).not.toMatch(/printed-toc|structure-proposal|prepare-draft/u);
   });
 });

@@ -1,239 +1,109 @@
 CREATE TABLE database_baseline (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  identity TEXT NOT NULL UNIQUE
-    CHECK (identity = 'mirawind-publishing-editor-v1')
+  identity TEXT NOT NULL UNIQUE CHECK (identity = 'mirawind-content-ir-v1')
 ) STRICT;
-
-INSERT INTO database_baseline (id, identity)
-VALUES (1, 'mirawind-publishing-editor-v1');
+INSERT INTO database_baseline (id, identity) VALUES (1, 'mirawind-content-ir-v1');
 
 CREATE TABLE installation (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  admin_user_id TEXT UNIQUE,
+  id INTEGER PRIMARY KEY CHECK (id = 1), admin_user_id TEXT UNIQUE,
   schema_version INTEGER NOT NULL CHECK (schema_version >= 1),
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 ) STRICT;
-
 CREATE TABLE books (
-  id INTEGER PRIMARY KEY,
-  alias TEXT UNIQUE CHECK (
-    alias IS NULL OR (
-      length(alias) BETWEEN 1 AND 120
-      AND alias GLOB '[a-z0-9]*'
-      AND alias NOT GLOB '*[^a-z0-9-]*'
-      AND alias NOT GLOB '[0-9]*'
-    )
+  id INTEGER PRIMARY KEY, alias TEXT UNIQUE CHECK (
+    alias IS NULL OR (length(alias) BETWEEN 1 AND 120 AND alias GLOB '[a-z0-9]*'
+      AND alias NOT GLOB '*[^a-z0-9-]*' AND alias GLOB '*[^0-9]*')
   ),
-  access TEXT NOT NULL DEFAULT 'private'
-    CHECK (access IN ('private', 'public')),
+  access TEXT NOT NULL DEFAULT 'private' CHECK (access IN ('private', 'public')),
   title_cache TEXT NOT NULL CHECK (length(title_cache) BETWEEN 1 AND 500),
-  draft_source_id TEXT,
-  draft_config_revision INTEGER,
-  current_candidate_id TEXT,
-  current_version_id TEXT,
-  unavailable_reason TEXT CHECK (
-    unavailable_reason IS NULL OR length(unavailable_reason) <= 80
-  ),
-  deletion_requested_at INTEGER CHECK (
-    deletion_requested_at IS NULL OR deletion_requested_at >= 0
-  ),
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  CHECK (draft_config_revision IS NOT NULL OR current_candidate_id IS NULL),
-  FOREIGN KEY (draft_source_id) REFERENCES source_snapshots(id),
-  FOREIGN KEY (id, draft_config_revision)
-    REFERENCES config_revisions(book_id, revision),
-  FOREIGN KEY (current_candidate_id) REFERENCES draft_candidates(id),
-  FOREIGN KEY (current_version_id) REFERENCES book_versions(id)
+  draft_import_id TEXT REFERENCES imports(id) ON DELETE RESTRICT,
+  current_candidate_id TEXT REFERENCES draft_candidates(id),
+  current_version_id TEXT REFERENCES book_versions(id),
+  unavailable_reason TEXT CHECK (unavailable_reason IS NULL OR length(unavailable_reason) <= 80),
+  deletion_requested_at INTEGER CHECK (deletion_requested_at IS NULL OR deletion_requested_at >= 0),
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 ) STRICT;
-
 CREATE TABLE imports (
   id TEXT PRIMARY KEY CHECK (id GLOB 'imp_*'),
   original_name TEXT NOT NULL CHECK (length(original_name) BETWEEN 1 AND 255),
-  state TEXT NOT NULL CHECK (
-    state IN (
-      'uploaded',
-      'analyzing',
-      'needs_main_confirmation',
-      'preparing',
-      'draft_ready',
-      'rejected',
-      'canceled',
-      'expired'
-    )
-  ),
+  state TEXT NOT NULL CHECK (state IN ('uploaded','analyzing','preparing','draft_ready','rejected','canceled','expired')),
   upload_rel_path TEXT NOT NULL,
-  upload_size_bytes INTEGER NOT NULL CHECK (
-    upload_size_bytes BETWEEN 0 AND 2147483648
-  ),
+  upload_size_bytes INTEGER NOT NULL CHECK (upload_size_bytes BETWEEN 0 AND 2147483648),
   upload_sha256 TEXT NOT NULL CHECK (length(upload_sha256) = 64),
-  selected_candidate_id TEXT,
-  book_id INTEGER REFERENCES books(id),
-  safe_error_code TEXT CHECK (
-    safe_error_code IS NULL OR length(safe_error_code) <= 80
-  ),
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,
-  FOREIGN KEY (id, selected_candidate_id)
-    REFERENCES import_candidates(import_id, id)
+  selected_candidate_id TEXT, book_id INTEGER REFERENCES books(id),
+  safe_error_code TEXT CHECK (safe_error_code IS NULL OR length(safe_error_code) <= 80),
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+  FOREIGN KEY (id, selected_candidate_id) REFERENCES import_candidates(import_id,id)
 ) STRICT;
-
-CREATE TABLE source_snapshots (
-  id TEXT PRIMARY KEY CHECK (id GLOB 'src_*'),
-  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  main_markdown_path TEXT NOT NULL,
-  main_markdown_sha256 TEXT NOT NULL CHECK (length(main_markdown_sha256) = 64),
-  source_root_rel_path TEXT NOT NULL,
-  analysis_version TEXT NOT NULL CHECK (length(analysis_version) <= 100),
-  origin TEXT NOT NULL CHECK (origin IN ('import', 'edit')),
-  parent_source_id TEXT REFERENCES source_snapshots(id) ON DELETE CASCADE,
-  created_from_import_id TEXT REFERENCES imports(id) ON DELETE RESTRICT,
-  created_at INTEGER NOT NULL,
-  CHECK (
-    (origin = 'import' AND parent_source_id IS NULL AND created_from_import_id IS NOT NULL)
-    OR
-    (origin = 'edit' AND parent_source_id IS NOT NULL AND created_from_import_id IS NULL)
-  ),
-  UNIQUE (book_id, id)
+CREATE TABLE import_candidates (
+  id TEXT PRIMARY KEY CHECK (id GLOB 'cand_*'),
+  import_id TEXT NOT NULL REFERENCES imports(id) ON DELETE CASCADE,
+  normalized_path TEXT NOT NULL CHECK (length(normalized_path) BETWEEN 1 AND 2048),
+  confidence TEXT NOT NULL CHECK (confidence IN ('high','ambiguous')),
+  score INTEGER NOT NULL,
+  evidence_json TEXT NOT NULL CHECK (json_valid(evidence_json) AND length(evidence_json) <= 65536),
+  diagnostics_json TEXT NOT NULL CHECK (json_valid(diagnostics_json) AND length(diagnostics_json) <= 1048576),
+  UNIQUE(import_id,normalized_path), UNIQUE(import_id,id)
 ) STRICT;
-
-CREATE TABLE source_assets (
-  id TEXT PRIMARY KEY CHECK (id GLOB 'asset_*'),
+CREATE TABLE book_resources (
+  id TEXT PRIMARY KEY CHECK (id GLOB 'res_*'),
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   storage_rel_path TEXT NOT NULL UNIQUE,
   size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 0 AND 2147483648),
   sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
   created_at INTEGER NOT NULL,
-  UNIQUE (book_id, id)
+  UNIQUE(book_id,id)
 ) STRICT;
-
-CREATE TABLE source_asset_bindings (
-  source_id TEXT NOT NULL REFERENCES source_snapshots(id) ON DELETE CASCADE,
-  logical_path TEXT NOT NULL,
-  asset_id TEXT NOT NULL REFERENCES source_assets(id) ON DELETE RESTRICT,
-  PRIMARY KEY (source_id, logical_path)
-) STRICT, WITHOUT ROWID;
-
-CREATE TABLE config_revisions (
-  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  revision INTEGER NOT NULL CHECK (revision >= 1),
-  source_id TEXT NOT NULL REFERENCES source_snapshots(id) ON DELETE RESTRICT,
-  schema_version INTEGER NOT NULL CHECK (schema_version = 4),
-  yaml_rel_path TEXT NOT NULL,
-  yaml_sha256 TEXT NOT NULL CHECK (length(yaml_sha256) = 64),
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY (book_id, revision),
-  UNIQUE (book_id, revision, source_id)
-) STRICT, WITHOUT ROWID;
-
-CREATE TABLE jobs (
-  id TEXT PRIMARY KEY CHECK (id GLOB 'job_*'),
-  kind TEXT NOT NULL CHECK (
-    kind IN (
-      'analyze_import',
-      'prepare_draft',
-      'build_candidate',
-      'verify_version',
-      'reconcile',
-      'reclaim_versions',
-      'purge_book'
-    )
-  ),
-  state TEXT NOT NULL CHECK (
-    state IN ('queued', 'running', 'succeeded', 'failed', 'canceled', 'interrupted')
-  ),
-  import_id TEXT REFERENCES imports(id) ON DELETE RESTRICT,
-  book_id INTEGER REFERENCES books(id) ON DELETE RESTRICT,
-  candidate_id TEXT,
-  version_id TEXT,
-  captured_source_id TEXT REFERENCES source_snapshots(id) ON DELETE RESTRICT,
-  captured_config_revision INTEGER,
-  captured_current_version_id TEXT,
-  retry_of_job_id TEXT REFERENCES jobs(id) ON DELETE RESTRICT,
-  attempt INTEGER NOT NULL CHECK (attempt >= 1),
-  automatic_retry_count INTEGER NOT NULL DEFAULT 0 CHECK (
-    automatic_retry_count BETWEEN 0 AND 1
-  ),
-  lease_owner TEXT,
-  lease_until INTEGER,
-  heartbeat_at INTEGER,
-  phase TEXT NOT NULL CHECK (length(phase) BETWEEN 1 AND 80),
-  progress_json TEXT NOT NULL DEFAULT
-    '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}'
-    CHECK (json_valid(progress_json) AND length(progress_json) <= 65536),
-  error_code TEXT CHECK (error_code IS NULL OR length(error_code) <= 80),
-  error_class TEXT CHECK (
-    error_class IS NULL OR error_class IN (
-      'infrastructure',
-      'content',
-      'validation',
-      'security_limit',
-      'timeout',
-      'canceled'
-    )
-  ),
-  error_detail_json TEXT CHECK (
-    error_detail_json IS NULL OR (
-      json_valid(error_detail_json) AND length(error_detail_json) <= 65536
-    )
-  ),
-  cancellation_requested_at INTEGER,
-  created_at INTEGER NOT NULL,
-  started_at INTEGER,
-  finished_at INTEGER,
-  CHECK (
-    (state = 'running' AND lease_owner IS NOT NULL AND lease_until IS NOT NULL)
-    OR state != 'running'
-  ),
-  FOREIGN KEY (book_id, captured_config_revision)
-    REFERENCES config_revisions(book_id, revision),
-  FOREIGN KEY (candidate_id) REFERENCES draft_candidates(id),
-  FOREIGN KEY (captured_current_version_id) REFERENCES book_versions(id)
-) STRICT;
-
 CREATE TABLE original_files (
   id TEXT PRIMARY KEY CHECK (id GLOB 'file_*'),
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  source_id TEXT NOT NULL REFERENCES source_snapshots(id) ON DELETE RESTRICT,
+  import_id TEXT NOT NULL REFERENCES imports(id) ON DELETE RESTRICT,
   role TEXT NOT NULL CHECK (role = 'mineru_zip'),
-  storage_rel_path TEXT NOT NULL,
-  original_name TEXT NOT NULL CHECK (length(original_name) BETWEEN 1 AND 255),
+  storage_rel_path TEXT NOT NULL, original_name TEXT NOT NULL CHECK (length(original_name) BETWEEN 1 AND 255),
   media_type TEXT NOT NULL CHECK (length(media_type) BETWEEN 3 AND 200),
   size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 0 AND 2147483648),
-  sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
-  created_at INTEGER NOT NULL,
-  UNIQUE (book_id, source_id, role)
+  sha256 TEXT NOT NULL CHECK (length(sha256) = 64), created_at INTEGER NOT NULL,
+  UNIQUE(book_id,import_id,role)
 ) STRICT;
-
-CREATE TABLE import_candidates (
-  id TEXT PRIMARY KEY CHECK (id GLOB 'cand_*'),
-  import_id TEXT NOT NULL REFERENCES imports(id) ON DELETE CASCADE,
-  normalized_path TEXT NOT NULL CHECK (length(normalized_path) BETWEEN 1 AND 2048),
-  confidence TEXT NOT NULL CHECK (confidence IN ('high', 'generic', 'ambiguous')),
-  score INTEGER NOT NULL,
-  evidence_json TEXT NOT NULL CHECK (
-    json_valid(evidence_json) AND length(evidence_json) <= 65536
-  ),
-  diagnostics_json TEXT NOT NULL CHECK (
-    json_valid(diagnostics_json) AND length(diagnostics_json) <= 1048576
-  ),
-  UNIQUE (import_id, normalized_path),
-  UNIQUE (import_id, id)
+CREATE TABLE jobs (
+  id TEXT PRIMARY KEY CHECK (id GLOB 'job_*'),
+  kind TEXT NOT NULL CHECK (kind IN ('analyze_import','prepare_draft','save_draft','build_candidate','purge_book')),
+  state TEXT NOT NULL CHECK (state IN ('queued','running','succeeded','failed','canceled','interrupted')),
+  import_id TEXT REFERENCES imports(id) ON DELETE RESTRICT, book_id INTEGER REFERENCES books(id) ON DELETE RESTRICT,
+  candidate_id TEXT REFERENCES draft_candidates(id), version_id TEXT,
+  captured_input_path TEXT, captured_source_updated_at INTEGER,
+  captured_current_version_id TEXT REFERENCES book_versions(id),
+  retry_of_job_id TEXT REFERENCES jobs(id) ON DELETE RESTRICT,
+  attempt INTEGER NOT NULL CHECK (attempt >= 1),
+  automatic_retry_count INTEGER NOT NULL DEFAULT 0 CHECK (automatic_retry_count BETWEEN 0 AND 1),
+  lease_owner TEXT, lease_until INTEGER, heartbeat_at INTEGER,
+  phase TEXT NOT NULL CHECK (length(phase) BETWEEN 1 AND 80),
+  progress_json TEXT NOT NULL DEFAULT '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}'
+    CHECK (json_valid(progress_json) AND length(progress_json) <= 65536),
+  error_code TEXT CHECK (error_code IS NULL OR length(error_code) <= 80),
+  error_class TEXT CHECK (error_class IS NULL OR error_class IN ('infrastructure','content','validation','security_limit','timeout','canceled')),
+  error_detail_json TEXT CHECK (error_detail_json IS NULL OR (json_valid(error_detail_json) AND length(error_detail_json) <= 65536)),
+  cancellation_requested_at INTEGER, created_at INTEGER NOT NULL, started_at INTEGER, finished_at INTEGER,
+  CHECK ((state = 'running' AND lease_owner IS NOT NULL AND lease_until IS NOT NULL) OR state != 'running')
 ) STRICT;
-
+CREATE TABLE save_draft_requests (
+  job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  expected_updated_at INTEGER NOT NULL CHECK (expected_updated_at BETWEEN 0 AND 8640000000000000),
+  payload_json TEXT NOT NULL CHECK (json_valid(payload_json) AND length(CAST(payload_json AS BLOB)) <= 4194304),
+  accepted_updated_at INTEGER CHECK (accepted_updated_at BETWEEN 0 AND 8640000000000000),
+  prepared_path TEXT, document_sha256 TEXT CHECK (document_sha256 IS NULL OR length(document_sha256) = 64),
+  no_change INTEGER NOT NULL DEFAULT 0 CHECK (no_change IN (0,1))
+) STRICT;
 CREATE TABLE book_versions (
   id TEXT PRIMARY KEY CHECK (id GLOB 'ver_*'),
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  source_id TEXT NOT NULL REFERENCES source_snapshots(id) ON DELETE RESTRICT,
-  config_revision INTEGER NOT NULL,
+  import_id TEXT NOT NULL REFERENCES imports(id) ON DELETE RESTRICT,
+  source_updated_at INTEGER NOT NULL CHECK (source_updated_at BETWEEN 0 AND 8640000000000000),
   predecessor_version_id TEXT REFERENCES book_versions(id) ON DELETE RESTRICT,
-  state TEXT NOT NULL CHECK (
-    state IN ('ready', 'published', 'superseded', 'discarded', 'corrupt')
-  ),
+  state TEXT NOT NULL CHECK (state IN ('ready','published','superseded','discarded','corrupt')),
   version_rel_path TEXT NOT NULL UNIQUE,
-  manifest_schema_version INTEGER NOT NULL CHECK (manifest_schema_version = 3),
+  manifest_schema_version INTEGER NOT NULL CHECK (manifest_schema_version = 4),
   manifest_sha256 TEXT NOT NULL CHECK (length(manifest_sha256) = 64),
   version_marker_sha256 TEXT NOT NULL CHECK (length(version_marker_sha256) = 64),
   semantic_digest TEXT NOT NULL CHECK (length(semantic_digest) = 64),
@@ -241,137 +111,61 @@ CREATE TABLE book_versions (
   renderer_version TEXT NOT NULL CHECK (length(renderer_version) <= 100),
   preview_version TEXT NOT NULL CHECK (length(preview_version) <= 100),
   reader_version TEXT NOT NULL CHECK (length(reader_version) <= 100),
-  blocking_diagnostic_count INTEGER NOT NULL CHECK (
-    blocking_diagnostic_count BETWEEN 0 AND 10000
-  ),
-  complete_at INTEGER NOT NULL,
-  published_at INTEGER,
-  verified_at INTEGER,
+  blocking_diagnostic_count INTEGER NOT NULL CHECK (blocking_diagnostic_count BETWEEN 0 AND 10000),
+  complete_at INTEGER NOT NULL, published_at INTEGER, verified_at INTEGER,
   reclaimed_at INTEGER CHECK (reclaimed_at IS NULL OR reclaimed_at >= 0),
   created_by_job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE RESTRICT,
-  FOREIGN KEY (book_id, config_revision, source_id)
-    REFERENCES config_revisions(book_id, revision, source_id),
-  UNIQUE (book_id, id)
+  UNIQUE(book_id,id)
 ) STRICT;
-
 CREATE TABLE draft_candidates (
   id TEXT PRIMARY KEY CHECK (id GLOB 'candidate_*'),
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  source_id TEXT NOT NULL REFERENCES source_snapshots(id) ON DELETE RESTRICT,
-  config_revision INTEGER NOT NULL,
+  import_id TEXT NOT NULL REFERENCES imports(id) ON DELETE RESTRICT,
+  source_updated_at INTEGER NOT NULL CHECK (source_updated_at BETWEEN 0 AND 8640000000000000),
+  input_rel_path TEXT NOT NULL,
   job_id TEXT NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE RESTRICT,
   version_id TEXT UNIQUE REFERENCES book_versions(id) ON DELETE RESTRICT,
-  state TEXT NOT NULL CHECK (
-    state IN (
-      'building',
-      'ready',
-      'failed',
-      'canceled',
-      'interrupted',
-      'discarded'
-    )
-  ),
-  semantic_digest TEXT CHECK (
-    semantic_digest IS NULL OR length(semantic_digest) = 64
-  ),
-  safe_error_code TEXT CHECK (
-    safe_error_code IS NULL OR (
-      length(safe_error_code) BETWEEN 3 AND 80
-      AND safe_error_code NOT GLOB '*[^A-Z0-9_]*'
-    )
-  ),
-  blocking_diagnostic_count INTEGER CHECK (
-    blocking_diagnostic_count IS NULL
-    OR blocking_diagnostic_count BETWEEN 0 AND 10000
-  ),
-  created_at INTEGER NOT NULL CHECK (created_at >= 0),
-  completed_at INTEGER CHECK (
-    completed_at IS NULL OR completed_at >= created_at
-  ),
-  CHECK (
-    (state = 'ready'
-      AND version_id IS NOT NULL
-      AND semantic_digest IS NOT NULL
-      AND blocking_diagnostic_count IS NOT NULL
-      AND safe_error_code IS NULL
-      AND completed_at IS NOT NULL)
-    OR
-    (state <> 'ready'
-      AND version_id IS NULL
-      AND semantic_digest IS NULL
-      AND blocking_diagnostic_count IS NULL)
-  ),
-  CHECK (
-    (state = 'building' AND safe_error_code IS NULL AND completed_at IS NULL)
-    OR state <> 'building'
-  ),
-  FOREIGN KEY (book_id, config_revision, source_id)
-    REFERENCES config_revisions(book_id, revision, source_id),
-  UNIQUE (book_id, id)
+  state TEXT NOT NULL CHECK (state IN ('building','ready','failed','canceled','interrupted','discarded')),
+  semantic_digest TEXT CHECK (semantic_digest IS NULL OR length(semantic_digest) = 64),
+  safe_error_code TEXT CHECK (safe_error_code IS NULL OR (length(safe_error_code) BETWEEN 3 AND 80 AND safe_error_code NOT GLOB '*[^A-Z0-9_]*')),
+  blocking_diagnostic_count INTEGER CHECK (blocking_diagnostic_count IS NULL OR blocking_diagnostic_count BETWEEN 0 AND 10000),
+  created_at INTEGER NOT NULL CHECK (created_at >= 0), completed_at INTEGER CHECK (completed_at IS NULL OR completed_at >= created_at),
+  CHECK ((state = 'ready' AND version_id IS NOT NULL AND semantic_digest IS NOT NULL AND blocking_diagnostic_count IS NOT NULL AND safe_error_code IS NULL AND completed_at IS NOT NULL)
+    OR (state <> 'ready' AND version_id IS NULL AND semantic_digest IS NULL AND blocking_diagnostic_count IS NULL)),
+  CHECK ((state = 'building' AND safe_error_code IS NULL AND completed_at IS NULL) OR state <> 'building'),
+  UNIQUE(book_id,id)
 ) STRICT;
-
 CREATE TABLE search_short_fields (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
   version_id TEXT NOT NULL REFERENCES book_versions(id) ON DELETE CASCADE,
-  page_id INTEGER NOT NULL CHECK (page_id >= 1),
-  block_id TEXT,
-  kind TEXT NOT NULL CHECK (kind IN ('title', 'author', 'heading')),
-  normalized_text TEXT NOT NULL,
-  ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
-  PRIMARY KEY (version_id, kind, ordinal)
+  page_id INTEGER NOT NULL CHECK (page_id >= 1), block_id TEXT,
+  kind TEXT NOT NULL CHECK (kind IN ('title','author','heading')), normalized_text TEXT NOT NULL,
+  ordinal INTEGER NOT NULL CHECK (ordinal >= 0), PRIMARY KEY(version_id,kind,ordinal)
 ) STRICT, WITHOUT ROWID;
-
 CREATE TABLE audit_events (
-  id INTEGER PRIMARY KEY,
-  actor_user_id TEXT,
+  id INTEGER PRIMARY KEY, actor_user_id TEXT,
   action TEXT NOT NULL CHECK (length(action) BETWEEN 1 AND 100),
   book_id INTEGER REFERENCES books(id) ON DELETE RESTRICT,
-  version_id TEXT REFERENCES book_versions(id) ON DELETE RESTRICT,
-  job_id TEXT REFERENCES jobs(id) ON DELETE RESTRICT,
-  safe_metadata_json TEXT NOT NULL DEFAULT '{}'
-    CHECK (json_valid(safe_metadata_json) AND length(safe_metadata_json) <= 65536),
+  version_id TEXT REFERENCES book_versions(id) ON DELETE RESTRICT, job_id TEXT REFERENCES jobs(id) ON DELETE RESTRICT,
+  safe_metadata_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(safe_metadata_json) AND length(safe_metadata_json) <= 65536),
   created_at INTEGER NOT NULL
 ) STRICT;
-
 CREATE VIRTUAL TABLE search_fts USING fts5(
-  title,
-  authors,
-  heading,
-  body,
-  book_id UNINDEXED,
-  version_id UNINDEXED,
-  page_id UNINDEXED,
-  block_id UNINDEXED,
-  kind UNINDEXED,
-  ordinal UNINDEXED,
-  tokenize = 'trigram',
-  detail = full
+  title, authors, heading, body, book_id UNINDEXED, version_id UNINDEXED, page_id UNINDEXED,
+  block_id UNINDEXED, kind UNINDEXED, ordinal UNINDEXED, tokenize = 'trigram', detail = full
 );
-
-CREATE UNIQUE INDEX one_published_version_per_book
-  ON book_versions(book_id)
-  WHERE state = 'published';
-CREATE UNIQUE INDEX one_ready_version_per_book
-  ON book_versions(book_id)
-  WHERE state = 'ready';
-CREATE INDEX draft_candidates_book_revision
-  ON draft_candidates(book_id, config_revision, created_at);
-CREATE INDEX source_snapshots_book ON source_snapshots(book_id, created_at);
-CREATE INDEX source_assets_book ON source_assets(book_id, created_at);
-CREATE INDEX source_asset_bindings_asset ON source_asset_bindings(asset_id);
-CREATE INDEX config_revisions_source ON config_revisions(source_id);
-CREATE INDEX imports_state_expiry ON imports(state, expires_at);
-CREATE INDEX import_candidates_import_score
-  ON import_candidates(import_id, score DESC, id);
-CREATE INDEX book_versions_book_state
-  ON book_versions(book_id, state, complete_at);
-CREATE INDEX jobs_claim_order ON jobs(state, created_at, id);
-CREATE INDEX jobs_lease_expiry ON jobs(state, lease_until);
-CREATE INDEX jobs_scope ON jobs(book_id, import_id, created_at);
-CREATE INDEX search_short_current
-  ON search_short_fields(book_id, version_id, kind, normalized_text);
-CREATE INDEX audit_events_scope
-  ON audit_events(book_id, job_id, version_id, created_at);
+CREATE UNIQUE INDEX one_published_version_per_book ON book_versions(book_id) WHERE state = 'published';
+CREATE UNIQUE INDEX one_ready_version_per_book ON book_versions(book_id) WHERE state = 'ready';
+CREATE INDEX draft_candidates_book_input ON draft_candidates(book_id,source_updated_at,created_at);
+CREATE INDEX book_resources_book ON book_resources(book_id,created_at);
+CREATE INDEX imports_state_expiry ON imports(state,expires_at);
+CREATE INDEX import_candidates_import_score ON import_candidates(import_id,score DESC,id);
+CREATE INDEX book_versions_book_state ON book_versions(book_id,state,complete_at);
+CREATE INDEX jobs_claim_order ON jobs(state,created_at,id);
+CREATE INDEX jobs_lease_expiry ON jobs(state,lease_until);
+CREATE INDEX jobs_scope ON jobs(book_id,import_id,created_at);
+CREATE INDEX search_short_current ON search_short_fields(book_id,version_id,kind,normalized_text);
+CREATE INDEX audit_events_scope ON audit_events(book_id,job_id,version_id,created_at);
 
 -- Better Auth 1.6.25 and @better-auth/passkey 1.6.25 schema.
 CREATE TABLE "user" (
@@ -506,15 +300,15 @@ ON book_versions(state, reclaimed_at, published_at);
 CREATE TABLE book_version_presentations (
   version_id TEXT PRIMARY KEY REFERENCES book_versions(id) ON DELETE CASCADE,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  config_revision INTEGER NOT NULL CHECK (config_revision >= 1),
+  source_updated_at INTEGER NOT NULL CHECK (source_updated_at >= 0),
   projection_schema_version INTEGER NOT NULL
-    CHECK (projection_schema_version = 2),
+    CHECK (projection_schema_version = 3),
   alias TEXT CHECK (
     alias IS NULL OR (
       length(alias) BETWEEN 1 AND 120
       AND alias GLOB '[a-z0-9]*'
       AND alias NOT GLOB '*[^a-z0-9-]*'
-      AND alias NOT GLOB '[0-9]*'
+      AND alias GLOB '*[^0-9]*'
     )
   ),
   title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 500),
@@ -532,7 +326,7 @@ CREATE TABLE book_version_presentations (
       length(first_page_alias) BETWEEN 1 AND 120
       AND first_page_alias GLOB '[a-z0-9]*'
       AND first_page_alias NOT GLOB '*[^a-z0-9-]*'
-      AND first_page_alias NOT GLOB '[0-9]*'
+      AND first_page_alias GLOB '*[^0-9]*'
     )
   ),
   toc_preview_json TEXT NOT NULL CHECK (
@@ -547,9 +341,7 @@ CREATE TABLE book_version_presentations (
   projection_sha256 TEXT NOT NULL CHECK (length(projection_sha256) = 64),
   created_at INTEGER NOT NULL,
   FOREIGN KEY (book_id, version_id)
-    REFERENCES book_versions(book_id, id) ON DELETE CASCADE,
-  FOREIGN KEY (book_id, config_revision)
-    REFERENCES config_revisions(book_id, revision) ON DELETE RESTRICT
+    REFERENCES book_versions(book_id, id) ON DELETE CASCADE
 ) STRICT, WITHOUT ROWID;
 
 CREATE INDEX book_version_presentations_book

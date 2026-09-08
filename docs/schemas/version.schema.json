@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mirawind.local/schemas/version.schema.json",
-  "title": "Mirawind immutable version marker v3",
+  "title": "Mirawind immutable version marker v4",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -9,18 +9,17 @@
     "complete",
     "book_id",
     "version_id",
-    "source_id",
-    "config_revision",
+    "source_updated_at",
     "predecessor_version_id",
     "created_at",
     "compiler",
-    "book_yaml_sha256",
+    "book_document_sha256",
     "manifest_sha256",
     "files"
   ],
   "properties": {
     "schema_version": {
-      "const": 3
+      "const": 4
     },
     "complete": {
       "const": true
@@ -31,13 +30,6 @@
     },
     "version_id": {
       "$ref": "#/$defs/versionId"
-    },
-    "source_id": {
-      "$ref": "#/$defs/sourceId"
-    },
-    "config_revision": {
-      "type": "integer",
-      "minimum": 1
     },
     "predecessor_version_id": {
       "oneOf": [
@@ -56,9 +48,6 @@
     "compiler": {
       "$ref": "#/$defs/compiler"
     },
-    "book_yaml_sha256": {
-      "$ref": "#/$defs/sha256"
-    },
     "manifest_sha256": {
       "$ref": "#/$defs/sha256"
     },
@@ -69,16 +58,20 @@
       "items": {
         "$ref": "#/$defs/file"
       }
+    },
+    "source_updated_at": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 8640000000000000
+    },
+    "book_document_sha256": {
+      "$ref": "#/$defs/sha256"
     }
   },
   "$defs": {
     "versionId": {
       "type": "string",
       "pattern": "^ver_[A-Za-z0-9_-]{16,80}$"
-    },
-    "sourceId": {
-      "type": "string",
-      "pattern": "^src_[A-Za-z0-9_-]{16,80}$"
     },
     "sha256": {
       "type": "string",
@@ -122,7 +115,11 @@
     "file": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "size", "sha256"],
+      "required": [
+        "path",
+        "size",
+        "sha256"
+      ],
       "properties": {
         "path": {
           "$ref": "#/$defs/relativePath"
@@ -137,13 +134,5 @@
         }
       }
     }
-  },
-  "x-semantic-validations": [
-    "file paths are unique and sorted by UTF-8 byte order",
-    "files enumerate every regular file except version.json exactly once",
-    "book.yaml and document-manifest.json are required and match their top-level hashes",
-    "all file sizes and hashes match bytes in the immutable version directory",
-    "book, version, source, config and compiler identities match authoritative inputs and the manifest",
-    "unknown properties and unsupported newer schema versions are rejected"
-  ]
+  }
 }

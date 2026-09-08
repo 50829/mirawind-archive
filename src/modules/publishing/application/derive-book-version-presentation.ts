@@ -3,8 +3,7 @@ import { createHash } from "node:crypto";
 import type { BookVersionPresentation } from "@/modules/catalog/application/catalog-api";
 import {
   canonicalJson,
-  parseBookConfigYaml,
-  validateBookConfig,
+  validateBookDocument,
   validateDocumentManifest,
 } from "./publication-formats";
 
@@ -54,29 +53,22 @@ function projectionDigest(
   input: Omit<BookVersionPresentation, "createdAtMs" | "projectionSha256">,
 ): string {
   return createHash("sha256")
-    .update("mirawind-book-presentation-v2\0")
+    .update("mirawind-book-presentation-v3\0")
     .update(canonicalJson(input))
     .digest("hex");
 }
 
 export function deriveBookVersionPresentation(input: {
-  readonly bookConfig: unknown;
+  readonly bookDocument: unknown;
   readonly createdAtMs: number;
   readonly documentManifest: unknown;
 }): BookVersionPresentation {
-  const config =
-    typeof input.bookConfig === "string"
-      ? parseBookConfigYaml(input.bookConfig)
-      : validateBookConfig(input.bookConfig);
-  const parsedConfig =
-    typeof config === "object" && config !== null
-      ? (config as Readonly<Record<string, unknown>>)
-      : null;
+  const parsedConfig = validateBookDocument(input.bookDocument);
   const manifest = validateDocumentManifest(input.documentManifest);
   if (
     !parsedConfig ||
     parsedConfig.book_id !== manifest.book_id ||
-    parsedConfig.revision !== manifest.config_revision
+    parsedConfig.updated_at !== manifest.source_updated_at
   ) {
     throw new Error("PRESENTATION_IDENTITY_MISMATCH");
   }
@@ -84,12 +76,9 @@ export function deriveBookVersionPresentation(input: {
   const firstPage = pages[0];
   if (!firstPage) throw new Error("PRESENTATION_FIRST_PAGE_MISSING");
   const toc = manifest.toc as readonly ManifestTocNode[];
-  const metadataSource =
-    parsedConfig.metadata &&
-    typeof parsedConfig.metadata === "object" &&
-    !Array.isArray(parsedConfig.metadata)
-      ? (parsedConfig.metadata as Readonly<Record<string, unknown>>)
-      : {};
+  const metadataSource: Readonly<Record<string, unknown>> = {
+    ...parsedConfig.metadata,
+  };
   const metadata = Object.fromEntries(
     metadataKeys.flatMap((key) =>
       metadataSource[key] === undefined ? [] : [[key, metadataSource[key]]],
@@ -112,28 +101,21 @@ export function deriveBookVersionPresentation(input: {
   if (Buffer.byteLength(tocPreviewJson, "utf8") > maximumTocPreviewBytes) {
     throw new Error("PRESENTATION_TOC_LIMIT");
   }
-  const configuredCoverPath =
-    typeof metadataSource.cover_path === "string"
-      ? `source/${metadataSource.cover_path}`
-      : null;
-  const resources = manifest.resources as Readonly<
-    Record<string, { readonly source_path?: unknown }>
-  >;
-  const configuredCover = configuredCoverPath
-    ? (Object.entries(resources).find(
-        ([, resource]) => resource.source_path === configuredCoverPath,
-      )?.[0] ?? null)
-    : null;
+  const configuredCover = parsedConfig.metadata.cover_resource_id ?? null;
   const projection = Object.freeze({
     alias: typeof parsedConfig.alias === "string" ? parsedConfig.alias : null,
     bookId: Number(parsedConfig.book_id),
-    configRevision: Number(parsedConfig.revision),
-    coverResourceId: configuredCover,
+    sourceUpdatedAt: Number(parsedConfig.updated_at),
+    coverResourceId:
+      configuredCover &&
+      Object.hasOwn(manifest.resources as object, configuredCover)
+        ? configuredCover
+        : null,
     firstPageAlias:
       typeof firstPage.alias === "string" ? firstPage.alias : null,
     firstPageId: firstPage.page_id,
     metadataJson,
-    projectionSchemaVersion: 2 as const,
+    projectionSchemaVersion: 3 as const,
     title: String(metadataSource.title),
     tocEntryCount: toc.length,
     tocPreviewJson,

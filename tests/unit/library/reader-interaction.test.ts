@@ -4,7 +4,6 @@ import {
   buildReaderNavigationTree,
   readerBreadcrumbs,
 } from "@/modules/reader/application/reader-api";
-import { shouldNavigateWithArrowKey } from "@/web/features/reader/reader-interaction";
 
 const props = {
   bodyHtml: '<h1 id="blk_test">Chapter</h1>',
@@ -66,48 +65,5 @@ describe("reader interaction", () => {
       expect.objectContaining({ blockId: "blk_test" }),
       expect.objectContaining({ blockId: "blk_model" }),
     ]);
-  });
-
-  it("excludes editable, code, link, role-bearing and dialog contexts", () => {
-    const base = {
-      altKey: false,
-      ctrlKey: false,
-      defaultPrevented: false,
-      isComposing: false,
-      key: "ArrowRight",
-      metaKey: false,
-      shiftKey: false,
-    } as const;
-    expect(
-      shouldNavigateWithArrowKey({
-        dialogOpen: false,
-        event: base,
-        path: [{ tagName: "P" }],
-      }),
-    ).toBe(true);
-    for (const path of [
-      [{ tagName: "INPUT" }],
-      [{ tagName: "CODE" }],
-      [{ tagName: "A" }],
-      [{ role: "button", tagName: "SPAN" }],
-      [{ contentEditable: "true", tagName: "DIV" }],
-      [{ tabIndex: 0, tagName: "DIV" }],
-      [{ interactive: true, tagName: "DIV" }],
-    ]) {
-      expect(
-        shouldNavigateWithArrowKey({
-          dialogOpen: false,
-          event: base,
-          path,
-        }),
-      ).toBe(false);
-    }
-    expect(
-      shouldNavigateWithArrowKey({
-        dialogOpen: true,
-        event: base,
-        path: [{ tagName: "P" }],
-      }),
-    ).toBe(false);
   });
 });

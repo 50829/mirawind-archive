@@ -1,58 +1,37 @@
-# Mirawind schemas
+# Mirawind Schemas
 
-本目录冻结三个独立版本化格式：
+D-138 冻结三个独立版本化的 JSON Schema Draft 2020-12 格式：
 
-- `book.schema.json`：`book.yaml` v4
-- `document-manifest.schema.json`：派生 document manifest v3
-- `version.schema.json`：不可变版本完整性标记 v3
+- `book.schema.json`：唯一可编辑正文 `book.json`，IR v1。
+- `document-manifest.schema.json`：派生页面、目录、块与资源映射，v4。
+- `version.schema.json`：不可变候选/发布的完整性标记，v4。
 
-三者均使用 JSON Schema Draft 2020-12。YAML 在验证前必须解析为 JSON
-兼容数据模型；不得使用 YAML 自定义 tag、对象构造器、锚点合并造成的重复
-键或其他可执行扩展。
+旧 Markdown、`book.yaml`、旧 manifest 和旧数据库不被新运行时读取。切换使用全新数据
+目录重新导入，不实现旧书迁移、独立格式适配器或双写。
 
-## 版本与未知字段
+## 类型与校验
 
-- `book.yaml` 仅支持 v4；manifest 与 version marker 仅支持 v3。
-- schema 版本只在格式语义变化时增加，不随书籍内容修改增加。
-- `book.yaml.revision` 在每次接受的出版配置修改后单调递增。
-- 已知版本中的未知字段一律拒绝，不静默忽略。
-- 高于当前程序支持范围的 `schema_version` 一律拒绝发布。
+`pnpm generate:content-types` 从正文 schema 生成 Publishing 类型，并使用仓库格式化配置。
+`pnpm typecheck` 先检查生成类型与 schema 一致，避免生成后又被格式化产生差异。语义校验和正文操作
+集中在 `src/modules/publishing/core/content/`，不复制另一份独立手写正文接口。
 
-严格拒绝未知字段可以防止拼写错误或新程序生成的配置被旧程序悄悄丢失。
-未来新增字段时必须同步增加 schema 版本或提供明确的兼容迁移。
+校验严格拒绝未知字段、类型强制转换、重复身份、不完整引用、非法资源路径、层级跳跃、
+错误边界、重复页面别名及不合法表格合并。未知格式版本不得 fallback。
 
-## 权威边界
+正文包含元数据、可选 alias、出版设置、有序块和逻辑资源；不能包含账户、权限、任务、
+笔记、绝对路径、正文偏移或块指纹。`updated_at` 是唯一草稿修订标识：服务端 Unix 毫秒
+整数，变化保存取 `max(now, previous + 1)`，无变化保存不推进。
 
-`book.yaml` 可以包含：
+## 派生产物
 
-- 可移植元数据
-- 主 Markdown 和登记原文件描述
-- 已持久化源预处理的 profile、输入/输出摘要与有界计数
-- 活动 Markdown 的稳定 block 身份
-- 目录、富文本标题、层级、线性内容边界、拆页和编号配置
+manifest 保存当前版本页面、标题表示、稳定块 ID、规范化可见文本及资源映射，不保存
+Markdown 源位置或文本指纹。目录树、角色和自动编号从正文块与出版设置派生。
 
-`book.yaml` 不得包含：
+完整性标记绑定 `book_document_sha256`、`manifest_sha256`、`source_updated_at`、编译器
+身份与严格闭合的文件清单。文件摘要用于存储完整性，不是正文修订号。
 
-- Markdown 正文副本
-- session、密码或 Passkey
-- 笔记、高亮、批注、书签和阅读进度
-- 后台任务、发布状态或服务器绝对路径
+发布前既验证 schema，也验证引用闭合、页面覆盖、不可变文件完整性和当前工作稿时间。
+管理与私人资源依旧经过服务端授权，不放入静态 public 目录。
 
-`document-manifest.json` 是可重建产物，不是可编辑正文。它保存当前版本页面、
-块、源位置、规范化可见文本、指纹和资源映射，以支持渲染、搜索、诊断和
-后续稳定 ID 继承。
-
-## 两层验证
-
-导入和发布必须依次执行：
-
-1. JSON Schema 结构验证。
-2. `x-semantic-validations` 中列出的跨字段与文件系统语义验证。
-
-第二层包括层级连续性、引用完整性、路径边界、ID 唯一性、页面覆盖和图片
-总像素数等无法仅靠 JSON Schema 可靠表达的规则。
-
-## 示例
-
-`examples/book.v4.yaml` 展示当前配置。新导入默认在接纳正文前应用
-`zh-smart-v2`。示例 ID 和哈希只用于说明格式，不得作为生产默认值。
+示例见 `examples/book.v1.json`；完整读写和恢复协议见
+[结构化正文 IR](../architecture/structured-content-ir.md)。

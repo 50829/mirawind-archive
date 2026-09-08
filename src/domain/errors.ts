@@ -49,10 +49,8 @@ export interface SafeDiagnostic {
   readonly evidence?: readonly string[];
   readonly location?: {
     readonly blockId?: string;
-    readonly endByte?: number;
     readonly pageIndex?: number;
     readonly regionId?: string;
-    readonly startByte?: number;
   };
   readonly message: string;
   readonly path?: string;
@@ -119,20 +117,10 @@ export function createSafeDiagnostic(input: SafeDiagnostic): SafeDiagnostic {
     }
   }
   const location = input.location;
-  const validRange =
-    location?.startByte !== undefined &&
-    location.endByte !== undefined &&
-    Number.isSafeInteger(location.startByte) &&
-    Number.isSafeInteger(location.endByte) &&
-    location.startByte >= 0 &&
-    location.endByte > location.startByte;
   const safeLocation = location
     ? Object.freeze({
         ...(location.blockId && isOpaqueId("block", location.blockId)
           ? { blockId: location.blockId }
-          : {}),
-        ...(validRange
-          ? { endByte: location.endByte, startByte: location.startByte }
           : {}),
         ...(Number.isSafeInteger(location.pageIndex) &&
         Number(location.pageIndex) >= 0

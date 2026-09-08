@@ -15,7 +15,7 @@ import {
 const maximumConcurrentPages = 4;
 
 export interface RenderPageInput extends RenderSemanticDocumentOptions {
-  readonly headingHref: (blockId: string) => string;
+  readonly blockHref: (blockId: string) => string;
   readonly headingPresentations: NonNullable<
     RenderSemanticDocumentOptions["headingPresentations"]
   >;
@@ -59,8 +59,8 @@ export async function* renderPages(input: {
     ((options) =>
       renderSemanticDocument({
         document: options.document,
-        headingHref: options.headingHref,
-        headingLinkIndex: options.headingLinkIndex,
+        blockHref: options.blockHref,
+        blockLinkIndex: options.blockLinkIndex,
         headingPresentations: options.headingPresentations,
         publishedResourceUrl: options.publishedResourceUrl,
         resourceResolution: options.resourceResolution,
@@ -79,8 +79,8 @@ export async function* renderPages(input: {
         );
         const rendered = await renderer({
           document: documentForPage(input.book, page),
-          headingHref: routeLinks.headingHref,
-          headingLinkIndex: input.book.headingLinkIndex,
+          blockHref: routeLinks.blockHref,
+          blockLinkIndex: input.book.blockLinkIndex,
           headingPresentations: input.book.headingByBlockId,
           page,
           publishedResourceUrl: routeLinks.resourceUrl,

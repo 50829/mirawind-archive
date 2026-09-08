@@ -3,7 +3,7 @@ import type {
   SemanticCompilationIdentity,
 } from "../preparation/document-model";
 import type { HeadingPresentation } from "./heading-presentation";
-import type { ValidatedDocumentConfig } from "./validate-config";
+import type { BookDocument } from "../content/book-document.generated";
 
 export interface PageRange {
   readonly end: number;
@@ -22,60 +22,38 @@ export interface PageMetadata {
   readonly title: string;
 }
 
-export interface HeadingLinkIndex {
-  readonly blockIdBySlug: ReadonlyMap<string, string>;
+export interface BlockLinkIndex {
   readonly blockIds: ReadonlySet<string>;
 }
 
-function headingSlug(value: string): string {
-  return value
-    .normalize("NFC")
-    .trim()
-    .toLocaleLowerCase("en")
-    .replaceAll(/[^\p{Letter}\p{Number}\s_-]/gu, "")
-    .replaceAll(/\s+/gu, "-")
-    .replaceAll(/-+/gu, "-");
-}
-
-export function createHeadingLinkIndex(
+export function createBlockLinkIndex(
   document: NormalizedDocument,
-  presentations: ReadonlyMap<string, HeadingPresentation>,
-): HeadingLinkIndex {
-  const blockIds = new Set<string>();
-  const blockIdBySlug = new Map<string, string>();
-  for (const heading of document.headings) {
-    blockIds.add(heading.blockId);
-    const presentation = presentations.get(heading.blockId);
-    for (const title of [
-      heading.sourceTitle,
-      ...(presentation ? [presentation.title, presentation.label] : []),
-    ]) {
-      const slug = headingSlug(title);
-      if (slug && !blockIdBySlug.has(slug)) {
-        blockIdBySlug.set(slug, heading.blockId);
-      }
-    }
-  }
-  return Object.freeze({ blockIdBySlug, blockIds });
+): BlockLinkIndex {
+  return {
+    blockIds: new Set(
+      document.blocks.flatMap((block) =>
+        block.blockId ? [block.blockId] : [],
+      ),
+    ),
+  };
 }
 
-export function resolveHeadingLinkTarget(
-  index: HeadingLinkIndex,
+export function resolveBlockLinkTarget(
+  index: BlockLinkIndex,
   value: string,
 ): string | undefined {
-  return index.blockIds.has(value)
-    ? value
-    : index.blockIdBySlug.get(headingSlug(value));
+  return index.blockIds.has(value) ? value : undefined;
 }
 
 export interface CompiledBook {
+  readonly book: BookDocument;
   readonly blockById: ReadonlyMap<string, NormalizedDocument["blocks"][number]>;
   readonly blockIds: readonly string[];
   readonly blockIndexById: ReadonlyMap<string, number>;
   readonly bookTitle: string;
   readonly document: NormalizedDocument;
   readonly headingByBlockId: ReadonlyMap<string, HeadingPresentation>;
-  readonly headingLinkIndex: HeadingLinkIndex;
+  readonly blockLinkIndex: BlockLinkIndex;
   readonly headings: readonly HeadingPresentation[];
   readonly identity: SemanticCompilationIdentity;
   readonly pageByBlockId: ReadonlyMap<string, PagePlan>;
@@ -83,7 +61,6 @@ export interface CompiledBook {
   readonly pageById: ReadonlyMap<number, PagePlan>;
   readonly pageMetadataById: ReadonlyMap<number, PageMetadata>;
   readonly pages: readonly PagePlan[];
-  readonly validated: ValidatedDocumentConfig;
 }
 
 export function pageBlockIds(
@@ -119,6 +96,5 @@ export function documentForPage(
         roots.slice(page.rootRange.start, page.rootRange.end),
       ),
     }),
-    source: book.document.source,
   });
 }

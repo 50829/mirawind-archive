@@ -3,22 +3,20 @@ import type Database from "better-sqlite3";
 import { hasControlCharacters } from "@/domain/text";
 import type {
   CandidateDiagnostic,
-  MarkdownCandidate,
-} from "../filesystem/discover-markdown-candidates";
+  MineruCandidate,
+} from "../filesystem/discover-mineru-candidates";
 import { createOpaqueId } from "@/domain/ids";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
-import type { TypographyProfile } from "../../core/preparation/document-model";
 
 export type ImportState =
   | "uploaded"
   | "analyzing"
-  | "needs_main_confirmation"
   | "preparing"
   | "draft_ready"
   | "rejected"
   | "canceled"
   | "expired";
-export type CandidateConfidence = "ambiguous" | "generic" | "high";
+export type CandidateConfidence = "ambiguous" | "high";
 
 interface ImportRow {
   book_id: number | null;
@@ -68,14 +66,6 @@ export interface ImportCandidateRecord {
   readonly importId: string;
   readonly normalizedPath: string;
   readonly score: number;
-}
-
-export interface ReprocessPreparationEvidence {
-  readonly expectedConfigRevision: number;
-  readonly expectedSourceId: string;
-  readonly kind: "reprocess";
-  readonly originalFileId: string;
-  readonly typographyProfile: TypographyProfile;
 }
 
 function mapImport(row: ImportRow): ImportRecord {
@@ -196,11 +186,10 @@ export class ImportRepository {
   }
 
   saveCandidates(input: {
-    readonly candidates: readonly MarkdownCandidate[];
+    readonly candidates: readonly MineruCandidate[];
     readonly importId: string;
-    readonly nextState: "needs_main_confirmation" | "preparing";
+    readonly nextState: "preparing";
     readonly nowMs: number;
-    readonly preparation?: ReprocessPreparationEvidence;
     readonly selectedCandidateId: string | null;
   }): ImportRecord {
     return withImmediateTransaction(this.database, () => {
@@ -228,7 +217,6 @@ export class ImportRepository {
             byteSize: candidate.byteSize,
             companionFiles: candidate.companionFiles,
             firstHeading: candidate.firstHeading,
-            ...(input.preparation ? { preparation: input.preparation } : {}),
             referencedResources: candidate.referencedResources,
           }),
           JSON.stringify(candidate.diagnostics),
@@ -257,26 +245,6 @@ export class ImportRepository {
       if (result.changes !== 1) throw new Error("IMPORT_CANDIDATE_INVALID");
       return this.require(input.importId);
     });
-  }
-
-  confirmCandidate(input: {
-    readonly candidateId: string;
-    readonly importId: string;
-    readonly nowMs: number;
-  }): ImportRecord {
-    const result = this.database
-      .prepare(
-        `UPDATE imports
-         SET state = 'preparing', selected_candidate_id = ?, updated_at = ?
-         WHERE id = ? AND state = 'needs_main_confirmation'
-           AND EXISTS (
-             SELECT 1 FROM import_candidates
-             WHERE import_id = imports.id AND id = ?
-           )`,
-      )
-      .run(input.candidateId, input.nowMs, input.importId, input.candidateId);
-    if (result.changes !== 1) throw new Error("IMPORT_CONFIRMATION_CONFLICT");
-    return this.require(input.importId);
   }
 
   attachBookForPreparation(input: {
@@ -342,7 +310,7 @@ export class ImportRepository {
         `UPDATE imports
          SET state = 'rejected', safe_error_code = ?, updated_at = ?
          WHERE id = ? AND state IN (
-           'uploaded', 'analyzing', 'needs_main_confirmation', 'preparing'
+           'uploaded', 'analyzing', 'preparing'
          )`,
       )
       .run(errorCode, nowMs, importId);
@@ -356,7 +324,7 @@ export class ImportRepository {
         `UPDATE imports
          SET state = 'canceled', updated_at = ?
          WHERE id = ? AND state IN (
-           'uploaded', 'analyzing', 'needs_main_confirmation', 'preparing'
+           'uploaded', 'analyzing', 'preparing'
          )`,
       )
       .run(nowMs, importId);
@@ -365,7 +333,7 @@ export class ImportRepository {
   }
 
   saveRejectedCandidates(input: {
-    readonly candidates: readonly MarkdownCandidate[];
+    readonly candidates: readonly MineruCandidate[];
     readonly errorCode: string;
     readonly importId: string;
     readonly nowMs: number;

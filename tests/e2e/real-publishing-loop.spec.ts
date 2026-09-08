@@ -2,10 +2,13 @@ import { resolve } from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+import { verifyRealMineruFixtures } from "../../scripts/fixtures/verify-real-mineru";
 import { loginAsAdministrator } from "../helpers/e2e-login.js";
 
-const realFixtureDirectory = process.env.MIRAWIND_REAL_FIXTURE_DIR;
-const realFixtureName = "real-mineru-e80477ff22ac.zip";
+const realFixtureDirectory = process.env.MIRAWIND_REAL_FIXTURE_DIR
+  ? resolve(process.env.MIRAWIND_REAL_FIXTURE_DIR)
+  : undefined;
+const realFixtureId = "real-mineru-e80477ff22ac";
 
 test("publishes the registered 97-page MinerU fixture through the browser loop", async ({
   page,
@@ -16,45 +19,35 @@ test("publishes the registered 97-page MinerU fixture through the browser loop",
   );
   test.setTimeout(180_000);
 
+  const fixtures = await verifyRealMineruFixtures(
+    String(realFixtureDirectory),
+    undefined,
+    [realFixtureId],
+  );
+  const realFixtureName = fixtures[0]?.fileName;
+  if (!realFixtureName) throw new Error("REAL_FIXTURE_MISSING");
   await loginAsAdministrator(page, "192.0.2.18");
   await page
     .getByLabel("MinerU ZIP")
     .setInputFiles(resolve(String(realFixtureDirectory), realFixtureName));
-  await expect(page.getByText(realFixtureName, { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "上传并分析" }).click();
   await expect(page.getByRole("link", { name: "打开出版工作台" })).toBeVisible({
     timeout: 60_000,
   });
-  await expect(page.getByText(realFixtureName, { exact: true })).toBeVisible();
 
   const workbenchHref = await page
     .getByRole("link", { name: "打开出版工作台" })
     .getAttribute("href");
   expect(workbenchHref).toMatch(/^\/manage\/books\/[1-9][0-9]*$/u);
   await page.goto(String(workbenchHref));
-  const bookTitle = (
-    await page.locator(".workbench-title h1").textContent()
-  )?.trim();
-  expect(bookTitle).toBeTruthy();
-  expect(bookTitle).not.toMatch(/^job_/u);
-
-  await page.goto("/manage/tasks");
-  const bookTasks = page.locator(".task-card").filter({
-    has: page.getByText(String(bookTitle), { exact: true }),
-  });
-  await expect(bookTasks).toHaveCount(3);
-  await expect(bookTasks.locator('[data-state="succeeded"]')).toHaveCount(3);
-  await expect(bookTasks.locator("code:visible")).toHaveCount(0);
-
-  await page.goto(String(workbenchHref));
   await expect(page.locator("iframe")).toHaveAttribute(
     "sandbox",
     "allow-scripts",
   );
-  await expect(page.getByRole("button", { name: "发布当前修订" })).toBeEnabled({
+  await expect(page.getByRole("button", { name: "发布当前预览" })).toBeEnabled({
     timeout: 60_000,
   });
-  await page.getByRole("button", { name: "发布当前修订" }).click();
+  await page.getByRole("button", { name: "发布当前预览" }).click();
   const startReading = page.getByRole("link", { name: "开始阅读" });
   await expect(startReading).toBeVisible({ timeout: 90_000 });
   await startReading.click();

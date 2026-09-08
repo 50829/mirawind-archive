@@ -55,62 +55,67 @@ export function buildStressBook(options: StressBookOptions): {
     100,
   );
   const imageCount = boundedInteger(options.imageCount, "imageCount", 0, 500);
-  const markdown: string[] = [
-    "# Mirawind deterministic synthetic stress book",
-    "",
-    "This generated document contains no source-book content.",
-    "",
+  const text = (content: string) => ({ type: "text", content });
+  const title = (content: string) => ({
+    type: "title",
+    content: { level: 1, title_content: [text(content)] },
+  });
+  const paragraph = (content: string) => ({
+    type: "paragraph",
+    content: { paragraph_content: [text(content)] },
+  });
+  const contentList: Record<string, unknown>[][] = [
+    [
+      title("Mirawind deterministic synthetic stress book"),
+      paragraph("This generated document contains no source-book content."),
+    ],
   ];
-  const contentList: {
-    page_idx: number;
-    text: string;
-    type: string;
-  }[] = [];
 
   for (let page = 1; page <= pages; page += 1) {
-    const heading = `Page ${page.toString().padStart(4, "0")} — 混合语言章节`;
-    markdown.push(`## ${heading}`, "");
-    contentList.push({ page_idx: page - 1, text: heading, type: "text" });
+    const heading = `Page ${page.toString().padStart(4, "0")} 混合语言章节`;
+    const content: Record<string, unknown>[] = [title(heading)];
     for (let block = 1; block <= blocksPerPage; block += 1) {
       const identity = token(page, block);
-      markdown.push(
-        `Synthetic paragraph ${page}.${block} token ${identity}. 中文连续检索样本，TypeScript and SQLite mixed-language evidence.`,
-        "",
+      content.push(
+        paragraph(
+          `Synthetic paragraph ${page}.${block} token ${identity}. 中文连续检索样本，TypeScript and SQLite mixed-language evidence.`,
+        ),
       );
     }
     if (imageCount > 0) {
       const image = (page - 1) % imageCount;
-      markdown.push(
-        `![Synthetic stress image ${image}](images/image-${image.toString().padStart(3, "0")}.png)`,
-        "",
-      );
+      content.push({
+        type: "image",
+        content: {
+          image_source: {
+            path: `images/image-${image.toString().padStart(3, "0")}.png`,
+          },
+          image_caption: [text(`Synthetic stress image ${image}`)],
+          image_footnote: [],
+        },
+      });
     }
-    markdown.push(
-      `Inline formula: $x_${page}^2 + y_${page}^2 = z_${page}^2$.`,
-      "",
-    );
+    content.push({
+      type: "paragraph",
+      content: {
+        paragraph_content: [
+          text("Inline formula: "),
+          {
+            type: "equation_inline",
+            content: `x_${page}^2 + y_${page}^2 = z_${page}^2`,
+          },
+          text("."),
+        ],
+      },
+    });
+    contentList.push(content);
   }
 
   const entries: ZipEntryInput[] = [
     {
-      data: `${markdown.join("\n")}\n`,
-      method: 8,
-      name: "stress-result/full.md",
-    },
-    {
       data: `${JSON.stringify(contentList)}\n`,
       method: 8,
-      name: "stress-result/content_list.json",
-    },
-    {
-      data: `${JSON.stringify({
-        generator: "mirawind-stress-v1",
-        pages: Array.from({ length: pages }, (_, page) => ({
-          page_idx: page,
-        })),
-      })}\n`,
-      method: 8,
-      name: "stress-result/layout.json",
+      name: "stress-result/content_list_v2.json",
     },
   ];
   for (let image = 0; image < imageCount; image += 1) {

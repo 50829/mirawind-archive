@@ -84,18 +84,6 @@ function freezeDeep<T>(value: T): T {
   return value;
 }
 
-function pointAfter(
-  end: Readonly<Record<string, unknown>>,
-  start: Readonly<Record<string, unknown>>,
-): boolean {
-  const endLine = Number(end.line);
-  const startLine = Number(start.line);
-  return (
-    endLine > startLine ||
-    (endLine === startLine && Number(end.column) >= Number(start.column))
-  );
-}
-
 export function validateDocumentManifest(
   input: unknown,
 ): Readonly<Record<string, unknown>> {
@@ -104,7 +92,7 @@ export function validateDocumentManifest(
   if (!validateManifestSchema(manifest)) {
     throw new PublicationSchemaValidationError(
       "DOCUMENT_MANIFEST_INVALID",
-      "The document manifest does not match schema version 3.",
+      "The document manifest does not match schema version 4.",
       validateManifestSchema.errors,
     );
   }
@@ -136,15 +124,6 @@ export function validateDocumentManifest(
   }
   for (const [blockId, block] of Object.entries(blocks)) {
     if (!ownedBlocks.has(blockId)) diagnostics.push("BLOCK_WITHOUT_PAGE");
-    const source = block.source as Readonly<Record<string, unknown>>;
-    if (
-      !pointAfter(
-        source.end as Readonly<Record<string, unknown>>,
-        source.start as Readonly<Record<string, unknown>>,
-      )
-    ) {
-      diagnostics.push("SOURCE_SPAN_REVERSED");
-    }
     for (const resourceId of block.resource_ids as readonly string[]) {
       if (!resources[resourceId]) diagnostics.push("BLOCK_RESOURCE_MISSING");
     }
@@ -179,7 +158,7 @@ export function validateVersionMarker(
   if (!validateMarkerSchema(marker)) {
     throw new PublicationSchemaValidationError(
       "VERSION_MARKER_INVALID",
-      "The version marker does not match schema version 3.",
+      "The version marker does not match schema version 4.",
       validateMarkerSchema.errors,
     );
   }
@@ -197,7 +176,7 @@ export function validateVersionMarker(
   }
   const byPath = new Map(files.map((file) => [String(file.path), file]));
   if (
-    byPath.get("book.yaml")?.sha256 !== marker.book_yaml_sha256 ||
+    byPath.get("book.json")?.sha256 !== marker.book_document_sha256 ||
     byPath.get("document-manifest.json")?.sha256 !== marker.manifest_sha256
   ) {
     diagnostics.push("VERSION_AUTHORITY_HASH_MISMATCH");

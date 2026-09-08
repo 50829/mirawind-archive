@@ -2,7 +2,7 @@
 
 Recovery never mutates the source deployment first. Stop writers, preserve evidence, make a
 copy or snapshot, and perform destructive tests only on that copy. A database backup alone
-does not contain Markdown, originals or immutable versions; normal disaster recovery
+does not contain `book.json`, resources, originals or immutable versions; normal disaster recovery
 requires the complete persistent volume.
 
 ## 1. Backup policy
@@ -57,8 +57,9 @@ Restore into a new disposable volume or host, never over the only live copy:
    administrator task/health page;
 8. retain the old live volume until acceptance is complete.
 
-The repository's recorded representative drill is
-`docs/audits/m1-migration-recovery-report.md`.
+The historical M1 drill in `docs/audits/m1-migration-recovery-report.md` concerns the retired
+Markdown database. D-138 rejects that baseline: initialize a new IR data root and reimport
+the original MinerU v2 ZIPs. Do not run old-format migration or audit scripts on the new root.
 
 ## 3. Lost administrator credentials
 
@@ -118,7 +119,7 @@ verified, published predecessor that also has a matching presentation projection
 valid predecessor exists, only that book becomes unavailable with `503`; unrelated books
 continue.
 
-A missing presentation is rebuilt off the request path from the immutable `book.yaml` and
+A missing presentation is rebuilt off the request path from the immutable `book.json` and
 `document-manifest.json`. A digest mismatch is never overwritten automatically and prevents
 that version from automatic rollback promotion. Do not repair
 `book_version_presentations`, `books.alias` or the projection digest by hand; preserve the
@@ -131,7 +132,7 @@ When automatic rollback occurs:
 2. save bounded logs and the `book.version.recovered` audit event;
 3. determine whether the cause is disk failure, manual mutation or incomplete restore;
 4. restore the complete volume to a disposable location and compare;
-5. re-import/rebuild from authoritative Markdown, `book.yaml` and original only after the
+5. rebuild from authoritative `book.json`, resources and original only after the
    storage cause is understood.
 
 Never edit the current pointer, version state, `version.json` or manifest manually.
@@ -154,7 +155,7 @@ For a failed cleanup:
 
 Cleanup removes the deterministic book directory, associated retained upload directories and
 associated inactive staging directories before its final database purge. Missing targets are
-normal retry progress. Do not delete `books`, `imports`, `source_snapshots`,
+normal retry progress. Do not delete `books`, `imports`, `save_draft_requests`,
 `book_deletions` or job rows by hand: the database inventory is required until filesystem
 absence has been proven.
 

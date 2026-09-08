@@ -1,56 +1,47 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { chmod, copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-
+import { createOpaqueId } from "@/domain/ids";
 import {
   extractZipFile,
   type ArchiveExtractionLimits,
 } from "../filesystem/extract-archive";
-import { normalizeDocumentBlocks } from "../../core/preparation/normalize-document";
-import { normalizeMineruPreformattedMarkdown } from "../../core/preparation/mineru-preformatted";
-import { parseMarkdownDocument } from "../../core/preparation/parse-markdown";
-import {
-  preprocessMarkdownTypography,
-  type TypographyProvenance,
-} from "../../core/preparation/typography";
-import { resolveDocumentResources } from "../filesystem/resolve-document-resources";
 import { claimSealedExtraction } from "../filesystem/sealed-extraction";
-import {
-  analyzeDraftContents,
-  type PdfEvidenceReader,
-} from "./draft-contents-analysis";
-import {
-  createPreparedSourceFiles,
-  draftPreparationVersion,
-  type PreparedDraftArtifact,
-  preparationArtifactFilename,
-  preparedSourceFilesFilename,
-} from "./prepared-draft-artifact";
-import { resolveContainedPath } from "@/platform/filesystem/contained-path";
+import { readJsonDocument } from "../filesystem/read-json-document";
+import { importMineruContent } from "../../core/preparation/mineru-content";
+import { serializeBookDocument } from "../../core/content/book-document";
 import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
+import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import {
-  profilePipelineStage,
-  recordPipelineProfileMetrics,
-} from "@/observability/pipeline-profile";
+  organizeMineruBook,
+  type PdfEvidenceReader,
+} from "./organize-mineru-book";
+import { prepareBookResources } from "./prepare-book-resources";
+import { writeDraftViews } from "../filesystem/draft-views";
+import {
+  draftPreparationVersion,
+  preparationArtifactFilename,
+  type PreparedDraftArtifact,
+} from "./prepared-draft-artifact";
 
 export interface PrepareDraftResult {
   readonly artifact: PreparedDraftArtifact;
   readonly artifactPath: string;
   readonly extractionSource: "archive" | "sealed";
   readonly extractedRoot: string;
-  readonly sourceFiles: readonly string[];
-  readonly sourceFilesPath: string;
+  readonly preparedRoot: string;
 }
-
 export async function prepareDraft(input: {
   readonly archivePath: string;
+  readonly bookId: number;
   readonly extractionLimits?: Partial<ArchiveExtractionLimits>;
   readonly importId?: string;
   readonly selectedCandidatePath: string;
   readonly sealedExtractionDirectory?: string;
   readonly signal?: AbortSignal;
   readonly stagingDirectory: string;
-  readonly typographyProfile?: TypographyProvenance["profile"];
+  readonly typographyProfile?: "verbatim-v1" | "zh-smart-v2";
   readonly pdfEvidenceReader?: PdfEvidenceReader;
   readonly onPhase?: (
     phase: "identify_document" | "organize_structure" | "security_check",
@@ -58,157 +49,122 @@ export async function prepareDraft(input: {
     total: number,
   ) => void;
 }): Promise<PrepareDraftResult> {
-  if (Boolean(input.importId) !== Boolean(input.sealedExtractionDirectory)) {
-    throw new Error("SEALED_EXTRACTION_INPUT_INVALID");
-  }
-  const stagingDirectory = resolve(input.stagingDirectory);
-  const extractedRoot = resolve(stagingDirectory, "extracted");
-  const artifactPath = resolve(stagingDirectory, preparationArtifactFilename);
-  const sourceFilesPath = resolve(
-    stagingDirectory,
-    preparedSourceFilesFilename,
-  );
+  const staging = resolve(input.stagingDirectory);
+  const extractedRoot = resolve(staging, "extracted");
+  const preparedRoot = resolve(staging, "prepared");
   try {
-    await mkdir(dirname(stagingDirectory), { mode: 0o700, recursive: true });
-    await mkdir(stagingDirectory, { mode: 0o700, recursive: false });
+    await mkdir(staging, { recursive: true, mode: 0o700 });
     input.onPhase?.("security_check", 0, 3);
-    const claimed =
+    const sealed =
       input.importId && input.sealedExtractionDirectory
         ? await claimSealedExtraction({
             expectedImportId: input.importId,
             sealedDirectory: input.sealedExtractionDirectory,
-            stagingDirectory,
+            stagingDirectory: staging,
           })
         : null;
-    if (input.signal?.aborted) throw new Error("ARCHIVE_CANCELED");
-    const extractionSource = claimed ? "sealed" : "archive";
-    const extracted =
-      claimed ??
-      (await profilePipelineStage("archive_extract", () =>
-        extractZipFile({
-          archivePath: input.archivePath,
-          destination: extractedRoot,
-          ...(input.extractionLimits ? { limits: input.extractionLimits } : {}),
-          ...(input.signal ? { signal: input.signal } : {}),
-        }),
-      ));
-    recordPipelineProfileMetrics({
-      archive_entries: extracted.entries,
-      archive_files: extracted.files,
-      archive_reused: extractionSource === "sealed" ? 1 : 0,
-      archive_uncompressed_bytes: extracted.totalUncompressedBytes,
-    });
-    if (extracted.files < 1) throw new Error("IMPORT_ARCHIVE_EMPTY");
+    if (!sealed)
+      await extractZipFile({
+        archivePath: input.archivePath,
+        destination: extractedRoot,
+        ...(input.extractionLimits ? { limits: input.extractionLimits } : {}),
+        ...(input.signal ? { signal: input.signal } : {}),
+      });
+    input.signal?.throwIfAborted();
     input.onPhase?.("identify_document", 1, 3);
-    const markdownPath = await resolveContainedPath(
+    const sourcePath = await resolveContainedPath(
       extractedRoot,
       input.selectedCandidatePath,
     );
-    const markdownBytes = await profilePipelineStage("markdown_read", () =>
-      readFile(markdownPath),
-    );
-    recordPipelineProfileMetrics({ markdown_bytes: markdownBytes.byteLength });
+    if (
+      !/(?:^|_)content_list_v2\.json$/iu.test(
+        sourcePath.split("/").at(-1) ?? "",
+      )
+    )
+      throw new Error("IMPORT_MINERU_JSON_MISSING");
+    const parsed = await readJsonDocument(sourcePath, input.signal);
+    const imported = importMineruContent(parsed, {
+      bookId: input.bookId,
+      nowMs: Date.now(),
+      title: "Untitled",
+    });
     input.onPhase?.("organize_structure", 2, 3);
-    const typography = await profilePipelineStage("typography", () =>
-      preprocessMarkdownTypography(
-        markdownBytes,
-        input.typographyProfile ?? "zh-smart-v2",
-      ),
-    );
-    recordPipelineProfileMetrics({
-      protected_nodes: typography.provenance.protected_nodes,
-    });
-    const analysisMarkdown = await profilePipelineStage(
-      "structural_cleanup",
-      async () => {
-        const markdown = normalizeMineruPreformattedMarkdown(
-          typography.markdown,
-        );
-        await atomicWriteFile(markdownPath, markdown, { mode: 0o600 });
-        return markdown;
-      },
-    );
-    const normalized = await profilePipelineStage("parse_normalize", () => {
-      const parsed = parseMarkdownDocument(analysisMarkdown);
-      return normalizeDocumentBlocks(parsed);
-    });
-    recordPipelineProfileMetrics({
-      headings: normalized.headings.length,
-      root_blocks: normalized.blocks.length,
-    });
-    const contents = await analyzeDraftContents({
-      cleanupInputSha256: typography.provenance.output_sha256,
-      markdownPath,
-      normalized,
+    const organized = await organizeMineruBook({
+      imported,
+      sourcePath,
+      stagingDirectory: staging,
+      ...(input.signal ? { signal: input.signal } : {}),
+      ...(input.typographyProfile
+        ? { typographyProfile: input.typographyProfile }
+        : {}),
       ...(input.pdfEvidenceReader
         ? { pdfEvidenceReader: input.pdfEvidenceReader }
         : {}),
-      selectedCandidatePath: input.selectedCandidatePath,
-      ...(input.signal ? { signal: input.signal } : {}),
-      sourceSha256: createHash("sha256").update(analysisMarkdown).digest("hex"),
-      stagingDirectory,
     });
+    const resources = await prepareBookResources(
+      organized.book,
+      dirname(sourcePath),
+      preparedRoot,
+      input.signal,
+    );
+    const document = serializeBookDocument(organized.book);
+    await atomicWriteFile(resolve(preparedRoot, "draft/book.json"), document, {
+      mode: 0o600,
+    });
+    await writeDraftViews(organized.book, resolve(preparedRoot, "draft"));
     await atomicWriteFile(
-      markdownPath,
-      contents.preparedDocument.activeMarkdown,
-      {
-        mode: 0o600,
-      },
+      resolve(
+        preparedRoot,
+        "draft/views",
+        String(organized.book.updated_at),
+        "analysis.json",
+      ),
+      JSON.stringify(organized.analysis) + "\n",
+      { mode: 0o600 },
     );
-    recordPipelineProfileMetrics({
-      cleanup_helper_blocks_removed:
-        contents.contentCleanup.helper_blocks_removed,
-      cleanup_printed_toc_regions_removed:
-        contents.contentCleanup.printed_toc_regions_removed,
-    });
-    const resources = await profilePipelineStage("resource_resolution", () =>
-      resolveDocumentResources({
-        document: contents.preparedDocument.active,
-        markdownPath,
-        resourceRoot: dirname(markdownPath),
-      }),
+    await atomicWriteFile(
+      resolve(preparedRoot, "draft/import-source.json"),
+      JSON.stringify({ selected_path: input.selectedCandidatePath }) + "\n",
+      { mode: 0o600 },
     );
-    if (resources.diagnostics.length > 0) {
-      throw new Error("IMPORT_RESOURCE_CLOSURE_FAILED");
+    const originalId = createOpaqueId("file");
+    const originalPath = resolve(preparedRoot, "originals", originalId);
+    await mkdir(dirname(originalPath), { recursive: true, mode: 0o700 });
+    await copyFile(input.archivePath, originalPath);
+    await chmod(originalPath, 0o400);
+    const hash = createHash("sha256");
+    let size = 0;
+    for await (const chunk of createReadStream(originalPath)) {
+      input.signal?.throwIfAborted();
+      size += chunk.byteLength;
+      if (size > 2 * 1024 * 1024 * 1024)
+        throw new Error("ORIGINAL_FILE_LIMIT_EXCEEDED");
+      hash.update(chunk);
     }
-    recordPipelineProfileMetrics({
-      resources: resources.resources.length,
-    });
-    const { preparedDocument: _preparedDocument, ...artifactContents } =
-      contents;
-    void _preparedDocument;
-    const artifact: PreparedDraftArtifact = Object.freeze({
-      ...artifactContents,
-      mainMarkdownRelativePath: input.selectedCandidatePath,
-      typography: typography.provenance,
-      typographyRiskSummaries: typography.riskSummaries,
-      typographyRiskSummariesTruncated: typography.riskSummariesTruncated,
+    const artifact: PreparedDraftArtifact = {
       version: draftPreparationVersion,
+      bookId: input.bookId,
+      sourceUpdatedAt: organized.book.updated_at,
+      title: organized.book.metadata.title,
+      documentSha256: createHash("sha256").update(document).digest("hex"),
+      resources,
+      original: { id: originalId, size, sha256: hash.digest("hex") },
+      diagnostics: organized.analysis.diagnostics,
+    };
+    const artifactPath = resolve(staging, preparationArtifactFilename);
+    await atomicWriteFile(artifactPath, JSON.stringify(artifact) + "\n", {
+      mode: 0o600,
     });
-    const sourceFiles = createPreparedSourceFiles(
-      resources.resources.map((resource) => resource.relativePath),
-    );
-    await profilePipelineStage("artifact_write", () =>
-      Promise.all([
-        atomicWriteFile(artifactPath, `${JSON.stringify(artifact)}\n`, {
-          mode: 0o600,
-        }),
-        atomicWriteFile(sourceFilesPath, `${JSON.stringify(sourceFiles)}\n`, {
-          mode: 0o600,
-        }),
-      ]),
-    );
     input.onPhase?.("organize_structure", 3, 3);
-    return Object.freeze({
+    return {
       artifact,
       artifactPath,
       extractedRoot,
-      extractionSource,
-      sourceFiles,
-      sourceFilesPath,
-    });
+      preparedRoot,
+      extractionSource: sealed ? "sealed" : "archive",
+    };
   } catch (error) {
-    await rm(stagingDirectory, { force: true, recursive: true });
+    await rm(staging, { force: true, recursive: true });
     throw error;
   }
 }

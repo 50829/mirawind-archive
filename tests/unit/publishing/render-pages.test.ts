@@ -1,44 +1,19 @@
-import { createHash } from "node:crypto";
-
+import { required } from "../../helpers/required";
 import { describe, expect, it, vi } from "vitest";
-
 import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import { renderPages } from "@/modules/publishing/core/publication/render-pages";
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
-import {
-  createBookConfigV4,
-  structureForDocument,
-} from "../../helpers/book-config";
-
+import { smallBook, headingBlock, paragraphBlock } from "../../helpers/ir-book";
 function fixture() {
-  const markdown = `${Array.from(
-    { length: 6 },
-    (_, index) => `# Chapter ${index + 1}\n\nBody ${index + 1}.`,
-  ).join("\n\n")}\n`;
-  const sourceSha256 = createHash("sha256").update(markdown).digest("hex");
-  let ordinal = 0;
-  const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown), {
-    idFactory: () => `blk_render_pages_${String(++ordinal).padStart(8, "0")}`,
-  });
-  const structure = structureForDocument(document).map((node) => ({
-    ...node,
-    display_level: 1,
-    starts_page: true,
-  }));
-  return compileBook({
-    config: createBookConfigV4({
-      document,
-      numbering: "generated",
-      sourceSha256,
-      structure,
-      title: "Render Pages",
-    }),
-    configSha256: "b".repeat(64),
-    markdownBytes: markdown,
-  });
+  const book = smallBook();
+  book.blocks = Array.from({ length: 6 }, (_, i) => [
+    headingBlock(`Chapter ${i + 1}`),
+    paragraphBlock(`Body ${i + 1}.`),
+  ]).flat();
+  book.publishing.boundaries = {
+    body_start_block_id: required(book.blocks[0]).id,
+  };
+  return compileBook(book);
 }
-
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((accept) => {
@@ -46,7 +21,6 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-
 describe("bounded ordered page rendering", () => {
   it("runs at most four pages and yields deterministic ordinal order", async () => {
     const book = fixture();
@@ -87,7 +61,6 @@ describe("bounded ordered page rendering", () => {
       },
       resourceResolution: { diagnostics: [], references: [], resources: [] },
     })[Symbol.asyncIterator]();
-
     const firstResult = iterator.next();
     await vi.waitFor(() => expect(started).toEqual([1, 2, 3, 4]));
     for (const pageId of [4, 3, 2]) {
@@ -99,14 +72,12 @@ describe("bounded ordered page rendering", () => {
     }
     await Promise.resolve();
     expect(started).toEqual([1, 2, 3, 4]);
-
     pending.get(1)?.resolve({
       css: ".page-1{}",
       diagnostics: [{ code: "PAGE_1", message: "diagnostic" }],
       html: "<p>1</p>",
     });
     expect((await firstResult).value?.page.pageId).toBe(1);
-
     const results = [];
     for (;;) {
       const nextResult = iterator.next();
@@ -127,7 +98,6 @@ describe("bounded ordered page rendering", () => {
       if (result.done) break;
       results.push(result.value);
     }
-
     expect([1, ...results.map((result) => result.page.pageId)]).toEqual([
       1, 2, 3, 4, 5, 6,
     ]);
@@ -140,7 +110,6 @@ describe("bounded ordered page rendering", () => {
       "PAGE_6",
     ]);
   });
-
   it("rejects before starting work when cancellation is requested", async () => {
     const controller = new AbortController();
     controller.abort();
@@ -151,7 +120,6 @@ describe("bounded ordered page rendering", () => {
       resourceResolution: { diagnostics: [], references: [], resources: [] },
       signal: controller.signal,
     })[Symbol.asyncIterator]();
-
     await expect(iterator.next()).rejects.toMatchObject({ name: "AbortError" });
     expect(renderPage).not.toHaveBeenCalled();
   });

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { createStrongEtag } from "@/http/cache/policies";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
 import { serializeJobStatus } from "@/modules/publishing/adapters/sqlite/job-status";
@@ -28,8 +27,7 @@ function token(book: ReturnType<DraftRepository["createBook"]>): string {
     bookId: book.id,
     currentCandidateId: book.currentCandidateId,
     currentVersionId: book.currentVersionId,
-    draftConfigRevision: book.draftConfigRevision,
-    draftSourceId: book.draftSourceId,
+    draftImportId: book.draftImportId,
     title: book.title,
     updatedAtMs: book.updatedAtMs,
   });
@@ -372,7 +370,8 @@ describe("permanent book deletion acceptance", () => {
         publishReadyCandidateForTest({
           bookId: current.id,
           database,
-          expectedConfigEtag: createStrongEtag("a".repeat(64)),
+          expectedUpdatedAt: fixture.document.updated_at,
+          candidateId: fixture.candidate.attemptId,
           nowMs: 21,
         }),
       ).rejects.toMatchObject({ code: "PUBLICATION_STALE" });

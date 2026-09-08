@@ -6,7 +6,7 @@ export interface BookVersionRecord {
   readonly blockingDiagnosticCount: number;
   readonly compilerVersion: string;
   readonly completeAtMs: number;
-  readonly configRevision: number;
+  readonly sourceUpdatedAt: number;
   readonly createdByJobId: string;
   readonly id: string;
   readonly manifestSchemaVersion: number;
@@ -18,7 +18,7 @@ export interface BookVersionRecord {
   readonly rendererVersion: string;
   readonly readerVersion: string;
   readonly semanticDigest: string;
-  readonly sourceId: string;
+  readonly importId: string;
   readonly state: BookVersionState;
   readonly verifiedAtMs: number | null;
   readonly versionRelativePath: string;

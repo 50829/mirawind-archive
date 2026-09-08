@@ -56,6 +56,7 @@ async function collectFile(stream: BusboyFileStream): Promise<Uint8Array> {
 export async function readMultipartCover(request: Request): Promise<{
   readonly bytes: Uint8Array;
   readonly filename: string;
+  readonly expectedUpdatedAt: number;
 }> {
   if (!request.body) throw invalidCover("A multipart body is required.");
   const contentType = request.headers.get("content-type");
@@ -66,12 +67,13 @@ export async function readMultipartCover(request: Request): Promise<{
       headers: { "content-type": contentType } as BusboyHeaders,
       limits: {
         fieldNameSize: 100,
-        fields: 0,
+        fields: 1,
+        fieldSize: 32,
         fileSize: maximumCoverUploadBytes,
         files: 1,
         headerPairs: 100,
         headerSize: 16 * 1024,
-        parts: 1,
+        parts: 2,
       },
       preservePath: false,
     });
@@ -80,6 +82,7 @@ export async function readMultipartCover(request: Request): Promise<{
   }
   let filePromise: Promise<Uint8Array> | undefined;
   let filename: string | undefined;
+  let expectedUpdatedAt: number | undefined;
   let failure: unknown;
   const finished = new Promise<void>((resolveFinished, rejectFinished) => {
     const fail = (error: unknown) => {
@@ -111,13 +114,29 @@ export async function readMultipartCover(request: Request): Promise<{
       filePromise = collectFile(stream);
       void filePromise.catch(fail);
     });
-    parser.on("field", () => fail(invalidCover("Unexpected form field.")));
+    parser.on("field", (name, value, nameTruncated, valueTruncated) => {
+      if (
+        name !== "expected_updated_at" ||
+        expectedUpdatedAt !== undefined ||
+        nameTruncated ||
+        valueTruncated ||
+        !/^(?:0|[1-9][0-9]*)$/u.test(value) ||
+        !Number.isSafeInteger(Number(value))
+      )
+        return fail(invalidCover("A draft timestamp is required."));
+      expectedUpdatedAt = Number(value);
+    });
     parser.on("filesLimit", () => fail(invalidCover()));
     parser.on("fieldsLimit", () => fail(invalidCover()));
     parser.on("partsLimit", () => fail(invalidCover()));
-    parser.on("error", () => fail(invalidCover()));
+    parser.on("error", () => rejectFinished(invalidCover()));
     parser.on("finish", () => {
-      if (failure || !filePromise || !filename) {
+      if (
+        failure ||
+        !filePromise ||
+        !filename ||
+        expectedUpdatedAt === undefined
+      ) {
         rejectFinished(failure ?? invalidCover());
         return;
       }
@@ -133,6 +152,11 @@ export async function readMultipartCover(request: Request): Promise<{
     request.body as unknown as import("node:stream/web").ReadableStream,
   ).pipe(parser);
   await finished;
-  if (!filePromise || !filename) throw invalidCover();
-  return Object.freeze({ bytes: await filePromise, filename });
+  if (!filePromise || !filename || expectedUpdatedAt === undefined)
+    throw invalidCover();
+  return Object.freeze({
+    bytes: await filePromise,
+    filename,
+    expectedUpdatedAt,
+  });
 }

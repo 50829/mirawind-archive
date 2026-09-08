@@ -8,7 +8,6 @@ import Busboy, {
 import type Database from "better-sqlite3";
 
 import { createPublishingImportServer } from "@/composition/server/publishing-imports";
-import { createPublishingDraftServer } from "@/composition/server/publishing-drafts";
 import { SafeApplicationError } from "@/domain/errors";
 import { hasControlCharacters } from "@/domain/text";
 import {
@@ -59,7 +58,6 @@ export async function storeMultipartImport(input: {
   readonly request: Request;
 }): Promise<ImportUploadResult> {
   const publishing = createPublishingImportServer(input.database);
-  const drafts = createPublishingDraftServer(input.database);
   const existing = publishing.findJobByIdempotency(
     importUploadIdempotencyOperation,
     input.idempotencyKey,
@@ -76,16 +74,15 @@ export async function storeMultipartImport(input: {
   if (!input.request.body)
     throw multipartError("A multipart body is required.");
 
-  let resolveTargetBook!: (value: number | undefined) => void;
-  let rejectTargetBook!: (reason: unknown) => void;
-  const targetBook = new Promise<number | undefined>((resolve, reject) => {
-    resolveTargetBook = resolve;
-    rejectTargetBook = reject;
+  let resolveValidation!: () => void;
+  let rejectValidation!: (reason: unknown) => void;
+  const formValidated = new Promise<void>((resolve, reject) => {
+    resolveValidation = resolve;
+    rejectValidation = reject;
   });
-  void targetBook.catch(() => undefined);
-  let targetBookId: number | undefined;
-  let targetSeen = false;
+  void formValidated.catch(() => undefined);
   let fileResult: Promise<ImportUploadResult> | undefined;
+  let activeFile: BusboyFileStream | undefined;
   let parsingError: unknown;
   let fileSeen = false;
   const contentType = input.request.headers.get("content-type");
@@ -99,12 +96,12 @@ export async function storeMultipartImport(input: {
       limits: {
         fieldNameSize: 100,
         fieldSize: 32,
-        fields: 1,
+        fields: 0,
         fileSize: maximumUploadBytes,
         files: 1,
         headerPairs: 100,
         headerSize: 16 * 1024,
-        parts: 2,
+        parts: 1,
       },
       preservePath: false,
     });
@@ -119,6 +116,7 @@ export async function storeMultipartImport(input: {
       parsingError ??= error;
     };
     parser.on("file", (fieldName, stream, filename, _encoding, mimeType) => {
+      stream.on("error", () => fail(multipartError()));
       if (
         fileSeen ||
         fieldName !== "file" ||
@@ -129,6 +127,7 @@ export async function storeMultipartImport(input: {
         return;
       }
       fileSeen = true;
+      activeFile = stream;
       let originalName: string;
       try {
         originalName = cleanedUploadName(filename);
@@ -138,7 +137,7 @@ export async function storeMultipartImport(input: {
         return;
       }
       fileResult = publishing.storeImport(input.layout).store({
-        bookId: targetBook,
+        formValidated,
         bytes: fileBytes(stream),
         expiresAtMs: m1ImportExpiryMs,
         idempotencyKey: input.idempotencyKey,
@@ -148,20 +147,9 @@ export async function storeMultipartImport(input: {
       });
       void fileResult.catch(fail);
     });
-    parser.on("field", (fieldName, value, _nameCut, valueCut) => {
-      if (targetSeen || fieldName !== "target_book_id" || valueCut) {
-        fail(multipartError("The target book field is invalid."));
-        return;
-      }
-      targetSeen = true;
-      if (value.trim() === "") return;
-      const parsed = Number(value);
-      if (!Number.isSafeInteger(parsed) || parsed < 1) {
-        fail(multipartError("The target book ID is invalid."));
-        return;
-      }
-      targetBookId = parsed;
-    });
+    parser.on("field", () =>
+      fail(multipartError("Unexpected multipart field.")),
+    );
     parser.on("filesLimit", () =>
       fail(multipartError("Exactly one ZIP file is allowed.")),
     );
@@ -171,18 +159,24 @@ export async function storeMultipartImport(input: {
     parser.on("partsLimit", () =>
       fail(multipartError("Too many multipart parts were supplied.")),
     );
-    parser.on("error", () => fail(multipartError()));
+    parser.on("error", () => {
+      const error = multipartError();
+      activeFile?.destroy(error);
+      rejectValidation(error);
+      if (fileResult)
+        void fileResult.catch(() => undefined).then(() => reject(error));
+      else reject(error);
+    });
     parser.on("finish", () => {
-      if (targetBookId !== undefined && !drafts.findBook(targetBookId)) {
-        fail(multipartError("The target book does not exist."));
-      }
       if (parsingError || !fileSeen || !fileResult) {
         const error = parsingError ?? multipartError();
-        rejectTargetBook(error);
-        reject(error);
+        rejectValidation(error);
+        if (fileResult)
+          void fileResult.catch(() => undefined).then(() => reject(error));
+        else reject(error);
         return;
       }
-      resolveTargetBook(targetBookId);
+      resolveValidation();
       void fileResult.then(resolve, reject);
     });
   });
@@ -191,8 +185,11 @@ export async function storeMultipartImport(input: {
     () => parser.destroy(new Error("UPLOAD_CANCELED")),
     { once: true },
   );
-  Readable.fromWeb(
+  const source = Readable.fromWeb(
     input.request.body as unknown as import("node:stream/web").ReadableStream,
-  ).pipe(parser);
+  );
+  source.on("error", () => parser.destroy(multipartError()));
+  if (input.request.signal.aborted) parser.destroy(multipartError());
+  else source.pipe(parser);
   return finished;
 }

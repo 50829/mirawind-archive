@@ -21,6 +21,9 @@ function isExternal(id: string): boolean {
 }
 
 export default defineConfig({
+  oxc: {
+    jsx: { development: false },
+  },
   build: {
     emptyOutDir: true,
     minify: false,

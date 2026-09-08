@@ -16,7 +16,7 @@ function evidence(value: Readonly<Record<string, unknown>>): readonly string[] {
     output.push(`First heading: ${value.firstHeading.slice(0, 450)}`);
   }
   if (typeof value.byteSize === "number") {
-    output.push(`Markdown bytes: ${value.byteSize}`);
+    output.push(`JSON bytes: ${value.byteSize}`);
   }
   if (typeof value.referencedResources === "number") {
     output.push(`Referenced resources: ${value.referencedResources}`);
@@ -45,12 +45,8 @@ export const GET: APIRoute = ({ locals, params }) => {
       if (!imported) return null;
       const currentJob = publishing.latestJobForImport(importId);
       const book = imported.bookId ? drafts.findBook(imported.bookId) : null;
-      const revision = book?.draftConfigRevision ?? null;
       const candidate = book ? drafts.findCurrentCandidate(book.id) : null;
-      const previewReady =
-        candidate?.state === "ready" &&
-        candidate.configRevision === revision &&
-        revision !== null;
+      const previewReady = candidate?.state === "ready";
       return {
         book_id: imported.bookId,
         candidates: publishing.importCandidates(importId).map((candidate) => ({
@@ -68,10 +64,10 @@ export const GET: APIRoute = ({ locals, params }) => {
         import_id: imported.id,
         source_name: imported.originalName,
         preview: {
-          revision,
+          source_updated_at: candidate?.sourceUpdatedAt ?? null,
           state:
             candidate?.state ??
-            (revision === null ? "unavailable" : "building"),
+            (book?.draftImportId ? "building" : "unavailable"),
           url:
             previewReady && imported.bookId
               ? `/manage/books/${imported.bookId}`

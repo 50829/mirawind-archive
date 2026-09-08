@@ -4,33 +4,12 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import { isAbsolute, join, resolve, sep } from "node:path";
 import { performance, type EventLoopUtilization } from "node:perf_hooks";
 
-export const pipelineProfileSchemaVersion = 1 as const;
+export const pipelineProfileSchemaVersion = 2 as const;
 
 export const pipelineProfileStageNames = [
   "archive_extract",
   "candidate_discovery",
   "artifact_write",
-  "markdown_read",
-  "typography",
-  "structural_cleanup",
-  "parse_normalize",
-  "layout_evidence",
-  "resource_resolution",
-  "image_inspection",
-  "initial_printed_contents",
-  "pdf_evidence",
-  "repaired_printed_contents",
-  "source_regions",
-  "structure_proposal",
-  "input_validation",
-  "configured_document",
-  "asset_copy",
-  "candidate_materialization",
-  "manifest_build",
-  "source_copy",
-  "original_copy",
-  "file_inventory",
-  "version_marker",
   "candidate_finalize",
 ] as const;
 
@@ -40,26 +19,8 @@ export type PipelineProfileStageName =
 export const pipelineProfileMetricNames = [
   "archive_entries",
   "archive_files",
-  "archive_reused",
   "archive_uncompressed_bytes",
-  "markdown_candidates",
-  "markdown_bytes",
-  "root_blocks",
-  "headings",
-  "protected_nodes",
-  "cleanup_printed_toc_regions_removed",
-  "cleanup_helper_blocks_removed",
-  "layout_records",
-  "printed_regions",
-  "printed_entries",
-  "printed_alignment_cells",
-  "pdf_pages",
-  "resources",
-  "resource_bytes",
-  "pages",
-  "output_bytes",
-  "search_fts_rows",
-  "search_short_rows",
+  "content_candidates",
 ] as const;
 
 export type PipelineProfileMetricName =

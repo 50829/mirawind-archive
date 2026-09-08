@@ -124,8 +124,8 @@ export class SqliteBookPublishingCleanup
       .prepare(
         `UPDATE jobs
          SET import_id = NULL, book_id = NULL, candidate_id = NULL,
-             version_id = NULL, captured_source_id = NULL,
-             captured_config_revision = NULL,
+             version_id = NULL, captured_input_path = NULL,
+             captured_source_updated_at = NULL,
              captured_current_version_id = NULL, progress_json = ?,
              error_detail_json = NULL,
              error_code = CASE
@@ -150,7 +150,7 @@ export class SqliteBookPublishingCleanup
       .prepare("DELETE FROM original_files WHERE book_id = ?")
       .run(input.bookId);
     this.database
-      .prepare("DELETE FROM config_revisions WHERE book_id = ?")
+      .prepare("DELETE FROM save_draft_requests WHERE book_id = ?")
       .run(input.bookId);
     if (importIds.length > 0) {
       this.database
@@ -166,10 +166,7 @@ export class SqliteBookPublishingCleanup
         .run(...importIds);
     }
     this.database
-      .prepare("DELETE FROM source_snapshots WHERE book_id = ?")
-      .run(input.bookId);
-    this.database
-      .prepare("DELETE FROM source_assets WHERE book_id = ?")
+      .prepare("DELETE FROM book_resources WHERE book_id = ?")
       .run(input.bookId);
     if (importIds.length > 0) {
       this.database

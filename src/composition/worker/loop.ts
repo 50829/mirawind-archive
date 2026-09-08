@@ -4,11 +4,11 @@ import { setTimeout as wait } from "node:timers/promises";
 import { executeWorkerAttempt } from "./execute-attempt";
 import { completeWorkerAttempt } from "./complete-attempt";
 import { recoverWorkerAttempts } from "./recover-attempts";
+import { recoverDraftSaves } from "@/modules/publishing/adapters/worker/recover-draft-saves";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import type {
   JobPhase,
   JobProgress,
@@ -45,12 +45,16 @@ export async function runWorkerLoop(input: {
   readonly repository: JobRepository;
   readonly scheduler: WorkerCheckpointScheduler;
   readonly shutdownSignal: AbortSignal;
-  readonly sources: SourceRepository;
   readonly workerId: string;
 }): Promise<void> {
   let idleMaintenancePending = Boolean(input.onIdle);
   while (!input.shutdownSignal.aborted) {
     const loopNowMs = Date.now();
+    await recoverDraftSaves({
+      database: input.database,
+      layout: input.layout,
+      nowMs: loopNowMs,
+    });
     await recoverWorkerAttempts({
       candidates: input.candidates,
       database: input.database,
@@ -104,7 +108,6 @@ export async function runWorkerLoop(input: {
       repository: input.repository,
       shutdownSignal: input.shutdownSignal,
       layout: input.layout,
-      sources: input.sources,
     });
     const memory = await completeWorkerAttempt({
       candidates: input.candidates,

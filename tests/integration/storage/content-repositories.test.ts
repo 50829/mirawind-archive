@@ -1,181 +1,93 @@
 import { describe, expect, it } from "vitest";
-
-import type { MarkdownCandidate } from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
+import type { MineruCandidate } from "@/modules/publishing/adapters/filesystem/discover-mineru-candidates";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
+import { withMigratedTestDatabase } from "../../helpers/database";
 
-import { withMigratedTestDatabase } from "../../helpers/database.js";
-
-const sha256 = "a".repeat(64);
-
-function candidate(): MarkdownCandidate {
-  return Object.freeze({
-    byteSize: 123,
-    companionFiles: Object.freeze(["layout.json"]),
-    confidence: "generic",
-    diagnostics: Object.freeze([]),
-    firstHeading: "Book",
-    id: "cand_abcdefghijklmnop",
-    normalizedPath: "nested/book.md",
-    referencedResources: 1,
-    score: 50,
-  });
-}
-
-describe("M1 import, source and draft repositories", () => {
-  it("persists the guarded import candidate workflow", () =>
+const candidate: MineruCandidate = {
+  byteSize: 123,
+  companionFiles: [],
+  confidence: "high",
+  diagnostics: [],
+  firstHeading: "Book",
+  id: "cand_abcdefghijklmnop",
+  normalizedPath: "nested/content_list_v2.json",
+  referencedResources: 0,
+  score: 100,
+};
+describe("IR import and draft repositories", () => {
+  it("guards the selected v2 import and scopes its jobs to the prepared book", () =>
     withMigratedTestDatabase(({ database }) => {
-      const drafts = new DraftRepository(database);
-      const imports = new ImportRepository(database);
-      const created = imports.createUploaded({
-        expiresAtMs: 10_000,
-        id: "imp_abcdefghijklmnop",
+      const drafts = new DraftRepository(database),
+        imports = new ImportRepository(database),
+        jobs = new JobRepository(database);
+      const imported = imports.createUploaded({
+        expiresAtMs: 10000,
         nowMs: 2,
-        originalName: "fixture.zip",
-        uploadRelativePath: "imports/imp_abcdefghijklmnop/original.zip",
-        uploadSha256: sha256,
+        originalName: "book.zip",
+        uploadRelativePath: "tmp/uploads/book.zip",
+        uploadSha256: "a".repeat(64),
         uploadSizeBytes: 42,
       });
-      const jobs = new JobRepository(database);
-      const analysisJob = jobs.create({
-        importId: created.id,
+      const job = jobs.create({
+        importId: imported.id,
         kind: "analyze_import",
         nowMs: 2,
       });
-
-      expect(created.state).toBe("uploaded");
-      expect(imports.startAnalysis(created.id, 3).state).toBe("analyzing");
-      expect(
-        imports.saveCandidates({
-          candidates: [candidate()],
-          importId: created.id,
-          nextState: "needs_main_confirmation",
-          nowMs: 4,
-          selectedCandidateId: null,
-        }),
-      ).toMatchObject({
-        selectedCandidateId: null,
-        state: "needs_main_confirmation",
-      });
-      expect(imports.candidates(created.id)).toEqual([
-        expect.objectContaining({
-          evidence: {
-            byteSize: 123,
-            companionFiles: ["layout.json"],
-            firstHeading: "Book",
-            referencedResources: 1,
-          },
-          normalizedPath: "nested/book.md",
-        }),
-      ]);
-      expect(
-        imports.confirmCandidate({
-          candidateId: candidate().id,
-          importId: created.id,
-          nowMs: 5,
-        }),
-      ).toMatchObject({
-        selectedCandidateId: candidate().id,
-        state: "preparing",
-      });
       expect(() =>
-        imports.confirmCandidate({
-          candidateId: candidate().id,
-          importId: created.id,
-          nowMs: 6,
+        imports.saveCandidates({
+          candidates: [candidate],
+          importId: imported.id,
+          nextState: "preparing",
+          nowMs: 3,
+          selectedCandidateId: candidate.id,
         }),
-      ).toThrow("IMPORT_CONFIRMATION_CONFLICT");
-      const book = drafts.createBook({ nowMs: 7, title: "Pending import" });
+      ).toThrow("IMPORT_STATE_CONFLICT");
+      imports.startAnalysis(imported.id, 3);
+      expect(() =>
+        imports.saveCandidates({
+          candidates: [candidate],
+          importId: imported.id,
+          nextState: "preparing",
+          nowMs: 4,
+          selectedCandidateId: "cand_missing000000000",
+        }),
+      ).toThrow("IMPORT_CANDIDATE_INVALID");
+      expect(imports.candidates(imported.id)).toEqual([]);
+      imports.saveCandidates({
+        candidates: [candidate],
+        importId: imported.id,
+        nextState: "preparing",
+        nowMs: 4,
+        selectedCandidateId: candidate.id,
+      });
+      const book = drafts.createBook({ nowMs: 5, title: "Book" });
       imports.attachBookForPreparation({
         bookId: book.id,
-        importId: created.id,
-        nowMs: 8,
-      });
-      expect(jobs.get(analysisJob.id)?.bookId).toBe(book.id);
-    }));
-
-  it("indexes immutable source, original, config and current candidate records", () =>
-    withMigratedTestDatabase(({ database }) => {
-      const drafts = new DraftRepository(database);
-      const imports = new ImportRepository(database);
-      const sources = new SourceRepository(database);
-      const book = drafts.createBook({ nowMs: 1, title: "Book" });
-      const importRecord = imports.createUploaded({
-        bookId: book.id,
-        expiresAtMs: 10_000,
-        id: "imp_abcdefghijklmnop",
-        nowMs: 2,
-        originalName: "fixture.zip",
-        uploadRelativePath: "imports/imp_abcdefghijklmnop/original.zip",
-        uploadSha256: sha256,
-        uploadSizeBytes: 42,
-      });
-      const source = sources.createSnapshot({
-        analysisVersion: "candidate-v1",
-        bookId: book.id,
-        createdFromImportId: importRecord.id,
-        id: "src_abcdefghijklmnop",
-        mainMarkdownPath: "book.md",
-        mainMarkdownSha256: sha256,
-        nowMs: 3,
-        origin: "import",
-        sourceRootRelativePath: "books/1/sources/src_abcdefghijklmnop",
-      });
-      const original = sources.registerOriginal({
-        bookId: book.id,
-        id: "file_abcdefghijklmnop",
-        mediaType: "application/zip",
-        nowMs: 3,
-        originalName: "upload.zip",
-        sha256,
-        sizeBytes: 42,
-        sourceId: source.id,
-        storageRelativePath: "books/1/originals/file_abcdefghijklmnop.zip",
-      });
-      const config = drafts.addConfigRevision({
-        bookId: book.id,
-        nowMs: 4,
-        revision: 1,
-        schemaVersion: 4,
-        sourceId: source.id,
-        title: "Ready book",
-        yamlRelativePath: "books/1/config/1/book.yaml",
-        yamlSha256: sha256,
-      });
-      const candidateRecord = new DraftCandidateRepository(
-        database,
-      ).createForCurrentRevision({
-        bookId: book.id,
-        configRevision: config.revision,
+        importId: imported.id,
         nowMs: 5,
-        sourceId: source.id,
       });
-
-      expect(sources.requireSnapshot(source.id)).toEqual(source);
-      expect(sources.requireOriginal(original.id)).toEqual(original);
-      expect(drafts.requireConfig(book.id, 1)).toEqual(config);
-      expect(candidateRecord).toMatchObject({ state: "building" });
+      expect(jobs.get(job.id)?.bookId).toBe(book.id);
+      imports.attachPreparedBook({
+        bookId: book.id,
+        importId: imported.id,
+        nowMs: 6,
+      });
+      expect(imports.require(imported.id).state).toBe("draft_ready");
+      const built = new DraftCandidateRepository(database).createForDocument({
+        bookId: book.id,
+        importId: imported.id,
+        sourceUpdatedAt: 1000,
+        nowMs: 7,
+      });
+      expect(built).toMatchObject({ sourceUpdatedAt: 1000, state: "building" });
       expect(drafts.requireBook(book.id)).toMatchObject({
-        currentCandidateId: candidateRecord.attemptId,
-        draftConfigRevision: 1,
-        draftSourceId: source.id,
-        title: "Ready book",
+        currentCandidateId: built.attemptId,
+        draftImportId: imported.id,
+        access: "private",
+        currentVersionId: null,
       });
-      expect(() =>
-        drafts.addConfigRevision({
-          bookId: book.id,
-          nowMs: 7,
-          revision: 1,
-          schemaVersion: 4,
-          sourceId: source.id,
-          title: "Mutated",
-          yamlRelativePath: "other.yaml",
-          yamlSha256: sha256,
-        }),
-      ).toThrow();
-      expect(drafts.requireConfig(book.id, 1)).toEqual(config);
     }));
 });

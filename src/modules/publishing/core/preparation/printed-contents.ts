@@ -1,17 +1,13 @@
-import { createHash } from "node:crypto";
-
 import { createOpaqueId } from "@/domain/ids";
 import {
   reconstructPrintedLayoutRows,
   type LayoutEvidence,
 } from "./layout-evidence";
 import type {
-  ConfirmedSourceRegion,
   NormalizedDocument,
   NormalizedHeading,
   TransientDocumentNode,
 } from "./document-model";
-import { SourceTextIndex } from "./source-text-index";
 
 export interface PrintedContentsDiagnostic {
   readonly blockId?: string;
@@ -35,23 +31,29 @@ export interface PrintedContentsCandidate {
   readonly canonical: boolean;
   readonly confidence: "high" | "low" | "medium";
   readonly diagnostics: readonly PrintedContentsDiagnostic[];
-  readonly endByte: number;
+  readonly endIndex: number;
   readonly entryCount: number;
   readonly logicalEntries: readonly PrintedContentsLogicalEntry[];
   readonly matchedHeadingCount: number;
   readonly matchConfidence: "high" | "low" | "medium";
-  readonly proposedRegion?: ConfirmedSourceRegion;
+  readonly proposedRegion?: PrintedContentsRegion;
   readonly requiresPdfEvidence?: boolean;
-  readonly startByte: number;
+  readonly startIndex: number;
+}
+
+export interface PrintedContentsRegion {
+  readonly region_id: string;
+  readonly block_ids: readonly string[];
+  readonly applied: true;
+  readonly kind: "printed_toc";
 }
 
 export interface PrintedContentsLogicalEntry {
   readonly bodyHeadingBlockId?: string;
   readonly pageIndex?: number;
   readonly range: {
-    readonly end_byte: number;
-    readonly sha256: string;
-    readonly start_byte: number;
+    readonly start_block_index: number;
+    readonly end_block_index: number;
   };
   readonly referenceLevel: number;
   readonly sourceTitle: string;
@@ -74,9 +76,8 @@ interface ExtractedEntry {
   readonly normalizedTitle: string;
   readonly numbering?: PrintedHeadingEvidence;
   readonly range: {
-    readonly end_byte: number;
-    readonly sha256: string;
-    readonly start_byte: number;
+    readonly start_block_index: number;
+    readonly end_block_index: number;
   };
   readonly referenceLevel: number;
   readonly sourceTitle: string;
@@ -132,10 +133,7 @@ export interface PrintedContentsDocumentIndex {
   readonly document: NormalizedDocument;
   readonly headingFactsByBlockId: ReadonlyMap<string, HeadingMatchFacts>;
   readonly rootTitleByNode: ReadonlyMap<TransientDocumentNode, string>;
-  readonly sourceBytes: Buffer;
-  readonly sourceIndex: SourceTextIndex;
-  readonly sourceSha256: string;
-  readonly sourceRegionHeadingIndexes: ReadonlyMap<string, number>;
+  readonly rootIndexByBlockId: ReadonlyMap<string, number>;
 }
 
 interface AlignmentNode extends MatchCandidate {
@@ -198,10 +196,6 @@ const namedHeading = new RegExp(
   `^(?:第\\s*([0-9零〇一二三四五六七八九十百千]+)\\s*(章|篇|部分|部)|(?:chapter|chap\\.?)\\s*([0-9ivxlcdm]+|[A-Z]|${englishOrdinalWord})(?=\\s|$|[—–:：.-])|part\\s*([0-9ivxlcdm]+|${englishOrdinalWord})(?=\\s|$|[—–:：.-]))`,
   "iu",
 );
-
-function hash(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
 
 function withoutControlCharacters(value: string): string {
   let output = "";
@@ -624,6 +618,7 @@ function containsRichContent(node: TransientDocumentNode): boolean {
 }
 
 function rootTitle(node: TransientDocumentNode): string {
+  if (node.visibleText !== undefined) return node.visibleText;
   const values: string[] = [];
   const visit = (current: TransientDocumentNode) => {
     if (current.type === "text" && current.value) values.push(current.value);
@@ -686,17 +681,10 @@ function lineEntries(input: {
   readonly block: TransientDocumentNode;
   readonly previousLevel: number;
   readonly repairableContextualTitles?: ReadonlySet<string>;
-  readonly source: string;
-  readonly sourceBytes: Uint8Array;
-  readonly sourceIndex: SourceTextIndex;
+  readonly blockIndex: number;
 }): readonly ExtractedEntry[] {
-  if (!input.block.position) return [];
-  const blockSource = input.source.slice(
-    input.block.position.start.offset,
-    input.block.position.end.offset,
-  );
+  const blockSource = rootTitle(input.block);
   const entries: ExtractedEntry[] = [];
-  let lineOffset = 0;
   let previousLevel = input.previousLevel;
   for (const line of blockSource.split(/\n/u)) {
     for (const segment of splitPrintedLogicalLine(line)) {
@@ -722,12 +710,6 @@ function lineEntries(input: {
         const pageOnly =
           printed !== undefined && normalizedTitle(printed.title) === "";
         if (title || pageOnly) {
-          const startOffset =
-            input.block.position.start.offset + lineOffset + segment.start;
-          const endOffset =
-            input.block.position.start.offset + lineOffset + segment.end;
-          const startByte = input.sourceIndex.byteOffsetAt(startOffset);
-          const endByte = input.sourceIndex.byteOffsetAt(endOffset);
           const referenceLevel = contextualLevel(
             segment.text,
             numbering,
@@ -739,9 +721,8 @@ function lineEntries(input: {
               normalizedTitle: title,
               ...(numbering ? { numbering } : {}),
               range: Object.freeze({
-                end_byte: endByte,
-                sha256: hash(input.sourceBytes.subarray(startByte, endByte)),
-                start_byte: startByte,
+                start_block_index: input.blockIndex,
+                end_block_index: input.blockIndex,
               }),
               referenceLevel,
               sourceTitle: segment.text,
@@ -750,14 +731,12 @@ function lineEntries(input: {
         }
       }
     }
-    lineOffset += line.length + 1;
   }
   return Object.freeze(entries);
 }
 
 function mergeDetachedSourceEntries(
   entries: readonly ExtractedEntry[],
-  sourceBytes: Uint8Array,
 ): readonly ExtractedEntry[] {
   const merged: ExtractedEntry[] = [];
   const truncatedReview = new RegExp(
@@ -805,14 +784,8 @@ function mergeDetachedSourceEntries(
           ...(numbering ? { numbering } : {}),
           normalizedTitle: normalizedTitle(sourceTitle),
           range: Object.freeze({
-            end_byte: next.range.end_byte,
-            sha256: hash(
-              sourceBytes.subarray(
-                current.range.start_byte,
-                next.range.end_byte,
-              ),
-            ),
-            start_byte: current.range.start_byte,
+            start_block_index: current.range.start_block_index,
+            end_block_index: next.range.end_block_index,
           }),
           sourceTitle,
         }),
@@ -826,7 +799,7 @@ function mergeDetachedSourceEntries(
       ? printedPageEvidence(next.sourceTitle)
       : undefined;
     const sourceGap = next
-      ? next.range.start_byte - current.range.end_byte
+      ? next.range.start_block_index - current.range.end_block_index
       : Number.POSITIVE_INFINITY;
     if (
       current.numbering &&
@@ -838,7 +811,7 @@ function mergeDetachedSourceEntries(
       nextPrinted &&
       !next.numbering &&
       sourceGap >= 0 &&
-      sourceGap <= 4 &&
+      sourceGap <= 1 &&
       !frontmatterEntryTitle.test(nextPrinted.title) &&
       !contextualEntryTitle.test(nextPrinted.title)
     ) {
@@ -848,14 +821,8 @@ function mergeDetachedSourceEntries(
           ...current,
           normalizedTitle: normalizedTitle(sourceTitle),
           range: Object.freeze({
-            end_byte: next.range.end_byte,
-            sha256: hash(
-              sourceBytes.subarray(
-                current.range.start_byte,
-                next.range.end_byte,
-              ),
-            ),
-            start_byte: current.range.start_byte,
+            start_block_index: current.range.start_block_index,
+            end_block_index: next.range.end_block_index,
           }),
           sourceTitle,
         }),
@@ -899,24 +866,15 @@ function mergeDetachedSourceEntries(
   return Object.freeze(merged);
 }
 
-function hasPrintedPageLine(
-  block: TransientDocumentNode | undefined,
-  source: string,
-): boolean {
-  if (!block?.position) return false;
-  return source
-    .slice(block.position.start.offset, block.position.end.offset)
+function hasPrintedPageLine(block: TransientDocumentNode | undefined): boolean {
+  if (!block) return false;
+  return rootTitle(block)
     .split(/\n/u)
     .some((line) => printedPageEvidence(line) !== undefined);
 }
 
-function requiresPdfLineRepair(
-  block: TransientDocumentNode,
-  source: string,
-): boolean {
-  if (!block.position) return false;
-  return source
-    .slice(block.position.start.offset, block.position.end.offset)
+function requiresPdfLineRepair(block: TransientDocumentNode): boolean {
+  return rootTitle(block)
     .split(/\n/u)
     .some((line) => {
       const plain = plainTitle(line);
@@ -1073,7 +1031,6 @@ function createHeadingMatchFacts(
 export function createPrintedContentsDocumentIndex(
   document: NormalizedDocument,
 ): PrintedContentsDocumentIndex {
-  const sourceBytes = Buffer.from(document.source, "utf8");
   return Object.freeze({
     document,
     headingFactsByBlockId: new Map(
@@ -1085,12 +1042,11 @@ export function createPrintedContentsDocumentIndex(
     rootTitleByNode: new Map(
       (document.root.children ?? []).map((node) => [node, rootTitle(node)]),
     ),
-    sourceBytes,
-    sourceIndex: new SourceTextIndex(document.source),
-    sourceRegionHeadingIndexes: new Map(
-      document.headings.map((heading, index) => [heading.blockId, index]),
+    rootIndexByBlockId: new Map(
+      (document.root.children ?? []).flatMap((block, index) =>
+        block.blockId ? [[block.blockId, index] as const] : [],
+      ),
     ),
-    sourceSha256: hash(sourceBytes),
   });
 }
 
@@ -1291,7 +1247,7 @@ function recoveredMatchedSourceTitle(
   }
   if (
     dotLeader.test(bodyTitle) ||
-    /^\$?k\$?\s*习题(?:\s|$).*\$?k\$?$/iu.test(bodyTitle)
+    /^k\s*习题(?:\s|\d|$).*k$/iu.test(bodyTitle)
   ) {
     return sourceTitle;
   }
@@ -2090,7 +2046,6 @@ function reorderFromReliableLayout(
         blockId: `layout-order-${index}`,
         level: entry.referenceLevel,
         sourceTitle: entry.sourceTitle,
-        textFingerprint: "",
       }),
   );
   const layoutHeadingFacts = layoutHeadings.map(createHeadingMatchFacts);
@@ -2213,9 +2168,8 @@ export function hasReliableLayoutOrderInversion(
     Object.freeze({
       ...entry,
       range: Object.freeze({
-        end_byte: index + 1,
-        sha256: "",
-        start_byte: index,
+        start_block_index: index,
+        end_block_index: index,
       }),
     }),
   );
@@ -2354,7 +2308,6 @@ function recoverLayoutLogicalEntries(
         blockId: `layout-${index}`,
         level: entry.referenceLevel,
         sourceTitle: entry.sourceTitle,
-        textFingerprint: "",
       }),
   );
   const layoutHeadingFacts = layoutHeadings.map(createHeadingMatchFacts);
@@ -2492,12 +2445,12 @@ function recoverLayoutLogicalEntries(
     sourceEntry: ExtractedEntry,
     layoutEntry: Omit<ExtractedEntry, "range">,
   ): boolean => {
-    const hasMarkdownMathSyntax = (value: string): boolean =>
+    const hasLatexMarkup = (value: string): boolean =>
       /\$[^$\n]+\$|\\[A-Za-z]+(?:\s*\{|\b)/u.test(value);
     if (
       evidence?.source !== "native-pdf" ||
-      !hasMarkdownMathSyntax(sourceEntry.sourceTitle) ||
-      hasMarkdownMathSyntax(layoutEntry.sourceTitle)
+      !hasLatexMarkup(sourceEntry.sourceTitle) ||
+      hasLatexMarkup(layoutEntry.sourceTitle)
     ) {
       return false;
     }
@@ -2770,8 +2723,6 @@ interface DetectPrintedContentsInput {
   readonly documentIndex?: PrintedContentsDocumentIndex;
   readonly idFactory?: () => string;
   readonly layoutEvidence?: LayoutEvidence;
-  readonly sourcePath: string;
-  readonly sourceSha256: string;
 }
 
 interface CandidateWindow {
@@ -2794,8 +2745,6 @@ interface PrintedContentsDetectionContext {
   readonly layoutLevelByTitle: ReadonlyMap<string, readonly number[]>;
   readonly roots: readonly TransientDocumentNode[];
   readonly similarityIndex: TextSimilarityIndex;
-  readonly sourceBytes: Buffer;
-  readonly sourceIndex: SourceTextIndex;
   readonly titleOf: (node: TransientDocumentNode) => string;
 }
 
@@ -2804,12 +2753,8 @@ function createPrintedContentsDetectionContext(
 ): PrintedContentsDetectionContext {
   const documentIndex =
     input.documentIndex ?? createPrintedContentsDocumentIndex(input.document);
-  if (
-    documentIndex.document !== input.document ||
-    documentIndex.sourceSha256 !== input.sourceSha256
-  ) {
-    throw new Error("PRINTED_TOC_SOURCE_HASH_MISMATCH");
-  }
+  if (documentIndex.document !== input.document)
+    throw new Error("PRINTED_TOC_DOCUMENT_INDEX_MISMATCH");
   return Object.freeze({
     contextualTitles: repairableContextualTitles(input.layoutEvidence),
     documentIndex,
@@ -2820,8 +2765,6 @@ function createPrintedContentsDetectionContext(
     layoutLevelByTitle: layoutLevels(input.layoutEvidence),
     roots: input.document.root.children ?? [],
     similarityIndex: createTextSimilarityIndex(),
-    sourceBytes: documentIndex.sourceBytes,
-    sourceIndex: documentIndex.sourceIndex,
     titleOf: (node: TransientDocumentNode): string =>
       documentIndex.rootTitleByNode.get(node) ?? rootTitle(node),
   });
@@ -2830,7 +2773,7 @@ function createPrintedContentsDetectionContext(
 function discoverCandidateWindows(
   context: PrintedContentsDetectionContext,
 ): readonly CandidateWindow[] {
-  const { input, roots, sourceBytes, sourceIndex, titleOf } = context;
+  const { roots, titleOf } = context;
   const ranges: CandidateWindow[] = [];
   const explicitLabels = roots.flatMap((root, index) =>
     contentsTitle.test(titleOf(root).normalize("NFKC")) ? [index] : [],
@@ -2857,13 +2800,11 @@ function discoverCandidateWindows(
   for (let index = 0; index < searchLimit; index += 1) {
     if (index / Math.max(1, roots.length) > 0.5) break;
     const root = roots[index];
-    if (!root?.position) continue;
+    if (!root) continue;
     const seed = lineEntries({
       block: root,
       previousLevel: 0,
-      source: input.document.source,
-      sourceBytes,
-      sourceIndex,
+      blockIndex: index,
     });
     if (seed.length === 0) continue;
     let evidenceEntries = seed.length;
@@ -2874,13 +2815,11 @@ function discoverCandidateWindows(
       cursor += 1
     ) {
       const candidate = roots[cursor];
-      if (!candidate?.position) continue;
+      if (!candidate) continue;
       const extracted = lineEntries({
         block: candidate,
         previousLevel: 0,
-        source: input.document.source,
-        sourceBytes,
-        sourceIndex,
+        blockIndex: cursor,
       });
       if (extracted.length > 0) {
         evidenceEntries += extracted.length;
@@ -2911,8 +2850,7 @@ function estimateCandidateWindows(
   context: PrintedContentsDetectionContext,
   ranges: readonly CandidateWindow[],
 ): readonly (EstimatedCandidateWindow | undefined)[] {
-  const { contextualTitles, input, roots, sourceBytes, sourceIndex, titleOf } =
-    context;
+  const { contextualTitles, roots, titleOf } = context;
   return Object.freeze(
     ranges.map((range) => {
       const seenTitles = new Set<string>();
@@ -2923,7 +2861,7 @@ function estimateCandidateWindows(
         index += 1
       ) {
         const block = roots[index];
-        if (!block?.position) continue;
+        if (!block) continue;
         if (
           index > range.firstEntryIndex &&
           contentsTitle.test(titleOf(block).normalize("NFKC"))
@@ -2935,9 +2873,7 @@ function estimateCandidateWindows(
           block.type === "heading" ? normalizedTitle(titleOf(block)) : "";
         const printedRowsContinue = roots
           .slice(index + 1, index + 5)
-          .some((candidate) =>
-            hasPrintedPageLine(candidate, input.document.source),
-          );
+          .some((candidate) => hasPrintedPageLine(candidate));
         if (
           title &&
           seenTitles.has(title) &&
@@ -2951,21 +2887,14 @@ function estimateCandidateWindows(
           block,
           previousLevel: 0,
           repairableContextualTitles: contextualTitles,
-          source: input.document.source,
-          sourceBytes,
-          sourceIndex,
+          blockIndex: index,
         })) {
           if (entry.normalizedTitle) seenTitles.add(entry.normalizedTitle);
         }
       }
-      const start = roots[range.startIndex]?.position?.start.offset;
-      const end =
-        endIndex === undefined
-          ? undefined
-          : roots[endIndex]?.position?.end.offset;
-      return start === undefined || end === undefined
+      return endIndex === undefined
         ? undefined
-        : Object.freeze({ end, start });
+        : Object.freeze({ start: range.startIndex, end: endIndex });
     }),
   );
 }
@@ -2989,8 +2918,7 @@ function parseCandidateRegion(
   context: PrintedContentsDetectionContext,
   window: CandidateWindow,
 ): ParsedCandidateRegion {
-  const { contextualTitles, input, roots, sourceBytes, sourceIndex, titleOf } =
-    context;
+  const { contextualTitles, roots, titleOf } = context;
   const sourceEntries: ExtractedEntry[] = [];
   let candidateEndIndex = window.startIndex;
   let richContent = false;
@@ -3002,7 +2930,7 @@ function parseCandidateRegion(
     index += 1
   ) {
     const block = roots[index];
-    if (!block?.position) continue;
+    if (!block) continue;
     if (
       sourceEntries.length > 0 &&
       supplementalListTitle.test(titleOf(block).normalize("NFKC"))
@@ -3013,9 +2941,7 @@ function parseCandidateRegion(
       block.type === "heading" ? normalizedTitle(titleOf(block)) : "";
     const printedRowsContinue = roots
       .slice(index + 1, index + 5)
-      .some((candidate) =>
-        hasPrintedPageLine(candidate, input.document.source),
-      );
+      .some((candidate) => hasPrintedPageLine(candidate));
     const nextBlock = roots[index + 1];
     const nextBodyTitle =
       nextBlock?.type === "heading" ? normalizedTitle(titleOf(nextBlock)) : "";
@@ -3060,9 +2986,7 @@ function parseCandidateRegion(
       block,
       previousLevel: sourceEntries.at(-1)?.referenceLevel ?? 0,
       repairableContextualTitles: contextualTitles,
-      source: input.document.source,
-      sourceBytes,
-      sourceIndex,
+      blockIndex: index,
     });
     const previousEntry = sourceEntries.at(-1);
     const detachedPartSubtitle =
@@ -3078,23 +3002,16 @@ function parseCandidateRegion(
       roots.slice(index + 1, index + 5).some((candidate) => {
         const candidateTitle = titleOf(candidate);
         const candidateKind = inferPrintedHeadingEvidence(candidateTitle)?.kind;
-        return (
-          hasPrintedPageLine(candidate, input.document.source) ||
-          candidateKind === "chapter"
-        );
+        return hasPrintedPageLine(candidate) || candidateKind === "chapter";
       });
-    if (detachedPartSubtitle && previousEntry && block.position) {
+    if (detachedPartSubtitle && previousEntry) {
       const sourceTitle = `${plainTitle(previousEntry.sourceTitle)} ${plainTitle(titleOf(block))}`;
-      const endByte = sourceIndex.byteOffsetAt(block.position.end.offset);
       sourceEntries[sourceEntries.length - 1] = Object.freeze({
         ...previousEntry,
         normalizedTitle: normalizedTitle(sourceTitle),
         range: Object.freeze({
-          end_byte: endByte,
-          sha256: hash(
-            sourceBytes.subarray(previousEntry.range.start_byte, endByte),
-          ),
-          start_byte: previousEntry.range.start_byte,
+          start_block_index: previousEntry.range.start_block_index,
+          end_block_index: index,
         }),
         sourceTitle,
       });
@@ -3102,7 +3019,7 @@ function parseCandidateRegion(
       noiseBlocks = 0;
       continue;
     }
-    if (requiresPdfLineRepair(block, input.document.source)) {
+    if (requiresPdfLineRepair(block)) {
       requiresPdfEvidence = true;
     }
     if (containsRichContent(block)) richContent = true;
@@ -3130,11 +3047,11 @@ function recoverCandidateRegion(
   parsed: ParsedCandidateRegion,
   layoutOccurrences: Map<string, number>,
 ): RecoveredCandidateRegion {
-  const { input, layoutLevelByTitle, similarityIndex, sourceBytes } = context;
+  const { input, layoutLevelByTitle, similarityIndex } = context;
   const entries = [
     ...attachReliableLayoutPageIndexes(
       recoverLayoutLogicalEntries(
-        mergeDetachedSourceEntries(parsed.sourceEntries, sourceBytes),
+        mergeDetachedSourceEntries(parsed.sourceEntries),
         input.layoutEvidence,
         similarityIndex,
       ),
@@ -3218,13 +3135,9 @@ function indexCandidateHeadings(
   rangeIndex: number,
   estimatedWindows: readonly (EstimatedCandidateWindow | undefined)[],
 ): CandidateHeadingIndex {
-  const { factsFor, input, roots } = context;
-  const candidateEndOffset =
-    roots[recovered.candidateEndIndex]?.position?.end.offset ??
-    Number.POSITIVE_INFINITY;
-  const candidateStartOffset =
-    roots[recovered.window.startIndex]?.position?.start.offset ??
-    Number.NEGATIVE_INFINITY;
+  const { factsFor, input, documentIndex } = context;
+  const candidateEndIndex = recovered.candidateEndIndex;
+  const candidateStartIndex = recovered.window.startIndex;
   const eligibleHeading = (
     heading: NormalizedHeading,
     allowNumberedPageSuffix = false,
@@ -3234,11 +3147,11 @@ function indexCandidateHeadings(
       printedPageEvidence(heading.sourceTitle) === undefined);
   const laterHeadings = input.document.headings.filter(
     (heading) =>
-      (heading.position?.start.offset ?? Number.NEGATIVE_INFINITY) >
-        candidateEndOffset && eligibleHeading(heading, true),
+      (documentIndex.rootIndexByBlockId.get(heading.blockId) ?? -1) >
+        candidateEndIndex && eligibleHeading(heading, true),
   );
   const bodyHeadings = input.document.headings.filter((heading) => {
-    const start = heading.position?.start.offset ?? Number.NEGATIVE_INFINITY;
+    const start = documentIndex.rootIndexByBlockId.get(heading.blockId) ?? -1;
     const insideOtherPrintedWindow = estimatedWindows.some(
       (window, windowIndex) =>
         windowIndex !== rangeIndex &&
@@ -3248,8 +3161,8 @@ function indexCandidateHeadings(
     );
     return (
       !insideOtherPrintedWindow &&
-      (start < candidateStartOffset || start > candidateEndOffset) &&
-      eligibleHeading(heading, start > candidateEndOffset)
+      (start < candidateStartIndex || start > candidateEndIndex) &&
+      eligibleHeading(heading, start > candidateEndIndex)
     );
   });
   const laterHeadingFacts = Object.freeze(laterHeadings.map(factsFor));
@@ -3571,10 +3484,10 @@ interface CandidateRegionDecision {
   readonly boundaryConfidence: PrintedContentsCandidate["boundaryConfidence"];
   readonly canApplyBoundary: boolean;
   readonly diagnostics: readonly PrintedContentsDiagnostic[];
-  readonly endByte: number;
+  readonly endIndex: number;
   readonly matchConfidence: PrintedContentsCandidate["matchConfidence"];
   readonly matchedCount: number;
-  readonly startByte: number;
+  readonly startIndex: number;
 }
 
 function evaluateCandidateRegion(
@@ -3584,7 +3497,7 @@ function evaluateCandidateRegion(
   aligned: AlignedCandidateRegion,
   candidateIndex: number,
 ): CandidateRegionDecision | undefined {
-  const { roots, similarityIndex, sourceIndex } = context;
+  const { roots, similarityIndex } = context;
   const { candidateEndIndex, richContent, window } = recovered;
   const { laterHeadingFacts, laterHeadingIndexByBlockId, laterHeadings } =
     headingIndex;
@@ -3622,11 +3535,9 @@ function evaluateCandidateRegion(
       diagnostic("PRINTED_TOC_LOW_COVERAGE", `candidates/${candidateIndex}`),
     );
   }
-  const firstNode = roots[window.startIndex];
-  const candidateEnd = roots[candidateEndIndex] ?? firstNode;
-  if (!firstNode?.position || !candidateEnd?.position) return;
-  const startByte = sourceIndex.byteOffsetAt(firstNode.position.start.offset);
-  const endByte = sourceIndex.byteOffsetAt(candidateEnd.position.end.offset);
+  if (!roots[window.startIndex] || !roots[candidateEndIndex]) return;
+  const startIndex = window.startIndex;
+  const endIndex = candidateEndIndex;
   const recursInLaterHeadings = (entry: AlignedEntry): boolean => {
     const matchedBlockId = alignedBodyHeadingBlockId(entry);
     const matchedLaterIndex = matchedBlockId
@@ -3696,10 +3607,10 @@ function evaluateCandidateRegion(
     boundaryConfidence,
     canApplyBoundary: boundaryConfidence === "high" && entries.length >= 2,
     diagnostics: Object.freeze(diagnostics),
-    endByte,
+    endIndex,
     matchConfidence,
     matchedCount,
-    startByte,
+    startIndex,
   });
 }
 
@@ -3709,68 +3620,29 @@ function materializeCandidateRegion(
   aligned: AlignedCandidateRegion,
   decision: CandidateRegionDecision,
 ): PrintedContentsCandidate {
-  const { documentIndex, input, sourceBytes } = context;
+  const { input, roots } = context;
   const { requiresPdfEvidence } = recovered;
   const { alignment, entries } = aligned;
   const {
     boundaryConfidence,
     canApplyBoundary,
     diagnostics,
-    endByte,
+    endIndex,
     matchConfidence,
     matchedCount,
-    startByte,
+    startIndex,
   } = decision;
-  const sourceRegionEntries = entries
-    .filter(
-      (entry, index, values) =>
-        values.findIndex(
-          (candidate) =>
-            candidate.range.start_byte === entry.range.start_byte &&
-            candidate.range.end_byte === entry.range.end_byte,
-        ) === index,
-    )
-    .sort(
-      (left, right) =>
-        left.range.start_byte - right.range.start_byte ||
-        left.range.end_byte - right.range.end_byte,
-    );
-  let previousSourceRegionHeadingIndex = -1;
-  const sourceRegionHeadingIndexes = documentIndex.sourceRegionHeadingIndexes;
   const proposedRegion = canApplyBoundary
     ? Object.freeze({
-        applied: true,
-        disposition: "reference_only" as const,
-        entries: Object.freeze(
-          sourceRegionEntries.map((entry) => {
-            const bodyHeadingBlockId = alignedBodyHeadingBlockId(entry);
-            const matchedHeadingIndex = bodyHeadingBlockId
-              ? sourceRegionHeadingIndexes.get(bodyHeadingBlockId)
-              : undefined;
-            const retainsMatch =
-              matchedHeadingIndex !== undefined &&
-              matchedHeadingIndex > previousSourceRegionHeadingIndex;
-            if (retainsMatch) {
-              previousSourceRegionHeadingIndex = matchedHeadingIndex;
-            }
-            return Object.freeze({
-              ...(retainsMatch && bodyHeadingBlockId
-                ? { body_heading_block_id: bodyHeadingBlockId }
-                : {}),
-              range: entry.range,
-              reference_level: entry.referenceLevel,
-            });
+        applied: true as const,
+        kind: "printed_toc" as const,
+        block_ids: Object.freeze(
+          roots.slice(startIndex, endIndex + 1).map((block) => {
+            if (!block.blockId) throw new Error("PRINTED_TOC_BLOCK_ID_MISSING");
+            return block.blockId;
           }),
         ),
-        kind: "printed_toc" as const,
-        range: Object.freeze({
-          end_byte: endByte,
-          sha256: hash(sourceBytes.subarray(startByte, endByte)),
-          start_byte: startByte,
-        }),
         region_id: input.idFactory?.() ?? createOpaqueId("region"),
-        source_path: input.sourcePath,
-        source_sha256: input.sourceSha256,
       })
     : undefined;
   return Object.freeze({
@@ -3788,7 +3660,7 @@ function materializeCandidateRegion(
           ? "low"
           : "medium",
     diagnostics: Object.freeze(diagnostics.slice(0, 100)),
-    endByte,
+    endIndex,
     entryCount: entries.length,
     logicalEntries: Object.freeze(
       entries.map((entry) => {
@@ -3808,7 +3680,7 @@ function materializeCandidateRegion(
     matchConfidence,
     ...(proposedRegion ? { proposedRegion } : {}),
     requiresPdfEvidence,
-    startByte,
+    startIndex,
   });
 }
 
@@ -3822,27 +3694,14 @@ function finalizePrintedContentsDetection(
         right.entryCount - left.entryCount ||
         right.matchedHeadingCount - left.matchedHeadingCount ||
         right.alignment.bestScore - left.alignment.bestScore ||
-        left.startByte - right.startByte,
+        left.startIndex - right.startIndex,
     )[0];
   const canonicalRegionId = canonical?.proposedRegion?.region_id;
   const finalized = candidates.map((candidate) => {
     const isCanonical =
       canonicalRegionId !== undefined &&
       candidate.proposedRegion?.region_id === canonicalRegionId;
-    const proposedRegion =
-      candidate.proposedRegion && !isCanonical
-        ? Object.freeze({
-            ...candidate.proposedRegion,
-            entries: Object.freeze(
-              candidate.proposedRegion.entries.map((entry) =>
-                Object.freeze({
-                  range: entry.range,
-                  reference_level: entry.reference_level,
-                }),
-              ),
-            ),
-          })
-        : candidate.proposedRegion;
+    const proposedRegion = candidate.proposedRegion;
     return Object.freeze({
       ...candidate,
       canonical: isCanonical,

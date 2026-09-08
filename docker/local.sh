@@ -66,7 +66,7 @@ create_environment() {
   fi
   umask 077
   {
-    printf '%s\n' 'MIRAWIND_DATA_DIR=./data/development'
+    printf '%s\n' 'MIRAWIND_DATA_DIR=./data/library'
     printf '%s\n' 'MIRAWIND_PUBLIC_ORIGIN=http://127.0.0.1:4322'
     printf '%s\n' 'MIRAWIND_PASSKEY_RP_ID=127.0.0.1'
     printf '%s\n' 'MIRAWIND_ALLOWED_HOSTS=127.0.0.1,localhost'

@@ -4,7 +4,6 @@ import { relative, resolve, sep } from "node:path";
 
 import type { SafeDiagnostic } from "@/domain/errors";
 import type { CandidateTreeCrashPointInjector } from "../../application/candidate-durability";
-import type { TypographyProvenance } from "../../core/preparation/document-model";
 import {
   assembleCandidate,
   type CandidateAssemblyResult,
@@ -87,17 +86,13 @@ export async function buildCandidateVersion(input: {
     input.layout.root,
     `staging/${command.jobId}`,
   );
-  const configYamlPath = await resolveContainedPath(
+  const inputPath = await resolveContainedPath(
     input.layout.root,
-    command.configRelativePath,
+    command.inputRelativePath,
   );
-  const sourceRoot = await resolveContainedPath(
+  const resourceRoot = await resolveContainedPath(
     input.layout.root,
-    command.sourceRootRelativePath,
-  );
-  const draftRoot = await resolveContainedPath(
-    input.layout.root,
-    `books/${command.bookId}/draft`,
+    command.resourceRootRelativePath,
   );
   report(input.onStage, {
     completed: 0,
@@ -108,10 +103,11 @@ export async function buildCandidateVersion(input: {
   let safeDiagnostics: readonly SafeDiagnostic[] = [];
   const result = await assembleCandidate({
     bookId: command.bookId,
-    configRevision: command.configRevision,
-    configYamlPath,
+    sourceUpdatedAt: command.sourceUpdatedAt,
+    inputPath,
+    documentSha256: command.documentSha256,
     createdAtMs: input.createdAtMs,
-    draftRoot,
+    importId: command.importId,
     async materializePages(context) {
       if (
         context.compiled.identity.compiler_version !==
@@ -136,8 +132,9 @@ export async function buildCandidateVersion(input: {
         bookId: command.bookId,
         candidateDirectory: context.candidateDirectory,
         compiled: context.compiled,
-        config: context.config,
-        configRevision: command.configRevision,
+        bookDocument: context.bookDocument,
+        candidateId: command.candidateId,
+        sourceUpdatedAt: command.sourceUpdatedAt,
         files: context.files,
         onPageRendered(completed, total) {
           report(input.onStage, {
@@ -162,11 +159,6 @@ export async function buildCandidateVersion(input: {
         versionId: command.versionId,
       });
       safeDiagnostics = boundedDiagnostics(materialized.diagnostics);
-      const source = context.config.source as Readonly<Record<string, unknown>>;
-      const preprocessing = source.preprocessing as Readonly<
-        Record<string, unknown>
-      >;
-      const typography = preprocessing.typography as TypographyProvenance;
       await context.files.write(
         "preview/diagnostics.json",
         canonicalJson({ diagnostics: safeDiagnostics }),
@@ -175,9 +167,9 @@ export async function buildCandidateVersion(input: {
         "preview/preview-model.json",
         canonicalJson({
           compiler_version: context.compiled.identity.compiler_version,
-          boundaries: context.config.boundaries,
-          config_sha256: context.compiled.identity.config_sha256,
-          config_revision: command.configRevision,
+          boundaries: context.bookDocument.publishing.boundaries,
+          candidate_id: command.candidateId,
+          source_updated_at: command.sourceUpdatedAt,
           headings: context.compiled.headings.map((heading) => ({
             block_id: heading.block_id,
             display_level: heading.display_level,
@@ -185,8 +177,7 @@ export async function buildCandidateVersion(input: {
             number: heading.number,
             page_id: materialized.pageByHeading.get(heading.block_id) ?? null,
             source_number: heading.sourceNumber,
-            source_level: heading.source_level,
-            source_title: heading.source_title,
+            exclude_from_numbering: heading.exclude_from_numbering,
             starts_page: heading.starts_page,
             title: heading.title,
             title_markdown: heading.title_markdown,
@@ -197,9 +188,6 @@ export async function buildCandidateVersion(input: {
           })),
           renderer_version: context.compiled.identity.renderer_version,
           semantic_digest: context.compiled.identity.semantic_digest,
-          content_cleanup: preprocessing.content_cleanup,
-          source_sha256: context.compiled.identity.source_sha256,
-          typography,
           version: command.previewIdentity,
         }),
       );
@@ -227,8 +215,7 @@ export async function buildCandidateVersion(input: {
     },
     predecessorVersionId: command.capturedCurrentVersionId,
     ...(input.signal ? { signal: input.signal } : {}),
-    sourceId: command.sourceId,
-    sourceRoot,
+    resourceRoot,
     stagingDirectory,
     versionId: command.versionId,
   });

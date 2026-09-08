@@ -3,6 +3,7 @@ import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "astro/config";
 import { fileURLToPath } from "node:url";
+import { sandboxedPreviewRequests } from "./scripts/dev-preview-requests.ts";
 
 const schemaRoot = fileURLToPath(new URL("./docs/schemas", import.meta.url));
 const sourceRoot = fileURLToPath(new URL("./src", import.meta.url));
@@ -33,7 +34,7 @@ export default defineConfig({
   },
   vite: {
     cacheDir: viteCacheRoot,
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), sandboxedPreviewRequests()],
     resolve: {
       alias: [
         { find: "@/schemas", replacement: schemaRoot },

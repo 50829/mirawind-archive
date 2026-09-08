@@ -4,7 +4,7 @@ import {
   inferPrintedReferenceLevels,
   isLocalPartHeading,
 } from "./printed-contents";
-import { configuredHeadingTitle } from "./heading-title";
+import { splitSourceHeadingTitle } from "./heading-title";
 import type {
   NormalizedDocument,
   NormalizedHeading,
@@ -250,6 +250,11 @@ function indexHeadingGaps(
   ) => boolean;
 } {
   const gaps = new Array<HeadingGapSummary | undefined>(headings.length);
+  const rootIndexByBlockId = new Map(
+    roots.flatMap((root, index) =>
+      root.blockId ? [[root.blockId, index] as const] : [],
+    ),
+  );
   const textPrefix = new Uint32Array(headings.length);
   const headingIndexByBlockId = new Map(
     headings.map((heading, index) => [heading.blockId, index] as const),
@@ -261,8 +266,12 @@ function indexHeadingGaps(
     headingIndex < headings.length;
     headingIndex += 1
   ) {
-    const previousEnd = headings[headingIndex - 1]?.position?.end.offset;
-    const currentStart = headings[headingIndex]?.position?.start.offset;
+    const previousEnd = rootIndexByBlockId.get(
+      headings[headingIndex - 1]?.blockId ?? "",
+    );
+    const currentStart = rootIndexByBlockId.get(
+      headings[headingIndex]?.blockId ?? "",
+    );
     if (previousEnd === undefined || currentStart === undefined) {
       textPrefix[headingIndex] = textCount;
       continue;
@@ -273,17 +282,11 @@ function indexHeadingGaps(
     let ornamentalNodeCount = 0;
     while (rootCursor < roots.length) {
       const root = roots[rootCursor];
-      const position = root?.position;
-      if (
-        !root ||
-        !position ||
-        root.type === "heading" ||
-        position.start.offset < previousEnd
-      ) {
+      if (!root || root.type === "heading" || rootCursor <= previousEnd) {
         rootCursor += 1;
         continue;
       }
-      if (position.end.offset > currentStart) break;
+      if (rootCursor >= currentStart) break;
       const text = nodeText(root);
       nodeCount += 1;
       if (text.length > 0) textNodeCount += 1;
@@ -305,7 +308,7 @@ function indexHeadingGaps(
       previous: NormalizedHeading | undefined,
       current: NormalizedHeading,
     ): boolean {
-      if (!previous || !previous.position || !current.position) return true;
+      if (!previous) return true;
       const previousIndex = headingIndexByBlockId.get(previous.blockId);
       const currentIndex = headingIndexByBlockId.get(current.blockId);
       if (
@@ -1072,28 +1075,25 @@ function portableProposal(
     if (!heading || heading.blockId !== node.block_id) {
       throw new Error("DOCUMENT_STRUCTURE_HEADING_ALIGNMENT_INVALID");
     }
-    const title = configuredHeadingTitle({
-      document,
-      heading,
-      ...(node.title_override ? { titleOverride: node.title_override } : {}),
-    });
+    const title = splitSourceHeadingTitle(
+      node.title_override ?? heading.sourceTitle,
+    );
     return Object.freeze({
       block_id: node.block_id,
       display_level: node.display_level,
       include_in_toc: node.include_in_toc,
-      ...(title.number && title.markdown !== title.number
+      ...(title.number && title.title !== title.number
         ? { source_number: title.number }
         : {}),
       starts_page: node.starts_page,
-      title_markdown: title.markdown,
+      title_markdown: title.title || heading.sourceTitle,
     });
   });
   return Object.freeze({ boundaries, nodes: Object.freeze(portableNodes) });
 }
 
 /**
- * Produces a portable initial `book.yaml` structure without mutating or
- * reordering the transient document tree.
+ * Infers initial heading settings without reordering the document.
  */
 export function proposeDocumentStructure(
   document: NormalizedDocument,

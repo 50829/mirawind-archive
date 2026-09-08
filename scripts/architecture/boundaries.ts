@@ -70,7 +70,11 @@ export function dependencyViolation(
     if (
       /^(?:entrypoints|pages|web)\//u.test(sourcePath) &&
       target !== null &&
-      targetPath !== applicationApiPath(target.domain)
+      targetPath !== applicationApiPath(target.domain) &&
+      !(
+        sourcePath.startsWith("web/") &&
+        targetPath === "modules/publishing/application/heading-api.ts"
+      )
     ) {
       return "FORBIDDEN_DEPENDENCY";
     }

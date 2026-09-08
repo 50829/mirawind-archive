@@ -24,7 +24,7 @@ export interface ImportUploadResult {
 }
 
 export interface StoreImportUploadOptions {
-  readonly bookId?: number | Promise<number | undefined>;
+  readonly formValidated?: Promise<void>;
   readonly bytes: AsyncIterable<Uint8Array>;
   readonly expiresAtMs: number;
   readonly idempotencyKey: string;
@@ -152,10 +152,9 @@ export class ImportUploadService {
       renamed = true;
       await syncDirectory(directory);
       await syncDirectory(this.layout.uploadDirectory);
-      const bookId = await options.bookId;
+      await options.formValidated;
       const result = withImmediateTransaction(this.database, () => {
         const importRecord = this.imports.createUploaded({
-          ...(bookId === undefined ? {} : { bookId }),
           expiresAtMs: options.expiresAtMs,
           id: importId,
           nowMs,
@@ -165,7 +164,6 @@ export class ImportUploadService {
           uploadSizeBytes: written.sizeBytes,
         });
         const job = this.jobs.create({
-          ...(bookId === undefined ? {} : { bookId }),
           idempotency: {
             key: options.idempotencyKey,
             operation: idempotencyOperation,

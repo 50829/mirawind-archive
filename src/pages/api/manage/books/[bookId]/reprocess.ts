@@ -41,8 +41,8 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
   const profile = value.profile;
   if (
     (profile !== "verbatim-v1" && profile !== "zh-smart-v2") ||
-    !Number.isSafeInteger(value.expected_config_revision) ||
-    Number(value.expected_config_revision) < 1
+    !Number.isSafeInteger(value.expected_updated_at) ||
+    Number(value.expected_updated_at) < 0
   ) {
     throw new SafeApplicationError(
       "REQUEST_BODY_INVALID",
@@ -50,18 +50,15 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
       400,
     );
   }
-  const queued = await publishingDraftActions.queueSourceReprocess({
+  const queued = publishingDraftActions.queueSourceReprocess({
     bookId,
     database,
-    expectedConfigRevision: Number(value.expected_config_revision),
+    expectedUpdatedAt: Number(value.expected_updated_at),
     layout: await getRuntimeStorageLayout(),
     nowMs: Date.now(),
     profile: profile as TypographyProfile,
   });
   const headers = new Headers();
   applyResponsePolicy(headers, "private-api");
-  return Response.json(
-    { job_id: queued.job.id, state: queued.job.state },
-    { headers, status: 202 },
-  );
+  return Response.json(queued, { headers, status: 202 });
 };

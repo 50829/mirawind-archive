@@ -1,28 +1,22 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { storeMultipartImport } from "@/http/multipart/import-form";
 import { m1ImportExpiryMs } from "@/modules/publishing/application/publishing-api";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
 
 describe("streaming multipart import form", () => {
-  it("accepts exactly one ZIP stream and an order-independent target book field", () =>
+  it("accepts exactly one ZIP stream for a new book", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
-      const book = new DraftRepository(database).createBook({
-        nowMs: 1,
-        title: "Existing book",
-      });
       const form = new FormData();
       form.append(
         "file",
         new Blob(["PK streamed"], { type: "application/zip" }),
         "unsafe/../upload.zip",
       );
-      form.append("target_book_id", String(book.id));
       const request = new Request("http://localhost/api/manage/imports", {
         body: form,
         method: "POST",
@@ -35,7 +29,7 @@ describe("streaming multipart import form", () => {
       });
 
       expect(result.import).toMatchObject({
-        bookId: book.id,
+        bookId: null,
         expiresAtMs: m1ImportExpiryMs,
         originalName: "upload.zip",
         state: "uploaded",
@@ -76,7 +70,7 @@ describe("streaming multipart import form", () => {
       ).toEqual({ count: 0 });
     }));
 
-  it("treats the empty optional target emitted by an HTML form as omitted", () =>
+  it("rejects an extra field after the file without leaving an upload", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const form = new FormData();
       form.append(
@@ -85,19 +79,39 @@ describe("streaming multipart import form", () => {
         "upload.zip",
       );
       form.append("target_book_id", "");
-      const result = await storeMultipartImport({
-        database,
-        idempotencyKey: "multipart-empty-target-001",
-        layout: dataRoot.layout,
-        request: new Request("http://localhost/api/manage/imports", {
-          body: form,
-          method: "POST",
+      await expect(
+        storeMultipartImport({
+          database,
+          idempotencyKey: "multipart-empty-target-001",
+          layout: dataRoot.layout,
+          request: new Request("http://localhost/api/manage/imports", {
+            body: form,
+            method: "POST",
+          }),
         }),
-      });
+      ).rejects.toMatchObject({ code: "INVALID_MULTIPART" });
+      expect(await readdir(dataRoot.layout.uploadDirectory)).toEqual([]);
+    }));
 
-      expect(result.import).toMatchObject({
-        bookId: null,
-        state: "uploaded",
-      });
+  it("rejects a truncated multipart stream and completes cleanup", () =>
+    withMigratedTestDatabase(async ({ database }, dataRoot) => {
+      await expect(
+        storeMultipartImport({
+          database,
+          layout: dataRoot.layout,
+          idempotencyKey: "truncated-multipart-001",
+          request: new Request("http://localhost/api/manage/imports", {
+            method: "POST",
+            headers: {
+              "Content-Type": "multipart/form-data; boundary=fixture",
+            },
+            body: '--fixture\r\nContent-Disposition: form-data; name="file"; filename="book.zip"\r\nContent-Type: application/zip\r\n\r\nPK incomplete',
+          }),
+        }),
+      ).rejects.toMatchObject({ code: "INVALID_MULTIPART" });
+      expect(await readdir(dataRoot.layout.uploadDirectory)).toEqual([]);
+      expect(
+        database.prepare("SELECT COUNT(*) AS count FROM imports").get(),
+      ).toEqual({ count: 0 });
     }));
 });

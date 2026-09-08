@@ -1,438 +1,165 @@
-# M1 architecture: MinerU public publishing
+# Mirawind Publishing Architecture
 
-- Status: Implemented; publishing candidate and maintenance ownership updated through 009
-- Date: 2026-07-31
-- Scope: M0 foundations required by the first MinerU vertical slice, plus M1 import,
-  preview, compile, search, publish, read, and original ZIP download
-- Governing decisions: D-019～D-025, D-042～D-124
+- Current authority: constitution 4.1.1 and D-138/D-139.
+- Body IR v1, manifest v4, version marker v4, database baseline `mirawind-content-ir-v1`.
+- Detailed save and content contract: [Structured Content IR](structured-content-ir.md).
+- Historical feature specifications describe their original milestones; their Markdown/config-revision
+  storage contracts do not apply to this runtime. The management OpenAPI contract is maintained in
+  `specs/001-mineru-public-publishing/contracts/openapi.yaml`.
 
-## 1. System boundary
+## Runtime Boundary
 
-M1 is one deployable application on one Linux host. It has two long-running processes from
-the same codebase and two persistence mechanisms:
+One Linux host runs one Astro Web process and one worker from the same codebase. SQLite WAL
+and a private local filesystem are the only coordination and persistence mechanisms. The worker
+executes one bounded heavy task at a time in an interruptible child process. No Redis, separate
+API service, object store, second database or multiple application instances are required.
 
-```mermaid
-flowchart LR
-    B[Browser] -->|HTTPS| P[Caddy or reverse proxy]
-    P --> W[Astro Web process]
-    W --> DB[(SQLite WAL)]
-    W --> FS[(Persistent book storage)]
-    W -->|enqueue and inspect| DB
-    K[Worker process] -->|lease jobs and write indexes| DB
-    K -->|staging and immutable versions| FS
-    K --> C[Per-job child process]
-```
+Web owns HTTP, sessions, authorization, response headers, streaming uploads and task submission.
+The worker owns document ingestion, content changes, compilation, rendering, indexing and recovery.
+Reader requests never parse a book or generate its assets.
 
-The Web process owns HTTP, authentication, authorization, cache and indexing headers, upload
-streaming, previews, task control, and published reads. The worker owns expensive import and
-build work. SQLite and the persistent filesystem are the only cross-process coordination
-surfaces.
+Development and production use the same packages and application code. Development login bypass
+requires the explicit launcher trust flag, development mode and an entirely loopback origin/Host
+configuration. Production always uses the real administrator session. Automated tests use the
+authenticated policy, not a third product mode. Process bundles explicitly compile production JSX
+so the build shell's `NODE_ENV` cannot select a React helper absent from the runtime environment.
 
-M1 does not introduce Redis, an external queue, object storage, a separate API service, a
-second database, or multiple Web/worker instances.
+Modules are Publishing, Reader, Catalog and Identity. Reader depends on Publishing's narrow
+application APIs; Publishing delegates catalog presentation and deletion policy to Catalog.
+Identity is independent. Imports within an ownership package are relative; crossings use `@/`
+and the target module's declared application API. The browser shares heading calculation only
+through Publishing's pure `application/heading-api.ts` entry point.
 
-The monolith is organized by `publishing`, `reader`, `catalog` and `identity` business
-modules. Both file and aggregated module dependency graphs must remain acyclic; the current
-module direction is Reader -> Publishing -> Catalog, with Identity independent. Cross-module
-calls use only declared application surfaces. Catalog owns presentation and deletion policy,
-while Publishing interprets version artifacts and invokes Catalog's narrow presentation or
-cleanup operations.
+## Authority And Storage
 
-Source dependency notation follows ownership rather than a repository-wide alias rule. Each
-`src/modules/<domain>/` tree is one package; every other direct source tree is one package, and
-direct files below `src/` form `src-root`. Imports inside one package use the shortest relative
-specifier. Cross-package imports use `@/`, while cross-business-module and entrypoint access can
-target only `application/<domain>-api.ts`. The architecture graph resolves both forms before
-checking layers, coupling and file/module cycles. `@/schemas/*` is the explicit exception that
-maps to authoritative `docs/schemas/` data. Tests and scripts remain separate support-code trees.
-
-Current first-party runtime files, types and functions use semantic names rather than `V1`,
-`V2` or `legacy` history. Numeric versions remain mandatory in persisted schemas, frozen
-compiler/renderer/profile identities, vendor filenames and offline reference data. A rename
-does not leave a forwarding export or alternate parser.
-
-For local preview, D-098 adds a repository launcher and a Compose override, not a new
-runtime topology. `./docker/local.sh` manages the same separate Web and worker processes as
-one `mirawind-local` Compose project, publishes Web only on `127.0.0.1:4321`, and omits
-Caddy for localhost HTTP. The existing production Compose and HTTPS proxy remain the
-authoritative deployment boundary.
-
-## 2. Authority and derived data
-
-| Data                     | Authority                          |                       Mutable? |          Rebuildable? |
-| ------------------------ | ---------------------------------- | -----------------------------: | --------------------: |
-| Markdown                 | Imported source                    |   Only by a new import/version |                    No |
-| `book.yaml`              | Portable publishing configuration  | Through atomic config revision |                    No |
-| Original MinerU ZIP      | Registered original file           | No, replace with a new version |                    No |
-| AST                      | Compiler memory                    |              No persisted copy |                   Yes |
-| `document-manifest.json` | Derived version manifest           |                      Immutable |                   Yes |
-| HTML and reading assets  | Derived version output             |                      Immutable |                   Yes |
-| FTS5 rows                | Derived version index              |                 Version-scoped |                   Yes |
-| Book presentation row    | Derived bounded display projection |                 Version-scoped |                   Yes |
-| Job/session/book state   | SQLite                             |                  Transactional | Not solely from books |
-
-`book.yaml`, manifest and the internal `version.json` complete marker use independent
-schemas in `docs/schemas/`. SQLite may cache metadata needed for routing and queries, but it
-must not become a second editable copy of publishing configuration.
-
-## 3. Persistent layout
+`docs/schemas/book.schema.json` is the single body schema. Generated TypeScript types and
+Publishing's semantic validator cover ordered and nested blocks, inline formatting, stable IDs,
+resource references and cross-field constraints. A heading is a body block, not a separate mutable
+TOC record. Numbering, roles, navigation, page plans and search are derived.
 
 ```text
-data/
-├── db/
-│   └── mirawind.sqlite
-├── books/
-│   └── <book_id>/
-│       ├── draft/
-│       │   ├── source/<source_id>/
-│       │   ├── originals/<file_id>
-│       │   ├── configs/<revision>/book.yaml
-│       ├── quarantine/
-│       │   └── <version_id>/
-│       └── versions/
-│           └── <version_id>/
-│               ├── version.json
-│               ├── book.yaml
-│               ├── document-manifest.json
-│               ├── source/
-│               │   ├── main.md
-│               │   └── resources/
-│               ├── originals/
-│               │   └── <uploaded-mineru.zip>
-│               └── published/
-│                   ├── pages/
-│                   └── assets/
-├── staging/
-│   └── <job_id>/
-└── tmp/
-    └── uploads/
-        └── <upload_id>.part
+<data-root>/
+  db/mirawind.sqlite{,-wal,-shm}
+  books/<book-id>/
+    draft/
+      book.json
+      import.json
+      import-source.json
+      import-artifact.json
+      views/<updated_at>/{view.json,index.json,blocks.ndjson,analysis.json}
+      saves/<job-id>/
+      candidates/<candidate-id>/{book.json,resources.json,original.json,analysis.json}
+    assets/<resource-id>.<extension>
+    originals/<file-id>
+    versions/<version-id>/
+      book.json
+      version.json
+      document-manifest.json
+      assets/
+      originals/
+      preview/
+      published/
+      derived/
+    quarantine/
+  staging/<job-id>/
+  tmp/uploads/
 ```
 
-`staging` and `versions` must share a filesystem so their final rename is atomic. Version
-directories are never directly exposed as a static Web root. `version.json` records the
-compiler version, schema versions, config revision, build time, manifest hash, and a complete
-build marker.
-
-The configured storage root is canonical and cannot itself be a symlink; managed database,
-book, temporary and upload directories are private non-symlink directories on that same
-filesystem. Persisted internal relative paths use one NFC POSIX form and reject absolute,
-drive-relative, backslash, control, empty, repeated and dot components. Existing-file reads and
-permanent removals also verify canonical parents so `O_NOFOLLOW` on a leaf cannot be bypassed by
-an intermediate symlink. Atomic writes remove their exclusive temporary sibling on every
-pre-rename failure.
-
-## 4. Core SQLite responsibilities
-
-The concrete schema belongs in the M1 data model, but it must represent:
-
-- the unique administrator identity and authentication library tables;
-- books and the sole `current_version_id`;
-- immutable book versions with `ready`, `published`, `superseded`, `failed`, and `corrupt`
-  lifecycle states; active builds exist only as jobs plus staging directories;
-- immutable job attempts with a closed operation identity, authoritative `book_id` once
-  assigned, leases, heartbeat, bounded progress, captured inputs and terminal outcome;
-- draft candidate attempts that bind one source/config revision, build job and prospective
-  immutable version;
-- FTS5 trigram rows scoped by book, version, page, and block;
-- a small normalized title/author/heading table for one- and two-character fallback;
-- one bounded `book_version_presentations` row per immutable version, derived from its
-  validated `book.yaml` and manifest and committed atomically with ready/search rows;
-- an audit trail for bootstrap, recovery, publish, rollback, visibility, and Passkey changes.
-
-Search queries must join or otherwise enforce both book visibility and
-`books.current_version_id`. Committed `ready`, old, or orphaned FTS rows must never become
-public results.
-
-The public `/library` and `/books/:bookKey` routes read only current public presentation
-rows. Draft title caches and administrator lifecycle state never enter cacheable HTML;
-`/api/manage/library` adds them after authorization with `private, no-store`. Numeric book
-keys redirect only after resolving and authorizing the current projection.
-
-## 5. Authentication and authorization
-
-Authentication uses a maintained authentication library with database sessions, the Passkey
-plugin, and password fallback. The public runtime permanently disables sign-up.
-
-Authentication policy is mode-closed. A controlled local launcher may explicitly request a synthetic
-request-local sole-admin session only in development mode when public origin and every allowed Host are
-loopback values. Container-internal wildcard listening used by Docker NAT is not an authentication input;
-the local Compose contract separately fixes the published host listener to `127.0.0.1`. Test and production
-modes never take this branch, even when a built server is reached through localhost or carries the marker;
-they require a Better Auth session for every management representation and mutation. The synthetic
-development session is derived from the initialized installation row and does not create a default
-credential or persisted session.
-
-The offline CLI:
-
-1. creates the sole administrator if none exists;
-2. reads secrets from a TTY rather than arguments, environment, or logs;
-3. uses the authentication library to create the password account;
-4. writes the resulting user ID as the only authorized administrator.
-
-The Astro middleware resolves sessions into request-local state. Resource services then apply
-authorization:
-
-- public current book content: anonymous allowed;
-- draft/private content and all administration: sole administrator only;
-- an anonymous request for a private or nonexistent book resource: indistinguishable `404`;
-- API authentication failure: JSON `401`; authenticated non-owner: `403`.
-
-Passkey registration, rename, and deletion require a real session created by server-side
-authentication within the previous five minutes. Fallback passwords are 16–128 characters.
-Deleting the final Passkey additionally verifies that password during the operation.
-Offline complete recovery sets a new password, revokes sessions, and deletes all Passkeys
-without exposing an HTTP recovery endpoint.
-
-Formal sessions and their cookies last 90 days and roll forward after 7 days of activity. Password
-login explicitly remembers the device. The five-minute freshness boundary remains independent from
-the longer session lifetime.
-
-## 6. Upload and hostile archive handling
-
-The Web process streams uploads to a uniquely created temporary file and counts actual bytes.
-It never buffers a complete ZIP in memory. After the upload reaches durable storage, it
-creates a durable import job.
-
-Before and during extraction, the worker must:
-
-- treat `/`, `\`, drive letters, UNC prefixes, NUL/control characters, `.`, `..`, empty
-  components, Unicode normalization and Unicode case-fold collisions as security-relevant;
-- convert accepted entry names to one internal POSIX-relative representation;
-- reject absolute paths, traversal, duplicate normalized paths, symlinks, hardlinks, devices,
-  FIFOs, sockets, encrypted entries, multi-disk archives, and unsupported compression;
-- keep every open/write operation beneath a pre-opened unique staging root;
-- enforce D-065～D-075 against actual bytes, entries, pixels, components, paths, elapsed
-  time, and expansion ratio;
-- read image metadata under decoder limits before any full decode;
-- terminate and remove the entire staging root on any violation.
-
-ZIP inspection records normalized path, entry type, compression, sizes, signature, encryption
-flags and platform attributes. Extraction rereads the directory and compares that complete
-identity before creating each target; replacing or changing the archive between passes fails and
-removes the incomplete extraction tree. File/directory prefix checks use bounded prefix metadata
-rather than scanning every registered path.
-
-The original uploaded ZIP is copied into the immutable version only after its stream hash and
-size are known. The normalized source tree retains only the main Markdown and referenced
-resources needed to rebuild the public book; intermediate MinerU debug artifacts do not enter
-the runtime source tree.
-
-## 7. Main Markdown selection
-
-The worker recursively enumerates ordinary `.md` files after safe extraction. It ignores
-platform junk only for candidacy, not resource-limit counting.
-
-Candidate scoring uses:
-
-- exact `full.md` and expected MinerU companion files;
-- `<stem>.md` patterns from CLI packages;
-- referenced-resource integrity relative to the candidate directory;
-- non-empty Markdown and parse diagnostics;
-- evidence that candidates belong to one book rather than a multi-book bundle.
-
-A unique error-free high-confidence candidate proceeds automatically. A generic single
-Markdown requires administrator confirmation. Multiple book roots or ambiguous high-value
-candidates stop before preview. The chosen Markdown's directory is the resource base.
-
-## 8. Prepare and candidate pipeline
-
-The bounded worker chain performs:
-
-1. safe extraction and candidate discovery;
-2. Markdown parsing and sanitized raw-HTML handling;
-3. transient AST and normalized block tree creation;
-4. stable block ID assignment or reliable inheritance;
-5. automatic TOC and page-boundary suggestions;
-6. an atomic draft source plus `book.yaml` revision;
-7. one `build_candidate` compilation into a single `CompiledBook` and ordered streamed pages;
-8. preview and public ReaderShell variants, KaTeX, code highlighting, resource variants,
-   manifest, search spool and bounded presentation projection from that same compilation;
-9. schema, link, hierarchy, page, resource, checksum, search and file-closure validation;
-10. durable immutable version rename followed by atomic candidate/version/search/presentation
-    registration.
-
-Raw HTML is not trusted. A maintained sanitizer must use an explicit allowlist for semantic
-elements and safe attributes, remove scripts/event handlers, reject unsafe URL protocols,
-and route accepted local resources through the versioned resource map.
-
-The preview reads the ready candidate version; publishing does not compile or render it again.
-The administrator cannot reorder body content in M1. TOC inclusion changes navigation only.
-`display_title`, `display_level`, `role`, and `starts_page` never rewrite the imported
-Markdown.
-
-## 9. Atomic publication
-
-Candidate creation and publication use two explicit transactions:
-
-1. `build_candidate` captures the base `current_version_id`, source and config revision;
-2. it fully builds and validates staging, syncs files, atomically renames to
-   `versions/<version_id>` and syncs the parent;
-3. one immediate transaction creates the `ready` version, candidate result, bounded
-   presentation and version-scoped FTS rows, validates their identities and completes the job;
-4. a later publish request performs no document processing; one short immediate transaction
-   checks the captured source/config/base version and ready projection, changes only version
-   states plus `books.current_version_id` and the frozen current alias, and records publication.
-
-There is no filesystem current pointer. Public version-specific routes must not expose a
-`ready` version merely because its directory exists.
-
-## 10. Worker and recovery
-
-M1 runs one worker and one active import/build job globally. Job claims use an atomic SQLite
-lease, a 10-second heartbeat, and a 60-second expiry. A job executes in a child process so the
-worker can terminate the whole process tree at the 30-minute limit. Cancellation or timeout
-first requests cooperative shutdown; after a fixed 10-second grace period the worker force
-terminates the task process group and waits for confirmed closure before committing terminal
-state.
-
-On restart:
-
-- expired `running` jobs become `interrupted`;
-- incomplete staging is cleaned;
-- an infrastructure-interrupted job may restart from the preserved ZIP once;
-- validation, limit, content, and second-interruption failures require manual retry;
-- `ready` versions remain unpublished until an administrator repeats the publish action.
-
-The durable queue contains only user-initiated import, draft preparation, candidate build and
-permanent deletion work. After restart recovery, the worker drains that FIFO before running
-one internal storage reconciliation and retention pass. Reconciliation verifies and safely
-recovers current versions; retention removes eligible old versions and quarantine entries.
-Neither operation creates a task row or child-process command. `purge_book` still owns one
-permanent deletion. Once a task belongs to a book, `jobs.book_id` is its only ownership scope;
-status and retry do not infer meaning through import/source/version joins. The generic job
-repository changes only task rows. Candidate terminalization/retry belongs to the Publishing
-candidate use case, and deletion terminalization/retry belongs to Catalog; composition
-coordinates each subject row and task row in one immediate transaction.
-
-Worker composition has one path for frozen input capture, isolated attempt execution,
-terminal completion and expired-lease recovery. Bootstrap, the serial claim loop and worker
-health reporting are separate composition responsibilities. Child IPC dispatches the closed
-task-kind union through an exhaustive registry; task handlers do not create a second terminal
-state path. Server routes likewise use focused Catalog, Publishing, Reader and Identity
-composition roots instead of a shared facade. Historical maintenance kinds remain only in the
-current immutable SQLite baseline; startup retires active rows and queue operations exclude
-them until the next approved schema clean switch.
-
-Catalog owns the book visibility barrier, ordinary book row and retained deletion tombstone.
-Publishing owns jobs, candidates, imports, sources, configs, originals, versions and search
-rows. Catalog requests Publishing cleanup through a narrow application port rather than
-writing those tables. `book_version_presentations` likewise has one Catalog SQLite insert and
-version-scoped mutation path used by candidate registration, reconciliation and retained-version
-cleanup; Catalog deletion owns bulk removal for a deleted book.
-
-Startup reconciliation inventories staging, version directories, version rows, and current
-pointers. Unreferenced completed directories move to quarantine and are deleted after 24
-hours. A missing/corrupt current version atomically rolls back to the newest verified
-published predecessor; without one, only that book returns `503`.
-
-## 11. Published read path
-
-A reading request:
-
-1. resolves the book and authorization;
-2. reads `current_version_id` once;
-3. derives the immutable version path;
-4. reads pre-generated HTML and response metadata; immutable manifests may be reused from a
-   bounded in-process cache keyed by version and manifest hash;
-5. returns without parsing, rendering, image processing, or indexing.
-
-The HTML references assets with a version ID or content hash so one page cannot mix resource
-versions. Old published assets may remain accessible while the book is public to support
-in-flight requests, but all historical resources become unauthorized when the book becomes
-private.
-
-## 12. Response policy matrix
-
-| Response                       |          Anonymous | Cache-Control                                      |            Search indexing |
-| ------------------------------ | -----------------: | -------------------------------------------------- | -------------------------: |
-| Public HTML                    |            Allowed | `public, max-age=0, must-revalidate` + strong ETag |                    Allowed |
-| Public versioned reading asset |            Allowed | `private, max-age=31536000, immutable`             |                   Via page |
-| Public original download       |            Allowed | `private, no-store`                                | `X-Robots-Tag: noindex...` |
-| Draft/private resource         |    Hidden as `404` | `private, no-store`                                |                  Forbidden |
-| Login/manage/private API       | Admin or auth flow | `private, no-store`                                |                  Forbidden |
-| Alias redirect                 |  As target permits | `no-store`                                         |      Canonical target only |
-| Missing/hidden route           |              `404` | `no-store`                                         |                  Forbidden |
-| Hashed site JS/CSS/font        |            Allowed | public one-year immutable                          |                Not content |
-
-Authorization runs before conditional ETag or Range handling. Public HTML cannot vary by
-administrator session; private controls load through non-cacheable authenticated endpoints.
-
-Downloads use safe `Content-Disposition: attachment`, UTF-8 and ASCII filenames, exact
-content type/length, `nosniff`, strong content hash ETag, and byte ranges. Every range request
-rechecks current visibility.
-
-## 13. Search
-
-M1 uses FTS5 trigram with `detail=full` over normalized visible text. Query input receives the
-same NFC/newline normalization, FTS5 literal-phrase encoding, and SQL parameter binding.
-
-- 3+ Unicode code points: search metadata, headings, and body.
-- 1–2 code points: bounded scan of book title, author, and current-version heading rows only.
-- no full-body `LIKE`, `unicode61` Chinese primary index, native word-segmentation extension,
-  or body unigram/bigram table in M1.
-
-The UI states the short-query scope. Result URLs include book, page, and block identity.
-
-## 14. Observability
-
-Structured events include request/job IDs, book/version IDs, phase, durations, byte/entry
-counts, exit category, and publish/recovery transitions. They exclude credentials, cookies,
-Passkey material, full Markdown, private notes, and unsanitized archive names.
-
-Required operational views:
-
-- queued/running task counts and oldest queued age;
-- worker lease, heartbeat and strict health schema status;
-- current/recent attempt total and contiguous phase duration;
-- nullable task child-process-tree peak RSS and sampling availability;
-- interrupted/failed task transitions and safe failure category;
-- staging/quarantine/version disk usage;
-- publication rollback and startup reconciliation events;
-- read latency p50/p95/p99 and response status;
-- FTS build size/time and query latency by short/normal branch.
-
-The worker is the sole writer of private `worker-health.json` schema v2. It atomically
-combines the latest WAL checkpoint, queue snapshot and current/recent attempt. Web rejects
-old unversioned, unknown, malformed or oversized snapshots as unavailable. Observation
-failure never changes task or publication state; RSS `null` means unavailable rather than
-zero. State changes are coalesced for one second, active refresh is at most every five
-seconds and idle refresh is at most every 60 seconds.
-
-## 15. Performance and fixture gates
-
-The uncached origin response for a public reading page must remain at or below 300 ms p95 on
-the reference single-server deployment. The gate measures request handling only; build time
-is reported separately and never blocks the published read path.
-
-M1 acceptance uses:
-
-- three registered, Git-ignored local MinerU 3.4.4 ZIP fixtures supplied by the
-  administrator, including 583-page and 441-page representative large books plus one
-  97-page compatibility book, identified in tracked evidence only by opaque ID, MinerU
-  version, size and SHA-256;
-- Cloud `full.md`, CLI `<stem>.md`, generic single Markdown, ambiguous multi-Markdown, and
-  multi-book fixtures;
-- missing/cross-directory resources and raw-HTML fixtures;
-- traversal, link/special-file, duplicate-path, malformed archive, ZIP bomb, path, image,
-  count, size, and timeout boundary fixtures;
-- publication crash points before/after rename, FTS transaction, and current pointer commit;
-- Chinese search fixtures from `docs/research/sqlite-fts5-chinese-short-query.md`;
-- a 500-page synthetic stress fixture that provides a repeatable ordinary-CI pressure
-  baseline without replacing the representative real large-book fixtures.
-
-The final benchmark records import time, peak worker memory, extracted size, index
-size/build time, idle and concurrent-build read percentiles, and normal/short search
-percentiles for all three real fixtures and the stress fixture in
-`docs/audits/m1-performance-report.md`. Every measured p95 passed its release gate.
-
-## 16. Deferred from M1
-
-- EPUB import
-- highlighter selection/range and exact offset semantics
-- notes, annotations, bookmarks, progress, and cross-device reading settings
-- chapter body reordering and page alias editing
-- complete library/folder management, recycle bin, homepage, and cover design
-  (historical M1 deferral; D-107 later approved irreversible single-book deletion without a
-  recycle bin)
-- Chinese two-character body search beyond title/author/heading fallback
+The mutable `draft/book.json` owns body, metadata, publishing settings and `updated_at`. SQLite owns
+permissions, task attempts, resource integrity records and the only current publication pointer,
+`books.current_version_id`. Permissions and private reading state never advance the body timestamp.
+Source ZIPs are immutable evidence, not a second editable body.
+
+All managed paths are canonical, private and symlink-safe. Staging and final directories share a
+filesystem. File digests belong to storage integrity and immutable publication, not block identity
+or revision numbering. The derived NDJSON index uses file byte positions only for bounded reads;
+no Markdown offsets, source fingerprints or preprocessing hash chains exist in the body model.
+
+## Import And Compilation
+
+The only book input is a single-book MinerU ZIP containing `content_list_v2.json` or
+`<stem>_content_list_v2.json`. Every archive entry is hostile: traversal, collisions, links, special
+files, encryption and unsupported archive structures are rejected; extraction budgets are enforced
+while streaming. Invalid JSON, unsupported content or missing referenced resources fail explicitly.
+
+JSON content kinds directly create IR headings, paragraphs, code, algorithms, formulas, lists,
+images, tables and annotations. Table HTML is parsed into cells; formulas become typed nodes before
+compilation. Raw HTML and arbitrary source objects are not persisted as body escape hatches.
+
+Printed-contents detection operates on block text, block order and layout evidence. Removed contents
+regions reference block IDs. Private analysis v2 associates these IDs with the original JSON page
+and record index. There is no synthesized whole-book Markdown or text-offset lookup layer.
+
+The compiler consumes the accepted IR and fixed resources once. It shares one heading presentation
+across body, navigation, page metadata and search. Whole-book numbering is `source | generated | none`;
+an excluded heading subtree never displays or consumes numbers in any mode. Source numbers remain
+stored. All internal content links target stable block IDs, including non-heading blocks.
+
+Preview and publication reuse the same rendered semantic body, sanitization, KaTeX and highlighter.
+The preview uses an embedded reading shell and signed resource URLs; published pages use the full
+reader shell. Route materialization does not reparse or re-render book content.
+
+## Saves And Publication
+
+`updated_at` is the sole draft revision identifier, a server Unix millisecond integer. A changed
+save uses `max(now, previous + 1)`; no-op saves retain the timestamp. Clients submit
+`expected_updated_at` for save and publish. A stale request cannot overwrite the accepted document.
+
+A save returns `202` with a durable `save_draft` task. A valid new save cancels unfinished preview
+builds for the same book, observes the existing 10-second termination grace, then saves and rebuilds.
+It never preempts another book's active task. Editors retain input typed after submission and retain
+local edits on failures or conflicts.
+
+Parsing, validation, staging writes and rendering happen outside SQLite transactions. Short
+`IMMEDIATE` transactions coordinate submission, fixed build-input capture and publication. Durable
+save receipts survive staging cleanup, bind the prepared document and timestamp, and recover the
+filesystem replacement/database commit boundary without applying an edit twice or deleting a saved
+body. Successful requests discard their edit payload; retryable receipts remain until recovery or
+retention permits cleanup.
+
+Candidates are addressed by candidate ID and record `source_updated_at`. Published versions are
+immutable. Publication rejects pending saves, stale timestamps, superseded or unready candidates,
+blocking diagnostics, changed build identities and incomplete/corrupt files. It promotes the ready
+preview artifacts rather than compiling again. Recovery never publishes an unrequested candidate.
+
+## Access And Recovery
+
+Better Auth and the existing Passkey/password flows own formal authentication. All management
+mutations enforce administrator authorization and same-origin protection. No book asset lives in a
+static public directory. Visibility is checked before ETag/Range processing on every resource request.
+
+| Response | Anonymous Access | Cache | Indexing |
+| --- | --- | --- | --- |
+| Current public HTML | Allowed | Public revalidation | Allowed |
+| Public versioned book asset | Allowed after authorization | Private immutable | Via page |
+| Public original ZIP | Allowed after authorization | Private, no-store | Forbidden |
+| Private book or private asset | 404 | No-store | Forbidden |
+| Management API, draft, preview | Administrator only | Private, no-store | Forbidden |
+| Signed candidate asset | Bound token/session | Private, no-store | Forbidden |
+| Site JS/CSS/fonts | Allowed, contains no book data | Public immutable | Not content |
+
+The worker owns leases, heartbeat, cancellation, timeout and retry limits. Recovery reconciles durable
+save receipts first, contains orphaned version trees and checks current publications. A corrupted
+current version can fall back only to a verified previously published predecessor; otherwise only
+that book returns an uncached 503. Missing projections are rebuilt off the request path from the
+version's IR and manifest. No mutable artifact is repaired by inventing a new current pointer.
+
+Search uses FTS5 trigram and parameterized, escaped queries. One/two-character queries use the bounded
+metadata/heading index. Every result is filtered by current publication and visibility; ready, old
+and private content is never anonymously searchable.
+
+## Evidence And Transition
+
+This is a clean switch, not an old-library migration. Initialize a fresh root and reimport MinerU v2
+ZIPs. Old databases are rejected. The retired local Docker services and their dedicated volume were
+removed under D-139; other roots are not automatically deleted or reinterpreted.
+
+Verification covers archive security, schemas, heading policy, edit fidelity, concurrent saves,
+clock rollback, cancellation, retries, crash recovery, publication races, authorization and private
+resource isolation. Browser workflows assert data and behavior, not fixed UI wording or styling.
+
+Real-book correctness uses independent PDF contents transcription and direct source-JSON-to-IR
+content checks. No old Markdown observation or position rebinding enters that gate. Review images
+are evidence; renderer-dependent PNG hashes are not semantic content equivalence. Fifteen registered
+real books and a 500-page stress book measure build/save latency, RSS and uncached read p95 <= 300 ms.
+An incomplete gate must be reported explicitly, never represented as completed by an import success.

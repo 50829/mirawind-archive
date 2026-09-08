@@ -3,7 +3,6 @@ import { FileArchive, Upload, X } from "lucide-react";
 
 import type { JobProgress } from "@/entrypoints/worker/protocol";
 import {
-  manageField,
   manageFieldLabel,
   managePanel,
   managePrimaryButton,
@@ -48,17 +47,12 @@ interface ImportView {
   readonly error_code: string | null;
   readonly import_id: string;
   readonly preview: {
-    readonly revision: number | null;
+    readonly source_updated_at: number | null;
     readonly state: "building" | "failed" | "ready" | "unavailable";
     readonly url: string | null;
   };
   readonly source_name: string;
   readonly state: string;
-}
-
-interface ManagedBook {
-  readonly book_id: number;
-  readonly title: string;
 }
 
 interface UploadResult {
@@ -104,7 +98,6 @@ function sendUpload(input: {
   readonly idempotencyKey: string;
   readonly onProgress: (loaded: number, total: number) => void;
   readonly onRequest: (request: XMLHttpRequest | null) => void;
-  readonly targetBookId: string;
 }): Promise<UploadResult> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
@@ -131,7 +124,6 @@ function sendUpload(input: {
     };
     const body = new FormData();
     body.set("file", input.file);
-    if (input.targetBookId) body.set("target_book_id", input.targetBookId);
     request.send(body);
   });
 }
@@ -139,10 +131,8 @@ function sendUpload(input: {
 export function ImportUploader() {
   const [busy, setBusy] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [managedBooks, setManagedBooks] = useState<readonly ManagedBook[]>([]);
   const [message, setMessage] = useState("");
   const [importView, setImportView] = useState<ImportView | null>(null);
-  const [targetBookId, setTargetBookId] = useState("");
   const [uploadBytes, setUploadBytes] = useState({ loaded: 0, total: 0 });
   const [uploadState, setUploadState] = useState<
     "accepting" | "idle" | "uploading"
@@ -167,21 +157,6 @@ export function ImportUploader() {
     if (!response.ok) throw new Error("IMPORT_STATUS_FAILED");
     setImportView((await response.json()) as ImportView);
   }
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetch("/api/manage/library?limit=100", {
-      cache: "no-store",
-      credentials: "same-origin",
-      signal: controller.signal,
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((body: { readonly entries?: readonly ManagedBook[] } | null) => {
-        setManagedBooks(body?.entries ?? []);
-      })
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, []);
 
   const importJobTerminal =
     importView?.current_job &&
@@ -220,7 +195,6 @@ export function ImportUploader() {
         onRequest(request) {
           uploadRequest.current = request;
         },
-        targetBookId,
       });
       if (result.status !== 202 || !result.body.import_id) {
         setMessage(`上传失败：${result.body.code ?? "UPLOAD_FAILED"}`);
@@ -243,28 +217,6 @@ export function ImportUploader() {
       uploadRequest.current = null;
       setBusy(false);
     }
-  }
-
-  async function confirm(candidateId: string) {
-    if (!importView || busy) return;
-    setBusy(true);
-    setMessage("");
-    const response = await fetch(
-      `/api/manage/imports/${importView.import_id}/main-markdown`,
-      {
-        body: JSON.stringify({ candidate_id: candidateId }),
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        method: "PUT",
-      },
-    );
-    if (!response.ok) {
-      const body = (await response.json()) as { code?: string };
-      setMessage(`确认失败：${body.code ?? "CONFIRM_FAILED"}`);
-    } else {
-      await refresh(importView.import_id);
-    }
-    setBusy(false);
   }
 
   async function cancelBackgroundJob() {
@@ -338,22 +290,6 @@ export function ImportUploader() {
             type="file"
           />
         </div>
-        <label className={manageFieldLabel}>
-          重新导入到已有书籍（可选）
-          <select
-            className={manageField}
-            disabled={uploadState !== "idle"}
-            onChange={(event) => setTargetBookId(event.currentTarget.value)}
-            value={targetBookId}
-          >
-            <option value="">创建新书</option>
-            {managedBooks.map((book) => (
-              <option key={book.book_id} value={book.book_id}>
-                {book.title}
-              </option>
-            ))}
-          </select>
-        </label>
         <div className="upload-actions flex flex-wrap gap-2">
           <button
             className={managePrimaryButton}
@@ -481,15 +417,8 @@ export function ImportUploader() {
               打开出版工作台
             </a>
           )}
-          {["needs_main_confirmation", "rejected"].includes(
-            importView.state,
-          ) && (
-            <CandidateReview
-              candidates={importView.candidates}
-              confirmable={importView.state === "needs_main_confirmation"}
-              disabled={busy}
-              onConfirm={confirm}
-            />
+          {importView.state === "rejected" && (
+            <CandidateReview candidates={importView.candidates} />
           )}
         </section>
       )}

@@ -9,7 +9,7 @@ import type {
 interface PresentationRow {
   alias: string | null;
   book_id: number;
-  config_revision: number;
+  source_updated_at: number;
   cover_resource_id: string | null;
   created_at: number;
   first_page_alias: string | null;
@@ -24,19 +24,19 @@ interface PresentationRow {
 }
 
 function mapPresentation(row: PresentationRow): BookVersionPresentation {
-  if (row.projection_schema_version !== 2) {
+  if (row.projection_schema_version !== 3) {
     throw new Error("PRESENTATION_SCHEMA_VERSION_UNSUPPORTED");
   }
   return Object.freeze({
     alias: row.alias,
     bookId: row.book_id,
-    configRevision: row.config_revision,
+    sourceUpdatedAt: row.source_updated_at,
     coverResourceId: row.cover_resource_id,
     createdAtMs: row.created_at,
     firstPageAlias: row.first_page_alias,
     firstPageId: row.first_page_id,
     metadataJson: row.metadata_json,
-    projectionSchemaVersion: 2,
+    projectionSchemaVersion: 3,
     projectionSha256: row.projection_sha256,
     title: row.title,
     tocEntryCount: row.toc_entry_count,
@@ -54,7 +54,7 @@ export class BookPresentationRepository
     const changed = this.database
       .prepare(
         `INSERT INTO book_version_presentations (
-          version_id, book_id, config_revision, projection_schema_version,
+          version_id, book_id, source_updated_at, projection_schema_version,
           alias, title, metadata_json, cover_resource_id, first_page_id,
           first_page_alias, toc_preview_json, toc_entry_count,
           projection_sha256, created_at
@@ -63,7 +63,7 @@ export class BookPresentationRepository
       .run(
         presentation.versionId,
         presentation.bookId,
-        presentation.configRevision,
+        presentation.sourceUpdatedAt,
         presentation.projectionSchemaVersion,
         presentation.alias,
         presentation.title,

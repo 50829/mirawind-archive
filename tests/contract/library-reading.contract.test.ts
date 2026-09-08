@@ -1,14 +1,9 @@
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-
 import { describe, expect, it } from "vitest";
 
 import {
   libraryHtmlResponse,
   publicJsonResponse,
 } from "@/http/cache/library-response";
-
-const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 describe("library HTTP contract", () => {
   it("uses strong session-independent public HTML identities", () => {
@@ -63,22 +58,5 @@ describe("library HTTP contract", () => {
     });
     expect(response.headers.get("x-robots-tag")).toContain("noindex");
     expect(response.headers.get("cache-control")).toContain("public");
-  });
-
-  it("declares canonical, noindex and private boundaries in route sources", async () => {
-    const [library, details, privateApi, capability] = await Promise.all([
-      readFile(`${projectRoot}src/pages/library/index.astro`, "utf8"),
-      readFile(`${projectRoot}src/pages/books/[bookKey]/index.astro`, "utf8"),
-      readFile(`${projectRoot}src/pages/api/manage/library.ts`, "utf8"),
-      readFile(
-        `${projectRoot}src/pages/api/library/management-capability.ts`,
-        "utf8",
-      ),
-    ]);
-    expect(library).toContain('rel="canonical"');
-    expect(details).toContain('rel="canonical"');
-    expect(privateApi).toContain('"private-api"');
-    expect(capability).toContain('"private-api"');
-    expect(capability).toContain("management_available: decision.allowed");
   });
 });

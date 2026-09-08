@@ -1,62 +1,51 @@
-import { parseHeadingMarkdown } from "./heading-markdown";
-import type { ValidatedConfiguredHeading } from "./validate-config";
+import type { BookDocument } from "../content/book-document.generated";
+import type {
+  ContentRole,
+  HeadingNumberingMode,
+} from "../content/heading-presentation";
+import { presentBookHeadings } from "../content/heading-presentation";
+import { inlineEditorText } from "../content/editor-text";
+import { renderingInline } from "../content/rendering-document";
 
-export type HeadingNumberingMode = "generated" | "none" | "source";
-
-export interface HeadingPresentation extends ValidatedConfiguredHeading {
-  readonly label: string;
-  readonly number: string | null;
+export type { HeadingNumberingMode };
+export interface HeadingPresentation {
+  readonly alias?: string;
+  readonly block_id: string;
+  readonly display_level: number;
+  readonly include_in_toc: boolean;
+  readonly starts_page: boolean;
+  readonly exclude_from_numbering: boolean;
+  readonly numbering_excluded: boolean;
+  readonly source_number?: string;
   readonly sourceNumber: string | null;
+  readonly role: ContentRole;
+  readonly title_markdown: string;
   readonly title: string;
-  readonly titleChildren: ReturnType<typeof parseHeadingMarkdown>["children"];
+  readonly number: string | null;
+  readonly label: string;
+  readonly titleChildren: Readonly<ReturnType<typeof renderingInline>>;
 }
 
-function generatedNumbers(
-  headings: readonly ValidatedConfiguredHeading[],
-): readonly (string | null)[] {
-  const counters = [0, 0, 0, 0];
-  let baseLevel: number | null = null;
-  return Object.freeze(
-    headings.map((heading) => {
-      if (heading.role !== "body") return null;
-      if (baseLevel === null) baseLevel = heading.display_level;
-      else if (heading.display_level < baseLevel) {
-        baseLevel = heading.display_level;
-      }
-      const index = heading.display_level - baseLevel;
-      counters[index] = (counters[index] ?? 0) + 1;
-      counters.fill(0, index + 1);
-      return counters
-        .slice(0, index + 1)
-        .map(String)
-        .join(".");
-    }),
-  );
-}
-
-export function presentConfiguredHeadings(input: {
-  readonly headings: readonly ValidatedConfiguredHeading[];
-  readonly mode: HeadingNumberingMode;
-}): readonly HeadingPresentation[] {
-  const generated = generatedNumbers(input.headings);
-  return Object.freeze(
-    input.headings.map((heading, index) => {
-      const parsed = parseHeadingMarkdown(heading.title_markdown);
-      const sourceNumber = heading.source_number ?? null;
-      const number =
-        input.mode === "none"
-          ? null
-          : input.mode === "source"
-            ? sourceNumber
-            : (generated[index] ?? null);
-      return Object.freeze({
-        ...heading,
-        label: [number, parsed.text].filter(Boolean).join(" "),
-        number,
-        sourceNumber,
-        title: parsed.text,
-        titleChildren: parsed.children,
-      });
-    }),
-  );
+export function presentDocumentHeadings(
+  book: BookDocument,
+): readonly HeadingPresentation[] {
+  return presentBookHeadings(book).map((value) => ({
+    ...(value.heading.alias ? { alias: value.heading.alias } : {}),
+    block_id: value.heading.id,
+    display_level: value.heading.level,
+    include_in_toc: value.heading.include_in_toc,
+    starts_page: value.heading.starts_page,
+    exclude_from_numbering: value.heading.exclude_from_numbering,
+    numbering_excluded: value.numberingExcluded,
+    ...(value.heading.source_number
+      ? { source_number: value.heading.source_number }
+      : {}),
+    sourceNumber: value.heading.source_number ?? null,
+    role: value.role,
+    title_markdown: inlineEditorText(value.heading.content, book),
+    title: value.title,
+    number: value.number,
+    label: value.label,
+    titleChildren: renderingInline(value.heading.content, book),
+  }));
 }

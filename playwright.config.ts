@@ -11,7 +11,7 @@ if (
 }
 const port = configuredPort;
 const baseURL = `http://127.0.0.1:${port}`;
-const dataRoot = resolve(".cache/e2e-playwright-data");
+const dataRoot = resolve(".cache/e2e-playwright-ir-data");
 
 export default defineConfig({
   testDir: "./tests/e2e",

@@ -4,8 +4,8 @@ import type { JobKind, JobState } from "../job-state";
 export interface CandidateBuildAttempt {
   readonly bookId: number | null;
   readonly candidateId: string | null;
-  readonly capturedConfigRevision: number | null;
-  readonly capturedSourceId: string | null;
+  readonly capturedSourceUpdatedAt: number | null;
+  readonly capturedInputPath: string | null;
   readonly id: string;
   readonly kind: JobKind;
   readonly retryOfJobId: string | null;
@@ -107,8 +107,8 @@ export function retryCandidateBuild<Job extends CandidateBuildAttempt>(input: {
       input.job.kind !== "build_candidate" ||
       input.job.bookId === null ||
       input.job.candidateId === null ||
-      input.job.capturedSourceId === null ||
-      input.job.capturedConfigRevision === null
+      input.job.capturedInputPath === null ||
+      input.job.capturedSourceUpdatedAt === null
     ) {
       throw new Error("CANDIDATE_RETRY_INPUT_INVALID");
     }

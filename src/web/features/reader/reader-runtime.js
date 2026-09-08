@@ -2,11 +2,15 @@
   document.documentElement.classList.add("reader-enhanced");
 
   const readerRoot = document.querySelector("[data-reader-mode]");
-  const previewRevision = Number(
+  const previewUpdatedAt = Number(
     readerRoot instanceof HTMLElement
-      ? readerRoot.dataset.previewRevision
+      ? readerRoot.dataset.previewUpdatedAt
       : Number.NaN,
   );
+  const previewCandidateId =
+    readerRoot instanceof HTMLElement
+      ? readerRoot.dataset.previewCandidateId
+      : null;
   const currentPageId = Number(
     readerRoot instanceof HTMLElement
       ? readerRoot.dataset.readerPageId
@@ -15,8 +19,10 @@
   const previewMode =
     readerRoot instanceof HTMLElement &&
     readerRoot.dataset.readerMode === "preview" &&
-    Number.isSafeInteger(previewRevision) &&
-    previewRevision > 0 &&
+    Number.isSafeInteger(previewUpdatedAt) &&
+    previewUpdatedAt >= 0 &&
+    typeof previewCandidateId === "string" &&
+    /^candidate_[A-Za-z0-9_-]{16,80}$/u.test(previewCandidateId) &&
     Number.isSafeInteger(currentPageId) &&
     currentPageId > 0;
 
@@ -25,7 +31,8 @@
     window.parent.postMessage(
       {
         type,
-        revision: previewRevision,
+        source_updated_at: previewUpdatedAt,
+        candidate_id: previewCandidateId,
         page_id: currentPageId,
         ...extra,
       },
@@ -241,7 +248,9 @@
     ) {
       return;
     }
-    const block = origin.closest("[data-block-id]");
+    const block =
+      origin.closest("table")?.closest("[data-block-id]") ??
+      origin.closest("[data-block-id]");
     if (!(block instanceof HTMLElement) || /^H[1-4]$/u.test(block.tagName)) {
       return;
     }
@@ -270,9 +279,9 @@
     if (!(target instanceof HTMLAnchorElement)) return;
     const url = new URL(target.href, window.location.href);
     const match = url.pathname.match(
-      /^\/api\/manage\/books\/[1-9]\d*\/preview\/([1-9]\d*)\/pages\/([1-9]\d*)$/u,
+      /^\/api\/manage\/books\/[1-9]\d*\/preview\/(candidate_[A-Za-z0-9_-]{16,80})\/pages\/([1-9]\d*)$/u,
     );
-    if (match && Number(match[1]) === previewRevision) {
+    if (match && match[1] === previewCandidateId) {
       event.preventDefault();
       previewMessage("mirawind-preview-navigate", {
         fragment: url.hash ? decodeURIComponent(url.hash.slice(1)) : null,

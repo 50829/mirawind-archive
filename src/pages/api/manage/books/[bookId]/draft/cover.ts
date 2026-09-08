@@ -34,24 +34,12 @@ export const POST: APIRoute = async ({ locals, params, request }) => {
     bookId,
     bytes: upload.bytes,
     database,
-    expectedEtag: request.headers.get("if-match"),
+    expectedUpdatedAt: upload.expectedUpdatedAt,
     filename: upload.filename,
     layout: await getRuntimeStorageLayout(),
     nowMs: Date.now(),
   });
-  const headers = new Headers({ ETag: result.etag });
+  const headers = new Headers();
   applyResponsePolicy(headers, "private-api");
-  return Response.json(
-    {
-      book_id: bookId,
-      candidate: {
-        attempt_id: result.candidate.attemptId,
-        job_id: result.candidate.jobId,
-        state: result.candidate.state,
-      },
-      config_revision: result.revision,
-      cover_path: result.coverPath,
-    },
-    { headers, status: 202 },
-  );
+  return Response.json(result, { headers, status: 202 });
 };

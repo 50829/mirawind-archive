@@ -12,19 +12,19 @@ describe("current draft candidate projection", () => {
         bookId: 7,
         candidate: {
           attemptId,
-          configRevision: 3,
-          previewUrl: "/api/manage/books/7/preview/3/pages/1",
+          sourceUpdatedAt: 3000,
+          previewUrl: `/api/manage/books/7/preview/${attemptId}/pages/1`,
           safeErrorCode: null,
           semanticDigest: "a".repeat(64),
           state: "ready",
           versionId,
         },
-        configRevision: 3,
+        sourceUpdatedAt: 3000,
       }),
     ).toEqual({
       attempt_id: attemptId,
-      preview_url: "/api/manage/books/7/preview/3/pages/1",
-      revision: 3,
+      preview_url: `/api/manage/books/7/preview/${attemptId}/pages/1`,
+      source_updated_at: 3000,
       safe_error_code: null,
       semantic_digest: "a".repeat(64),
       state: "ready",
@@ -39,14 +39,14 @@ describe("current draft candidate projection", () => {
         bookId: 7,
         candidate: {
           attemptId,
-          configRevision: 3,
+          sourceUpdatedAt: 3000,
           previewUrl: null,
           safeErrorCode: "CANDIDATE_BUILD_FAILED",
           semanticDigest: null,
           state: "failed",
           versionId: null,
         },
-        configRevision: 3,
+        sourceUpdatedAt: 3000,
       }),
     ).toMatchObject({
       attempt_id: attemptId,
@@ -58,7 +58,7 @@ describe("current draft candidate projection", () => {
   it("rejects stale, partial-ready and unbounded projections", () => {
     const valid = {
       attemptId: createOpaqueId("draftCandidate"),
-      configRevision: 3,
+      sourceUpdatedAt: 3000,
       previewUrl: null,
       safeErrorCode: null,
       semanticDigest: null,
@@ -66,12 +66,15 @@ describe("current draft candidate projection", () => {
       versionId: null,
     };
     for (const candidate of [
-      { ...valid, configRevision: 2 },
-      { ...valid, previewUrl: "/api/manage/books/7/preview/3/pages/1" },
+      { ...valid, sourceUpdatedAt: 2000 },
+      {
+        ...valid,
+        previewUrl: `/api/manage/books/7/preview/${valid.attemptId}/pages/1`,
+      },
       { ...valid, safeErrorCode: "private failure detail" },
       {
         ...valid,
-        previewUrl: "/api/manage/books/7/preview/3/pages/1",
+        previewUrl: `/api/manage/books/7/preview/${valid.attemptId}/pages/1`,
         semanticDigest: "a".repeat(64),
         state: "ready" as const,
       },
@@ -80,7 +83,7 @@ describe("current draft candidate projection", () => {
         getCurrentDraftCandidate({
           bookId: 7,
           candidate,
-          configRevision: 3,
+          sourceUpdatedAt: 3000,
         }),
       ).toThrow("DRAFT_CANDIDATE_PROJECTION_INVALID");
     }

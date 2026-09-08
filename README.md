@@ -1,7 +1,7 @@
 # Mirawind Library
 
 Mirawind 是一个自托管、单管理员的语义化在线图书馆。当前出版闭环接受“一本书一个
-MinerU ZIP”，在后台安全解包、构建真实阅读预览、编译并建立搜索索引，再以不可变
+MinerU v2 JSON ZIP”，在后台安全解包、生成结构化工作稿、构建阅读预览并建立搜索索引，再以不可变
 版本原子发布；读者可以从 `/library` 浏览当前公开版本、查看 `/books/:bookKey`
 详情，再进入带目录、提纲、搜索、下载和移动抽屉的阅读器。读者请求始终读取已经
 发布的版本。管理员还可以在私有书库中永久删除单本图书；接受后立即隐藏并由 worker
@@ -51,7 +51,7 @@ pnpm dev
 ```
 
 默认打开 <http://127.0.0.1:4322/manage>。源码开发数据保存在 Git 忽略的
-`data/development`；首次运行自动迁移并建立仅供 loopback 开发信任使用的本地管理员，
+`data/library`；首次运行初始化当前数据库基线并建立仅供 loopback 开发信任使用的本地管理员，
 不需要登录或输入密码。已有 `.env` 时保留原文件；首次配置需设置随机 `MIRAWIND_AUTH_SECRET`。
 开发和生产共用 `.env` 中同一组变量：`MIRAWIND_DATA_DIR` 指定数据目录，
 `MIRAWIND_PUBLIC_ORIGIN` 指定地址与端口。部署时修改对应的值即可。
@@ -104,24 +104,23 @@ pnpm benchmark:library --output-json docs/audits/m2a-library-performance.json \
 
 ```bash
 pnpm fixtures:verify-real --dir "$PWD/tests/fixtures/mineru/real"
+MIRAWIND_REAL_FIXTURE_DIR="$PWD/tests/fixtures/mineru/real" pnpm test:e2e
 ```
 
 ## 文档
 
 - [产品规格](docs/product/product-spec.md)
 - [决策日志](docs/decisions/decision-log.md)
-- [M1 架构](docs/architecture/m1-architecture.md)
+- [当前运行架构](docs/architecture/m1-architecture.md)
+- [结构化正文与保存协议](docs/architecture/structured-content-ir.md)
+- [本轮重构验收](docs/operations/content-refactor-acceptance.md)
 - [运行配置](docs/operations/configuration.md)
 - [部署与升级](docs/operations/deployment.md)
 - [恢复与事故处理](docs/operations/recovery.md)
-- [本地 Docker 预览规格](specs/002-local-docker-preview/spec.md)
-- [M1 Feature Spec](specs/001-mineru-public-publishing/spec.md)
-- [M1 验收流程](specs/001-mineru-public-publishing/quickstart.md)
-- [书库与阅读闭环规格](specs/003-library-reading-loop/spec.md)
-- [永久删除规格](specs/005-permanent-book-deletion/spec.md)
-- [出版与阅读闭环规格](specs/006-clean-slate-publishing/spec.md)
+- [当前接口与历史规格索引](specs/README.md)
 
-Markdown 与版本化 `book.yaml` 是出版权威；AST、HTML、
-`document-manifest.json`、资源和搜索索引都是可重建派生物。SQLite 中的
-`current_version_id` 是唯一的当前版本指针；`book_version_presentations` 只是
-从当前不可变 `book.yaml` 与 manifest 重建的有界展示投影，不是新的编辑权威。
+可更新的 `book.json` 是正文、元数据与出版设置的唯一编辑权威，`updated_at` 是保存冲突标识。
+只接受包含 `content_list_v2.json` 或 `<stem>_content_list_v2.json` 的单书 ZIP；Markdown
+片段只用于按块编辑。AST、HTML、manifest、生成资源和搜索索引由固定正文与源资源构建。
+预览和发布共享候选产物，已发布版本不可变；SQLite 的 `current_version_id` 是唯一当前指针。
+展示投影不是另一份编辑权威。旧数据库不能原地升级到本轮正文模型，必须在新数据根重新导入。

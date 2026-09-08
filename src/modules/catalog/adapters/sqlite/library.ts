@@ -44,7 +44,7 @@ interface DetailsRow extends PublicLibraryRow {
   current_version_id: string | null;
   projection_book_id: number | null;
   projection_version_id: string | null;
-  source_id: string | null;
+  import_id: string | null;
   state: "corrupt" | "published" | "ready" | "superseded" | null;
   toc_entry_count: number | null;
   toc_preview_json: string | null;
@@ -200,7 +200,7 @@ export class LibraryService {
          JOIN book_version_presentations AS presentation
            ON presentation.version_id = versions.id
           AND presentation.book_id = books.id
-          AND presentation.config_revision = versions.config_revision
+          AND presentation.source_updated_at = versions.source_updated_at
          WHERE books.access = 'public'
            AND books.unavailable_reason IS NULL
            AND books.deletion_requested_at IS NULL
@@ -229,7 +229,7 @@ export class LibraryService {
          LEFT JOIN book_version_presentations AS presentation
            ON presentation.version_id = versions.id
           AND presentation.book_id = books.id
-          AND presentation.config_revision = versions.config_revision
+          AND presentation.source_updated_at = versions.source_updated_at
          WHERE books.access = 'public'
            AND books.deletion_requested_at IS NULL
            AND (
@@ -269,7 +269,7 @@ export class LibraryService {
       .prepare(
         `SELECT books.id, books.title_cache, books.access,
                 books.alias AS mutable_alias, books.updated_at,
-                books.draft_source_id, books.draft_config_revision,
+                books.draft_import_id,
                 books.current_candidate_id, books.current_version_id,
                 books.unavailable_reason,
                 presentation.alias, presentation.first_page_id,
@@ -300,8 +300,7 @@ export class LibraryService {
       id: number;
       mutable_alias: string | null;
       current_version_id: string | null;
-      draft_config_revision: number | null;
-      draft_source_id: string | null;
+      draft_import_id: string | null;
       title_cache: string;
       unavailable_reason: string | null;
       updated_at: number;
@@ -335,8 +334,7 @@ export class LibraryService {
               bookId: row.id,
               currentCandidateId: row.current_candidate_id,
               currentVersionId: row.current_version_id,
-              draftConfigRevision: row.draft_config_revision,
-              draftSourceId: row.draft_source_id,
+              draftImportId: row.draft_import_id,
               title: row.title_cache,
               updatedAtMs: row.updated_at,
             }),
@@ -361,7 +359,7 @@ export class LibraryService {
         `SELECT books.id AS book_id, books.access,
                 books.unavailable_reason, books.current_version_id,
                 versions.id AS version_id, versions.state,
-                versions.source_id, presentation.version_id AS projection_version_id,
+                versions.import_id, presentation.version_id AS projection_version_id,
                 presentation.book_id AS projection_book_id,
                 presentation.alias, presentation.title,
                 presentation.metadata_json,
@@ -379,7 +377,7 @@ export class LibraryService {
          LEFT JOIN book_version_presentations AS presentation
            ON presentation.version_id = versions.id
           AND presentation.book_id = books.id
-          AND presentation.config_revision = versions.config_revision
+          AND presentation.source_updated_at = versions.source_updated_at
          WHERE ${predicate.sql}
            AND books.deletion_requested_at IS NULL
          LIMIT 1`,
@@ -428,11 +426,11 @@ export class LibraryService {
       .prepare(
         `SELECT id, original_name, media_type, size_bytes
          FROM original_files
-         WHERE book_id = ? AND source_id = ?
+         WHERE book_id = ? AND import_id = ?
          ORDER BY original_name, id
          LIMIT ?`,
       )
-      .all(row.book_id, row.source_id, maximumOriginals) as {
+      .all(row.book_id, row.import_id, maximumOriginals) as {
       id: string;
       media_type: string;
       original_name: string;

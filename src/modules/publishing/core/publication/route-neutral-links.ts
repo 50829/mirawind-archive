@@ -12,7 +12,7 @@ export type RouteNeutralReference = Readonly<{
 }>;
 
 export interface RouteNeutralLinkScope {
-  readonly headingHref: (blockId: string) => string;
+  readonly blockHref: (blockId: string) => string;
   readonly referencesIn: (html: string) => readonly RouteNeutralReference[];
   readonly resourceUrl: (resourceId: string) => string;
 }
@@ -41,7 +41,7 @@ export function createRouteNeutralLinkScope(
   const headingPrefix = `${scopePrefix}headings/`;
   const resourcePrefix = `${scopePrefix}resources/`;
 
-  const headingHref = (blockId: string): string => {
+  const blockHref = (blockId: string): string => {
     if (!blockIdPattern.test(blockId)) {
       throw new Error("ROUTE_NEUTRAL_HEADING_ID_INVALID");
     }
@@ -97,5 +97,5 @@ export function createRouteNeutralLinkScope(
     return Object.freeze(references);
   };
 
-  return Object.freeze({ headingHref, referencesIn, resourceUrl });
+  return Object.freeze({ blockHref, referencesIn, resourceUrl });
 }

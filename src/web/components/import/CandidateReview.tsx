@@ -1,6 +1,6 @@
 export interface CandidateView {
   readonly candidate_id: string;
-  readonly confidence: "ambiguous" | "generic" | "high";
+  readonly confidence: "ambiguous" | "high";
   readonly diagnostics: readonly string[];
   readonly display_path: string;
   readonly evidence: readonly string[];
@@ -8,9 +8,6 @@ export interface CandidateView {
 
 export function CandidateReview(props: {
   readonly candidates: readonly CandidateView[];
-  readonly confirmable: boolean;
-  readonly disabled: boolean;
-  readonly onConfirm: (candidateId: string) => void;
 }) {
   if (props.candidates.length === 0) return null;
   return (
@@ -42,20 +39,10 @@ export function CandidateReview(props: {
                 {item}
               </p>
             ))}
-            {props.confirmable && candidate.confidence === "generic" && (
-              <button
-                className={managePrimaryButton}
-                disabled={props.disabled}
-                onClick={() => props.onConfirm(candidate.candidate_id)}
-                type="button"
-              >
-                确认使用此文件
-              </button>
-            )}
           </article>
         ))}
       </div>
     </section>
   );
 }
-import { managePanel, managePrimaryButton } from "../ui/manage-classes";
+import { managePanel } from "../ui/manage-classes";

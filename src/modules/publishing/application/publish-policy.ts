@@ -1,7 +1,7 @@
 export interface PublishPolicyContext {
   readonly bookId: number;
-  readonly configRevision: number;
-  readonly sourceId: string;
+  readonly sourceUpdatedAt: number;
+  readonly importId: string;
 }
 
 export interface PublishPolicyDecision {

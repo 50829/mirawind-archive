@@ -8,7 +8,7 @@ import {
 function bindings(count = 15): readonly ReferenceFixtureBinding[] {
   return Array.from({ length: count }, (_, index) => ({
     fixture_id: `real-mineru-${String(index + 1).padStart(12, "0")}`,
-    reference_schema_version: 2,
+    reference_schema_version: 3,
     reference_sha256: index.toString(16).padStart(64, "0"),
     zip_sha256: (index + 100).toString(16).padStart(64, "0"),
   }));
@@ -31,7 +31,7 @@ describe("fifteen-book reference preflight", () => {
       "REFERENCE_PREFLIGHT_DUPLICATE",
     );
     const old = [...bindings()];
-    old[0] = { ...first, reference_schema_version: 1 as 2 };
+    old[0] = { ...first, reference_schema_version: 1 as 3 };
     expect(() => assertReferencePreflight(old)).toThrow(
       "REFERENCE_PREFLIGHT_SCHEMA_INVALID",
     );

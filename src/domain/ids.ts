@@ -10,8 +10,6 @@ const prefixes = {
   job: "job",
   region: "region",
   resource: "res",
-  sourceAsset: "asset",
-  source: "src",
   version: "ver",
 } as const;
 

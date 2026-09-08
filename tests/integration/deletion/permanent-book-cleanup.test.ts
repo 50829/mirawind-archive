@@ -25,6 +25,11 @@ import {
 } from "@/platform/filesystem/permanent-removal";
 
 import { withMigratedTestDatabase } from "../../helpers/database";
+import {
+  setupPublicationFixture,
+  publishReadyCandidateForTest,
+} from "../../helpers/publication";
+import { queueDraftSave } from "@/modules/publishing/adapters/filesystem/queue-draft-save";
 
 function acceptBookDeletion(
   input: Omit<
@@ -120,8 +125,7 @@ describe("permanent book cleanup", () => {
           bookId: book.id,
           currentCandidateId: book.currentCandidateId,
           currentVersionId: book.currentVersionId,
-          draftConfigRevision: book.draftConfigRevision,
-          draftSourceId: book.draftSourceId,
+          draftImportId: book.draftImportId,
           title: book.title,
           updatedAtMs: book.updatedAtMs,
         }),
@@ -171,165 +175,45 @@ describe("permanent book cleanup", () => {
     });
   });
 
-  it("purges the complete source/config/preview/version/search relationship graph", async () => {
+  it("purges the complete IR/save/preview/version/search relationship graph", async () => {
     await withMigratedTestDatabase(async ({ database }, dataRoot) => {
-      const drafts = new DraftRepository(database);
-      const book = drafts.createBook({ nowMs: 1_000, title: "Full graph" });
-      const importId = "imp_fullgraphfixture";
-      const sourceId = "src_fullgraphfixture";
-      const fileId = "file_fullgraphfixture";
-      const versionId = "ver_fullgraphfixture";
-      const candidateId = "candidate_fullgraphfixture";
-      database
-        .prepare(
-          `INSERT INTO imports (
-            id, original_name, state, upload_rel_path, upload_size_bytes, upload_sha256,
-            selected_candidate_id, book_id, safe_error_code,
-            created_at, updated_at, expires_at
-          ) VALUES (?, 'fixture.zip', 'draft_ready', ?, 3, ?, NULL, ?, NULL, 1000, 1000, 9000)`,
-        )
-        .run(
-          importId,
-          `tmp/uploads/${importId}/original.zip`,
-          "a".repeat(64),
-          book.id,
-        );
-      database
-        .prepare(
-          `INSERT INTO source_snapshots (
-            id, book_id, main_markdown_path, main_markdown_sha256,
-            source_root_rel_path, analysis_version,
-            origin, parent_source_id, created_from_import_id, created_at
-          ) VALUES (?, ?, 'main.md', ?, ?, 'fixture-v1', 'import', NULL, ?, 1100)`,
-        )
-        .run(
-          sourceId,
-          book.id,
-          "b".repeat(64),
-          `books/${book.id}/draft/sources/${sourceId}`,
-          importId,
-        );
-      database
-        .prepare(
-          `INSERT INTO config_revisions (
-            book_id, revision, source_id, schema_version,
-            yaml_rel_path, yaml_sha256, created_at
-          ) VALUES (?, 1, ?, 4, ?, ?, 1200)`,
-        )
-        .run(
-          book.id,
-          sourceId,
-          `books/${book.id}/draft/configs/1/book.yaml`,
-          "c".repeat(64),
-        );
-      const contentJob = new JobRepository(database).create({
+      const fixture = setupPublicationFixture(database);
+      const book = fixture.book;
+      const drafts = fixture.drafts;
+      await publishReadyCandidateForTest({
+        database,
         bookId: book.id,
-        capturedConfigRevision: 1,
-        capturedSourceId: sourceId,
-        kind: "build_candidate",
-        nowMs: 1_300,
-        versionId,
+        nowMs: 1500,
       });
       database
         .prepare(
-          `INSERT INTO original_files (
-            id, book_id, source_id, role, storage_rel_path, original_name,
-            media_type, size_bytes, sha256, created_at
-          ) VALUES (?, ?, ?, 'mineru_zip', ?, 'private.zip',
-                    'application/zip', 3, ?, 1400)`,
+          `INSERT INTO original_files (id,book_id,import_id,role,storage_rel_path,original_name,media_type,size_bytes,sha256,created_at)
+        VALUES ('file_fullgraphfixture',?,?,'mineru_zip',?,'private.zip','application/zip',3,?,1400)`,
         )
         .run(
-          fileId,
           book.id,
-          sourceId,
-          `books/${book.id}/draft/originals/${fileId}`,
+          fixture.imported.id,
+          `books/${book.id}/originals/file_fullgraphfixture`,
           "d".repeat(64),
         );
       database
         .prepare(
-          `INSERT INTO book_versions (
-            id, book_id, source_id, config_revision, predecessor_version_id,
-            state, version_rel_path, manifest_schema_version, manifest_sha256,
-            version_marker_sha256, semantic_digest, compiler_version,
-            renderer_version, preview_version, reader_version,
-            blocking_diagnostic_count, complete_at, published_at,
-            verified_at, created_by_job_id, reclaimed_at
-          ) VALUES (?, ?, ?, 1, NULL, 'published', ?, 3, ?, ?, ?,
-                    'fixture', 'fixture', 'fixture', 'fixture', 0,
-                    1500, 1500, 1500, ?, NULL)`,
+          "INSERT INTO book_resources (id,book_id,storage_rel_path,size_bytes,sha256,created_at) VALUES (?,?,?,3,?,1400)",
         )
         .run(
-          versionId,
+          "res_fullgraphfixture0001",
           book.id,
-          sourceId,
-          `books/${book.id}/versions/${versionId}`,
-          "e".repeat(64),
-          "e".repeat(64),
-          "e".repeat(64),
-          contentJob.id,
-        );
-      database
-        .prepare(
-          `INSERT INTO draft_candidates (
-            id, book_id, source_id, config_revision, job_id, version_id,
-            state, semantic_digest, safe_error_code,
-            blocking_diagnostic_count, created_at, completed_at
-          ) VALUES (?, ?, ?, 1, ?, ?, 'ready', ?, NULL, 0, 1300, 1500)`,
-        )
-        .run(
-          candidateId,
-          book.id,
-          sourceId,
-          contentJob.id,
-          versionId,
+          `books/${book.id}/assets/res_fullgraphfixture0001.png`,
           "e".repeat(64),
         );
-      database
-        .prepare(
-          `INSERT INTO book_version_presentations (
-            version_id, book_id, config_revision, projection_schema_version,
-            alias, title, metadata_json, cover_resource_id, first_page_id,
-            first_page_alias, toc_preview_json, toc_entry_count,
-            projection_sha256, created_at
-          ) VALUES (?, ?, 1, 2, 'full-graph', 'Full graph', '{}', NULL, 1,
-                    NULL, '[]', 0, ?, 1500)`,
-        )
-        .run(versionId, book.id, "f".repeat(64));
-      database
-        .prepare(
-          `INSERT INTO search_short_fields (
-            book_id, version_id, page_id, block_id, kind,
-            normalized_text, ordinal
-          ) VALUES (?, ?, 1, NULL, 'title', 'full graph', 0)`,
-        )
-        .run(book.id, versionId);
-      database
-        .prepare(
-          `INSERT INTO search_fts (
-            title, authors, heading, body, book_id, version_id,
-            page_id, block_id, kind, ordinal
-          ) VALUES ('Full graph', '', '', 'private body', ?, ?, 1,
-                    'blk_fullgraphfixture', 'paragraph', 0)`,
-        )
-        .run(book.id, versionId);
-      database
-        .prepare(
-          `UPDATE jobs
-           SET candidate_id = ?, state = 'succeeded', phase = 'complete',
-               finished_at = 1500
-           WHERE id = ?`,
-        )
-        .run(candidateId, contentJob.id);
-      database
-        .prepare(
-          `UPDATE books
-           SET alias = 'full-graph', access = 'public',
-               draft_source_id = ?, draft_config_revision = 1,
-               current_candidate_id = ?, current_version_id = ?,
-               updated_at = 1600
-           WHERE id = ?`,
-        )
-        .run(sourceId, candidateId, versionId, book.id);
+      queueDraftSave({
+        database,
+        layout: dataRoot.layout,
+        bookId: book.id,
+        expectedUpdatedAt: fixture.document.updated_at,
+        patch: { metadata: { title: "Pending edit" } },
+        nowMs: 1600,
+      });
       const current = drafts.requireBook(book.id);
       const accepted = acceptBookDeletion({
         actorUserId: "admin",
@@ -342,8 +226,7 @@ describe("permanent book cleanup", () => {
           bookId: current.id,
           currentCandidateId: current.currentCandidateId,
           currentVersionId: current.currentVersionId,
-          draftConfigRevision: current.draftConfigRevision,
-          draftSourceId: current.draftSourceId,
+          draftImportId: current.draftImportId,
           title: current.title,
           updatedAtMs: current.updatedAtMs,
         }),
@@ -367,8 +250,8 @@ describe("permanent book cleanup", () => {
       for (const table of [
         "books",
         "imports",
-        "source_snapshots",
-        "config_revisions",
+        "book_resources",
+        "save_draft_requests",
         "draft_candidates",
         "original_files",
         "book_versions",
@@ -389,8 +272,8 @@ describe("permanent book cleanup", () => {
           .prepare(
             `SELECT COUNT(*) AS count FROM jobs
              WHERE book_id IS NOT NULL OR import_id IS NOT NULL
-                OR version_id IS NOT NULL OR captured_source_id IS NOT NULL
-                OR captured_config_revision IS NOT NULL
+                OR version_id IS NOT NULL OR captured_input_path IS NOT NULL
+                OR captured_source_updated_at IS NOT NULL
                 OR captured_current_version_id IS NOT NULL`,
           )
           .get(),
@@ -462,8 +345,7 @@ describe("permanent book cleanup", () => {
           bookId: book.id,
           currentCandidateId: null,
           currentVersionId: null,
-          draftConfigRevision: null,
-          draftSourceId: null,
+          draftImportId: null,
           title: book.title,
           updatedAtMs: book.updatedAtMs,
         }),
@@ -513,8 +395,7 @@ describe("permanent book cleanup", () => {
           bookId: book.id,
           currentCandidateId: null,
           currentVersionId: null,
-          draftConfigRevision: null,
-          draftSourceId: null,
+          draftImportId: null,
           title: book.title,
           updatedAtMs: book.updatedAtMs,
         }),

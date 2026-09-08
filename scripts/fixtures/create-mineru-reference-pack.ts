@@ -15,8 +15,6 @@ import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 
 import { extractZipFile } from "../../src/modules/publishing/adapters/filesystem/extract-archive.js";
-import { parseMarkdownDocument } from "../../src/modules/publishing/core/preparation/parse-markdown.js";
-import type { TransientDocumentNode } from "../../src/modules/publishing/core/preparation/document-model.js";
 import {
   parseRealFixtureManifest,
   verifyRealMineruFixtures,
@@ -39,28 +37,20 @@ export interface ReferencePackInput {
   readonly temporaryParent?: string;
 }
 
-interface RootObservation {
-  readonly end_offset: number;
-  readonly root_index: number;
-  readonly sha256: string;
-  readonly start_offset: number;
+export interface ContentObservation {
+  readonly page_index: number;
+  readonly source_index: number;
   readonly type: string;
-}
-
-interface HeadingObservation extends RootObservation {
-  readonly depth: number;
   readonly text: string;
 }
-
 export interface MineruReferencePack {
   readonly archive_sha256: string;
   readonly fixture_id: string;
-  readonly markdown_documents: readonly {
-    readonly headings: readonly HeadingObservation[];
-    readonly input_sha256: string;
+  readonly content_json: {
     readonly relative_path: string;
-    readonly root_blocks: readonly RootObservation[];
-  }[];
+    readonly input_sha256: string;
+    readonly records: readonly ContentObservation[];
+  };
   readonly pdf_documents: readonly {
     readonly page_count: number;
     readonly relative_path: string;
@@ -71,7 +61,7 @@ export interface MineruReferencePack {
     }[];
     readonly sha256: string;
   }[];
-  readonly schema_version: 1;
+  readonly schema_version: 2;
   readonly sidecars: readonly {
     readonly relative_path: string;
     readonly sha256: string;
@@ -81,7 +71,7 @@ export interface MineruReferencePack {
 
 const fixtureIdPattern = /^real-mineru-[a-z0-9]{6,32}$/u;
 const maximumFiles = 20_000;
-const maximumMarkdownBytes = 512 * 1024 * 1024;
+const maximumContentBytes = 256 * 1024 * 1024;
 
 async function sha256File(path: string): Promise<string> {
   const digest = createHash("sha256");
@@ -125,70 +115,62 @@ async function regularFiles(root: string): Promise<readonly string[]> {
   );
 }
 
-function sourceRange(node: TransientDocumentNode): {
-  readonly end: number;
-  readonly start: number;
-} {
-  const start = node.position?.start.offset;
-  const end = node.position?.end.offset;
-  if (
-    !Number.isSafeInteger(start) ||
-    !Number.isSafeInteger(end) ||
-    Number(end) <= Number(start)
-  ) {
-    throw new Error("REFERENCE_PACK_MARKDOWN_POSITION_MISSING");
-  }
-  return { end: Number(end), start: Number(start) };
+export function sourceContentText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(sourceContentText).join("");
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  return sourceContentText(record.content);
 }
 
-function visibleText(node: TransientDocumentNode): string {
-  if (typeof node.value === "string") return node.value;
-  return (node.children ?? []).map(visibleText).join("");
+export function observeContentRecords(
+  value: unknown,
+): readonly ContentObservation[] {
+  if (!Array.isArray(value) || value.some((page) => !Array.isArray(page)))
+    throw new Error("REFERENCE_PACK_CONTENT_INVALID");
+  return value.flatMap((page: unknown[], page_index) =>
+    page.map((item, source_index) => {
+      if (!item || typeof item !== "object")
+        throw new Error("REFERENCE_PACK_CONTENT_INVALID");
+      const record = item as {
+        type: string;
+        content?: Record<string, unknown>;
+      };
+      const content = record.content ?? {};
+      return {
+        page_index,
+        source_index,
+        type: record.type,
+        text: sourceContentText(
+          content.title_content ??
+            content.paragraph_content ??
+            content.math_content ??
+            content.code_content ??
+            content.algorithm_content ??
+            (Array.isArray(content.list_items)
+              ? content.list_items
+                  .map((item) => sourceContentText(item.item_content))
+                  .join("\n")
+              : ""),
+        ),
+      };
+    }),
+  );
 }
 
-async function observeMarkdown(path: string, root: string) {
+async function observeContent(
+  path: string,
+  root: string,
+): Promise<MineruReferencePack["content_json"]> {
   const metadata = await lstat(path);
-  if (metadata.size > maximumMarkdownBytes) {
-    throw new Error("REFERENCE_PACK_MARKDOWN_SIZE_LIMIT");
-  }
-  const source = await readFile(path, "utf8");
-  const document = parseMarkdownDocument(source);
-  const roots = document.root.children ?? [];
-  const rootBlocks: RootObservation[] = [];
-  const headings: HeadingObservation[] = [];
-  for (const [rootIndex, node] of roots.entries()) {
-    const range = sourceRange(node);
-    const observation = Object.freeze({
-      end_offset: range.end,
-      root_index: rootIndex,
-      sha256: sha256Text(source.slice(range.start, range.end)),
-      start_offset: range.start,
-      type: node.type,
-    });
-    rootBlocks.push(observation);
-    if (node.type === "heading") {
-      if (
-        !Number.isSafeInteger(node.depth) ||
-        Number(node.depth) < 1 ||
-        Number(node.depth) > 6
-      ) {
-        throw new Error("REFERENCE_PACK_HEADING_DEPTH_INVALID");
-      }
-      headings.push(
-        Object.freeze({
-          ...observation,
-          depth: Number(node.depth),
-          text: visibleText(node).slice(0, 2_000),
-        }),
-      );
-    }
-  }
-  return Object.freeze({
-    headings: Object.freeze(headings),
-    input_sha256: sha256Text(source),
+  if (metadata.size > maximumContentBytes)
+    throw new Error("REFERENCE_PACK_CONTENT_LIMIT");
+  const bytes = await readFile(path);
+  return {
     relative_path: relative(root, path).split("\\").join("/"),
-    root_blocks: Object.freeze(rootBlocks),
-  });
+    input_sha256: sha256Text(bytes.toString("utf8")),
+    records: observeContentRecords(JSON.parse(bytes.toString("utf8"))),
+  };
 }
 
 async function runBounded(
@@ -323,21 +305,20 @@ export async function createReferencePackFromArchive(
       ...(input.signal ? { signal: input.signal } : {}),
     });
     const files = await regularFiles(extractedRoot);
-    const markdownPaths = files.filter((path) =>
-      path.toLowerCase().endsWith(".md"),
+    const contentPaths = files.filter((path) =>
+      /(?:^|_)content_list_v2\.json$/iu.test(basename(path)),
     );
     const pdfPaths = files.filter((path) =>
       path.toLowerCase().endsWith(".pdf"),
     );
-    if (markdownPaths.length < 1)
-      throw new Error("REFERENCE_PACK_MARKDOWN_MISSING");
+    const contentPath = contentPaths[0];
+    if (!contentPath || contentPaths.length !== 1)
+      throw new Error("REFERENCE_PACK_CONTENT_INVALID");
     if (pdfPaths.length < 1) throw new Error("REFERENCE_PACK_PDF_MISSING");
 
     await mkdir(outputDirectory, { mode: 0o700, recursive: false });
     outputCreated = true;
-    const markdownDocuments = await Promise.all(
-      markdownPaths.map((path) => observeMarkdown(path, extractedRoot)),
-    );
+    const contentJson = await observeContent(contentPath, extractedRoot);
     const pdfDocuments = [];
     for (const [pdfIndex, pdfPath] of pdfPaths.entries()) {
       const pageCount = await (input.pdfInspector ?? inspectPdf)(pdfPath);
@@ -404,9 +385,9 @@ export async function createReferencePackFromArchive(
     const result: MineruReferencePack = Object.freeze({
       archive_sha256: await sha256File(resolve(input.archivePath)),
       fixture_id: input.fixtureId,
-      markdown_documents: Object.freeze(markdownDocuments),
+      content_json: contentJson,
       pdf_documents: Object.freeze(pdfDocuments),
-      schema_version: 1,
+      schema_version: 2,
       sidecars: Object.freeze(sidecars),
     });
     await writeFile(
@@ -497,7 +478,7 @@ async function main(): Promise<void> {
   process.stdout.write(
     `${JSON.stringify({
       fixture_id: result.fixture_id,
-      markdown_documents: result.markdown_documents.length,
+      content_records: result.content_json.records.length,
       pdf_documents: result.pdf_documents.length,
       rendered_pages: result.pdf_documents.reduce(
         (total, pdf) => total + pdf.rendered_pages.length,

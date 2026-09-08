@@ -1,7 +1,4 @@
-import {
-  parseBookConfigYaml,
-  validateBookConfig,
-} from "../core/publication/book-config-schema";
+import { validateBookDocument } from "../core/content/book-document";
 import { validateDocumentManifest } from "../core/publication/document-manifest-schema";
 import { canonicalJson, compilerIdentity } from "../core/publication/manifest";
 import {
@@ -14,9 +11,8 @@ export type { HeadingNumberingMode } from "../core/publication/heading-presentat
 export {
   canonicalJson,
   katexCriticalCss,
-  parseBookConfigYaml,
   rendererStylesheetUrl,
-  validateBookConfig,
+  validateBookDocument,
   validateDocumentManifest,
 };
 

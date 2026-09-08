@@ -10,7 +10,10 @@ import {
   completeJobInterruption,
   retryJobAttempt,
 } from "./attempt-lifecycle";
-import type { WorkerAttemptExecutionOutcome } from "./execute-attempt";
+import {
+  workerHeartbeatIntervalMs,
+  type WorkerAttemptExecutionOutcome,
+} from "./execute-attempt";
 import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 import { CandidateRegistrationAdapter } from "@/modules/publishing/adapters/sqlite/candidate-registration";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
@@ -24,11 +27,10 @@ import {
   readAnalyzeImportArtifact,
 } from "@/modules/publishing/adapters/worker/analyze-import";
 import { finalizePreparedDraft } from "@/modules/publishing/adapters/worker/finalize-prepared-draft";
+import { finalizeDraftSave } from "@/modules/publishing/adapters/worker/finalize-draft-save";
 import {
   preparedDraftArtifactPath,
-  preparedSourceFilesFilename,
   readPreparedDraftArtifact,
-  readPreparedSourceFiles,
 } from "@/modules/publishing/adapters/worker/prepared-draft-artifact";
 import {
   evaluateJobRetry,
@@ -52,9 +54,42 @@ export async function completeWorkerAttempt(input: {
     input.outcome.kind === "child_closed"
       ? input.outcome.execution.memory
       : input.outcome.memory;
+  const heartbeat = setInterval(() => {
+    try {
+      input.repository.heartbeat({
+        jobId: input.job.id,
+        leaseOwner: input.leaseOwner,
+        nowMs: Date.now(),
+      });
+    } catch {
+      /* Final commits independently recheck lease ownership. */
+    }
+  }, workerHeartbeatIntervalMs);
   try {
     const latest = input.repository.get(input.job.id);
     if (!latest || latest.state !== "running") return memory;
+    if (latest.cancellationRequestedAtMs !== null) {
+      await cancelImportJob({
+        imports: input.imports,
+        job: input.job,
+        layout: input.layout,
+        nowMs: Date.now(),
+      });
+      completeJobFailure({
+        candidates: input.candidates,
+        database: input.database,
+        errorClass: "canceled",
+        errorCode:
+          latest.errorCode === "CANDIDATE_SUPERSEDED"
+            ? "CANDIDATE_SUPERSEDED"
+            : "JOB_CANCELED",
+        job: input.job,
+        leaseOwner: input.leaseOwner,
+        nowMs: Date.now(),
+        repository: input.repository,
+      });
+      return memory;
+    }
     if (input.outcome.kind === "execution_failed") {
       completeJobFailure({
         candidates: input.candidates,
@@ -68,27 +103,7 @@ export async function completeWorkerAttempt(input: {
       });
       return memory;
     }
-
     const { command, execution } = input.outcome;
-    if (latest.cancellationRequestedAtMs !== null) {
-      await cancelImportJob({
-        imports: input.imports,
-        job: input.job,
-        layout: input.layout,
-        nowMs: Date.now(),
-      });
-      completeJobFailure({
-        candidates: input.candidates,
-        database: input.database,
-        errorClass: "canceled",
-        errorCode: "JOB_CANCELED",
-        job: input.job,
-        leaseOwner: input.leaseOwner,
-        nowMs: Date.now(),
-        repository: input.repository,
-      });
-      return memory;
-    }
     if (input.outcome.shutdownRequested) {
       const interrupted = completeJobInterruption({
         candidates: input.candidates,
@@ -157,12 +172,9 @@ export async function completeWorkerAttempt(input: {
       }
       if (input.job.kind === "prepare_draft" && input.job.importId) {
         const expectedArtifact = `staging/${input.job.id}/prepared-draft.json`;
-        const expectedSourceFiles = `staging/${input.job.id}/${preparedSourceFilesFilename}`;
         if (
           execution.result.result?.preparedDraftRelativePath !==
-            expectedArtifact ||
-          execution.result.result?.preparedSourceFilesRelativePath !==
-            expectedSourceFiles
+          expectedArtifact
         ) {
           throw new Error("PREPARED_DRAFT_RESULT_PATH_INVALID");
         }
@@ -173,24 +185,33 @@ export async function completeWorkerAttempt(input: {
         const artifact = await readPreparedDraftArtifact(
           preparedDraftArtifactPath(stagingDirectory),
         );
-        const resourceRelativePaths = await readPreparedSourceFiles(
-          await resolveContainedPath(input.layout.root, expectedSourceFiles),
-        );
         const imported = input.imports.require(input.job.importId);
         await finalizePreparedDraft({
           artifact,
           database: input.database,
-          extractedRoot: resolve(stagingDirectory, "extracted"),
+          preparedRoot: resolve(stagingDirectory, "prepared"),
           importId: imported.id,
           layout: input.layout,
           nowMs: Date.now(),
-          originalArchivePath: await resolveContainedPath(
-            input.layout.root,
-            imported.uploadRelativePath,
-          ),
-          resourceRelativePaths,
         });
         await rm(stagingDirectory, { force: true, recursive: true });
+      }
+      if (input.job.kind === "save_draft") {
+        if (!execution.result.result)
+          throw new Error("DRAFT_SAVE_RESULT_MISSING");
+        await finalizeDraftSave({
+          database: input.database,
+          layout: input.layout,
+          jobId: input.job.id,
+          leaseOwner: input.leaseOwner,
+          nowMs: Date.now(),
+          result: execution.result.result,
+        });
+        await rm(resolve(input.layout.root, "staging", input.job.id), {
+          force: true,
+          recursive: true,
+        });
+        return memory;
       }
       if (input.job.kind === "build_candidate") {
         if (command.kind !== "build_candidate") {
@@ -278,6 +299,8 @@ export async function completeWorkerAttempt(input: {
         repository: input.repository,
       });
     }
+  } finally {
+    clearInterval(heartbeat);
   }
   return memory;
 }

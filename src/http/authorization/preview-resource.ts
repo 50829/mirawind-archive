@@ -6,21 +6,21 @@ import type { RequestSession } from "@/modules/identity/application/identity-api
 import { localDevelopmentSessionId } from "@/modules/identity/application/identity-api";
 import { isOpaqueId } from "@/domain/ids";
 
-const previewAuthorizationVersion = 1;
+const previewAuthorizationVersion = 2;
 export const previewAuthorizationLifetimeMs = 60 * 60 * 1000;
 
 interface PreviewAuthorizationClaims {
   readonly bookId: number;
   readonly expiresAtMs: number;
   readonly resourceId: string;
-  readonly revision: number;
+  readonly candidateId: string;
   readonly sessionId: string;
   readonly userId: string;
 }
 
 function signature(secret: BinaryLike, payload: string): Buffer {
   return createHmac("sha256", secret)
-    .update("mirawind-preview-resource-v1\0")
+    .update("mirawind-preview-resource-v2\0")
     .update(payload)
     .digest();
 }
@@ -32,7 +32,7 @@ function claimsPayload(claims: PreviewAuthorizationClaims): string {
       claims.sessionId,
       claims.userId,
       claims.bookId,
-      claims.revision,
+      claims.candidateId,
       claims.resourceId,
       claims.expiresAtMs,
     ]),
@@ -60,8 +60,8 @@ function parseClaims(payload: string): PreviewAuthorizationClaims | null {
     value[2].length > 255 ||
     !Number.isSafeInteger(value[3]) ||
     Number(value[3]) < 1 ||
-    !Number.isSafeInteger(value[4]) ||
-    Number(value[4]) < 1 ||
+    typeof value[4] !== "string" ||
+    !isOpaqueId("draftCandidate", value[4]) ||
     typeof value[5] !== "string" ||
     !isOpaqueId("resource", value[5]) ||
     !Number.isSafeInteger(value[6]) ||
@@ -73,7 +73,7 @@ function parseClaims(payload: string): PreviewAuthorizationClaims | null {
     bookId: Number(value[3]),
     expiresAtMs: Number(value[6]),
     resourceId: value[5],
-    revision: Number(value[4]),
+    candidateId: value[4],
     sessionId: value[1],
     userId: value[2],
   });
@@ -84,10 +84,13 @@ export function issuePreviewResourceAuthorization(input: {
   readonly bookId: number;
   readonly nowMs: number;
   readonly resourceId: string;
-  readonly revision: number;
+  readonly candidateId: string;
   readonly session: RequestSession;
 }): string {
-  if (!isOpaqueId("resource", input.resourceId)) {
+  if (
+    !isOpaqueId("resource", input.resourceId) ||
+    !isOpaqueId("draftCandidate", input.candidateId)
+  ) {
     throw new Error("PREVIEW_RESOURCE_ID_INVALID");
   }
   const expiresAtMs = Math.min(
@@ -101,7 +104,7 @@ export function issuePreviewResourceAuthorization(input: {
     bookId: input.bookId,
     expiresAtMs,
     resourceId: input.resourceId,
-    revision: input.revision,
+    candidateId: input.candidateId,
     sessionId: input.session.sessionId,
     userId: input.session.user.id,
   });
@@ -118,7 +121,7 @@ export function authorizePreviewResource(input: {
   readonly database: Database.Database;
   readonly nowMs: number;
   readonly resourceId: string;
-  readonly revision: number;
+  readonly candidateId: string;
 }): boolean {
   if (
     !input.authorization ||
@@ -146,7 +149,7 @@ export function authorizePreviewResource(input: {
   if (
     !claims ||
     claims.bookId !== input.bookId ||
-    claims.revision !== input.revision ||
+    claims.candidateId !== input.candidateId ||
     claims.resourceId !== input.resourceId ||
     claims.expiresAtMs <= input.nowMs ||
     claims.expiresAtMs > input.nowMs + previewAuthorizationLifetimeMs
@@ -186,10 +189,10 @@ export function authorizePreviewHtmlResources(input: {
   readonly bookId: number;
   readonly html: string;
   readonly nowMs: number;
-  readonly revision: number;
+  readonly candidateId: string;
   readonly session: RequestSession;
 }): string {
-  const prefix = `/api/manage/books/${input.bookId}/preview/${input.revision}/assets/`;
+  const prefix = `/api/manage/books/${input.bookId}/preview/${input.candidateId}/assets/`;
   const pattern = new RegExp(
     `${prefix.replaceAll("/", "\\/")}(res_[A-Za-z0-9_-]{16,80})`,
     "gu",
@@ -203,7 +206,7 @@ export function authorizePreviewHtmlResources(input: {
         bookId: input.bookId,
         nowMs: input.nowMs,
         resourceId,
-        revision: input.revision,
+        candidateId: input.candidateId,
         session: input.session,
       });
       authorizations.set(resourceId, authorization);

@@ -22,6 +22,8 @@ export function dispatchJobCommand<Result>(
       return registry.build_candidate(command);
     case "prepare_draft":
       return registry.prepare_draft(command);
+    case "save_draft":
+      return registry.save_draft(command);
     case "purge_book":
       return registry.purge_book(command);
   }

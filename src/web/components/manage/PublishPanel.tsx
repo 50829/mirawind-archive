@@ -8,7 +8,8 @@ export function PublishPanel(props: {
   readonly bookId: number;
   readonly candidatePublished: boolean;
   readonly compact?: boolean;
-  readonly etag: string;
+  readonly updatedAt: number;
+  readonly candidateId: string | null;
   readonly onPublished: () => Promise<void>;
   readonly previewReady: boolean;
   readonly previewStale: boolean;
@@ -23,12 +24,14 @@ export function PublishPanel(props: {
       const response = await fetch(
         `/api/manage/books/${props.bookId}/publish`,
         {
-          body: JSON.stringify({}),
+          body: JSON.stringify({
+            expected_updated_at: props.updatedAt,
+            candidate_id: props.candidateId,
+          }),
           cache: "no-store",
           credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
-            "If-Match": props.etag,
           },
           method: "POST",
         },
@@ -53,7 +56,7 @@ export function PublishPanel(props: {
 
   const canPublish =
     props.previewReady &&
-    Boolean(props.etag) &&
+    Boolean(props.candidateId) &&
     !props.previewStale &&
     !props.blocked &&
     !submitting &&
@@ -62,7 +65,7 @@ export function PublishPanel(props: {
     ? "正在发布"
     : props.candidatePublished
       ? "已发布"
-      : "发布当前修订";
+      : "发布当前预览";
 
   return (
     <section

@@ -8,7 +8,6 @@ import {
 const blockId = "blk_0123456789abcdefghij";
 const resourceId = "res_0123456789abcdefghij";
 const versionId = "ver_0123456789abcdefghij";
-const sourceId = "src_0123456789abcdefghij";
 
 function manifest(): Record<string, unknown> {
   return {
@@ -18,26 +17,16 @@ function manifest(): Record<string, unknown> {
         normalized_visible_text: "Chapter",
         page_id: 1,
         resource_ids: [resourceId],
-        source: {
-          end: { column: 10, line: 1 },
-          path: "source/main.md",
-          start: { column: 1, line: 1 },
-        },
-        text_fingerprint: {
-          algorithm: "sha256",
-          normalization_version: 1,
-          value: "a".repeat(64),
-        },
       },
     },
     book_id: 1,
     compiler: {
       name: "mirawind-book-compiler",
-      renderer_version: "semantic-html-v6-katex-0.18.1",
+      renderer_version: "semantic-html-v7-katex-0.18.1",
       text_normalization_version: 1,
-      version: "compiler-v6",
+      version: "compiler-v7",
     },
-    config_revision: 2,
+    source_updated_at: 2000,
     created_at: "2026-07-24T00:00:00.000Z",
     pages: [
       {
@@ -59,14 +48,7 @@ function manifest(): Record<string, unknown> {
         width: 10,
       },
     },
-    schema_version: 3,
-    source_files: [
-      {
-        path: "source/main.md",
-        sha256: "c".repeat(64),
-        size: 10,
-      },
-    ],
+    schema_version: 4,
     toc: [
       {
         block_id: blockId,
@@ -84,18 +66,18 @@ function manifest(): Record<string, unknown> {
 function versionMarker(): Record<string, unknown> {
   return {
     book_id: 1,
-    book_yaml_sha256: "d".repeat(64),
+    book_document_sha256: "d".repeat(64),
     complete: true,
     compiler: {
       name: "mirawind-book-compiler",
-      renderer_version: "semantic-html-v6-katex-0.18.1",
+      renderer_version: "semantic-html-v7-katex-0.18.1",
       text_normalization_version: 1,
-      version: "compiler-v6",
+      version: "compiler-v7",
     },
-    config_revision: 2,
+    source_updated_at: 2000,
     created_at: "2026-07-24T00:00:00.000Z",
     files: [
-      { path: "book.yaml", sha256: "d".repeat(64), size: 10 },
+      { path: "book.json", sha256: "d".repeat(64), size: 10 },
       {
         path: "document-manifest.json",
         sha256: "e".repeat(64),
@@ -109,8 +91,7 @@ function versionMarker(): Record<string, unknown> {
     ],
     manifest_sha256: "e".repeat(64),
     predecessor_version_id: null,
-    schema_version: 3,
-    source_id: sourceId,
+    schema_version: 4,
     version_id: versionId,
   };
 }
@@ -120,7 +101,7 @@ describe("document manifest and immutable version marker", () => {
     const result = validateDocumentManifest(manifest());
     expect(result).toMatchObject({
       book_id: 1,
-      schema_version: 3,
+      schema_version: 4,
       version_id: versionId,
     });
     expect(Object.isFrozen(result)).toBe(true);
@@ -151,21 +132,7 @@ describe("document manifest and immutable version marker", () => {
     );
   });
 
-  it("rejects reversed source spans and duplicate page ownership", () => {
-    const reversed = manifest();
-    const block = (reversed.blocks as Record<string, Record<string, unknown>>)[
-      blockId
-    ];
-    if (!block) throw new Error("Block fixture is missing");
-    block.source = {
-      end: { column: 1, line: 1 },
-      path: "source/main.md",
-      start: { column: 2, line: 1 },
-    };
-    expect(() => validateDocumentManifest(reversed)).toThrow(
-      expect.objectContaining({ code: "DOCUMENT_MANIFEST_SEMANTIC_INVALID" }),
-    );
-
+  it("rejects duplicate page ownership", () => {
     const duplicate = manifest();
     (duplicate.pages as Record<string, unknown>[]).push({
       block_ids: [blockId],
@@ -182,7 +149,7 @@ describe("document manifest and immutable version marker", () => {
   it("requires a strict complete marker and canonical closed file list", () => {
     expect(validateVersionMarker(versionMarker())).toMatchObject({
       complete: true,
-      schema_version: 3,
+      schema_version: 4,
     });
 
     expect(() =>
@@ -193,7 +160,7 @@ describe("document manifest and immutable version marker", () => {
         ...versionMarker(),
         files: [
           ...(versionMarker().files as Record<string, unknown>[]),
-          { path: "book.yaml", sha256: "d".repeat(64), size: 10 },
+          { path: "book.json", sha256: "d".repeat(64), size: 10 },
         ],
       }),
     ).toThrow(
@@ -208,7 +175,7 @@ describe("document manifest and immutable version marker", () => {
             sha256: "e".repeat(64),
             size: 20,
           },
-          { path: "book.yaml", sha256: "d".repeat(64), size: 10 },
+          { path: "book.json", sha256: "d".repeat(64), size: 10 },
           {
             path: "published/pages/1.html",
             sha256: "f".repeat(64),
@@ -229,11 +196,11 @@ describe("document manifest and immutable version marker", () => {
       validateDocumentManifest({ ...manifest(), schema_version: 2 }),
     ).toThrow(
       expect.objectContaining({
-        code: "DOCUMENT_MANIFEST_SCHEMA_VERSION_INVALID",
+        code: "DOCUMENT_MANIFEST_SCHEMA_VERSION_UNSUPPORTED",
       }),
     );
     expect(() =>
-      validateDocumentManifest({ ...manifest(), schema_version: 4 }),
+      validateDocumentManifest({ ...manifest(), schema_version: 5 }),
     ).toThrow(
       expect.objectContaining({
         code: "DOCUMENT_MANIFEST_SCHEMA_VERSION_UNSUPPORTED",
@@ -243,11 +210,11 @@ describe("document manifest and immutable version marker", () => {
       validateVersionMarker({ ...versionMarker(), schema_version: 2 }),
     ).toThrow(
       expect.objectContaining({
-        code: "VERSION_MARKER_SCHEMA_VERSION_INVALID",
+        code: "VERSION_MARKER_SCHEMA_VERSION_UNSUPPORTED",
       }),
     );
     expect(() =>
-      validateVersionMarker({ ...versionMarker(), schema_version: 4 }),
+      validateVersionMarker({ ...versionMarker(), schema_version: 5 }),
     ).toThrow(
       expect.objectContaining({
         code: "VERSION_MARKER_SCHEMA_VERSION_UNSUPPORTED",

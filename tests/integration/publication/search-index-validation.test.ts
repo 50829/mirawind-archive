@@ -4,7 +4,6 @@ import type { SearchSpool } from "@/modules/publishing/core/publication/search-m
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import { BookPresentationRepository } from "@/modules/catalog/adapters/sqlite/book-presentations";
 
@@ -12,7 +11,6 @@ import { withMigratedTestDatabase } from "../../helpers/database.js";
 import { presentationForTest } from "../../helpers/publication.js";
 
 const hash = "a".repeat(64);
-const sourceId = "src_search_index_test_0001";
 const versionId = "ver_search_index_test_0001";
 const secondVersionId = "ver_search_index_test_0002";
 const blockId = "blk_search_index_test_0001";
@@ -67,32 +65,11 @@ describe("ready-version and search index transaction", () => {
         uploadSha256: hash,
         uploadSizeBytes: 1,
       });
-      new SourceRepository(database).createSnapshot({
-        analysisVersion: "test-v1",
-        bookId: book.id,
-        createdFromImportId: imported.id,
-        id: sourceId,
-        mainMarkdownPath: "book.md",
-        mainMarkdownSha256: hash,
-        nowMs: 3,
-        origin: "import",
-        sourceRootRelativePath: "books/1/draft/sources/source",
-      });
-      drafts.addConfigRevision({
-        bookId: book.id,
-        nowMs: 4,
-        revision: 1,
-        schemaVersion: 4,
-        sourceId,
-        title: "Book",
-        yamlRelativePath: "books/1/draft/configs/1/book.yaml",
-        yamlSha256: hash,
-      });
       const jobs = new JobRepository(database);
       const firstJob = jobs.create({
         bookId: book.id,
-        capturedConfigRevision: 1,
-        capturedSourceId: sourceId,
+        capturedSourceUpdatedAt: 1000,
+        importId: imported.id,
         kind: "build_candidate",
         nowMs: 5,
         versionId,
@@ -100,18 +77,18 @@ describe("ready-version and search index transaction", () => {
       const versions = new VersionRepository(database);
       const ready = versions.registerReadyWithSearch({
         bookId: book.id,
-        compilerVersion: "compiler-v6",
+        compilerVersion: "compiler-v7",
         completeAtMs: 6,
-        configRevision: 1,
+        sourceUpdatedAt: 1000,
         createdByJobId: firstJob.id,
         expectedSearchBlockIds: [blockId],
-        manifestSchemaVersion: 3,
+        manifestSchemaVersion: 4,
         manifestSha256: hash,
         predecessorVersionId: null,
         presentation: presentationForTest(book.id, versionId),
         presentationWriter: new BookPresentationRepository(database),
-        rendererVersion: "semantic-html-v6-katex-0.18.1",
-        sourceId,
+        rendererVersion: "semantic-html-v7-katex-0.18.1",
+        importId: imported.id,
         spool: spool({ bookId: book.id, versionId }),
         versionId,
         versionRelativePath: `books/1/versions/${versionId}`,
@@ -132,9 +109,9 @@ describe("ready-version and search index transaction", () => {
 
       const secondJob = jobs.create({
         bookId: book.id,
-        capturedConfigRevision: 1,
+        capturedSourceUpdatedAt: 1000,
         capturedCurrentVersionId: versionId,
-        capturedSourceId: sourceId,
+        importId: imported.id,
         kind: "build_candidate",
         nowMs: 7,
         versionId: secondVersionId,
@@ -142,18 +119,18 @@ describe("ready-version and search index transaction", () => {
       expect(() =>
         versions.registerReadyWithSearch({
           bookId: book.id,
-          compilerVersion: "compiler-v6",
+          compilerVersion: "compiler-v7",
           completeAtMs: 8,
-          configRevision: 1,
+          sourceUpdatedAt: 1000,
           createdByJobId: secondJob.id,
           expectedSearchBlockIds: ["blk_search_index_missing_0001"],
-          manifestSchemaVersion: 3,
+          manifestSchemaVersion: 4,
           manifestSha256: hash,
           predecessorVersionId: versionId,
           presentation: presentationForTest(book.id, secondVersionId),
           presentationWriter: new BookPresentationRepository(database),
-          rendererVersion: "semantic-html-v6-katex-0.18.1",
-          sourceId,
+          rendererVersion: "semantic-html-v7-katex-0.18.1",
+          importId: imported.id,
           spool: spool({ bookId: book.id, versionId: secondVersionId }),
           versionId: secondVersionId,
           versionRelativePath: `books/1/versions/${secondVersionId}`,

@@ -31,9 +31,9 @@ interface JobRow {
   automatic_retry_count: number;
   book_id: number | null;
   candidate_id: string | null;
-  captured_config_revision: number | null;
+  captured_source_updated_at: number | null;
   captured_current_version_id: string | null;
-  captured_source_id: string | null;
+  captured_input_path: string | null;
   created_at: number;
   error_class: JobErrorClass | null;
   error_code: string | null;
@@ -59,9 +59,9 @@ export interface JobRecord {
   readonly automaticRetryCount: number;
   readonly bookId: number | null;
   readonly candidateId: string | null;
-  readonly capturedConfigRevision: number | null;
+  readonly capturedSourceUpdatedAt: number | null;
   readonly capturedCurrentVersionId: string | null;
-  readonly capturedSourceId: string | null;
+  readonly capturedInputPath: string | null;
   readonly createdAtMs: number;
   readonly errorClass: JobErrorClass | null;
   readonly errorCode: string | null;
@@ -89,9 +89,9 @@ export type UserJobRecord = Omit<JobRecord, "kind"> & {
 export interface CreateJobInput {
   readonly bookId?: number;
   readonly candidateId?: string;
-  readonly capturedConfigRevision?: number;
+  readonly capturedSourceUpdatedAt?: number;
   readonly capturedCurrentVersionId?: string;
-  readonly capturedSourceId?: string;
+  readonly capturedInputPath?: string;
   readonly idempotency?: {
     readonly key: string;
     readonly operation: string;
@@ -129,9 +129,9 @@ function mapJob(row: JobRow): JobRecord {
     automaticRetryCount: row.automatic_retry_count,
     bookId: row.book_id,
     candidateId: row.candidate_id,
-    capturedConfigRevision: row.captured_config_revision,
+    capturedSourceUpdatedAt: row.captured_source_updated_at,
     capturedCurrentVersionId: row.captured_current_version_id,
-    capturedSourceId: row.captured_source_id,
+    capturedInputPath: row.captured_input_path,
     createdAtMs: row.created_at,
     errorClass: row.error_class,
     errorCode: row.error_code,
@@ -219,7 +219,7 @@ export class JobRepository {
 
   create(input: CreateJobInput): UserJobRecord {
     if (
-      ["build_candidate", "purge_book"].includes(input.kind) &&
+      ["save_draft", "build_candidate", "purge_book"].includes(input.kind) &&
       input.bookId === undefined
     ) {
       throw new Error("JOB_BOOK_SCOPE_REQUIRED");
@@ -251,7 +251,7 @@ export class JobRepository {
           .prepare(
             `INSERT INTO jobs (
             id, kind, state, import_id, book_id, candidate_id, version_id,
-            captured_source_id, captured_config_revision,
+            captured_input_path, captured_source_updated_at,
             captured_current_version_id, attempt, automatic_retry_count,
             phase, progress_json, created_at
           ) VALUES (
@@ -265,8 +265,8 @@ export class JobRepository {
             input.bookId ?? null,
             input.candidateId ?? null,
             input.versionId ?? null,
-            input.capturedSourceId ?? null,
-            input.capturedConfigRevision ?? null,
+            input.capturedInputPath ?? null,
+            input.capturedSourceUpdatedAt ?? null,
             input.capturedCurrentVersionId ?? null,
             phase,
             progressJson(initialProgress),
@@ -333,7 +333,7 @@ export class JobRepository {
            COALESCE(SUM(CASE WHEN state = 'running' THEN 1 ELSE 0 END), 0) AS running_count,
            MIN(CASE WHEN state = 'queued' THEN created_at END) AS oldest_queued_at
          FROM jobs
-         WHERE kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')`,
+         WHERE kind IN ('analyze_import', 'prepare_draft', 'save_draft', 'build_candidate', 'purge_book')`,
       )
       .get() as {
       oldest_queued_at: number | null;
@@ -371,7 +371,7 @@ export class JobRepository {
             .prepare(
               `SELECT 1 FROM jobs
                WHERE state = 'running'
-                 AND kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')
+                 AND kind IN ('analyze_import', 'prepare_draft', 'save_draft', 'build_candidate', 'purge_book')
                LIMIT 1`,
             )
             .get()
@@ -382,8 +382,8 @@ export class JobRepository {
           .prepare(
             `SELECT id FROM jobs
              WHERE state = 'queued'
-               AND kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')
-             ORDER BY created_at, id
+               AND kind IN ('analyze_import', 'prepare_draft', 'save_draft', 'build_candidate', 'purge_book')
+             ORDER BY CASE WHEN kind = 'save_draft' THEN 0 ELSE 1 END, created_at, id
              LIMIT 1`,
           )
           .get() as { id: string } | undefined;
@@ -409,23 +409,6 @@ export class JobRepository {
         return mapUserJob(row);
       })
       .immediate();
-  }
-
-  retireMaintenanceJobs(nowMs: number): number {
-    if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
-      throw new RangeError("JOB_RETIREMENT_TIME_INVALID");
-    }
-    return this.database
-      .prepare(
-        `UPDATE jobs
-         SET state = 'canceled', phase = 'canceled',
-             error_class = 'canceled', error_code = 'MAINTENANCE_MOVED_INTERNAL',
-             cancellation_requested_at = ?, finished_at = ?,
-             lease_owner = NULL, lease_until = NULL
-         WHERE kind IN ('verify_version', 'reconcile', 'reclaim_versions')
-           AND state IN ('queued', 'running')`,
-      )
-      .run(nowMs, nowMs).changes;
   }
 
   heartbeat(input: {
@@ -616,7 +599,7 @@ export class JobRepository {
           .prepare(
             `SELECT id FROM jobs
              WHERE state = 'running' AND lease_until < ?
-               AND kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')
+               AND kind IN ('analyze_import', 'prepare_draft', 'save_draft', 'build_candidate', 'purge_book')
              ORDER BY id`,
           )
           .all(input.nowMs) as { id: string }[];
@@ -625,7 +608,7 @@ export class JobRepository {
            error_class = 'infrastructure', error_code = 'JOB_LEASE_EXPIRED',
            finished_at = ?, lease_owner = NULL, lease_until = NULL
            WHERE id = ? AND state = 'running' AND lease_until < ?
-             AND kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')`,
+             AND kind IN ('analyze_import', 'prepare_draft', 'save_draft', 'build_candidate', 'purge_book')`,
         );
         const interrupted: UserJobRecord[] = [];
         for (const row of rows) {
@@ -648,7 +631,7 @@ export class JobRepository {
       .prepare(
         `SELECT jobs.* FROM jobs
          WHERE jobs.state = 'interrupted'
-           AND jobs.kind IN ('analyze_import', 'prepare_draft', 'build_candidate', 'purge_book')
+           AND jobs.kind IN ('analyze_import', 'prepare_draft', 'save_draft', 'build_candidate', 'purge_book')
            AND jobs.error_class = 'infrastructure'
            AND jobs.error_code IN ('JOB_LEASE_EXPIRED', 'WORKER_SHUTDOWN')
            AND jobs.automatic_retry_count = 0
@@ -694,6 +677,15 @@ export class JobRepository {
       jobId: id,
       leaseOwner: current.leaseOwner,
     });
+  }
+
+  latestRetryOf(jobId: string): UserJobRecord | null {
+    const row = this.database
+      .prepare(
+        "SELECT * FROM jobs WHERE retry_of_job_id=? ORDER BY created_at DESC,id DESC LIMIT 1",
+      )
+      .get(jobId) as JobRow | undefined;
+    return row ? mapUserJob(row) : null;
   }
 
   retry(
@@ -758,7 +750,7 @@ export class JobRepository {
           .prepare(
             `INSERT INTO jobs (
               id, kind, state, import_id, book_id, candidate_id, version_id,
-              captured_source_id, captured_config_revision,
+              captured_input_path, captured_source_updated_at,
               captured_current_version_id, retry_of_job_id, attempt,
               automatic_retry_count, phase, progress_json, created_at
             ) VALUES (
@@ -776,8 +768,8 @@ export class JobRepository {
             input.nextAttempt
               ? input.nextAttempt.versionId
               : original.versionId,
-            original.capturedSourceId,
-            original.capturedConfigRevision,
+            original.capturedInputPath,
+            original.capturedSourceUpdatedAt,
             input.nextAttempt
               ? input.nextAttempt.capturedCurrentVersionId
               : original.capturedCurrentVersionId,

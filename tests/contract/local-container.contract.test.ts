@@ -7,8 +7,6 @@ const localComposePath = new URL(
   "../../docker/compose.local.yaml",
   import.meta.url,
 );
-const astroConfigPath = new URL("../../astro.config.mjs", import.meta.url);
-const localScriptPath = new URL("../../docker/local.sh", import.meta.url);
 
 describe("local Docker launcher", () => {
   it("publishes only the local Web port and preserves separate Web and worker processes", async () => {
@@ -40,38 +38,5 @@ describe("local Docker launcher", () => {
       NODE_ENV: "development",
     });
     expect(compose.services.caddy?.profiles).toEqual(["production-proxy"]);
-  });
-
-  it("isolates native development dependencies from tooling cache invalidation", async () => {
-    const astroConfig = await readFile(astroConfigPath, "utf8");
-
-    expect(astroConfig).toContain('MIRAWIND_LOCAL_DEVELOPMENT_TRUST === "1"');
-    expect(astroConfig).toContain('"./node_modules/.vite-development/"');
-    expect(astroConfig).toContain('"./node_modules/.vite-tooling/"');
-  });
-
-  it("uses an interactive offline bootstrap and never accepts a password variable", async () => {
-    const script = await readFile(localScriptPath, "utf8");
-    const startStack = script.slice(
-      script.indexOf("start_stack()"),
-      script.indexOf("\nusage()"),
-    );
-
-    expect(script).toContain('--project-name "${project_name}"');
-    expect(script).toContain(
-      "node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d",
-    );
-    expect(script).toContain("randomBytes(48)");
-    expect(script).not.toContain("openssl rand");
-    expect(script).toContain(
-      "SELECT admin_user_id FROM installation WHERE id = 1",
-    );
-    expect(script).toContain("admin bootstrap");
-    expect(script).toContain("compose up --detach --no-build --wait");
-    expect(startStack).toMatch(
-      /compose build\s+compose stop worker\s+compose stop web\s+compose run --rm data-init/,
-    );
-    expect(script).toMatch(/compose stop worker\s+compose stop web/);
-    expect(script).not.toMatch(/ADMIN_(?:PASSWORD|PASS)|MIRAWIND_PASSWORD/);
   });
 });

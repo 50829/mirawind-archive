@@ -1,11 +1,11 @@
-import { createHash } from "node:crypto";
+import type { NormalizedDocument } from "@/modules/publishing/core/preparation/document-model";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { analysisDocument } from "../../helpers/analysis-document";
+import { parseEditorDocument } from "@/modules/publishing/core/content/editor-parser";
 import {
   detectPrintedContents,
   hasReliableLayoutOrderInversion,
@@ -16,7 +16,6 @@ import {
   supplementalPdfPageIndices,
   type PrintedContentsDetection,
 } from "@/modules/publishing/core/preparation/printed-contents";
-import { applySourceRegions } from "@/modules/publishing/core/preparation/source-regions";
 import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
 
 const fixturePath = fileURLToPath(
@@ -40,7 +39,7 @@ const unlabelledPath = fileURLToPath(
 
 function documentFor(source: string) {
   let ordinal = 0;
-  return normalizeDocumentBlocks(parseMarkdownDocument(source), {
+  return analysisDocument(parseEditorDocument(source), {
     idFactory: () => `blk_${String(++ordinal).padStart(16, "0")}`,
   });
 }
@@ -234,8 +233,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -273,8 +270,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -303,8 +298,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toBe(expected);
@@ -333,8 +326,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -533,12 +524,9 @@ describe("printed contents detection", () => {
 
   it("produces a high-confidence title-free region with monotonic body matches", async () => {
     const source = await readFile(fixturePath, "utf8");
-    const digest = createHash("sha256").update(source).digest("hex");
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: digest,
     });
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({
@@ -547,26 +535,18 @@ describe("printed contents detection", () => {
       matchedHeadingCount: 6,
       proposedRegion: {
         applied: true,
-        disposition: "reference_only",
-        entries: expect.arrayContaining([
-          expect.objectContaining({
-            body_heading_block_id: expect.stringMatching(/^blk_/u),
-            reference_level: 1,
-          }),
-          expect.objectContaining({ reference_level: 2 }),
-        ]),
+        block_ids: expect.arrayContaining([expect.stringMatching(/^blk_/u)]),
         kind: "printed_toc",
         region_id: "region_abcdefghijklmnop",
-        source_path: "source/full.md",
-        source_sha256: digest,
       },
     });
     expect(JSON.stringify(result.candidates[0]?.proposedRegion)).not.toContain(
       "绪论",
     );
-    expect(result.candidates[0]?.proposedRegion?.range.start_byte).toBe(
-      Buffer.byteLength(source.slice(0, source.indexOf("# 目录")), "utf8"),
+    const first = documentFor(source).root.children?.findIndex(
+      (node) => node.visibleText === "目录",
     );
+    expect(result.candidates[0]?.startIndex).toBe(first);
   });
 
   it("excludes a reliable region while leaving repeated matches ambiguous", async () => {
@@ -574,8 +554,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
     expect(result.candidates[0]).toMatchObject({
       boundaryConfidence: "high",
@@ -592,8 +570,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
     expect(
       result.candidates.every((candidate) => !candidate.proposedRegion),
@@ -622,12 +598,9 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
     expect(result.candidates[0]?.proposedRegion).toMatchObject({
       applied: true,
-      disposition: "reference_only",
     });
     expect(result.candidates[0]?.diagnostics).not.toContainEqual(
       expect.objectContaining({ code: "PRINTED_TOC_RICH_CONTENT" }),
@@ -675,8 +648,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]).toMatchObject({
@@ -716,8 +687,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -785,8 +754,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -824,8 +791,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -873,8 +838,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]).toMatchObject({
@@ -919,17 +882,10 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]).toMatchObject({ entryCount: 3 });
-    expect(result.candidates[0]?.endByte).toBe(
-      Buffer.byteLength(
-        "# Contents\n\n# Chapter 1 Start 1\n\n# Chapter 2 Continue 9\n\n# Chapter 3 Finish 17",
-        "utf8",
-      ),
-    );
+    expect(result.candidates[0]?.endIndex).toBe(3);
   });
 
   it("keeps a repeated chapter when printed-page rows continue after it", () => {
@@ -967,8 +923,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]).toMatchObject({
@@ -982,18 +936,14 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
-      result.candidates[0]?.proposedRegion?.entries.map(
-        (entry) => entry.reference_level,
-      ),
+      result.candidates[0]?.logicalEntries.map((entry) => entry.referenceLevel),
     ).toEqual([1, 2, 2]);
     expect(
-      result.candidates[0]?.proposedRegion?.entries.every(
-        (entry) => entry.body_heading_block_id,
+      result.candidates[0]?.logicalEntries.every(
+        (entry) => entry.bodyHeadingBlockId,
       ),
     ).toBe(true);
   });
@@ -1023,8 +973,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
@@ -1058,8 +1006,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
@@ -1093,8 +1039,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
@@ -1122,8 +1066,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toContain(
@@ -1154,8 +1096,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
@@ -1188,8 +1128,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
@@ -1217,8 +1155,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
@@ -1252,8 +1188,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
@@ -1293,8 +1227,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -1328,8 +1260,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -1399,8 +1329,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toContain(
@@ -1427,8 +1355,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -1465,8 +1391,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
     const candidate = result.candidates[0];
 
@@ -1506,8 +1430,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -1544,8 +1466,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -1606,8 +1526,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -1638,7 +1556,6 @@ describe("printed contents detection", () => {
       ...body.flatMap((entry) => [`## ${entry}`, "", "正文", ""]),
     ].join("\n");
     const document = documentFor(source);
-    const sourceSha256 = createHash("sha256").update(source).digest("hex");
     const misleadingLayoutTitles = [
       contents[0],
       contents[1],
@@ -1671,23 +1588,16 @@ describe("printed contents detection", () => {
         ],
         source: "content-list",
       },
-      sourcePath: "source/full.md",
-      sourceSha256,
     });
 
     const region = result.candidates[0]?.proposedRegion;
-    expect(region?.entries.map((entry) => entry.reference_level)).toEqual([
-      1, 2, 1, 2, 3, 4, 1, 2, 3, 1,
-    ]);
+    expect(
+      result.candidates[0]?.logicalEntries.map((entry) => entry.referenceLevel),
+    ).toEqual([1, 2, 1, 2, 3, 4, 1, 2, 3, 1]);
     expect(region).toBeDefined();
     if (!region) throw new Error("Expected a proposed printed region");
 
-    const activeDocument = applySourceRegions({
-      document,
-      mainMarkdownPath: "source/full.md",
-      mainMarkdownSha256: sourceSha256,
-      regions: [region],
-    }).document;
+    const activeDocument = withoutContents(document, new Set(region.block_ids));
     expect(
       activeDocument.headings.filter((heading) =>
         heading.sourceTitle.includes("第一部分"),
@@ -1751,14 +1661,10 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
-      result.candidates[0]?.proposedRegion?.entries.map(
-        (entry) => entry.reference_level,
-      ),
+      result.candidates[0]?.logicalEntries.map((entry) => entry.referenceLevel),
     ).toEqual([1, 2, 3, 2, 3, 3]);
   });
 
@@ -1804,8 +1710,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     const candidate = result.candidates[0];
@@ -1816,14 +1720,7 @@ describe("printed contents detection", () => {
       entryCount: 6,
       matchedHeadingCount: 6,
     });
-    expect(candidate?.proposedRegion?.entries.length).toBeGreaterThanOrEqual(3);
-    expect(
-      new Set(
-        candidate?.proposedRegion?.entries.map(
-          (entry) => `${entry.range.start_byte}:${entry.range.end_byte}`,
-        ),
-      ).size,
-    ).toBe(candidate?.proposedRegion?.entries.length);
+    expect(candidate?.logicalEntries.length).toBeGreaterThanOrEqual(3);
   });
 
   it("recovers unnumbered native rows from an empty source gap", () => {
@@ -1870,8 +1767,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -1936,8 +1831,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -1996,8 +1889,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
@@ -2038,8 +1929,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document,
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(numberedHeading).toBeDefined();
@@ -2101,14 +1990,12 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document,
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
       result.candidates[0]?.logicalEntries.map((entry) => entry.sourceTitle),
     ).toEqual([
-      "## 出版者的话",
+      "出版者的话",
       "中文版序一",
       "中文版序二",
       "关于作者",
@@ -2146,8 +2033,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries.slice(0, 2)).toMatchObject([
@@ -2193,8 +2078,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2258,8 +2141,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2294,8 +2175,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.diagnostics).toEqual(
@@ -2358,8 +2237,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2416,8 +2293,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2477,8 +2352,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2495,13 +2368,6 @@ describe("printed contents detection", () => {
     expect(result.candidates[0]?.matchedHeadingCount).toBe(
       layoutEntries.length,
     );
-    expect(
-      result.candidates[0]?.proposedRegion?.entries.every(
-        (entry, index, entries) =>
-          index === 0 ||
-          entry.range.start_byte >= (entries[index - 1]?.range.end_byte ?? 0),
-      ),
-    ).toBe(true);
   });
 
   it("attributes uniquely matching layout rows after a local order crossing", () => {
@@ -2558,8 +2424,6 @@ describe("printed contents detection", () => {
         ],
         source: "content-list",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2610,8 +2474,6 @@ describe("printed contents detection", () => {
         ],
         source: "content-list",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2664,8 +2526,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2732,8 +2592,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2798,8 +2656,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2839,14 +2695,12 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]).toMatchObject({
       bodyHeadingBlockId: expect.any(String),
       referenceLevel: 2,
-      sourceTitle: "\\* 5.4 概率分析和指示器随机变量的 进一步使用 ...... 73",
+      sourceTitle: "* 5.4 概率分析和指示器随机变量的 进一步使用 ...... 73",
     });
   });
 
@@ -2904,8 +2758,6 @@ describe("printed contents detection", () => {
         })),
         source: "content-list",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -2968,8 +2820,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -3022,8 +2872,6 @@ describe("printed contents detection", () => {
         })),
         source: "content-list",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toBe(
@@ -3083,8 +2931,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -3152,8 +2998,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -3215,8 +3059,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toBe(
@@ -3263,8 +3105,6 @@ describe("printed contents detection", () => {
         })),
         source: "native-pdf",
       },
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[1]?.sourceTitle).toBe(
@@ -3309,8 +3149,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -3352,8 +3190,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries).toMatchObject([
@@ -3407,8 +3243,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -3452,8 +3286,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -3472,8 +3304,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates).toHaveLength(1);
@@ -3483,9 +3313,7 @@ describe("printed contents detection", () => {
       matchedHeadingCount: 4,
     });
     expect(
-      result.candidates[0]?.proposedRegion?.entries.map(
-        (entry) => entry.reference_level,
-      ),
+      result.candidates[0]?.logicalEntries.map((entry) => entry.referenceLevel),
     ).toEqual([1, 1, 1, 1]);
   });
 
@@ -3520,17 +3348,11 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]).toMatchObject({
       entryCount: 4,
-      proposedRegion: expect.objectContaining({
-        range: expect.objectContaining({
-          start_byte: Buffer.byteLength("# Book\n\n", "utf8"),
-        }),
-      }),
+      startIndex: 1,
     });
   });
 
@@ -3565,8 +3387,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document,
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.logicalEntries[0]?.bodyHeadingBlockId).toBe(
@@ -3604,8 +3424,6 @@ describe("printed contents detection", () => {
         let ordinal = 0;
         return () => `region_${String(++ordinal).padStart(16, "0")}`;
       })(),
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates).toHaveLength(2);
@@ -3647,16 +3465,12 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({
       entryCount: 3,
-      proposedRegion: expect.objectContaining({
-        range: expect.objectContaining({ start_byte: 0 }),
-      }),
+      startIndex: 0,
     });
   });
 
@@ -3692,8 +3506,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]).toMatchObject({
@@ -3731,8 +3543,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.diagnostics).toContainEqual(
@@ -3768,8 +3578,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates).toHaveLength(1);
@@ -3785,7 +3593,7 @@ describe("printed contents detection", () => {
       const source = [
         "## Contents",
         "",
-        firstRow,
+        `## ${firstRow}`,
         "",
         "Chapter 1 Start .... 1",
         "",
@@ -3802,8 +3610,6 @@ describe("printed contents detection", () => {
       return detectPrintedContents({
         document: documentFor(source),
         idFactory: () => "region_abcdefghijklmnop",
-        sourcePath: "source/full.md",
-        sourceSha256: createHash("sha256").update(source).digest("hex"),
       });
     };
 
@@ -3860,8 +3666,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(
@@ -3894,8 +3698,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => `region_${String(++region).padStart(16, "0")}`,
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates).toHaveLength(2);
@@ -3908,24 +3710,17 @@ describe("printed contents detection", () => {
       true,
     ]);
     expect(
-      result.candidates[0]?.proposedRegion?.entries.every(
-        (entry) => entry.body_heading_block_id === undefined,
-      ),
-    ).toBe(true);
-    expect(
-      result.candidates[1]?.proposedRegion?.entries.every(
-        (entry) => entry.body_heading_block_id !== undefined,
+      result.candidates[1]?.logicalEntries.every(
+        (entry) => entry.bodyHeadingBlockId !== undefined,
       ),
     ).toBe(true);
     const acceptedRegions = result.candidates.flatMap((candidate) =>
       candidate.proposedRegion ? [candidate.proposedRegion] : [],
     );
-    const activeDocument = applySourceRegions({
-      document: documentFor(source),
-      mainMarkdownPath: "source/full.md",
-      mainMarkdownSha256: createHash("sha256").update(source).digest("hex"),
-      regions: acceptedRegions,
-    }).document;
+    const activeDocument = withoutContents(
+      documentFor(source),
+      new Set(acceptedRegions.flatMap((region) => region.block_ids)),
+    );
     expect(
       activeDocument.headings.map((heading) => heading.sourceTitle),
     ).toEqual(body);
@@ -3935,8 +3730,8 @@ describe("printed contents detection", () => {
       }).nodes.map((node) => node.display_level),
     ).toEqual([1, 1, 1, 1]);
     expect(
-      (result.candidates[0]?.endByte ?? 0) <
-        (result.candidates[1]?.startByte ?? 0),
+      (result.candidates[0]?.endIndex ?? 0) <
+        (result.candidates[1]?.startIndex ?? 0),
     ).toBe(true);
   });
 
@@ -3961,15 +3756,13 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]).toMatchObject({
       entryCount: 3,
       proposedRegion: expect.objectContaining({ applied: true }),
     });
-    expect(result.candidates[0]?.proposedRegion?.range.sha256).toBeDefined();
+    expect(result.candidates[0]?.proposedRegion?.block_ids).toHaveLength(5);
   });
 
   it("ends before a detached body part label whose title matches the contents", () => {
@@ -3995,14 +3788,9 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
-    expect(result.candidates[0]?.endByte).toBeLessThan(
-      Buffer.byteLength(source.slice(0, source.indexOf("# Part One")), "utf8") +
-        1,
-    );
+    expect(result.candidates[0]?.endIndex).toBe(3);
   });
 
   it("rejects a late index-shaped Contents block without later body recurrence", () => {
@@ -4026,8 +3814,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates).toHaveLength(1);
@@ -4062,8 +3848,6 @@ describe("printed contents detection", () => {
     const result = detectPrintedContents({
       document: documentFor(source),
       idFactory: () => "region_abcdefghijklmnop",
-      sourcePath: "source/full.md",
-      sourceSha256: createHash("sha256").update(source).digest("hex"),
     });
 
     expect(result.candidates[0]?.alignment).toMatchObject({
@@ -4077,3 +3861,24 @@ describe("printed contents detection", () => {
     );
   });
 });
+
+function withoutContents(
+  document: NormalizedDocument,
+  excluded: ReadonlySet<string>,
+): NormalizedDocument {
+  return {
+    root: {
+      type: "root",
+      children:
+        document.root.children?.filter(
+          (node) => !node.blockId || !excluded.has(node.blockId),
+        ) ?? [],
+    },
+    blocks: document.blocks.filter(
+      (node) => !node.blockId || !excluded.has(node.blockId),
+    ),
+    headings: document.headings.filter(
+      (heading) => !excluded.has(heading.blockId),
+    ),
+  };
+}

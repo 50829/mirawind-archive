@@ -1,320 +1,164 @@
 import { createHash } from "node:crypto";
-import { chmod, readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-
+import { createReadStream } from "node:fs";
+import { mkdir, open, readFile, rename } from "node:fs/promises";
+import { dirname, relative, resolve, sep } from "node:path";
 import type Database from "better-sqlite3";
-import { stringify } from "yaml";
 
-import { canonicalJson } from "../../core/publication/manifest";
-import { createPrintedContentsAnalysis } from "../../core/preparation/printed-contents-analysis";
-import { DraftRepository } from "../sqlite/drafts";
+import { DraftCandidateRepository } from "../sqlite/draft-candidate-repository";
+import { ImportRepository } from "../sqlite/imports";
 import {
-  DraftCandidateRepository,
-  type DraftCandidateRecord,
-} from "../sqlite/draft-candidate-repository";
-import {
-  ImportRepository,
-  type ReprocessPreparationEvidence,
-} from "../sqlite/imports";
-import {
-  draftPreparationVersion,
+  readPreparedDraftArtifact,
   type PreparedDraftArtifact,
 } from "./prepared-draft-artifact";
-import {
-  parseBookConfigYaml,
-  validateBookConfig,
-} from "../../core/publication/book-config-schema";
-import {
-  SourceSnapshotService,
-  type SourceSnapshotResult,
-} from "../filesystem/source-snapshot";
+import { readDraftHeader } from "../filesystem/draft-document";
 import type { StorageLayout } from "@/platform/filesystem/storage-layout";
-import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
-
-export interface FinalizedPreparedDraft {
-  readonly bookId: number;
-  readonly candidate: DraftCandidateRecord;
-  readonly configRevision: number;
-  readonly snapshot: SourceSnapshotResult;
-}
-
-function configFor(input: {
-  readonly baseConfig?: Readonly<Record<string, unknown>>;
-  readonly boundaries: PreparedDraftArtifact["boundaries"];
-  readonly bookId: number;
-  readonly contentCleanup: PreparedDraftArtifact["contentCleanup"];
-  readonly metadata: PreparedDraftArtifact["metadata"];
-  readonly revision: number;
-  readonly snapshot: SourceSnapshotResult;
-  readonly sourceBlocks: PreparedDraftArtifact["sourceBlocks"];
-  readonly structure: PreparedDraftArtifact["structure"];
-  readonly typography: PreparedDraftArtifact["typography"];
-}): Readonly<Record<string, unknown>> {
-  if (
-    input.typography.output_sha256 !== input.contentCleanup.input_sha256 ||
-    input.contentCleanup.output_sha256 !==
-      input.snapshot.source.mainMarkdownSha256
-  ) {
-    throw new Error("PREPROCESS_OUTPUT_HASH_MISMATCH");
-  }
-  return validateBookConfig({
-    ...(input.baseConfig?.alias ? { alias: input.baseConfig.alias } : {}),
-    boundaries: input.boundaries,
-    book_id: input.bookId,
-    metadata: input.baseConfig?.metadata ?? input.metadata,
-    publishing: input.baseConfig?.publishing ?? {
-      code: { line_numbers: false },
-      numbering: { mode: "source" },
-    },
-    revision: input.revision,
-    schema_version: 4,
-    source: {
-      blocks: input.sourceBlocks,
-      main_markdown: input.snapshot.source.mainMarkdownPath,
-      main_markdown_sha256: input.snapshot.source.mainMarkdownSha256,
-      original_files: [
-        {
-          filename: input.snapshot.original.originalName,
-          id: input.snapshot.original.id,
-          media_type: input.snapshot.original.mediaType,
-          path: `originals/${input.snapshot.original.id}`,
-          role: "mineru_zip",
-          sha256: input.snapshot.original.sha256,
-          size: input.snapshot.original.sizeBytes,
-        },
-      ],
-      preprocessing: {
-        content_cleanup: input.contentCleanup,
-        typography: input.typography,
-      },
-    },
-    structure: input.structure,
-  });
-}
-
-function reprocessEvidence(
-  imports: ImportRepository,
-  importId: string,
-): ReprocessPreparationEvidence | null {
-  const imported = imports.require(importId);
-  if (!imported.selectedCandidateId) return null;
-  const candidate = imports
-    .candidates(importId)
-    .find((value) => value.id === imported.selectedCandidateId);
-  const value = candidate?.evidence.preparation;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const evidence = value as Record<string, unknown>;
-  if (
-    evidence.kind !== "reprocess" ||
-    !Number.isSafeInteger(evidence.expectedConfigRevision) ||
-    Number(evidence.expectedConfigRevision) < 1 ||
-    typeof evidence.expectedSourceId !== "string" ||
-    typeof evidence.originalFileId !== "string" ||
-    (evidence.typographyProfile !== "verbatim-v1" &&
-      evidence.typographyProfile !== "zh-smart-v2")
-  ) {
-    throw new Error("REPROCESS_EVIDENCE_INVALID");
-  }
-  return Object.freeze({
-    expectedConfigRevision: Number(evidence.expectedConfigRevision),
-    expectedSourceId: evidence.expectedSourceId,
-    kind: "reprocess",
-    originalFileId: evidence.originalFileId,
-    typographyProfile: evidence.typographyProfile,
-  });
-}
+import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 export async function finalizePreparedDraft(input: {
   readonly artifact: PreparedDraftArtifact;
   readonly database: Database.Database;
-  readonly extractedRoot: string;
+  readonly preparedRoot: string;
   readonly importId: string;
   readonly layout: StorageLayout;
   readonly nowMs: number;
-  readonly originalArchivePath: string;
-  readonly resourceRelativePaths: readonly string[];
-}): Promise<FinalizedPreparedDraft> {
+}) {
   const imports = new ImportRepository(input.database);
-  const drafts = new DraftRepository(input.database);
-  const candidates = new DraftCandidateRepository(input.database);
   const imported = imports.require(input.importId);
-  if (imported.state !== "preparing" || imported.bookId === null) {
-    throw new Error("IMPORT_PREPARE_STATE_CONFLICT");
-  }
-  const reprocess = reprocessEvidence(imports, imported.id);
-  const currentBook = reprocess ? drafts.requireBook(imported.bookId) : null;
-  const currentConfigRecord =
-    reprocess && currentBook?.draftConfigRevision
-      ? drafts.requireConfig(imported.bookId, currentBook.draftConfigRevision)
-      : null;
   if (
-    reprocess &&
-    (!currentBook ||
-      !currentConfigRecord ||
-      currentBook.draftSourceId !== reprocess.expectedSourceId ||
-      currentBook.draftConfigRevision !== reprocess.expectedConfigRevision ||
-      input.artifact.typography.profile !== reprocess.typographyProfile)
-  ) {
-    throw new Error("REPROCESS_PRECONDITION_FAILED");
-  }
-  const snapshot = await new SourceSnapshotService(
-    input.database,
-    input.layout,
-  ).create({
-    analysisVersion: draftPreparationVersion,
-    bookId: imported.bookId,
-    extractedRoot: input.extractedRoot,
-    importId: imported.id,
-    mainMarkdownRelativePath: input.artifact.mainMarkdownRelativePath,
-    nowMs: input.nowMs,
-    originalArchivePath: input.originalArchivePath,
-    originalName: imported.originalName,
-    resourceRelativePaths: input.resourceRelativePaths,
-  });
-  const currentConfig =
-    currentConfigRecord === null
-      ? undefined
-      : parseBookConfigYaml(
-          await readFile(
-            await resolveContainedPath(
-              input.layout.root,
-              currentConfigRecord.yamlRelativePath,
-            ),
-            "utf8",
-          ),
-        );
-  const revision = reprocess ? reprocess.expectedConfigRevision + 1 : 1;
-  const config = configFor({
-    ...(currentConfig ? { baseConfig: currentConfig } : {}),
-    boundaries: input.artifact.boundaries,
-    bookId: imported.bookId,
-    contentCleanup: input.artifact.contentCleanup,
-    metadata: input.artifact.metadata,
-    revision,
-    snapshot,
-    sourceBlocks: input.artifact.sourceBlocks,
-    structure: input.artifact.structure,
-    typography: input.artifact.typography,
-  });
-  const configMetadata = config.metadata as Readonly<Record<string, unknown>>;
-  const title = String(configMetadata.title);
-  const yaml = stringify(config, { lineWidth: 0 });
-  const yamlSha256 = createHash("sha256").update(yaml).digest("hex");
-  const yamlPath = resolve(
+    imported.bookId !== input.artifact.bookId ||
+    !["preparing", "draft_ready"].includes(imported.state)
+  )
+    throw new Error("IMPORT_PREPARE_STATE_CONFLICT");
+  const finalRoot = resolve(
     input.layout.bookDirectory,
-    String(imported.bookId),
-    "draft",
-    "configs",
-    String(revision),
-    "book.yaml",
+    String(input.artifact.bookId),
   );
-  await atomicWriteFile(yamlPath, yaml, { mode: 0o600 });
-  await chmod(yamlPath, 0o400);
-  const yamlRelativePath = relativePath(input.layout.root, yamlPath);
-  const analysis = createPrintedContentsAnalysis({
-    configRevision: revision,
-    detection: preparedDetection(input.artifact),
-    layoutDiagnostics: input.artifact.layoutDiagnostics,
-    layoutSource: input.artifact.layoutSource,
-    pdfDiagnostics: input.artifact.pdfDiagnostics,
-    sourceId: snapshot.source.id,
-    sourceSha256: snapshot.source.mainMarkdownSha256,
-    typographyRiskSummaries: input.artifact.typographyRiskSummaries,
-    typographyRiskSummariesTruncated:
-      input.artifact.typographyRiskSummariesTruncated,
-  });
-  const analysisPath = resolve(
-    input.layout.bookDirectory,
-    String(imported.bookId),
-    "draft",
-    "analyses",
-    snapshot.source.id,
-    `${revision}.json`,
-  );
-  await atomicWriteFile(analysisPath, canonicalJson(analysis), { mode: 0o600 });
-  await chmod(analysisPath, 0o400);
-  let candidate: DraftCandidateRecord;
-  if (reprocess && currentConfigRecord) {
-    candidate = candidates.replaceSourceConfigAndCreate({
-      bookId: imported.bookId,
-      expectedRevision: reprocess.expectedConfigRevision,
-      expectedSourceId: reprocess.expectedSourceId,
-      expectedYamlSha256: currentConfigRecord.yamlSha256,
-      importId: imported.id,
-      newSourceId: snapshot.source.id,
-      nowMs: input.nowMs,
-      revision,
-      schemaVersion: 4,
-      title,
-      yamlRelativePath,
-      yamlSha256,
-    });
+  let artifact = input.artifact;
+  const existing = await readFile(
+    resolve(finalRoot, "draft/import.json"),
+    "utf8",
+  ).catch(() => null);
+  if (existing !== null) {
+    const original = JSON.parse(existing) as { import_id: string };
+    if (original.import_id !== imported.id)
+      throw new Error("IMPORT_BOOK_STORAGE_EXISTS");
+    artifact = await readPreparedDraftArtifact(
+      resolve(finalRoot, "draft/import-artifact.json"),
+    );
   } else {
-    candidate = candidates.addInitialConfigAndCreate({
-      bookId: imported.bookId,
+    if (
+      artifact.original.sha256 !== imported.uploadSha256 ||
+      artifact.original.size !== imported.uploadSizeBytes
+    )
+      throw new Error("IMPORT_ORIGINAL_INTEGRITY_MISMATCH");
+    const documentPath = resolve(input.preparedRoot, "draft/book.json");
+    const header = readDraftHeader(documentPath, artifact.bookId);
+    const hash = createHash("sha256");
+    for await (const chunk of createReadStream(documentPath))
+      hash.update(chunk);
+    if (
+      header.updated_at !== artifact.sourceUpdatedAt ||
+      hash.digest("hex") !== artifact.documentSha256
+    )
+      throw new Error("IMPORT_DOCUMENT_INTEGRITY_MISMATCH");
+    await atomicWriteFile(
+      resolve(input.preparedRoot, "draft/import.json"),
+      JSON.stringify({
+        import_id: imported.id,
+        files: [
+          {
+            id: artifact.original.id,
+            filename: imported.originalName,
+            media_type: "application/zip",
+            size: artifact.original.size,
+            sha256: artifact.original.sha256,
+            path: "originals/" + artifact.original.id,
+          },
+        ],
+      }) + "\n",
+      { mode: 0o600 },
+    );
+    await atomicWriteFile(
+      resolve(input.preparedRoot, "draft/import-artifact.json"),
+      JSON.stringify(artifact) + "\n",
+      { mode: 0o600 },
+    );
+    const originalHandle = await open(
+      resolve(input.preparedRoot, "originals", artifact.original.id),
+      "r",
+    );
+    try {
+      await originalHandle.sync();
+    } finally {
+      await originalHandle.close();
+    }
+    await mkdir(dirname(finalRoot), { recursive: true, mode: 0o700 });
+    await rename(input.preparedRoot, finalRoot);
+    const parent = await open(dirname(finalRoot), "r");
+    try {
+      await parent.sync();
+    } finally {
+      await parent.close();
+    }
+  }
+  const candidates = new DraftCandidateRepository(input.database);
+  const candidate = withImmediateTransaction(input.database, () => {
+    const current = imports.require(imported.id);
+    if (current.state === "draft_ready") {
+      const existingCandidate = candidates.findCurrent(artifact.bookId);
+      if (!existingCandidate) throw new Error("IMPORT_CANDIDATE_MISSING");
+      return existingCandidate;
+    }
+    const relativePath = (path: string) =>
+      relative(input.layout.root, path).split(sep).join("/");
+    const insertResource = input.database.prepare(
+      "INSERT INTO book_resources (id,book_id,storage_rel_path,size_bytes,sha256,created_at) VALUES (?,?,?,?,?,?)",
+    );
+    for (const resource of artifact.resources)
+      insertResource.run(
+        resource.id,
+        artifact.bookId,
+        relativePath(resolve(finalRoot, resource.path)),
+        resource.size,
+        resource.sha256,
+        input.nowMs,
+      );
+    input.database
+      .prepare(
+        "INSERT INTO original_files (id,book_id,import_id,role,storage_rel_path,original_name,media_type,size_bytes,sha256,created_at) VALUES (?,?,?,'mineru_zip',?,?,'application/zip',?,?,?)",
+      )
+      .run(
+        artifact.original.id,
+        artifact.bookId,
+        imported.id,
+        relativePath(resolve(finalRoot, "originals", artifact.original.id)),
+        imported.originalName,
+        artifact.original.size,
+        artifact.original.sha256,
+        input.nowMs,
+      );
+    input.database
+      .prepare(
+        "UPDATE books SET title_cache = ? WHERE id = ? AND deletion_requested_at IS NULL",
+      )
+      .run(artifact.title, artifact.bookId);
+    const candidate = candidates.createForDocument({
+      bookId: artifact.bookId,
+      importId: imported.id,
+      sourceUpdatedAt: artifact.sourceUpdatedAt,
+      nowMs: input.nowMs,
+    });
+    imports.attachPreparedBook({
+      bookId: artifact.bookId,
       importId: imported.id,
       nowMs: input.nowMs,
-      revision,
-      schemaVersion: 4,
-      sourceId: snapshot.source.id,
-      title,
-      yamlRelativePath,
-      yamlSha256,
     });
-  }
-  imports.attachPreparedBook({
-    bookId: imported.bookId,
-    importId: imported.id,
-    nowMs: input.nowMs,
+    return candidate;
   });
-  return Object.freeze({
-    bookId: imported.bookId,
+  return {
+    bookId: artifact.bookId,
+    sourceUpdatedAt: artifact.sourceUpdatedAt,
     candidate,
-    configRevision: revision,
-    snapshot,
-  });
-}
-
-function preparedDetection(artifact: PreparedDraftArtifact) {
-  const regions = new Map(
-    artifact.sourceRegions.map((region) => [region.region_id, region] as const),
-  );
-  const candidates = artifact.printedContents.map((candidate) => {
-    const proposedRegion = candidate.regionId
-      ? regions.get(candidate.regionId)
-      : undefined;
-    return Object.freeze({
-      alignment: candidate.alignment,
-      boundaryConfidence: candidate.boundaryConfidence,
-      canonical: candidate.canonical,
-      confidence: candidate.confidence,
-      diagnostics: candidate.diagnostics,
-      endByte: candidate.endByte,
-      entryCount: candidate.entryCount,
-      logicalEntries: Object.freeze([]),
-      matchedHeadingCount: candidate.matchedHeadingCount,
-      matchConfidence: candidate.matchConfidence,
-      ...(proposedRegion ? { proposedRegion } : {}),
-      startByte: candidate.startByte,
-    });
-  });
-  const canonicalRegionId = artifact.printedContents.find(
-    (candidate) => candidate.canonical,
-  )?.regionId;
-  return Object.freeze({
-    ...(canonicalRegionId ? { canonicalRegionId } : {}),
-    candidates: Object.freeze(candidates),
-  });
-}
-
-function relativePath(root: string, target: string): string {
-  const relative = target
-    .slice(root.length + 1)
-    .split("\\")
-    .join("/");
-  if (!relative || target === root || !target.startsWith(`${root}/`)) {
-    throw new Error("CONFIG_STORAGE_PATH_INVALID");
-  }
-  return relative;
+  };
 }

@@ -1,215 +1,117 @@
+import { required } from "../../helpers/required";
 import { describe, expect, it } from "vitest";
-
 import { deriveBookVersionPresentation } from "@/modules/publishing/application/publishing-api";
-
+import { compileBook } from "@/modules/publishing/core/publication/compile-book";
+import { buildDocumentManifest } from "@/modules/publishing/core/publication/manifest";
+import { smallBook, headingBlock } from "../../helpers/ir-book";
 const versionId = "ver_0123456789abcdefghij";
 const resourceId = "res_0123456789abcdefghij";
-
-function blockId(index: number): string {
-  return `blk_${String(index).padStart(20, "0")}`;
-}
-
-function config(coverPath: string | null = "cover.png") {
-  return {
-    alias: "example-book",
-    book_id: 1,
-    metadata: {
-      authors: ["甲", "Author"],
-      description: "A bounded description.",
-      language: "zh-CN",
-      title: "Example Book",
-      ...(coverPath ? { cover_path: coverPath } : {}),
-    },
-    publishing: {
-      code: { line_numbers: false },
-      numbering: { mode: "source" },
-    },
-    revision: 2,
-    schema_version: 4,
-    source: {
-      blocks: [
-        {
-          block_id: blockId(1),
-          end_offset: 10,
-          kind: "heading",
-          start_offset: 0,
-          text_fingerprint: `tfp_v1_${"A".repeat(43)}`,
-        },
-      ],
-      main_markdown: "main.md",
-      main_markdown_sha256: "a".repeat(64),
-      original_files: [],
-      preprocessing: {
-        content_cleanup: {
-          helper_blocks_removed: 0,
-          input_sha256: "a".repeat(64),
-          output_sha256: "a".repeat(64),
-          printed_toc_regions_removed: 0,
-        },
-        typography: {
-          input_sha256: "a".repeat(64),
-          output_sha256: "a".repeat(64),
-          profile: "verbatim-v1",
-          protected_nodes: 0,
-          punctuation_converted: 0,
-          spaces_normalized: 0,
-        },
-      },
-    },
-    boundaries: { body_start_block_id: blockId(1) },
-    structure: [
-      {
-        block_id: blockId(1),
-        display_level: 1,
-        include_in_toc: true,
-        starts_page: true,
-        title_markdown: "Chapter 1",
-      },
-    ],
+function fixture(tocSize = 1, includeCover = true) {
+  const book = smallBook();
+  book.alias = "example-book";
+  book.metadata = {
+    title: "Example Book",
+    authors: ["Author"],
+    description: "A bounded description.",
+    language: "en",
+    cover_resource_id: resourceId,
   };
-}
-
-function manifest(tocSize = 1, includeCover = true) {
-  const ids = Array.from({ length: tocSize }, (_, index) => blockId(index + 1));
-  const blocks = Object.fromEntries(
-    ids.map((id, index) => [
-      id,
-      {
-        kind: "heading",
-        normalized_visible_text: `Chapter ${index + 1}`,
-        page_id: 1,
-        resource_ids: [],
-        source: {
-          end: { column: 2, line: index + 1 },
-          path: "source/main.md",
-          start: { column: 1, line: index + 1 },
-        },
-        text_fingerprint: {
-          algorithm: "sha256",
-          normalization_version: 1,
-          value: String(index).padStart(64, "0"),
-        },
-      },
-    ]),
+  book.resources = [
+    { id: resourceId, path: "assets/cover.png", media_type: "image/png" },
+  ];
+  book.blocks = Array.from({ length: tocSize }, (_, index) =>
+    headingBlock(`Chapter ${index + 1}`),
   );
-  return {
-    blocks,
-    book_id: 1,
-    compiler: {
-      name: "mirawind-book-compiler",
-      renderer_version: "semantic-html-v6-katex-0.18.1",
-      text_normalization_version: 1,
-      version: "compiler-v6",
-    },
-    config_revision: 2,
-    created_at: "2026-07-25T00:00:00.000Z",
-    pages: [
-      {
-        block_ids: ids,
-        first_block_id: ids[0],
-        output_path: "published/pages/1.html",
-        page_id: 1,
-        title: "Chapter 1",
-      },
-    ],
+  book.publishing.numbering = "generated";
+  book.publishing.boundaries.body_start_block_id = required(book.blocks[0]).id;
+  const manifest = buildDocumentManifest({
+    book: compileBook(book),
+    bookId: 1,
+    createdAt: "2026-09-07T00:00:00.000Z",
+    versionId,
     resources: includeCover
-      ? {
-          [resourceId]: {
-            height: 100,
-            media_type: "image/png",
-            output_path: `published/assets/${resourceId}`,
+      ? [
+          {
+            id: resourceId,
+            absolutePath: "/private/cover.png",
+            originalUrl: "assets/cover.png",
+            relativePath: "assets/cover.png",
+            outputPath: `published/assets/${resourceId}`,
+            mediaType: "image/png",
             sha256: "b".repeat(64),
             size: 1000,
-            source_path: "source/cover.png",
+            height: 100,
             width: 80,
           },
-        }
-      : {},
-    schema_version: 3,
-    source_files: [
-      { path: "source/main.md", sha256: "c".repeat(64), size: 10 },
-    ],
-    toc: ids.map((id, index) => ({
-      block_id: id,
-      level: 1,
-      number: String(index + 1),
-      page_id: 1,
-      role: "body",
-      title: `Chapter ${index + 1}`,
-    })),
-    version_id: versionId,
-  };
+        ]
+      : [],
+  });
+  return { book, manifest };
 }
-
 describe("book version presentation projection", () => {
-  it("derives deterministic current-version metadata and navigation", () => {
+  it("derives deterministic version metadata and navigation", () => {
+    const { book, manifest } = fixture();
     const first = deriveBookVersionPresentation({
-      bookConfig: config(),
+      bookDocument: book,
+      documentManifest: manifest,
       createdAtMs: 1000,
-      documentManifest: manifest(),
     });
     const second = deriveBookVersionPresentation({
-      bookConfig: config(),
+      bookDocument: book,
+      documentManifest: manifest,
       createdAtMs: 2000,
-      documentManifest: manifest(),
     });
-
     expect(first).toMatchObject({
       alias: "example-book",
       bookId: 1,
-      configRevision: 2,
+      sourceUpdatedAt: 1000,
       coverResourceId: resourceId,
       firstPageAlias: null,
       firstPageId: 1,
-      projectionSchemaVersion: 2,
+      projectionSchemaVersion: 3,
       title: "Example Book",
       tocEntryCount: 1,
       versionId,
     });
     expect(JSON.parse(first.metadataJson)).toEqual({
-      authors: ["甲", "Author"],
+      authors: ["Author"],
       description: "A bounded description.",
-      language: "zh-CN",
+      language: "en",
     });
-    expect(JSON.parse(first.tocPreviewJson)).toEqual([
-      {
-        block_id: blockId(1),
-        level: 1,
-        number: "1",
-        page_id: 1,
-        role: "body",
-        title: "Chapter 1",
-      },
-    ]);
+    expect(JSON.parse(first.tocPreviewJson)).toEqual(manifest.toc);
     expect(first.projectionSha256).toBe(second.projectionSha256);
     expect(first.createdAtMs).not.toBe(second.createdAtMs);
   });
-
-  it("caps the preview and replaces a missing cover with a placeholder", () => {
+  it("caps the preview and replaces an unavailable cover with a placeholder", () => {
+    const { book, manifest } = fixture(201, false);
     const result = deriveBookVersionPresentation({
-      bookConfig: config(),
+      bookDocument: book,
+      documentManifest: manifest,
       createdAtMs: 1000,
-      documentManifest: manifest(201, false),
     });
-
     expect(result.coverResourceId).toBeNull();
     expect(result.tocEntryCount).toBe(201);
     expect(JSON.parse(result.tocPreviewJson)).toHaveLength(200);
-    expect(Buffer.byteLength(result.metadataJson, "utf8")).toBeLessThanOrEqual(
-      65_536,
+    expect(Buffer.byteLength(result.metadataJson)).toBeLessThanOrEqual(65536);
+    expect(Buffer.byteLength(result.tocPreviewJson)).toBeLessThanOrEqual(
+      262144,
     );
-    expect(
-      Buffer.byteLength(result.tocPreviewJson, "utf8"),
-    ).toBeLessThanOrEqual(262_144);
   });
-
-  it("rejects config and manifest identities that do not match", () => {
+  it("rejects document and manifest identities that do not match", () => {
+    const { book, manifest } = fixture();
     expect(() =>
       deriveBookVersionPresentation({
-        bookConfig: { ...config(), book_id: 2 },
+        bookDocument: { ...book, book_id: 2 },
+        documentManifest: manifest,
         createdAtMs: 1000,
-        documentManifest: manifest(),
       }),
-    ).toThrow(/PRESENTATION_IDENTITY_MISMATCH/u);
+    ).toThrow("PRESENTATION_IDENTITY_MISMATCH");
+    expect(() =>
+      deriveBookVersionPresentation({
+        bookDocument: { ...book, updated_at: 2000 },
+        documentManifest: manifest,
+        createdAtMs: 1000,
+      }),
+    ).toThrow("PRESENTATION_IDENTITY_MISMATCH");
   });
 });

@@ -6,10 +6,10 @@ import {
   type ArchiveExtractionLimits,
 } from "../filesystem/extract-archive";
 import {
-  discoverMarkdownCandidates,
+  discoverMineruCandidates,
   type CandidateDiscovery,
-  type MarkdownCandidate,
-} from "../filesystem/discover-markdown-candidates";
+  type MineruCandidate,
+} from "../filesystem/discover-mineru-candidates";
 import { sealExtractedDirectory } from "../filesystem/sealed-extraction";
 import { ImportRepository, type ImportRecord } from "../sqlite/imports";
 import { atomicWriteFile } from "@/platform/filesystem/atomic-file";
@@ -18,11 +18,11 @@ import {
   recordPipelineProfileMetrics,
 } from "@/observability/pipeline-profile";
 
-const importAnalysisVersion = "mineru-candidate-v1";
+const importAnalysisVersion = "mineru-content-candidate-v2";
 const analysisArtifactFilename = "analysis-result.json";
 
 export interface AnalyzeImportArtifact {
-  readonly candidates: readonly MarkdownCandidate[];
+  readonly candidates: readonly MineruCandidate[];
   readonly decision: CandidateDiscovery["decision"];
   readonly reason: CandidateDiscovery["reason"];
   readonly selectedCandidateId: string | null;
@@ -38,18 +38,9 @@ export interface AnalyzeImportResult {
 }
 
 function rejectionCode(reason: CandidateDiscovery["reason"]): string {
-  switch (reason) {
-    case "ambiguous-candidates":
-      return "IMPORT_AMBIGUOUS_CANDIDATES";
-    case "missing-resources":
-      return "IMPORT_RESOURCE_CLOSURE_FAILED";
-    case "multiple-book-bundles":
-      return "IMPORT_MULTIPLE_BOOKS";
-    case "no-markdown":
-      return "IMPORT_MAIN_MARKDOWN_MISSING";
-    default:
-      return "IMPORT_CANDIDATE_REJECTED";
-  }
+  if (reason === "multiple-book-bundles") return "IMPORT_MULTIPLE_BOOKS";
+  if (reason === "document-too-large") return "CONTENT_FILE_LIMIT_EXCEEDED";
+  return "IMPORT_MINERU_JSON_MISSING";
 }
 
 export async function analyzeImport(input: {
@@ -90,10 +81,10 @@ export async function analyzeImport(input: {
     });
     input.onPhase?.("identify_document", 1, 2);
     const discovered = await profilePipelineStage("candidate_discovery", () =>
-      discoverMarkdownCandidates(extractedDirectory),
+      discoverMineruCandidates(extractedDirectory),
     );
     recordPipelineProfileMetrics({
-      markdown_candidates: discovered.candidates.length,
+      content_candidates: discovered.candidates.length,
     });
     input.onPhase?.("identify_document", 2, 2);
     const artifact: AnalyzeImportArtifact = Object.freeze({
@@ -131,14 +122,14 @@ export async function analyzeImport(input: {
   }
 }
 
-function isCandidate(value: unknown): value is MarkdownCandidate {
+function isCandidate(value: unknown): value is MineruCandidate {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
   return (
     typeof candidate.id === "string" &&
     typeof candidate.normalizedPath === "string" &&
     typeof candidate.byteSize === "number" &&
-    (candidate.confidence === "generic" || candidate.confidence === "high") &&
+    candidate.confidence === "high" &&
     typeof candidate.score === "number" &&
     (typeof candidate.firstHeading === "string" ||
       candidate.firstHeading === null) &&
@@ -163,17 +154,12 @@ export async function readAnalyzeImportArtifact(
     artifact.version !== importAnalysisVersion ||
     !Array.isArray(artifact.candidates) ||
     !artifact.candidates.every(isCandidate) ||
-    !["automatic", "confirmation", "reject"].includes(
-      String(artifact.decision),
-    ) ||
+    !["automatic", "reject"].includes(String(artifact.decision)) ||
     ![
-      "ambiguous-candidates",
-      "cli-high-confidence",
-      "cloud-high-confidence",
-      "generic-single-markdown",
-      "missing-resources",
+      "mineru-v2",
       "multiple-book-bundles",
-      "no-markdown",
+      "no-mineru-json",
+      "document-too-large",
     ].includes(String(artifact.reason)) ||
     (typeof artifact.selectedCandidateId !== "string" &&
       artifact.selectedCandidateId !== null)
@@ -213,10 +199,7 @@ export function persistAnalyzeImportArtifact(input: {
   return input.repository.saveCandidates({
     candidates: input.artifact.candidates,
     importId: input.importId,
-    nextState:
-      input.artifact.decision === "automatic"
-        ? "preparing"
-        : "needs_main_confirmation",
+    nextState: "preparing",
     nowMs: input.nowMs,
     selectedCandidateId:
       input.artifact.decision === "automatic"

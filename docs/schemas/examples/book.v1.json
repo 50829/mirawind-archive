@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "book_id": 42,
+  "updated_at": 1788739200000,
+  "alias": "linear-algebra",
+  "metadata": { "title": "Linear Algebra", "authors": ["Example Author"], "language": "en" },
+  "publishing": {
+    "numbering": "generated",
+    "code": { "line_numbers": false },
+    "boundaries": { "body_start_block_id": "blk_example_heading_00000001" }
+  },
+  "blocks": [
+    {
+      "id": "blk_example_heading_00000001",
+      "type": "heading",
+      "level": 1,
+      "content": [{ "type": "text", "text": "Vector Spaces" }],
+      "source_number": "Chapter 1",
+      "include_in_toc": true,
+      "starts_page": true,
+      "exclude_from_numbering": false
+    },
+    {
+      "id": "blk_example_paragraph_00001",
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "Consider " },
+        { "type": "math", "latex": "v\\in V" },
+        { "type": "text", "text": "." },
+        { "type": "footnote_reference", "target_id": "blk_example_footnote_000001" }
+      ]
+    },
+    {
+      "id": "blk_example_code_000000001",
+      "type": "code",
+      "language": "python",
+      "code": "v = [1, 2, 3]",
+      "caption": [{ "type": "text", "text": "A vector" }]
+    },
+    {
+      "id": "blk_example_footnote_000001",
+      "type": "footnote",
+      "content": [{ "id": "blk_example_note_text_0001", "type": "paragraph", "content": [{ "type": "text", "text": "Vectors belong to a vector space." }] }]
+    }
+  ],
+  "resources": []
+}

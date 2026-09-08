@@ -20,7 +20,6 @@ import {
   setupPublicationFixture,
 } from "../../helpers/publication.js";
 
-const sourceId = "src_stale_publish_test_0001";
 const previousId = "ver_retention_previous_000001";
 const oldId = "ver_retention_old_00000000001";
 const failedCleanupId = "ver_retention_cleanup_000001";
@@ -56,20 +55,20 @@ describe("published version and orphan retention", () => {
         `books/${fixture.book.id}/versions/${versionId}`;
       const insert = migrated.database.prepare(
         `INSERT INTO book_versions (
-           id, book_id, source_id, config_revision, predecessor_version_id,
+           id, book_id, import_id, source_updated_at, predecessor_version_id,
            state, version_rel_path, manifest_schema_version, manifest_sha256,
            version_marker_sha256, semantic_digest, compiler_version,
            renderer_version, preview_version, reader_version,
            blocking_diagnostic_count, complete_at, published_at, verified_at,
            created_by_job_id, reclaimed_at
-         ) VALUES (?, ?, ?, 1, ?, 'superseded', ?, 3, ?, ?, ?, 'compiler-v6',
-                   'semantic-html-v6-katex-0.18.1', 'draft-preview-v6',
-                   'mirawind-reader-v3-tailwind-4.3.3', 0, ?, ?, ?, ?, NULL)`,
+         ) VALUES (?, ?, ?, 1000, ?, 'superseded', ?, 4, ?, ?, ?, 'compiler-v7',
+                   'semantic-html-v7-katex-0.18.1', 'draft-preview-v7',
+                   'mirawind-reader-v4-tailwind-4.3.3', 0, ?, ?, ?, ?, NULL)`,
       );
       insert.run(
         oldId,
         fixture.book.id,
-        sourceId,
+        fixture.imported.id,
         null,
         versionPath(oldId),
         "b".repeat(64),
@@ -83,7 +82,7 @@ describe("published version and orphan retention", () => {
       insert.run(
         previousId,
         fixture.book.id,
-        sourceId,
+        fixture.imported.id,
         oldId,
         versionPath(previousId),
         "c".repeat(64),
@@ -97,7 +96,7 @@ describe("published version and orphan retention", () => {
       insert.run(
         failedCleanupId,
         fixture.book.id,
-        sourceId,
+        fixture.imported.id,
         previousId,
         versionPath(failedCleanupId),
         "d".repeat(64),

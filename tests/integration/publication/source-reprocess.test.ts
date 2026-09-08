@@ -1,257 +1,266 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { required } from "../../helpers/required";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-
 import { describe, expect, it } from "vitest";
-
-import type { MarkdownCandidate } from "@/modules/publishing/adapters/filesystem/discover-markdown-candidates";
-import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
-import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
-import { finalizePreparedDraft } from "@/modules/publishing/adapters/worker/finalize-prepared-draft";
-import { prepareDraft } from "@/modules/publishing/adapters/worker/prepare-draft";
-import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
 import { queueSourceReprocess } from "@/modules/publishing/adapters/filesystem/source-reprocess";
-
-import { buildZip } from "../../../scripts/fixtures/zip-builder.js";
-import { withMigratedTestDatabase } from "../../helpers/database.js";
-
-const candidate: MarkdownCandidate = Object.freeze({
-  byteSize: 100,
-  companionFiles: Object.freeze([]),
-  confidence: "high",
-  diagnostics: Object.freeze([]),
-  firstHeading: "第一章",
-  id: "cand_reprocess_initial_0001",
-  normalizedPath: "wrapper/book.md",
-  referencedResources: 0,
-  score: 100,
-});
-
-describe("explicit source typography reprocessing", () => {
-  it("creates a new source and v3 config revision without mutating the old snapshot", () =>
-    withMigratedTestDatabase(async ({ database }, dataRoot) => {
-      const markdown = "# 第一章\n\n中文English,测试。\n";
-      const archivePath = resolve(dataRoot.path, "initial.zip");
-      await writeFile(
-        archivePath,
-        buildZip({
-          entries: [{ data: markdown, name: candidate.normalizedPath }],
-        }),
-      );
-      const imports = new ImportRepository(database);
-      const drafts = new DraftRepository(database);
-      const book = drafts.createBook({ nowMs: 1, title: "Pending" });
-      const initialImport = imports.createUploaded({
-        bookId: book.id,
-        expiresAtMs: Number.MAX_SAFE_INTEGER,
-        id: "imp_reprocess_initial_0001",
-        nowMs: 2,
-        originalName: "fixture.zip",
-        uploadRelativePath:
-          "tmp/uploads/imp_reprocess_initial_0001/original.zip",
-        uploadSha256: "a".repeat(64),
-        uploadSizeBytes: (await readFile(archivePath)).byteLength,
-      });
-      imports.startAnalysis(initialImport.id, 3);
-      imports.saveCandidates({
-        candidates: [candidate],
-        importId: initialImport.id,
-        nextState: "preparing",
-        nowMs: 4,
-        selectedCandidateId: candidate.id,
-      });
-      const initialPrepared = await prepareDraft({
-        archivePath,
-        selectedCandidatePath: candidate.normalizedPath,
-        stagingDirectory: resolve(dataRoot.path, "staging/initial"),
-        typographyProfile: "verbatim-v1",
-      });
-      const initial = await finalizePreparedDraft({
-        artifact: initialPrepared.artifact,
+import { readDraftDocument } from "@/modules/publishing/adapters/filesystem/draft-document";
+import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
+import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
+import { prepareDraftSave } from "@/modules/publishing/adapters/worker/prepare-draft-save";
+import { finalizeDraftSave } from "@/modules/publishing/adapters/worker/finalize-draft-save";
+import { captureFrozenJobInput } from "@/composition/worker/capture-frozen-input";
+import { buildCandidateHandler } from "@/composition/worker-child/handlers/publishing";
+import type { MineruBookAnalysis } from "@/modules/publishing/adapters/worker/rebind-mineru-analysis";
+import type { SafeDiagnostic } from "@/domain/errors";
+import { inlineText } from "@/modules/publishing/core/content/content-tree";
+import { withMigratedTestDatabase } from "../../helpers/database";
+import { prepareIrBook } from "../../helpers/prepare-ir-book";
+import {
+  mineruZip,
+  mineruTitle,
+  mineruParagraph,
+} from "../../helpers/mineru-v2";
+describe("original v2 reprocessing", () => {
+  it("keeps recovered contents evidence and diagnostic navigation bound to the saved blocks", () =>
+    withMigratedTestDatabase(async ({ database }, { layout }) => {
+      const fixture = await prepareIrBook(
         database,
-        extractedRoot: initialPrepared.extractedRoot,
-        importId: initialImport.id,
-        layout: dataRoot.layout,
-        nowMs: 5,
-        originalArchivePath: archivePath,
-        resourceRelativePaths: initialPrepared.sourceFiles,
-      });
-      const oldMarkdownPath = resolve(
-        dataRoot.layout.root,
-        initial.snapshot.source.sourceRootRelativePath,
-        initial.snapshot.source.mainMarkdownPath,
+        layout,
+        mineruZip([
+          [
+            mineruTitle("Contents"),
+            mineruParagraph("1 Alpha ...... 1"),
+            mineruParagraph("1.1 Missing ...... 2"),
+            mineruParagraph("2 Beta ...... 3"),
+            mineruParagraph("3 Gamma ...... 4"),
+          ],
+          [
+            mineruTitle("1 Alpha"),
+            mineruParagraph("中文与English排版"),
+            mineruTitle("2 Beta"),
+            mineruParagraph("Body"),
+            mineruTitle("3 Gamma"),
+            mineruParagraph("Body"),
+          ],
+        ]),
       );
-      expect(await readFile(oldMarkdownPath, "utf8")).toBe(markdown);
-
-      const queued = await queueSourceReprocess({
-        bookId: book.id,
-        database,
-        expectedConfigRevision: 1,
-        layout: dataRoot.layout,
-        nowMs: 6,
-        profile: "zh-smart-v2",
-      });
-      const reprocessImport = imports.require(queued.importId);
-      const reprocessCandidate = imports
-        .candidates(queued.importId)
-        .find((value) => value.id === reprocessImport.selectedCandidateId);
-      if (!reprocessCandidate) throw new Error("Reprocess candidate missing");
-      expect(queued.job).toMatchObject({
-        capturedConfigRevision: 1,
-        capturedSourceId: initial.snapshot.source.id,
-        kind: "prepare_draft",
-        state: "queued",
-      });
-
-      const reprocessed = await prepareDraft({
-        archivePath: resolve(
-          dataRoot.layout.root,
-          reprocessImport.uploadRelativePath,
-        ),
-        selectedCandidatePath: reprocessCandidate.normalizedPath,
-        stagingDirectory: resolve(dataRoot.path, "staging/reprocess"),
-        typographyProfile: "zh-smart-v2",
-      });
-      const finalized = await finalizePreparedDraft({
-        artifact: reprocessed.artifact,
-        database,
-        extractedRoot: reprocessed.extractedRoot,
-        importId: reprocessImport.id,
-        layout: dataRoot.layout,
-        nowMs: 7,
-        originalArchivePath: resolve(
-          dataRoot.layout.root,
-          reprocessImport.uploadRelativePath,
-        ),
-        resourceRelativePaths: reprocessed.sourceFiles,
-      });
-      const current = drafts.requireBook(book.id);
-      const configRecord = drafts.requireConfig(book.id, 2);
-      const config = parseBookConfigYaml(
-        await readFile(
-          resolve(dataRoot.layout.root, configRecord.yamlRelativePath),
-          "utf8",
-        ),
-      );
-      const normalizedMarkdown = await readFile(
-        resolve(
-          dataRoot.layout.root,
-          finalized.snapshot.source.sourceRootRelativePath,
-          finalized.snapshot.source.mainMarkdownPath,
-        ),
-        "utf8",
-      );
-
-      expect(normalizedMarkdown).toContain("中文 English，测试。");
-      expect(await readFile(oldMarkdownPath, "utf8")).toBe(markdown);
-      expect(finalized.snapshot.source.id).not.toBe(initial.snapshot.source.id);
-      expect(current).toMatchObject({
-        currentCandidateId: finalized.candidate.attemptId,
-        currentVersionId: null,
-        draftConfigRevision: 2,
-        draftSourceId: finalized.snapshot.source.id,
-      });
-      expect(config).toMatchObject({
-        revision: 2,
-        schema_version: 4,
-        source: {
-          main_markdown_sha256: finalized.snapshot.source.mainMarkdownSha256,
-          preprocessing: {
-            typography: {
-              profile: "zh-smart-v2",
-            },
-          },
-        },
-      });
-      expect(finalized.candidate).toMatchObject({
-        sourceId: finalized.snapshot.source.id,
-        state: "building",
-      });
-      await expect(
-        queueSourceReprocess({
-          bookId: book.id,
-          database,
-          expectedConfigRevision: 1,
-          layout: dataRoot.layout,
-          nowMs: 8,
-          profile: "verbatim-v1",
-        }),
-      ).rejects.toMatchObject({ code: "REPROCESS_PRECONDITION_FAILED" });
-
-      const revertQueued = await queueSourceReprocess({
-        bookId: book.id,
-        database,
-        expectedConfigRevision: 2,
-        layout: dataRoot.layout,
-        nowMs: 9,
-        profile: "verbatim-v1",
-      });
-      const revertImport = imports.require(revertQueued.importId);
-      const revertCandidate = imports
-        .candidates(revertImport.id)
-        .find((value) => value.id === revertImport.selectedCandidateId);
-      if (!revertCandidate) throw new Error("Verbatim candidate missing");
-      const reverted = await prepareDraft({
-        archivePath: resolve(
-          dataRoot.layout.root,
-          revertImport.uploadRelativePath,
-        ),
-        selectedCandidatePath: revertCandidate.normalizedPath,
-        stagingDirectory: resolve(dataRoot.path, "staging/revert"),
-        typographyProfile: "verbatim-v1",
-      });
-      const revertedFinal = await finalizePreparedDraft({
-        artifact: reverted.artifact,
-        database,
-        extractedRoot: reverted.extractedRoot,
-        importId: revertImport.id,
-        layout: dataRoot.layout,
-        nowMs: 10,
-        originalArchivePath: resolve(
-          dataRoot.layout.root,
-          revertImport.uploadRelativePath,
-        ),
-        resourceRelativePaths: reverted.sourceFiles,
-      });
-      const revertedMarkdown = await readFile(
-        resolve(
-          dataRoot.layout.root,
-          revertedFinal.snapshot.source.sourceRootRelativePath,
-          revertedFinal.snapshot.source.mainMarkdownPath,
-        ),
-        "utf8",
-      );
-
-      expect(revertedMarkdown).toBe(markdown);
-      expect(await readFile(oldMarkdownPath, "utf8")).toBe(markdown);
-      expect(
-        await readFile(
-          resolve(
-            dataRoot.layout.root,
-            finalized.snapshot.source.sourceRootRelativePath,
-            finalized.snapshot.source.mainMarkdownPath,
-          ),
-          "utf8",
-        ),
-      ).toBe(normalizedMarkdown);
-      expect(drafts.requireBook(book.id)).toMatchObject({
-        draftConfigRevision: 3,
-        draftSourceId: revertedFinal.snapshot.source.id,
-      });
-      expect(
-        parseBookConfigYaml(
+      const initial = await readDraftDocument(layout, fixture.book.id);
+      const analysisFor = async (
+        updatedAt: number,
+      ): Promise<MineruBookAnalysis> =>
+        JSON.parse(
           await readFile(
             resolve(
-              dataRoot.layout.root,
-              drafts.requireConfig(book.id, 3).yamlRelativePath,
+              layout.bookDirectory,
+              String(fixture.book.id),
+              "draft/views",
+              String(updatedAt),
+              "analysis.json",
             ),
             "utf8",
           ),
-        ),
-      ).toMatchObject({
-        revision: 3,
-        source: {
-          preprocessing: { typography: { profile: "verbatim-v1" } },
-        },
+        );
+      const initialAnalysis = await analysisFor(initial.updated_at);
+      expect(initialAnalysis.diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: "PRINTED_TOC_UNMATCHED_ENTRY",
+          blockId: expect.any(String),
+        }),
+      );
+      const jobs = new JobRepository(database);
+      const candidates = new DraftCandidateRepository(database);
+      const imports = new ImportRepository(database);
+      const now = Date.now();
+      queueSourceReprocess({
+        bookId: fixture.book.id,
+        database,
+        layout,
+        expectedUpdatedAt: initial.updated_at,
+        nowMs: now,
+        profile: "verbatim-v1",
       });
+      const job = required(
+        jobs.claimNext({ leaseOwner: "test", nowMs: now + 1 }),
+      );
+      const command = await captureFrozenJobInput({
+        job,
+        candidates,
+        imports,
+        database,
+        layout,
+      });
+      if (command.kind !== "save_draft") throw new Error("Wrong job");
+      const result = await prepareDraftSave({
+        root: layout.root,
+        bookId: fixture.book.id,
+        requestPath: resolve(layout.root, command.requestRelativePath),
+        stagingDirectory: resolve(layout.root, "staging", job.id),
+      });
+      await finalizeDraftSave({
+        database,
+        layout,
+        jobId: job.id,
+        leaseOwner: "test",
+        nowMs: Date.now(),
+        result,
+      });
+      const saved = await readDraftDocument(layout, fixture.book.id);
+      expect(saved.updated_at).toBeGreaterThan(initial.updated_at);
+      const analysis = await analysisFor(saved.updated_at);
+      const activeIds = new Set(saved.blocks.map((block) => block.id));
+      expect(analysis.diagnostics.map((item) => item.blockId)).toEqual(
+        initialAnalysis.diagnostics.map((item) => item.blockId),
+      );
+      expect(analysis.removed_block_ids).toEqual(
+        initialAnalysis.removed_block_ids,
+      );
+      for (const candidate of analysis.printed_contents) {
+        expect(candidate.proposedRegion?.block_ids).toEqual(
+          analysis.removed_block_ids,
+        );
+        for (const entry of candidate.logicalEntries)
+          if (entry.bodyHeadingBlockId)
+            expect(activeIds.has(entry.bodyHeadingBlockId)).toBe(true);
+        for (const diagnostic of candidate.diagnostics)
+          if (diagnostic.blockId)
+            expect(activeIds.has(diagnostic.blockId)).toBe(true);
+      }
+      const buildJob = required(
+        jobs.claimNext({ leaseOwner: "test", nowMs: Date.now() }),
+      );
+      const build = await captureFrozenJobInput({
+        job: buildJob,
+        candidates,
+        imports,
+        database,
+        layout,
+      });
+      if (build.kind !== "build_candidate") throw new Error("Wrong job");
+      const built = await buildCandidateHandler(build, {
+        root: layout.root,
+        signal: new AbortController().signal,
+        reportProgress() {},
+      });
+      if (!built.ok || !built.result) throw new Error("Candidate build failed");
+      const previewRoot = resolve(
+        layout.root,
+        String(built.result.artifactRootRelativePath),
+        "preview",
+      );
+      const preview = JSON.parse(
+        await readFile(resolve(previewRoot, "diagnostics.json"), "utf8"),
+      ) as {
+        diagnostics: SafeDiagnostic[];
+      };
+      const diagnostic = required(
+        preview.diagnostics.find(
+          (item) => item.code === "PRINTED_TOC_UNMATCHED_ENTRY",
+        ),
+      );
+      const target = required(
+        diagnostic.targets?.find(
+          (target) => target.kind === "select_structure",
+        ),
+      );
+      if (target.kind !== "select_structure")
+        throw new Error("Diagnostic target is not a heading");
+      expect(target.blockId).toBe(initialAnalysis.diagnostics[0]?.blockId);
+      expect(
+        await readFile(
+          resolve(previewRoot, "pages", `${target.pageId}.html`),
+          "utf8",
+        ),
+      ).toContain(`id="${target.blockId}"`);
+    }));
+
+  it("reprocesses through the save protocol, preserves identities and original bytes, and rejects stale requests", () =>
+    withMigratedTestDatabase(async ({ database }, { layout }) => {
+      const original = mineruZip([
+        [mineruTitle("Book"), mineruParagraph("中文与English排版")],
+      ]);
+      const fixture = await prepareIrBook(
+        database,
+        layout,
+        original,
+        "verbatim-v1",
+      );
+      const initial = await readDraftDocument(layout, fixture.book.id);
+      const jobs = new JobRepository(database),
+        candidates = new DraftCandidateRepository(database);
+      const originalPath = resolve(
+        layout.bookDirectory,
+        String(fixture.book.id),
+        "originals",
+        fixture.prepared.artifact.original.id,
+      );
+      for (const profile of ["zh-smart-v2", "verbatim-v1"] as const) {
+        const now = Date.now();
+        const before = await readDraftDocument(layout, fixture.book.id);
+        const queued = queueSourceReprocess({
+          bookId: fixture.book.id,
+          database,
+          layout,
+          expectedUpdatedAt: before.updated_at,
+          nowMs: now,
+          profile,
+        });
+        const job = required(
+          jobs.claimNext({ leaseOwner: "test", nowMs: now + 1 }),
+        );
+        expect(job.id).toBe(queued.job_id);
+        const command = await captureFrozenJobInput({
+          job,
+          candidates,
+          imports: new ImportRepository(database),
+          database,
+          layout,
+        });
+        if (command.kind !== "save_draft") throw new Error("Wrong job");
+        const result = await prepareDraftSave({
+          root: layout.root,
+          bookId: fixture.book.id,
+          requestPath: resolve(layout.root, command.requestRelativePath),
+          stagingDirectory: resolve(layout.root, "staging", job.id),
+        });
+        await finalizeDraftSave({
+          database,
+          layout,
+          jobId: job.id,
+          leaseOwner: "test",
+          nowMs: Date.now(),
+          result,
+        });
+        const saved = await readDraftDocument(layout, fixture.book.id);
+        expect(saved.updated_at).toBeGreaterThan(before.updated_at);
+        expect(saved.blocks.map((block) => block.id)).toEqual(
+          initial.blocks.map((block) => block.id),
+        );
+        expect(saved.metadata).toEqual(initial.metadata);
+        const paragraph = required(
+          saved.blocks.find((block) => block.type === "paragraph"),
+        );
+        expect(inlineText(paragraph.content)).toBe(
+          profile === "zh-smart-v2"
+            ? "中文与 English 排版"
+            : "中文与English排版",
+        );
+        expect(() =>
+          queueSourceReprocess({
+            bookId: fixture.book.id,
+            database,
+            layout,
+            expectedUpdatedAt: before.updated_at,
+            nowMs: 13,
+            profile,
+          }),
+        ).toThrow();
+      }
+      expect(await readFile(originalPath)).toEqual(original);
+      expect(
+        database
+          .prepare("SELECT current_version_id FROM books WHERE id=?")
+          .get(fixture.book.id),
+      ).toEqual({ current_version_id: null });
     }));
 });

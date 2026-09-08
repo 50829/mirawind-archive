@@ -7,12 +7,12 @@ import { recoverWorkerAttempts } from "./recover-attempts";
 import { WorkerHealthReporter } from "./health-reporter";
 import { runWorkerLoop } from "./loop";
 import { runWorkerMaintenance } from "./maintenance";
+import { recoverDraftSaves } from "@/modules/publishing/adapters/worker/recover-draft-saves";
 import { parseEnvironment } from "@/config/environment";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { WorkerCheckpointScheduler } from "@/entrypoints/worker/checkpoint";
 import { operationalMetrics } from "@/observability/metrics";
 import { createStorageLayout } from "@/platform/filesystem/storage-layout";
@@ -45,7 +45,7 @@ export async function runWorkerMain(): Promise<void> {
     const workerId = `worker:${hostname()}:${process.pid}:${bootId}`;
     const repository = new JobRepository(database);
     const candidates = new DraftCandidateRepository(database);
-    repository.retireMaintenanceJobs(Date.now());
+    await recoverDraftSaves({ database, layout, nowMs: Date.now() });
     await recoverWorkerAttempts({
       candidates,
       database,
@@ -87,7 +87,6 @@ export async function runWorkerMain(): Promise<void> {
       repository,
       scheduler,
       shutdownSignal: shutdownController.signal,
-      sources: new SourceRepository(database),
       workerId,
     });
     await healthReporter.drain();

@@ -46,14 +46,11 @@ describe("immediate public-to-private transition", () => {
   it("denies new anonymous read, search and original resolution without rebuilding", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const fixture = setupPublicationFixture(database);
-      const source = database
-        .prepare("SELECT source_id FROM book_versions WHERE id = ?")
-        .get(publicationTestVersionId) as { source_id: string };
       const fileId = "file_visibility_transition_0001";
       database
         .prepare(
           `INSERT INTO original_files (
-             id, book_id, source_id, role, storage_rel_path, original_name,
+             id, book_id, import_id, role, storage_rel_path, original_name,
              media_type, size_bytes, sha256, created_at
            ) VALUES (?, ?, ?, 'mineru_zip', ?, 'mineru.zip',
                      'application/zip', 1, ?, 11)`,
@@ -61,7 +58,7 @@ describe("immediate public-to-private transition", () => {
         .run(
           fileId,
           fixture.book.id,
-          source.source_id,
+          fixture.imported.id,
           `originals/${fileId}`,
           "a".repeat(64),
         );

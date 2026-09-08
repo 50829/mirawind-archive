@@ -7,6 +7,7 @@ import {
   type PresentationReconciliation,
 } from "@/modules/publishing/adapters/filesystem/book-presentation";
 import { reconcilePublishingStorage } from "@/modules/publishing/adapters/filesystem/storage-reconciliation";
+import { recoverDraftSaves } from "@/modules/publishing/adapters/worker/recover-draft-saves";
 import {
   verifyAndRecoverCurrentVersions,
   type CurrentVersionRecovery,
@@ -27,6 +28,7 @@ export async function reconcileStorage(input: {
   readonly layout: StorageLayout;
   readonly nowMs: number;
 }): Promise<StorageReconciliation> {
+  await recoverDraftSaves(input);
   const publishing = await reconcilePublishingStorage(input);
   const presentationReconciliation = await reconcileBookVersionPresentations({
     ...input,

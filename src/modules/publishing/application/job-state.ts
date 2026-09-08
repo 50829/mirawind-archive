@@ -1,17 +1,12 @@
 export const userJobKinds = [
   "analyze_import",
   "prepare_draft",
+  "save_draft",
   "build_candidate",
   "purge_book",
 ] as const;
 
-export const maintenanceJobKinds = [
-  "verify_version",
-  "reconcile",
-  "reclaim_versions",
-] as const;
-
-export const jobKinds = [...userJobKinds, ...maintenanceJobKinds] as const;
+export const jobKinds = userJobKinds;
 
 export type JobKind = (typeof jobKinds)[number];
 export type UserJobKind = (typeof userJobKinds)[number];
@@ -70,12 +65,12 @@ const jobPhases = Object.freeze({
     "finalize_candidate",
     ...terminalPhases,
   ],
-  verify_version: ["queued", "starting", "verify_manifest", ...terminalPhases],
-  reconcile: ["queued", "starting", "reconcile_storage", ...terminalPhases],
-  reclaim_versions: [
+  save_draft: [
     "queued",
     "starting",
-    "reclaim_storage",
+    "validate_edit",
+    "prepare_save",
+    "save_document",
     ...terminalPhases,
   ],
   purge_book: [

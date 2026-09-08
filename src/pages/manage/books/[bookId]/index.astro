@@ -30,7 +30,7 @@ const bookId = Number(Astro.params.bookId);
 const book = Number.isSafeInteger(bookId)
   ? createPublishingDraftServer(database).findBook(bookId)
   : null;
-if (!book?.draftConfigRevision || !book.draftSourceId) {
+if (!book?.draftImportId) {
   return hiddenManagementPage();
 }
 applyResponsePolicy(Astro.response.headers, "manage");

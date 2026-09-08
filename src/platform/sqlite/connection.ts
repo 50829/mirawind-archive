@@ -1,4 +1,6 @@
 import Database from "better-sqlite3";
+import { databaseBaselineIdentity } from "./migration-manifest";
+import { DatabaseBaselineIncompatibleError } from "./migrate";
 
 const minimumSqliteVersion = "3.51.3";
 
@@ -29,6 +31,28 @@ export function openDatabase(
   options: { readonly role: "web" | "worker" },
 ): Database.Database {
   const database = new Database(path);
+  const marker = database
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='database_baseline'",
+    )
+    .get();
+  const library = database
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='books'",
+    )
+    .get();
+  if (
+    (marker &&
+      (
+        database
+          .prepare("SELECT identity FROM database_baseline WHERE id=1")
+          .get() as { identity: string } | undefined
+      )?.identity !== databaseBaselineIdentity) ||
+    (library && !marker)
+  ) {
+    database.close();
+    throw new DatabaseBaselineIncompatibleError();
+  }
   database.pragma("journal_mode = WAL");
   database.pragma("foreign_keys = ON");
   database.pragma("trusted_schema = OFF");

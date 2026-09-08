@@ -24,7 +24,7 @@ describe("worker loop idle maintenance", () => {
 
     await runWorkerLoop({
       candidates: {} as never,
-      database: {} as never,
+      database: { prepare: () => ({ all: () => [] }) } as never,
       drafts: {} as never,
       imports: {} as never,
       layout: { root: "/tmp/unused-worker-loop-test" } as never,
@@ -35,7 +35,6 @@ describe("worker loop idle maintenance", () => {
       repository: repository as never,
       scheduler: { checkpointIfDue: async () => null } as never,
       shutdownSignal: shutdown.signal,
-      sources: {} as never,
       workerId: "worker:test",
     });
 

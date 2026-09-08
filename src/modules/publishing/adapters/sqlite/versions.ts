@@ -17,7 +17,7 @@ interface VersionRow {
   book_id: number;
   compiler_version: string;
   complete_at: number;
-  config_revision: number;
+  source_updated_at: number;
   created_by_job_id: string;
   id: string;
   manifest_schema_version: number;
@@ -29,7 +29,7 @@ interface VersionRow {
   renderer_version: string;
   reader_version: string;
   semantic_digest: string;
-  source_id: string;
+  import_id: string;
   state: BookVersionState;
   verified_at: number | null;
   version_rel_path: string;
@@ -42,7 +42,7 @@ function mapVersion(row: VersionRow): BookVersionRecord {
     blockingDiagnosticCount: row.blocking_diagnostic_count,
     compilerVersion: row.compiler_version,
     completeAtMs: row.complete_at,
-    configRevision: row.config_revision,
+    sourceUpdatedAt: row.source_updated_at,
     createdByJobId: row.created_by_job_id,
     id: row.id,
     manifestSchemaVersion: row.manifest_schema_version,
@@ -54,7 +54,7 @@ function mapVersion(row: VersionRow): BookVersionRecord {
     rendererVersion: row.renderer_version,
     readerVersion: row.reader_version,
     semanticDigest: row.semantic_digest,
-    sourceId: row.source_id,
+    importId: row.import_id,
     state: row.state,
     verifiedAtMs: row.verified_at,
     versionRelativePath: row.version_rel_path,
@@ -157,7 +157,7 @@ export class VersionRepository {
     readonly blockingDiagnosticCount?: number;
     readonly compilerVersion: string;
     readonly completeAtMs: number;
-    readonly configRevision: number;
+    readonly sourceUpdatedAt: number;
     readonly createdByJobId: string;
     readonly expectedSearchBlockIds: readonly string[];
     readonly manifestSchemaVersion: number;
@@ -169,7 +169,7 @@ export class VersionRepository {
     readonly rendererVersion: string;
     readonly readerVersion?: string;
     readonly semanticDigest?: string;
-    readonly sourceId: string;
+    readonly importId: string;
     readonly spool: SearchSpool;
     readonly versionId: string;
     readonly versionRelativePath: string;
@@ -182,7 +182,7 @@ export class VersionRepository {
       if (
         input.presentation.versionId !== input.versionId ||
         input.presentation.bookId !== input.bookId ||
-        input.presentation.configRevision !== input.configRevision ||
+        input.presentation.sourceUpdatedAt !== input.sourceUpdatedAt ||
         input.spool.ftsRows.some(
           (row) =>
             row.bookId !== input.bookId || row.versionId !== input.versionId,
@@ -197,7 +197,7 @@ export class VersionRepository {
       this.database
         .prepare(
           `INSERT INTO book_versions (
-            id, book_id, source_id, config_revision, predecessor_version_id,
+            id, book_id, import_id, source_updated_at, predecessor_version_id,
             state, version_rel_path, manifest_schema_version, manifest_sha256,
             version_marker_sha256, semantic_digest, compiler_version,
             renderer_version, preview_version, reader_version,
@@ -211,8 +211,8 @@ export class VersionRepository {
         .run(
           input.versionId,
           input.bookId,
-          input.sourceId,
-          input.configRevision,
+          input.importId,
+          input.sourceUpdatedAt,
           input.predecessorVersionId,
           input.versionRelativePath,
           input.manifestSchemaVersion,
@@ -222,7 +222,7 @@ export class VersionRepository {
           input.compilerVersion,
           input.rendererVersion,
           input.previewVersion ?? "draft-preview-v6",
-          input.readerVersion ?? "mirawind-reader-v3-tailwind-4.3.3",
+          input.readerVersion ?? "mirawind-reader-v4-tailwind-4.3.3",
           input.blockingDiagnosticCount ?? 0,
           input.completeAtMs,
           input.createdByJobId,

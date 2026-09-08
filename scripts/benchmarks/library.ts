@@ -93,57 +93,44 @@ function seedBooks(database: Database.Database, count: number): void {
        book_id, created_at, updated_at, expires_at
      ) VALUES (?, 'benchmark.zip', 'draft_ready', ?, 1, ?, ?, 1, 1, 9999999999999)`,
   );
-  const insertSource = database.prepare(
-    `INSERT INTO source_snapshots (
-       id, book_id, main_markdown_path, main_markdown_sha256,
-       source_root_rel_path, analysis_version, created_from_import_id,
-       created_at
-     ) VALUES (?, ?, 'book.md', ?, ?, 'benchmark-v1', ?, 1)`,
-  );
-  const insertConfig = database.prepare(
-    `INSERT INTO config_revisions (
-       book_id, revision, source_id, schema_version,
-       yaml_rel_path, yaml_sha256, created_at
-     ) VALUES (?, 1, ?, 3, ?, ?, 1)`,
-  );
   const insertJob = database.prepare(
     `INSERT INTO jobs (
-       id, kind, state, book_id, version_id, captured_source_id,
-       captured_config_revision, attempt, automatic_retry_count, phase,
+       id, kind, state, book_id, version_id, import_id,
+       captured_source_updated_at, attempt, automatic_retry_count, phase,
        progress_json, created_at, started_at, finished_at
-     ) VALUES (?, 'build_candidate', 'succeeded', ?, ?, ?, 1, 1, 0,
+     ) VALUES (?, 'build_candidate', 'succeeded', ?, ?, ?, 1000, 1, 0,
                'complete', '{}', 1, 1, 1)`,
   );
   const insertVersion = database.prepare(
     `INSERT INTO book_versions (
-       id, book_id, source_id, config_revision, predecessor_version_id,
+       id, book_id, import_id, source_updated_at, predecessor_version_id,
        state, version_rel_path, manifest_schema_version, manifest_sha256,
        version_marker_sha256, semantic_digest, compiler_version,
        renderer_version, preview_version, reader_version,
        blocking_diagnostic_count, complete_at, published_at,
        verified_at, created_by_job_id
-     ) VALUES (?, ?, ?, 1, NULL, 'published', ?, 2, ?, ?, ?,
-               'compiler-v6', 'semantic-html-v6-katex-0.18.1',
-               'draft-preview-v6', 'mirawind-reader-v3-tailwind-4.3.3',
+     ) VALUES (?, ?, ?, 1000, NULL, 'published', ?, 4, ?, ?, ?,
+               'compiler-v7', 'semantic-html-v7-katex-0.18.1',
+               'draft-preview-v7', 'mirawind-reader-v4-tailwind-4.3.3',
                0, 1, 1, 1, ?)`,
   );
   const insertCandidate = database.prepare(
     `INSERT INTO draft_candidates (
-       id, book_id, source_id, config_revision, job_id, version_id,
+       id, book_id, import_id, source_updated_at, input_rel_path, job_id, version_id,
        state, semantic_digest, safe_error_code,
        blocking_diagnostic_count, created_at, completed_at
-     ) VALUES (?, ?, ?, 1, ?, ?, 'ready', ?, NULL, 0, 1, 1)`,
+     ) VALUES (?, ?, ?, 1000, ?, ?, ?, 'ready', ?, NULL, 0, 1, 1)`,
   );
   const insertPresentation = database.prepare(
     `INSERT INTO book_version_presentations (
-       version_id, book_id, config_revision, projection_schema_version,
+       version_id, book_id, source_updated_at, projection_schema_version,
        alias, title, metadata_json, cover_resource_id, first_page_id,
        first_page_alias, toc_preview_json, toc_entry_count,
        projection_sha256, created_at
-     ) VALUES (?, ?, 1, 1, ?, ?, ?, NULL, 1, NULL, ?, 1, ?, 1)`,
+     ) VALUES (?, ?, 1000, 3, ?, ?, ?, NULL, 1, NULL, ?, 1, ?, 1)`,
   );
   const publish = database.prepare(
-    `UPDATE books SET draft_source_id = ?, draft_config_revision = 1,
+    `UPDATE books SET draft_import_id = ?,
                       current_candidate_id = ?, current_version_id = ?
      WHERE id = ?`,
   );
@@ -153,38 +140,32 @@ function seedBooks(database: Database.Database, count: number): void {
       const alias = `bench-book-${id}`;
       const title = `Benchmark Book ${suffix}`;
       const importId = `imp_library_benchmark_${suffix}`;
-      const sourceId = `src_library_benchmark_${suffix}`;
       const versionId = `ver_library_benchmark_${suffix}`;
       const jobId = `job_library_benchmark_${suffix}`;
       const candidateId = `candidate_library_benchmark_${suffix}`;
       const sha = createHash("sha256").update(suffix).digest("hex");
       insertBook.run(id, alias, title);
       insertImport.run(importId, `tmp/${suffix}.zip`, sha, id);
-      insertSource.run(
-        sourceId,
-        id,
-        sha,
-        `books/${id}/draft/sources/${sourceId}`,
-        importId,
-      );
-      insertConfig.run(
-        id,
-        sourceId,
-        `books/${id}/draft/configs/1/book.yaml`,
-        sha,
-      );
-      insertJob.run(jobId, id, versionId, sourceId);
+      insertJob.run(jobId, id, versionId, importId);
       insertVersion.run(
         versionId,
         id,
-        sourceId,
+        importId,
         `books/${id}/versions/${versionId}`,
         sha,
         sha,
         sha,
         jobId,
       );
-      insertCandidate.run(candidateId, id, sourceId, jobId, versionId, sha);
+      insertCandidate.run(
+        candidateId,
+        id,
+        importId,
+        `books/${id}/draft/candidates/${candidateId}/book.json`,
+        jobId,
+        versionId,
+        sha,
+      );
       database
         .prepare("UPDATE jobs SET candidate_id = ? WHERE id = ?")
         .run(candidateId, jobId);
@@ -206,7 +187,7 @@ function seedBooks(database: Database.Database, count: number): void {
         ]),
         sha,
       );
-      publish.run(sourceId, candidateId, versionId, id);
+      publish.run(importId, candidateId, versionId, id);
     }
     database
       .prepare(
@@ -215,7 +196,7 @@ function seedBooks(database: Database.Database, count: number): void {
            lease_until, heartbeat_at, phase, progress_json, created_at,
            started_at
          ) VALUES (
-           'job_library_benchmark_rebuild', 'reconcile', 'running', 1, 0,
+           'job_library_benchmark_writer', 'analyze_import', 'running', 1, 0,
            'benchmark-rebuild', 9999999999999, 1, 'rebuilding_projection',
            '{"processed":0}', 1, 1
          )`,
@@ -314,7 +295,7 @@ export async function runLibraryBenchmark(input: Arguments) {
     writer
       .prepare(
         `UPDATE jobs SET heartbeat_at = ?, progress_json = ?
-         WHERE id = 'job_library_benchmark_rebuild'`,
+         WHERE id = 'job_library_benchmark_writer'`,
       )
       .run(Date.now(), JSON.stringify({ processed }));
     createHash("sha256").update(randomBytes(4_096)).digest();
@@ -332,7 +313,7 @@ export async function runLibraryBenchmark(input: Arguments) {
       path: "/books/bench-book-500",
     });
     const report = Object.freeze({
-      background_rebuild: {
+      background_queue_writer: {
         heartbeat_writes: processed,
         job_state: "running",
         observed: processed > 0,
@@ -376,7 +357,7 @@ function markdown(report: Awaited<ReturnType<typeof runLibraryBenchmark>>) {
 
 - Status: **${report.status}**
 - Fixture: ${report.book_count} current public books
-- Concurrent background projection rebuild observed: ${report.background_rebuild.observed}
+- Simulated queue heartbeat contention observed: ${report.background_queue_writer.observed}
 - Requests: ${report.requests_per_route} per route at concurrency ${report.concurrency}
 - Library p95: ${report.library.summary.p95_ms} ms (target ≤ 300 ms)
 - Details p95: ${report.details.summary.p95_ms} ms (target ≤ 300 ms)

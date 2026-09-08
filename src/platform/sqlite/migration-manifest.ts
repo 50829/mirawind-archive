@@ -6,13 +6,15 @@ import {
   type Migration,
 } from "./migrate";
 
+export const databaseBaselineIdentity = "mirawind-content-ir-v1";
+
 const migrationDefinitions = [
   {
-    baselineIdentity: "mirawind-publishing-editor-v1",
+    baselineIdentity: databaseBaselineIdentity,
     checksum:
-      "c9bb475ecdf69efafed5ea904711c660ae5125c7c0786bc543526435e932ae89",
+      "08f1f680cf342e9076192beee177fd10bbab07a95212d0c481e67e8b09c66157",
     file: "0001_clean_slate.sql",
-    name: "publishing_editor_clean_slate",
+    name: "content_ir_clean_slate",
     version: 1,
   },
 ] as const;

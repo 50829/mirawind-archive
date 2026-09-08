@@ -1,183 +1,126 @@
 import type Database from "better-sqlite3";
-
 import { SafeApplicationError } from "@/domain/errors";
-import { createStrongEtag } from "@/http/cache/policies";
 import type {
   CandidatePublicationCapture,
   CandidatePublicationPort,
   PublishedCandidate,
 } from "../../application/commands/publish-candidate";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { requireDraftTimestamp } from "../filesystem/draft-document";
+import { DraftSaveRepository } from "./draft-saves";
 
 interface PublicationRow {
-  alias: string | null;
-  blocking_diagnostic_count: number;
   book_id: number;
-  candidate_job_id: string;
-  candidate_semantic_digest: string;
-  candidate_source_id: string;
+  candidate_id: string;
   candidate_state: string;
-  candidate_version_id: string;
-  config_yaml_sha256: string;
-  config_revision: number;
-  current_version_id: string | null;
-  draft_config_revision: number;
-  draft_source_id: string;
-  predecessor_version_id: string | null;
-  published_at: number | null;
-  semantic_digest: string;
-  source_id: string;
+  candidate_job_id: string;
+  source_updated_at: number;
+  import_id: string;
+  draft_import_id: string | null;
   version_id: string;
   version_state: string;
+  current_version_id: string | null;
+  predecessor_version_id: string | null;
+  published_at: number | null;
+  blocking_diagnostic_count: number;
+  semantic_digest: string;
+  candidate_semantic_digest: string;
+  alias: string | null;
 }
-
 export type CandidatePromotionCrashPoint =
   "after_version_before_book" | "after_book_before_audit" | "after_commit";
-
 export type CandidatePromotionCrashPointInjector = (
   point: CandidatePromotionCrashPoint,
 ) => void;
-
 function stale(): never {
   throw new SafeApplicationError(
     "PUBLICATION_STALE",
-    "The ready candidate no longer matches the current draft.",
+    "The ready preview no longer matches the draft.",
     409,
   );
 }
-
-function preconditionFailed(): never {
-  throw new SafeApplicationError(
-    "DRAFT_PRECONDITION_FAILED",
-    "The draft changed since it was read.",
-    412,
-  );
-}
-
 export class CandidatePublicationRepository implements CandidatePublicationPort {
   constructor(
     private readonly database: Database.Database,
+    private readonly layout: StorageLayout,
     private readonly crashPoint?: CandidatePromotionCrashPointInjector,
   ) {}
-
-  private row(bookId: number): PublicationRow | null {
-    return (this.database
+  private require(input: {
+    bookId: number;
+    candidateId: string;
+    expectedUpdatedAt: number;
+  }): PublicationRow {
+    requireDraftTimestamp(this.layout, input.bookId, input.expectedUpdatedAt);
+    if (new DraftSaveRepository(this.database).pending(input.bookId)) stale();
+    const row = this.database
       .prepare(
-        `SELECT books.id AS book_id, books.draft_source_id,
-                books.draft_config_revision, books.current_version_id,
-                candidate.state AS candidate_state,
-                candidate.source_id AS candidate_source_id,
-                candidate.config_revision, candidate.job_id AS candidate_job_id,
-                candidate.version_id AS candidate_version_id,
-                candidate.semantic_digest AS candidate_semantic_digest,
-                config.yaml_sha256 AS config_yaml_sha256,
-                version.id AS version_id, version.state AS version_state,
-                version.source_id, version.predecessor_version_id,
-                version.semantic_digest, version.blocking_diagnostic_count,
-                version.published_at, presentation.alias
-         FROM books
-         JOIN draft_candidates AS candidate
-           ON candidate.id = books.current_candidate_id
-          AND candidate.book_id = books.id
-         JOIN config_revisions AS config
-           ON config.book_id = books.id
-          AND config.revision = books.draft_config_revision
-         JOIN book_versions AS version
-           ON version.id = candidate.version_id
-          AND version.book_id = books.id
-         JOIN book_version_presentations AS presentation
-           ON presentation.version_id = version.id
-          AND presentation.book_id = books.id
-         WHERE books.id = ?
-           AND books.deletion_requested_at IS NULL`,
+        "SELECT books.id AS book_id,books.current_version_id,books.draft_import_id,candidate.id AS candidate_id,candidate.state AS candidate_state,candidate.job_id AS candidate_job_id,candidate.source_updated_at,candidate.import_id,candidate.semantic_digest AS candidate_semantic_digest,version.id AS version_id,version.state AS version_state,version.predecessor_version_id,version.published_at,version.blocking_diagnostic_count,version.semantic_digest,presentation.alias FROM books JOIN draft_candidates candidate ON candidate.id=books.current_candidate_id AND candidate.book_id=books.id JOIN book_versions version ON version.id=candidate.version_id AND version.book_id=books.id AND version.source_updated_at=candidate.source_updated_at AND version.import_id=candidate.import_id JOIN book_version_presentations presentation ON presentation.version_id=version.id WHERE books.id=? AND books.deletion_requested_at IS NULL",
       )
-      .get(bookId) ?? null) as PublicationRow | null;
-  }
-
-  private validate(row: PublicationRow | null): PublicationRow {
+      .get(input.bookId) as PublicationRow | undefined;
     if (
       !row ||
+      row.candidate_id !== input.candidateId ||
+      row.source_updated_at !== input.expectedUpdatedAt ||
       row.candidate_state !== "ready" ||
-      row.candidate_version_id !== row.version_id ||
-      row.config_revision !== row.draft_config_revision ||
-      row.candidate_source_id !== row.draft_source_id ||
-      row.source_id !== row.draft_source_id ||
-      row.candidate_semantic_digest !== row.semantic_digest ||
+      row.draft_import_id !== row.import_id ||
+      row.semantic_digest !== row.candidate_semantic_digest ||
       row.blocking_diagnostic_count !== 0 ||
-      !["ready", "published"].includes(row.version_state)
-    ) {
-      return stale();
-    }
-    if (
-      row.version_state === "published" &&
-      row.current_version_id !== row.version_id
-    ) {
-      return stale();
-    }
-    if (
-      row.version_state === "ready" &&
-      row.predecessor_version_id !== row.current_version_id
-    ) {
-      return stale();
-    }
+      !["ready", "published"].includes(row.version_state) ||
+      (row.version_state === "ready" &&
+        row.predecessor_version_id !== row.current_version_id) ||
+      (row.version_state === "published" &&
+        row.current_version_id !== row.version_id)
+    )
+      stale();
     return row;
   }
-
   capture(input: {
     readonly bookId: number;
-    readonly expectedConfigEtag: string;
+    readonly expectedUpdatedAt: number;
+    readonly candidateId: string;
   }): CandidatePublicationCapture {
-    const row = this.validate(this.row(input.bookId));
-    if (createStrongEtag(row.config_yaml_sha256) !== input.expectedConfigEtag) {
-      return preconditionFailed();
-    }
-    return Object.freeze({
+    const row = this.require(input);
+    return {
       bookId: row.book_id,
-      configRevision: row.config_revision,
-      sourceId: row.source_id,
+      sourceUpdatedAt: row.source_updated_at,
+      importId: row.import_id,
       versionId: row.version_id,
-    });
+      candidateId: row.candidate_id,
+    };
   }
-
   promote(input: {
     readonly actorUserId: string | null;
     readonly bookId: number;
-    readonly expectedConfigRevision: number;
+    readonly expectedUpdatedAt: number;
     readonly expectedVersionId: string;
+    readonly candidateId: string;
     readonly nowMs: number;
   }): PublishedCandidate {
     const published = withImmediateTransaction(this.database, () => {
-      const row = this.validate(this.row(input.bookId));
-      if (
-        row.config_revision !== input.expectedConfigRevision ||
-        row.version_id !== input.expectedVersionId
-      ) {
-        return stale();
-      }
+      const row = this.require(input);
+      if (row.version_id !== input.expectedVersionId) stale();
       if (row.version_state === "published") {
         if (row.published_at === null)
           throw new Error("PUBLICATION_TIMESTAMP_MISSING");
-        return Object.freeze({
+        return {
           publishedAtMs: row.published_at,
           state: "published" as const,
           versionId: row.version_id,
-        });
+        };
       }
       if (row.current_version_id !== null) {
-        const previous = this.database
+        const changed = this.database
           .prepare(
-            `UPDATE book_versions SET state = 'superseded'
-             WHERE id = ? AND book_id = ? AND state = 'published'`,
+            "UPDATE book_versions SET state='superseded' WHERE id=? AND book_id=? AND state='published'",
           )
           .run(row.current_version_id, row.book_id);
-        if (previous.changes !== 1)
+        if (changed.changes !== 1)
           throw new Error("PUBLICATION_OLD_STATE_INVALID");
       }
       const promoted = this.database
         .prepare(
-          `UPDATE book_versions
-           SET state = 'published', published_at = ?, verified_at = ?
-           WHERE id = ? AND book_id = ? AND state = 'ready'`,
+          "UPDATE book_versions SET state='published',published_at=?,verified_at=? WHERE id=? AND book_id=? AND state='ready'",
         )
         .run(input.nowMs, input.nowMs, row.version_id, row.book_id);
       if (promoted.changes !== 1)
@@ -185,46 +128,35 @@ export class CandidatePublicationRepository implements CandidatePublicationPort 
       this.crashPoint?.("after_version_before_book");
       const book = this.database
         .prepare(
-          `UPDATE books
-           SET current_version_id = ?, alias = ?,
-               unavailable_reason = NULL, updated_at = ?
-           WHERE id = ? AND current_candidate_id = (
-             SELECT id FROM draft_candidates WHERE version_id = ?
-           ) AND draft_source_id = ? AND draft_config_revision = ?
-             AND current_version_id IS ? AND deletion_requested_at IS NULL`,
+          "UPDATE books SET current_version_id=?,alias=?,unavailable_reason=NULL,updated_at=? WHERE id=? AND current_candidate_id=? AND current_version_id IS ? AND deletion_requested_at IS NULL",
         )
         .run(
           row.version_id,
           row.alias,
           input.nowMs,
           row.book_id,
-          row.version_id,
-          row.source_id,
-          row.config_revision,
+          row.candidate_id,
           row.current_version_id,
         );
       if (book.changes !== 1) throw new Error("PUBLICATION_BOOK_CAS_FAILED");
       this.crashPoint?.("after_book_before_audit");
       this.database
         .prepare(
-          `INSERT INTO audit_events (
-            actor_user_id, action, book_id, version_id, job_id,
-            safe_metadata_json, created_at
-          ) VALUES (?, 'book.published', ?, ?, ?, ?, ?)`,
+          "INSERT INTO audit_events (actor_user_id,action,book_id,version_id,job_id,safe_metadata_json,created_at) VALUES (?,'book.published',?,?,?,?,?)",
         )
         .run(
           input.actorUserId,
           row.book_id,
           row.version_id,
           row.candidate_job_id,
-          JSON.stringify({ config_revision: row.config_revision }),
+          JSON.stringify({ source_updated_at: row.source_updated_at }),
           input.nowMs,
         );
-      return Object.freeze({
+      return {
         publishedAtMs: input.nowMs,
         state: "published" as const,
         versionId: row.version_id,
-      });
+      };
     });
     this.crashPoint?.("after_commit");
     return published;

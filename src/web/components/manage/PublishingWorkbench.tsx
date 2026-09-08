@@ -1,3 +1,4 @@
+import { DraftSaveFailure, waitForDraftSave } from "./wait-for-save";
 import { CircleAlert, FilePenLine, RotateCcw, Save, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -37,13 +38,15 @@ interface PreviewFrameMessage {
   readonly block_id?: string;
   readonly fragment: string | null;
   readonly page_id: number;
-  readonly revision: number;
+  readonly source_updated_at: number;
+  readonly candidate_id: string;
   readonly type: PreviewFrameMessageType;
 }
 
 function previewFrameMessage(
   value: unknown,
-  revision: number,
+  sourceUpdatedAt: number,
+  candidateId: string,
   pages: readonly PreviewPage[],
 ): PreviewFrameMessage | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -57,7 +60,8 @@ function previewFrameMessage(
     return null;
   }
   if (
-    candidate.revision !== revision ||
+    candidate.source_updated_at !== sourceUpdatedAt ||
+    candidate.candidate_id !== candidateId ||
     !Number.isSafeInteger(candidate.page_id) ||
     !pages.some((page) => page.page_id === candidate.page_id)
   ) {
@@ -86,7 +90,7 @@ interface DraftBlockEditor {
   readonly blockId: string;
   readonly conflict: boolean;
   readonly error: string;
-  readonly etag: string;
+  readonly updatedAt: number;
   readonly kind: string;
   readonly loading: boolean;
   readonly markdown: string;
@@ -94,20 +98,22 @@ interface DraftBlockEditor {
 }
 
 interface DraftBlockResponse {
+  readonly updated_at: number;
   readonly block_id: string;
   readonly kind: string;
   readonly markdown: string;
 }
 
 const blockKindLabels: Readonly<Record<string, string>> = Object.freeze({
-  blockquote: "引用",
+  quote: "引用",
   code: "代码块",
-  footnoteDefinition: "脚注",
+  footnote: "脚注",
   image: "图片",
-  listItem: "列表项",
+  list_item: "列表项",
+  list: "列表",
   math: "公式",
   paragraph: "段落",
-  semanticContainer: "教材内容块",
+  container: "教材内容块",
   table: "表格",
 });
 
@@ -127,7 +133,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   const [displayedPreview, setDisplayedPreview] =
     useState<DraftView["preview"]>(null);
   const [message, setMessage] = useState("");
-  const [etag, setEtag] = useState("");
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   const [selectedFragment, setSelectedFragment] = useState<string | null>(null);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
@@ -145,9 +150,12 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     saving: false,
   });
   const [blockEditor, setBlockEditor] = useState<DraftBlockEditor | null>(null);
+  const blockEditorRef = useRef(blockEditor);
+  blockEditorRef.current = blockEditor;
   const blockDirty = Boolean(
     blockEditor && blockEditor.markdown !== blockEditor.acceptedMarkdown,
   );
+  const lastPreviewId = useRef<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const editorRef = useRef<StructureEditorHandle>(null);
   const diagnosticsDialog = useRef<HTMLDialogElement>(null);
@@ -170,9 +178,11 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
     });
     if (!response.ok) throw new Error("DRAFT_LOAD_FAILED");
     const next = (await response.json()) as DraftView;
-    setEtag(response.headers.get("etag") ?? "");
     setDraft(next);
     if (next.preview) {
+      if (lastPreviewId.current !== next.preview.candidate_id)
+        setFrameReady(false);
+      lastPreviewId.current = next.preview.candidate_id;
       setDisplayedPreview(next.preview);
       setSelectedPage((current) =>
         next.preview?.pages.some((page) => page.page_id === current)
@@ -184,9 +194,6 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   }, [props.bookId]);
 
   const preview = draft?.preview ?? displayedPreview;
-  const previewIsCurrent = Boolean(
-    draft?.preview && draft.preview.config_revision === draft.config_revision,
-  );
   const selectPreviewHeading = useCallback(
     (blockId: string) => {
       const heading = preview?.headings.find(
@@ -204,7 +211,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
 
   const loadBlock = useCallback(
     async (blockId: string) => {
-      if (!draft || !previewIsCurrent || draft.candidate?.state !== "ready") {
+      if (!draft) {
         setMessage("当前预览正在更新，完成后才能编辑正文。");
         return;
       }
@@ -213,7 +220,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         blockId,
         conflict: false,
         error: "",
-        etag: "",
+        updatedAt: draft.updated_at,
         kind: "",
         loading: true,
         markdown: "",
@@ -227,15 +234,13 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         );
         if (!response.ok) throw new Error("DRAFT_BLOCK_LOAD_FAILED");
         const value = (await response.json()) as DraftBlockResponse;
-        const responseEtag = response.headers.get("etag");
         if (value.block_id !== blockId) throw new Error("DRAFT_BLOCK_MISMATCH");
-        if (!responseEtag) throw new Error("DRAFT_BLOCK_ETAG_MISSING");
         setBlockEditor({
           acceptedMarkdown: value.markdown,
           blockId,
           conflict: false,
           error: "",
-          etag: responseEtag,
+          updatedAt: value.updated_at,
           kind: value.kind,
           loading: false,
           markdown: value.markdown,
@@ -253,7 +258,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         );
       }
     },
-    [draft, previewIsCurrent],
+    [draft],
   );
 
   const reloadBlock = useCallback(async () => {
@@ -274,8 +279,10 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
       ]);
       if (!response.ok) throw new Error("DRAFT_BLOCK_RELOAD_FAILED");
       const value = (await response.json()) as DraftBlockResponse;
-      const responseEtag = response.headers.get("etag");
-      if (value.block_id !== blockId || !responseEtag) {
+      if (
+        value.block_id !== blockId ||
+        !Number.isSafeInteger(value.updated_at)
+      ) {
         throw new Error("DRAFT_BLOCK_RELOAD_MISMATCH");
       }
       setBlockEditor({
@@ -283,7 +290,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         blockId,
         conflict: false,
         error: "",
-        etag: responseEtag,
+        updatedAt: value.updated_at,
         kind: value.kind,
         loading: false,
         markdown: value.markdown,
@@ -310,7 +317,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   }, [refresh]);
 
   usePolling(
-    draft?.candidate?.state === "building",
+    draft?.candidate?.state === "building" || draft?.pending_save === true,
     async () => {
       await refresh().catch(() => setMessage("预览状态刷新失败。"));
     },
@@ -323,7 +330,8 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const received = previewFrameMessage(
         event.data,
-        preview.config_revision,
+        preview.source_updated_at,
+        preview.candidate_id,
         preview.pages,
       );
       if (!received) return;
@@ -375,8 +383,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
       blockEditor.loading ||
       blockEditor.saving ||
       blockEditor.conflict ||
-      blockEditor.markdown === blockEditor.acceptedMarkdown ||
-      draft.candidate?.state !== "ready"
+      blockEditor.markdown === blockEditor.acceptedMarkdown
     ) {
       return;
     }
@@ -387,12 +394,14 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
       const response = await fetch(
         `/api/manage/books/${draft.book_id}/draft/blocks/${blockEditor.blockId}`,
         {
-          body: JSON.stringify({ markdown: blockEditor.markdown }),
+          body: JSON.stringify({
+            markdown: blockEditor.markdown,
+            expected_updated_at: blockEditor.updatedAt,
+          }),
           cache: "no-store",
           credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
-            "If-Match": blockEditor.etag,
           },
           method: "PATCH",
         },
@@ -423,16 +432,37 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
         );
         return;
       }
-      blockDialog.current?.close();
-      setBlockEditor(null);
-      setMessage("");
+      const acceptedAt = await waitForDraftSave(response);
       await refresh();
-    } catch {
+      if (blockEditorRef.current?.markdown === blockEditor.markdown) {
+        blockDialog.current?.close();
+        setBlockEditor(null);
+      } else {
+        setBlockEditor((current) =>
+          current
+            ? {
+                ...current,
+                acceptedMarkdown: blockEditor.markdown,
+                updatedAt: acceptedAt,
+                saving: false,
+              }
+            : current,
+        );
+      }
+      setMessage("");
+    } catch (error) {
       setBlockEditor((current) =>
         current
           ? {
               ...current,
-              error: "正文保存失败，请稍后重试。",
+              conflict:
+                error instanceof DraftSaveFailure &&
+                error.code === "DRAFT_PRECONDITION_FAILED",
+              error:
+                error instanceof DraftSaveFailure &&
+                error.code === "DRAFT_PRECONDITION_FAILED"
+                  ? "草稿已更新，本地正文仍保留。"
+                  : "正文保存失败，请检查内容后重试。",
               saving: false,
             }
           : current,
@@ -467,7 +497,8 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
   const candidateState = draft.candidate?.state ?? "failed";
   const previewReady =
     candidateState === "ready" &&
-    preview?.config_revision === draft.config_revision;
+    frameReady &&
+    preview?.source_updated_at === draft.updated_at;
   return (
     <div className="preview-workspace" data-mobile-mode={mobileMode}>
       <header className="preview-header sticky top-0 z-10 mb-4 grid min-h-18 grid-cols-[auto_minmax(12rem,1fr)_auto_auto_auto_auto] items-center gap-3 rounded-lg border border-stone-300 bg-white px-6 py-3 max-[850px]:static max-[850px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[480px]:grid-cols-[minmax(0,1fr)_auto] max-[480px]:gap-2 max-[480px]:px-3">
@@ -520,10 +551,9 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             editorState.conflict ||
             blockDirty ||
             Boolean(blockEditor?.saving || blockEditor?.conflict) ||
-            candidateState === "building"
+            draft.pending_save
           }
           draft={draft}
-          etag={etag}
           onChanged={async () => {
             await refresh();
           }}
@@ -553,12 +583,15 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             editorState.dirty ||
             blockDirty ||
             Boolean(blockEditor?.saving || blockEditor?.conflict) ||
+            editorState.saving ||
+            draft.pending_save ||
             blockingDiagnostics.length > 0
           }
           bookId={draft.book_id}
           candidatePublished={draft.candidate_published}
+          candidateId={preview?.candidate_id ?? null}
+          updatedAt={draft.updated_at}
           compact
-          etag={etag}
           onPublished={async () => {
             await refresh();
           }}
@@ -589,12 +622,11 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
       </header>
 
       <div className="preview-grid grid grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(18rem,22rem)] gap-4 max-[1180px]:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] max-[850px]:grid-cols-1">
-        {etag && (
+        {draft && (
           <StructureEditor
             ref={editorRef}
             bookId={draft.book_id}
             boundaries={draft.boundaries}
-            etag={etag}
             focusedBlockId={focusedBlockId}
             headings={preview?.headings ?? []}
             mobileHidden={mobileMode === "preview"}
@@ -604,9 +636,9 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
             onSelectHeading={selectPreviewHeading}
             onStateChange={updateEditorState}
             numbering={draft.numbering}
-            revision={draft.config_revision}
+            updatedAt={draft.updated_at}
             saveDisabled={
-              candidateState === "building" ||
+              draft.pending_save ||
               blockDirty ||
               Boolean(blockEditor?.saving || blockEditor?.conflict)
             }
@@ -652,15 +684,18 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
                   ? "mx-auto block w-[min(390px,100%)]"
                   : ""
               }`}
-              key={`${preview.config_revision}:${pageId}:${navigationSerial}`}
+              key={`${preview.candidate_id}:${pageId}:${navigationSerial}`}
               ref={iframeRef}
               sandbox="allow-scripts"
-              src={`/api/manage/books/${draft.book_id}/preview/${preview.config_revision}/pages/${pageId}${
+              src={`/api/manage/books/${draft.book_id}/preview/${preview.candidate_id}/pages/${pageId}${
                 selectedFragment
                   ? `#${encodeURIComponent(selectedFragment)}`
                   : ""
               }`}
-              title={`修订 ${preview.config_revision}：${preview.pages.find((page) => page.page_id === pageId)?.title ?? "正文预览"}`}
+              title={
+                preview.pages.find((page) => page.page_id === pageId)?.title ??
+                "正文预览"
+              }
             />
           ) : (
             <p className="quiet text-sm text-stone-600">预览生成中…</p>
@@ -788,7 +823,7 @@ export function PublishingWorkbench(props: { readonly bookId: number }) {
                     blockEditor.saving ||
                     blockEditor.conflict ||
                     blockEditor.markdown === blockEditor.acceptedMarkdown ||
-                    candidateState !== "ready"
+                    draft.pending_save
                   }
                   onClick={() => void saveBlock()}
                   type="button"

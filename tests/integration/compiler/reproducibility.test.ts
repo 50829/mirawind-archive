@@ -1,7 +1,5 @@
-import { createHash } from "node:crypto";
-
+import { required } from "../../helpers/required";
 import { describe, expect, it } from "vitest";
-
 import { buildSearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { compileBook } from "@/modules/publishing/core/publication/compile-book";
 import {
@@ -9,33 +7,17 @@ import {
   pageMetadata,
   pageOutputPath,
 } from "@/modules/publishing/core/publication/compiled-book";
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
-import { createBookConfigV4 } from "../../helpers/book-config";
-
+import { smallBook, headingBlock, paragraphBlock } from "../../helpers/ir-book";
 describe("same-version derived-data reproducibility", () => {
   it("produces identical page and search rows from unchanged normalized content", () => {
-    const source = "# Cafe\u0301\n\n中文正文";
-    const sourceSha256 = createHash("sha256").update(source).digest("hex");
+    const document = smallBook();
+    document.blocks = [headingBlock("Cafe\u0301"), paragraphBlock("中文正文")];
+    document.publishing.boundaries = {
+      body_start_block_id: required(document.blocks[0]).id,
+    };
+    document.publishing.numbering = "generated";
     const create = () => {
-      let ordinal = 0;
-      const document = normalizeDocumentBlocks(parseMarkdownDocument(source), {
-        idFactory: () =>
-          `blk_reproducibility_${String(++ordinal).padStart(8, "0")}`,
-      });
-      const config = createBookConfigV4({
-        document,
-        numbering: "generated",
-        sourceSha256,
-        title: "Café",
-      });
-      const book = compileBook({
-        config,
-        configSha256: createHash("sha256")
-          .update(JSON.stringify(config))
-          .digest("hex"),
-        markdownBytes: source,
-      });
+      const book = compileBook(structuredClone(document));
       return {
         pages: book.pages.map((page) => ({
           blockIds: pageBlockIds(book, page),
@@ -52,10 +34,8 @@ describe("same-version derived-data reproducibility", () => {
         }),
       };
     };
-
     const first = create();
     const second = create();
-
     expect(first).toEqual(second);
     expect(first.spool.ftsRows[0]?.title).toBe("Café");
     expect(first.spool.shortRows[1]?.normalizedText).toBe("Áuthor");

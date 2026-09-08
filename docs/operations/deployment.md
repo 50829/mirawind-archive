@@ -122,10 +122,12 @@ The named volume is mounted at `/var/lib/mirawind`:
 ├── backups/
 ├── books/<book_id>/
 │   ├── draft/
-│   │   ├── source/<source_id>/
-│   │   ├── originals/<file_id>
-│   │   ├── configs/<revision>/book.yaml
-│   │   └── previews/<revision>/
+│   │   ├── book.json
+│   │   ├── views/<updated_at>/
+│   │   ├── saves/<job_id>/
+│   │   └── candidates/<candidate_id>/
+│   ├── originals/<file_id>
+│   ├── assets/<resource_id>.<extension>
 │   ├── quarantine/
 │   └── versions/<version_id>/
 ├── staging/<job_id>/
@@ -136,14 +138,12 @@ Actual layout is always determined by the runtime code and opaque IDs; do not in
 from titles or paths. `staging`, `versions` and uploads must stay on the same filesystem so
 publication rename is atomic. Never expose this volume through Caddy as a static directory.
 
-Published version directories are immutable. Do not edit `book.yaml`, manifest, HTML,
-resources or `version.json` in place. Correct source/configuration through a new import or
-revision and publish a new version.
+Published version directories are immutable. Do not edit their `book.json`, manifest, HTML,
+resources or `version.json` in place. Save the working draft, inspect its new candidate and publish
+that version. Initialize a fresh data root for D-138; do not attach the retired Markdown database.
 
-The management reprocess action always reads the retained original archive and creates a new
-source snapshot plus a new v3 configuration revision. It never mutates an
-accepted source snapshot or published version. Keep the registered original archive when
-future preprocessing revisions may be needed.
+The management reprocess action reads the retained original v2 archive and submits a timestamp-guarded
+`save_draft` task. It never modifies a published version. Keep the registered original archive.
 
 ## 5. Lifecycle commands
 

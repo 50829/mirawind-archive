@@ -13,7 +13,7 @@ import type { BookVersionRecord } from "../../application/version-record";
 import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 
-const maximumConfigBytes = 4 * 1024 * 1024;
+const maximumConfigBytes = 256 * 1024 * 1024;
 const maximumManifestBytes = 64 * 1024 * 1024;
 
 async function defaultLoadPresentation(
@@ -25,7 +25,7 @@ async function defaultLoadPresentation(
     version.versionRelativePath,
   );
   const [configBytes, manifestBytes] = await Promise.all([
-    readFile(resolve(directory, "book.yaml")),
+    readFile(resolve(directory, "book.json")),
     readFile(resolve(directory, "document-manifest.json")),
   ]);
   if (configBytes.byteLength > maximumConfigBytes) {
@@ -35,7 +35,7 @@ async function defaultLoadPresentation(
     throw new Error("PRESENTATION_MANIFEST_LIMIT");
   }
   return deriveBookVersionPresentation({
-    bookConfig: configBytes.toString("utf8"),
+    bookDocument: JSON.parse(configBytes.toString("utf8")),
     createdAtMs: version.completeAtMs,
     documentManifest: JSON.parse(manifestBytes.toString("utf8")) as unknown,
   });
@@ -69,7 +69,7 @@ export async function reconcileBookVersionPresentations(input: {
       if (
         expected.versionId !== version.id ||
         expected.bookId !== version.bookId ||
-        expected.configRevision !== version.configRevision
+        expected.sourceUpdatedAt !== version.sourceUpdatedAt
       ) {
         throw new Error("PRESENTATION_IDENTITY_MISMATCH");
       }

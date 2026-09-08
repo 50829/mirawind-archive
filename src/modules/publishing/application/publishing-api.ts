@@ -1,9 +1,8 @@
 import {
   canonicalJson,
-  parseBookConfigYaml,
   parseReaderManifestProjection,
   publishingReaderRendererAssets,
-  validateBookConfig,
+  validateBookDocument,
 } from "./publication-formats";
 import {
   assertJobProgressUpdate,
@@ -94,8 +93,7 @@ export {
   parseCandidateBuildArtifact,
   publishCandidate,
   canonicalJson,
-  parseBookConfigYaml,
   parseReaderManifestProjection,
   publishingReaderRendererAssets,
-  validateBookConfig,
+  validateBookDocument,
 };

@@ -23,7 +23,7 @@ function progress() {
       total: 1,
       unit: "steps",
     },
-    protocolVersion: 5,
+    protocolVersion: 6,
     type: "progress",
   });
 }

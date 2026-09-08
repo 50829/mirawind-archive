@@ -77,16 +77,6 @@ function TechnicalDetails(props: { readonly diagnostic: PreviewDiagnostic }) {
             <dd className="m-0">第 {diagnostic.location.pageIndex + 1} 页</dd>
           </>
         )}
-        {diagnostic.location?.startByte !== undefined &&
-          diagnostic.location.endByte !== undefined && (
-            <>
-              <dt>源位置</dt>
-              <dd className="m-0">
-                字节 {diagnostic.location.startByte}-
-                {diagnostic.location.endByte}
-              </dd>
-            </>
-          )}
         {diagnostic.location?.regionId && (
           <>
             <dt>区域</dt>

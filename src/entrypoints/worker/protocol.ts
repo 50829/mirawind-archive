@@ -8,10 +8,9 @@ import {
   type JobPhase,
   type JobProgress,
   type JobProgressUnit,
-  type TypographyProfile,
 } from "@/modules/publishing/application/publishing-api";
 
-export const jobChildProtocolVersion = 5;
+export const jobChildProtocolVersion = 6;
 
 interface FrozenJobCommandBase {
   readonly attempt: number;
@@ -28,15 +27,16 @@ export interface AnalyzeImportCommand extends FrozenJobCommandBase {
 
 export interface PrepareDraftCommand extends FrozenJobCommandBase {
   readonly bookId: number;
-  readonly capturedConfigRevision: number | null;
-  readonly capturedSourceId: string | null;
-  readonly configYamlRelativePath: string | null;
   readonly importId: string;
   readonly importUploadRelativePath: string;
   readonly kind: "prepare_draft";
   readonly selectedCandidateRelativePath: string;
-  readonly sourceRootRelativePath: string | null;
-  readonly typographyProfile?: TypographyProfile | null;
+}
+export interface SaveDraftCommand extends FrozenJobCommandBase {
+  readonly bookId: number;
+  readonly expectedUpdatedAt: number;
+  readonly requestRelativePath: string;
+  readonly kind: "save_draft";
 }
 
 export interface PurgeBookCommand extends FrozenJobCommandBase {
@@ -48,6 +48,7 @@ export type FrozenJobInput =
   | AnalyzeImportCommand
   | BuildCandidateCommand
   | PrepareDraftCommand
+  | SaveDraftCommand
   | PurgeBookCommand;
 
 export interface RunJobMessage {
@@ -105,17 +106,6 @@ function exactKeys(
   return (
     actual.length === sortedExpected.length &&
     actual.every((key, index) => key === sortedExpected[index])
-  );
-}
-
-function isNullableTypographyProfile(
-  value: unknown,
-): value is TypographyProfile | null | undefined {
-  return (
-    value === undefined ||
-    value === null ||
-    value === "verbatim-v1" ||
-    value === "zh-smart-v2"
   );
 }
 
@@ -193,43 +183,48 @@ export function isRunJobMessage(value: unknown): value is RunJobMessage {
     );
   }
   if (input.kind === "prepare_draft") {
-    const keys = [
-      ...baseKeys,
-      "bookId",
-      "capturedConfigRevision",
-      "capturedSourceId",
-      "configYamlRelativePath",
-      "importId",
-      "importUploadRelativePath",
-      "selectedCandidateRelativePath",
-      "sourceRootRelativePath",
-      ...(Object.hasOwn(input, "typographyProfile")
-        ? ["typographyProfile"]
-        : []),
-    ];
-    const reprocess = input.typographyProfile != null;
     return (
-      exactKeys(input, keys) &&
-      isNullableTypographyProfile(input.typographyProfile) &&
+      exactKeys(input, [
+        ...baseKeys,
+        "bookId",
+        "importId",
+        "importUploadRelativePath",
+        "selectedCandidateRelativePath",
+      ]) &&
       isNullablePositiveInteger(input.bookId) &&
       input.bookId !== null &&
       typeof input.importId === "string" &&
       isOpaqueId("import", input.importId) &&
       input.importUploadRelativePath ===
-        `tmp/uploads/${input.importId}/original.zip` &&
+        "tmp/uploads/" + input.importId + "/original.zip" &&
       typeof input.selectedCandidateRelativePath === "string" &&
       input.selectedCandidateRelativePath.length > 0 &&
-      (reprocess
-        ? isNullablePositiveInteger(input.capturedConfigRevision) &&
-          input.capturedConfigRevision !== null &&
-          typeof input.capturedSourceId === "string" &&
-          isOpaqueId("source", input.capturedSourceId) &&
-          typeof input.configYamlRelativePath === "string" &&
-          typeof input.sourceRootRelativePath === "string"
-        : input.capturedConfigRevision === null &&
-          input.capturedSourceId === null &&
-          input.configYamlRelativePath === null &&
-          input.sourceRootRelativePath === null)
+      input.selectedCandidateRelativePath.length <= 2048 &&
+      !input.selectedCandidateRelativePath.includes("\\") &&
+      !input.selectedCandidateRelativePath.includes("\0") &&
+      input.selectedCandidateRelativePath
+        .split("/")
+        .every((part) => part !== "" && part !== "." && part !== "..") &&
+      /(?:^|_)content_list_v2\.json$/iu.test(
+        input.selectedCandidateRelativePath.split("/").at(-1) ?? "",
+      )
+    );
+  }
+  if (input.kind === "save_draft") {
+    return (
+      exactKeys(input, [
+        ...baseKeys,
+        "bookId",
+        "expectedUpdatedAt",
+        "requestRelativePath",
+      ]) &&
+      isNullablePositiveInteger(input.bookId) &&
+      input.bookId !== null &&
+      Number.isSafeInteger(input.expectedUpdatedAt) &&
+      Number(input.expectedUpdatedAt) >= 0 &&
+      Number(input.expectedUpdatedAt) <= 8_640_000_000_000_000 &&
+      input.requestRelativePath ===
+        "staging/" + input.jobId + "/save-request.json"
     );
   }
   return false;

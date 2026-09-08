@@ -1,5 +1,4 @@
 import type Database from "better-sqlite3";
-
 import { createOpaqueId } from "@/domain/ids";
 import type {
   CandidateBuildAttempt,
@@ -8,577 +7,259 @@ import type {
 import type {
   CurrentDraftCandidateRecord,
   CurrentDraftCandidateState,
-} from "../../application/publishing-api";
-import { candidateBuildIdentities } from "../../application/publishing-api";
+} from "../../application/queries/get-draft";
+import {
+  candidateBuildIdentities,
+  type BuildCandidateCommand,
+} from "../../application/commands/build-candidate";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 
 export type DraftCandidateState =
   "building" | "ready" | "failed" | "canceled" | "interrupted" | "discarded";
-
 interface CandidateRow {
-  blocking_diagnostic_count: number | null;
-  book_id: number;
-  completed_at: number | null;
-  config_revision: number;
-  created_at: number;
   id: string;
+  book_id: number;
+  import_id: string;
+  input_rel_path: string;
+  source_updated_at: number;
   job_id: string;
-  safe_error_code: string | null;
-  semantic_digest: string | null;
-  source_id: string;
-  state: DraftCandidateState;
   version_id: string | null;
+  state: DraftCandidateState;
+  semantic_digest: string | null;
+  safe_error_code: string | null;
+  blocking_diagnostic_count: number | null;
+  created_at: number;
+  completed_at: number | null;
 }
-
 export interface DraftCandidateRecord extends Omit<
   CurrentDraftCandidateRecord,
   "state"
 > {
-  readonly blockingDiagnosticCount: number | null;
   readonly bookId: number;
-  readonly completedAtMs: number | null;
-  readonly createdAtMs: number;
+  readonly importId: string;
+  readonly inputRelativePath: string;
   readonly jobId: string;
-  readonly sourceId: string;
   readonly state: DraftCandidateState;
+  readonly blockingDiagnosticCount: number | null;
+  readonly createdAtMs: number;
+  readonly completedAtMs: number | null;
 }
-
 export type CurrentCandidateRecord = Omit<DraftCandidateRecord, "state"> & {
   readonly state: CurrentDraftCandidateState;
 };
-
-function previewUrl(row: CandidateRow): string | null {
-  return row.state === "ready"
-    ? `/api/manage/books/${row.book_id}/preview/${row.config_revision}/pages/1`
-    : null;
-}
-
-function mapCandidate(row: CandidateRow): DraftCandidateRecord {
-  return Object.freeze({
+function map(row: CandidateRow): DraftCandidateRecord {
+  return {
     attemptId: row.id,
-    blockingDiagnosticCount: row.blocking_diagnostic_count,
     bookId: row.book_id,
-    completedAtMs: row.completed_at,
-    configRevision: row.config_revision,
-    createdAtMs: row.created_at,
+    importId: row.import_id,
+    inputRelativePath: row.input_rel_path,
+    sourceUpdatedAt: row.source_updated_at,
     jobId: row.job_id,
-    previewUrl: previewUrl(row),
-    safeErrorCode: row.safe_error_code,
-    semanticDigest: row.semantic_digest,
-    sourceId: row.source_id,
-    state: row.state,
     versionId: row.version_id,
-  });
+    state: row.state,
+    semanticDigest: row.semantic_digest,
+    safeErrorCode: row.safe_error_code,
+    blockingDiagnosticCount: row.blocking_diagnostic_count,
+    createdAtMs: row.created_at,
+    completedAtMs: row.completed_at,
+    previewUrl:
+      row.state === "ready"
+        ? "/api/manage/books/" + row.book_id + "/preview/" + row.id + "/pages/1"
+        : null,
+  };
 }
-
 export class DraftCandidateRepository {
   constructor(private readonly database: Database.Database) {}
-
-  private createForCurrentRevisionInTransaction(input: {
-    readonly bookId: number;
-    readonly configRevision: number;
-    readonly importId?: string;
-    readonly nowMs: number;
-    readonly sourceId: string;
-  }): DraftCandidateRecord {
-    const current = this.database
-      .prepare(
-        `SELECT current_candidate_id, current_version_id
-         FROM books
-         WHERE id = ? AND draft_source_id = ? AND draft_config_revision = ?
-           AND deletion_requested_at IS NULL`,
-      )
-      .get(input.bookId, input.sourceId, input.configRevision) as
-      | {
-          current_candidate_id: string | null;
-          current_version_id: string | null;
-        }
-      | undefined;
-    if (!current) throw new Error("CONFIG_REVISION_CONFLICT");
-
-    if (current.current_candidate_id) {
-      this.database
-        .prepare(
-          `UPDATE book_versions SET state = 'discarded'
-           WHERE id = (
-             SELECT version_id FROM draft_candidates WHERE id = ?
-           ) AND state = 'ready'`,
-        )
-        .run(current.current_candidate_id);
-      this.database
-        .prepare(
-          `UPDATE draft_candidates
-           SET state = 'discarded', safe_error_code = 'CANDIDATE_SUPERSEDED',
-               version_id = NULL, semantic_digest = NULL,
-               blocking_diagnostic_count = NULL, completed_at = ?
-           WHERE id = ? AND state IN ('building', 'ready')`,
-        )
-        .run(input.nowMs, current.current_candidate_id);
-      this.database
-        .prepare(
-          `UPDATE jobs
-           SET state = 'canceled', cancellation_requested_at = ?,
-               finished_at = ?, error_class = 'canceled',
-               error_code = 'CANDIDATE_SUPERSEDED', phase = 'canceled'
-           WHERE id = (
-             SELECT job_id FROM draft_candidates WHERE id = ?
-           ) AND state = 'queued'`,
-        )
-        .run(input.nowMs, input.nowMs, current.current_candidate_id);
-      this.database
-        .prepare(
-          `UPDATE jobs
-           SET cancellation_requested_at = COALESCE(cancellation_requested_at, ?)
-           WHERE id = (
-             SELECT job_id FROM draft_candidates WHERE id = ?
-           ) AND state = 'running'`,
-        )
-        .run(input.nowMs, current.current_candidate_id);
-    }
-
-    const candidateId = createOpaqueId("draftCandidate");
-    const jobId = createOpaqueId("job");
-    const versionId = createOpaqueId("version");
-    this.database
-      .prepare(
-        `INSERT INTO jobs (
-          id, kind, state, import_id, book_id, candidate_id, version_id,
-          captured_source_id, captured_config_revision,
-          captured_current_version_id, retry_of_job_id, attempt,
-          automatic_retry_count, lease_owner, lease_until, heartbeat_at,
-          phase, progress_json, error_code, error_class, error_detail_json,
-          cancellation_requested_at, created_at, started_at, finished_at
-        ) VALUES (
-          ?, 'build_candidate', 'queued', ?, ?, NULL, ?, ?, ?, ?, NULL, 1,
-          0, NULL, NULL, NULL, 'queued', ?, NULL, NULL, NULL,
-          NULL, ?, NULL, NULL
-        )`,
-      )
-      .run(
-        jobId,
-        input.importId ?? null,
-        input.bookId,
-        versionId,
-        input.sourceId,
-        input.configRevision,
-        current.current_version_id,
-        JSON.stringify({
-          completed: 0,
-          processed_bytes: null,
-          total: null,
-          unit: "steps",
-        }),
-        input.nowMs,
-      );
-    this.database
-      .prepare(
-        `INSERT INTO draft_candidates (
-          id, book_id, source_id, config_revision, job_id, version_id,
-          state, semantic_digest, safe_error_code,
-          blocking_diagnostic_count, created_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, NULL, 'building', NULL, NULL, NULL, ?, NULL)`,
-      )
-      .run(
-        candidateId,
-        input.bookId,
-        input.sourceId,
-        input.configRevision,
-        jobId,
-        input.nowMs,
-      );
-    this.database
-      .prepare("UPDATE jobs SET candidate_id = ? WHERE id = ?")
-      .run(candidateId, jobId);
-    const changed = this.database
-      .prepare(
-        `UPDATE books SET current_candidate_id = ?, updated_at = ?
-         WHERE id = ? AND draft_source_id = ? AND draft_config_revision = ?
-           AND deletion_requested_at IS NULL`,
-      )
-      .run(
-        candidateId,
-        input.nowMs,
-        input.bookId,
-        input.sourceId,
-        input.configRevision,
-      );
-    if (changed.changes !== 1) throw new Error("CONFIG_REVISION_CONFLICT");
-    return this.require(candidateId);
-  }
-
   find(candidateId: string): DraftCandidateRecord | null {
     const row = this.database
       .prepare("SELECT * FROM draft_candidates WHERE id = ?")
       .get(candidateId) as CandidateRow | undefined;
-    return row ? mapCandidate(row) : null;
+    return row ? map(row) : null;
   }
-
-  findCurrent(bookId: number): CurrentCandidateRecord | null {
-    const row = this.database
-      .prepare(
-        `SELECT candidate.* FROM books
-         JOIN draft_candidates AS candidate
-           ON candidate.id = books.current_candidate_id
-          AND candidate.book_id = books.id
-          AND candidate.config_revision = books.draft_config_revision
-          AND candidate.source_id = books.draft_source_id
-          AND candidate.state <> 'discarded'
-         WHERE books.id = ? AND books.deletion_requested_at IS NULL`,
-      )
-      .get(bookId) as CandidateRow | undefined;
-    return row ? (mapCandidate(row) as CurrentCandidateRecord) : null;
-  }
-
-  createForCurrentRevision(input: {
-    readonly bookId: number;
-    readonly configRevision: number;
-    readonly importId?: string;
-    readonly nowMs: number;
-    readonly sourceId: string;
-  }): DraftCandidateRecord {
-    return withImmediateTransaction(this.database, () =>
-      this.createForCurrentRevisionInTransaction(input),
-    );
-  }
-
-  replaceConfigAndCreate(input: {
-    readonly bookId: number;
-    readonly expectedRevision: number;
-    readonly expectedYamlSha256: string;
-    readonly nowMs: number;
-    readonly revision: number;
-    readonly schemaVersion: number;
-    readonly sourceId: string;
-    readonly title: string;
-    readonly yamlRelativePath: string;
-    readonly yamlSha256: string;
-  }): DraftCandidateRecord {
-    return withImmediateTransaction(this.database, () => {
-      const current = this.database
-        .prepare(
-          `SELECT books.draft_config_revision AS revision,
-                  books.draft_source_id AS source_id,
-                  config_revisions.yaml_sha256 AS yaml_sha256
-           FROM books
-           JOIN config_revisions
-             ON config_revisions.book_id = books.id
-            AND config_revisions.revision = books.draft_config_revision
-           WHERE books.id = ? AND books.deletion_requested_at IS NULL`,
-        )
-        .get(input.bookId) as
-        | { revision: number; source_id: string; yaml_sha256: string }
-        | undefined;
-      if (
-        !current ||
-        input.revision !== input.expectedRevision + 1 ||
-        current.revision !== input.expectedRevision ||
-        current.source_id !== input.sourceId ||
-        current.yaml_sha256 !== input.expectedYamlSha256
-      ) {
-        throw new Error("CONFIG_REVISION_CONFLICT");
-      }
-      this.database
-        .prepare(
-          `INSERT INTO config_revisions (
-            book_id, revision, source_id, schema_version,
-            yaml_rel_path, yaml_sha256, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          input.bookId,
-          input.revision,
-          input.sourceId,
-          input.schemaVersion,
-          input.yamlRelativePath,
-          input.yamlSha256,
-          input.nowMs,
-        );
-      const changed = this.database
-        .prepare(
-          `UPDATE books
-           SET draft_config_revision = ?, title_cache = ?, updated_at = ?
-           WHERE id = ? AND draft_config_revision = ? AND draft_source_id = ?
-             AND deletion_requested_at IS NULL`,
-        )
-        .run(
-          input.revision,
-          input.title,
-          input.nowMs,
-          input.bookId,
-          input.expectedRevision,
-          input.sourceId,
-        );
-      if (changed.changes !== 1) throw new Error("CONFIG_REVISION_CONFLICT");
-      return this.createForCurrentRevisionInTransaction({
-        bookId: input.bookId,
-        configRevision: input.revision,
-        nowMs: input.nowMs,
-        sourceId: input.sourceId,
-      });
-    });
-  }
-
-  addInitialConfigAndCreate(input: {
-    readonly bookId: number;
-    readonly importId: string;
-    readonly nowMs: number;
-    readonly revision: number;
-    readonly schemaVersion: number;
-    readonly sourceId: string;
-    readonly title: string;
-    readonly yamlRelativePath: string;
-    readonly yamlSha256: string;
-  }): DraftCandidateRecord {
-    return withImmediateTransaction(this.database, () => {
-      const current = this.database
-        .prepare(
-          `SELECT draft_source_id, draft_config_revision
-           FROM books
-           WHERE id = ? AND deletion_requested_at IS NULL`,
-        )
-        .get(input.bookId) as
-        | {
-            draft_config_revision: number | null;
-            draft_source_id: string | null;
-          }
-        | undefined;
-      if (
-        !current ||
-        current.draft_config_revision !== null ||
-        current.draft_source_id !== null ||
-        input.revision !== 1
-      ) {
-        throw new Error("CONFIG_REVISION_CONFLICT");
-      }
-      this.database
-        .prepare(
-          `INSERT INTO config_revisions (
-            book_id, revision, source_id, schema_version,
-            yaml_rel_path, yaml_sha256, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          input.bookId,
-          input.revision,
-          input.sourceId,
-          input.schemaVersion,
-          input.yamlRelativePath,
-          input.yamlSha256,
-          input.nowMs,
-        );
-      const changed = this.database
-        .prepare(
-          `UPDATE books
-           SET draft_source_id = ?, draft_config_revision = ?,
-               title_cache = ?, updated_at = ?
-           WHERE id = ? AND draft_source_id IS NULL
-             AND draft_config_revision IS NULL
-             AND deletion_requested_at IS NULL`,
-        )
-        .run(
-          input.sourceId,
-          input.revision,
-          input.title,
-          input.nowMs,
-          input.bookId,
-        );
-      if (changed.changes !== 1) throw new Error("CONFIG_REVISION_CONFLICT");
-      return this.createForCurrentRevisionInTransaction({
-        bookId: input.bookId,
-        configRevision: input.revision,
-        importId: input.importId,
-        nowMs: input.nowMs,
-        sourceId: input.sourceId,
-      });
-    });
-  }
-
-  replaceSourceConfigAndCreate(input: {
-    readonly bookId: number;
-    readonly expectedRevision: number;
-    readonly expectedSourceId: string;
-    readonly expectedYamlSha256: string;
-    readonly importId?: string;
-    readonly newSourceId: string;
-    readonly nowMs: number;
-    readonly revision: number;
-    readonly schemaVersion: number;
-    readonly title: string;
-    readonly yamlRelativePath: string;
-    readonly yamlSha256: string;
-  }): DraftCandidateRecord {
-    return withImmediateTransaction(this.database, () =>
-      this.replaceSourceConfigAndCreateInCurrentTransaction(input),
-    );
-  }
-
-  replaceSourceConfigAndCreateInCurrentTransaction(input: {
-    readonly bookId: number;
-    readonly expectedRevision: number;
-    readonly expectedSourceId: string;
-    readonly expectedYamlSha256: string;
-    readonly importId?: string;
-    readonly newSourceId: string;
-    readonly nowMs: number;
-    readonly revision: number;
-    readonly schemaVersion: number;
-    readonly title: string;
-    readonly yamlRelativePath: string;
-    readonly yamlSha256: string;
-  }): DraftCandidateRecord {
-    const current = this.database
-      .prepare(
-        `SELECT books.draft_config_revision AS revision,
-                  books.draft_source_id AS source_id,
-                  config_revisions.yaml_sha256 AS yaml_sha256
-           FROM books
-           JOIN config_revisions
-             ON config_revisions.book_id = books.id
-            AND config_revisions.revision = books.draft_config_revision
-           WHERE books.id = ? AND books.deletion_requested_at IS NULL`,
-      )
-      .get(input.bookId) as
-      { revision: number; source_id: string; yaml_sha256: string } | undefined;
-    if (
-      !current ||
-      input.revision !== input.expectedRevision + 1 ||
-      current.revision !== input.expectedRevision ||
-      current.source_id !== input.expectedSourceId ||
-      current.yaml_sha256 !== input.expectedYamlSha256
-    ) {
-      throw new Error("CONFIG_REVISION_CONFLICT");
-    }
-    this.database
-      .prepare(
-        `INSERT INTO config_revisions (
-            book_id, revision, source_id, schema_version,
-            yaml_rel_path, yaml_sha256, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        input.bookId,
-        input.revision,
-        input.newSourceId,
-        input.schemaVersion,
-        input.yamlRelativePath,
-        input.yamlSha256,
-        input.nowMs,
-      );
-    const changed = this.database
-      .prepare(
-        `UPDATE books
-           SET draft_source_id = ?, draft_config_revision = ?,
-               title_cache = ?, updated_at = ?
-           WHERE id = ? AND draft_config_revision = ? AND draft_source_id = ?
-             AND deletion_requested_at IS NULL`,
-      )
-      .run(
-        input.newSourceId,
-        input.revision,
-        input.title,
-        input.nowMs,
-        input.bookId,
-        input.expectedRevision,
-        input.expectedSourceId,
-      );
-    if (changed.changes !== 1) throw new Error("CONFIG_REVISION_CONFLICT");
-    return this.createForCurrentRevisionInTransaction({
-      bookId: input.bookId,
-      configRevision: input.revision,
-      ...(input.importId ? { importId: input.importId } : {}),
-      nowMs: input.nowMs,
-      sourceId: input.newSourceId,
-    });
-  }
-
   require(candidateId: string): DraftCandidateRecord {
     const candidate = this.find(candidateId);
     if (!candidate) throw new Error("DRAFT_CANDIDATE_NOT_FOUND");
     return candidate;
   }
-
-  captureRetry(job: CandidateBuildAttempt): CandidateBuildRetryCapture {
-    const capture = this.database
+  findReadable(
+    candidateId: string,
+    bookId: number,
+  ): DraftCandidateRecord | null {
+    const row = this.database
       .prepare(
-        `SELECT candidate.state, books.current_candidate_id,
-                books.current_version_id, books.draft_source_id,
-                books.draft_config_revision
-         FROM draft_candidates AS candidate
-         JOIN books ON books.id = candidate.book_id
-         WHERE candidate.id = ? AND candidate.job_id = ?
-           AND candidate.book_id = ?
-           AND books.deletion_requested_at IS NULL`,
+        "SELECT candidate.* FROM draft_candidates candidate JOIN book_versions version ON version.id=candidate.version_id AND version.book_id=candidate.book_id JOIN books ON books.id=candidate.book_id WHERE candidate.id=? AND candidate.book_id=? AND candidate.state='ready' AND version.state<>'corrupt' AND version.reclaimed_at IS NULL AND books.deletion_requested_at IS NULL",
+      )
+      .get(candidateId, bookId) as CandidateRow | undefined;
+    return row ? map(row) : null;
+  }
+  findCurrent(bookId: number): CurrentCandidateRecord | null {
+    const row = this.database
+      .prepare(
+        "SELECT candidate.* FROM books JOIN draft_candidates candidate ON candidate.id = books.current_candidate_id AND candidate.book_id = books.id WHERE books.id = ? AND books.deletion_requested_at IS NULL AND candidate.state <> 'discarded'",
+      )
+      .get(bookId) as CandidateRow | undefined;
+    return row ? (map(row) as CurrentCandidateRecord) : null;
+  }
+  createForDocument(input: {
+    readonly bookId: number;
+    readonly importId: string;
+    readonly sourceUpdatedAt: number;
+    readonly nowMs: number;
+  }): DraftCandidateRecord {
+    return withImmediateTransaction(this.database, () => {
+      const book = this.database
+        .prepare(
+          "SELECT current_candidate_id, current_version_id FROM books WHERE id = ? AND deletion_requested_at IS NULL",
+        )
+        .get(input.bookId) as
+        | {
+            current_candidate_id: string | null;
+            current_version_id: string | null;
+          }
+        | undefined;
+      if (!book) throw new Error("BOOK_NOT_FOUND");
+      if (book.current_candidate_id)
+        this.discard(book.current_candidate_id, input.nowMs);
+      const candidateId = createOpaqueId("draftCandidate");
+      const jobId = createOpaqueId("job");
+      const versionId = createOpaqueId("version");
+      const inputPath =
+        "books/" +
+        input.bookId +
+        "/draft/candidates/" +
+        candidateId +
+        "/book.json";
+      this.database
+        .prepare(
+          "INSERT INTO jobs (id,kind,state,book_id,import_id,version_id,captured_input_path,captured_source_updated_at,captured_current_version_id,attempt,phase,created_at) VALUES (?,'build_candidate','queued',?,?,?,?,?,?,1,'queued',?)",
+        )
+        .run(
+          jobId,
+          input.bookId,
+          input.importId,
+          versionId,
+          inputPath,
+          input.sourceUpdatedAt,
+          book.current_version_id,
+          input.nowMs,
+        );
+      this.database
+        .prepare(
+          "INSERT INTO draft_candidates (id,book_id,import_id,source_updated_at,input_rel_path,job_id,state,created_at) VALUES (?,?,?,?,?,?,'building',?)",
+        )
+        .run(
+          candidateId,
+          input.bookId,
+          input.importId,
+          input.sourceUpdatedAt,
+          inputPath,
+          jobId,
+          input.nowMs,
+        );
+      this.database
+        .prepare("UPDATE jobs SET candidate_id = ? WHERE id = ?")
+        .run(candidateId, jobId);
+      this.database
+        .prepare(
+          "UPDATE books SET current_candidate_id = ?, draft_import_id = ? WHERE id = ?",
+        )
+        .run(candidateId, input.importId, input.bookId);
+      return this.require(candidateId);
+    });
+  }
+  private discard(candidateId: string, nowMs: number): void {
+    this.database
+      .prepare(
+        "UPDATE book_versions SET state = 'discarded' WHERE id = (SELECT version_id FROM draft_candidates WHERE id = ?) AND state = 'ready'",
+      )
+      .run(candidateId);
+    this.database
+      .prepare(
+        "UPDATE draft_candidates SET state = 'discarded', safe_error_code = 'CANDIDATE_SUPERSEDED', version_id = NULL, semantic_digest = NULL, blocking_diagnostic_count = NULL, completed_at = max(?, created_at) WHERE id = ? AND state = 'building'",
+      )
+      .run(nowMs, candidateId);
+    this.database
+      .prepare(
+        "UPDATE jobs SET state = 'canceled', cancellation_requested_at = ?, finished_at = ?, error_class = 'canceled', error_code = 'CANDIDATE_SUPERSEDED', phase = 'canceled' WHERE candidate_id = ? AND state = 'queued'",
+      )
+      .run(nowMs, nowMs, candidateId);
+    this.database
+      .prepare(
+        "UPDATE jobs SET cancellation_requested_at = COALESCE(cancellation_requested_at,?) WHERE candidate_id = ? AND state = 'running'",
+      )
+      .run(nowMs, candidateId);
+  }
+  captureRetry(job: CandidateBuildAttempt): CandidateBuildRetryCapture {
+    const row = this.database
+      .prepare(
+        "SELECT books.current_candidate_id, books.current_version_id, candidate.state, candidate.source_updated_at FROM draft_candidates candidate JOIN books ON books.id = candidate.book_id WHERE candidate.id = ? AND candidate.job_id = ? AND candidate.book_id = ? AND books.deletion_requested_at IS NULL",
       )
       .get(job.candidateId, job.id, job.bookId) as
       | {
           current_candidate_id: string | null;
           current_version_id: string | null;
-          draft_config_revision: number | null;
-          draft_source_id: string | null;
+          source_updated_at: number;
           state: string;
         }
       | undefined;
     if (
-      !capture ||
-      !["failed", "canceled", "interrupted"].includes(capture.state) ||
-      capture.current_candidate_id !== job.candidateId ||
-      capture.draft_source_id !== job.capturedSourceId ||
-      capture.draft_config_revision !== job.capturedConfigRevision
-    ) {
+      !row ||
+      !["failed", "canceled", "interrupted"].includes(row.state) ||
+      row.current_candidate_id !== job.candidateId ||
+      row.source_updated_at !== job.capturedSourceUpdatedAt ||
+      this.database
+        .prepare(
+          "SELECT 1 FROM jobs WHERE book_id = ? AND kind = 'save_draft' AND state IN ('queued','running')",
+        )
+        .get(job.bookId)
+    )
       throw new Error("CANDIDATE_RETRY_STALE");
-    }
-    return Object.freeze({ currentVersionId: capture.current_version_id });
+    return { currentVersionId: row.current_version_id };
   }
-
   createRetry(input: {
     readonly candidateId: string;
     readonly jobId: string;
     readonly nowMs: number;
     readonly original: CandidateBuildAttempt;
   }): void {
-    const { original } = input;
+    const previous = input.original.candidateId
+      ? this.require(input.original.candidateId)
+      : null;
     if (
-      original.bookId === null ||
-      original.candidateId === null ||
-      original.capturedSourceId === null ||
-      original.capturedConfigRevision === null
-    ) {
+      !previous ||
+      previous.bookId !== input.original.bookId ||
+      previous.sourceUpdatedAt !== input.original.capturedSourceUpdatedAt
+    )
       throw new Error("CANDIDATE_RETRY_INPUT_INVALID");
-    }
+    const inputPath =
+      "books/" +
+      previous.bookId +
+      "/draft/candidates/" +
+      input.candidateId +
+      "/book.json";
     this.database
       .prepare(
-        `INSERT INTO draft_candidates (
-          id, book_id, source_id, config_revision, job_id, version_id,
-          state, semantic_digest, safe_error_code,
-          blocking_diagnostic_count, created_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, NULL, 'building', NULL, NULL, NULL, ?, NULL)`,
+        "INSERT INTO draft_candidates (id,book_id,import_id,source_updated_at,input_rel_path,job_id,state,created_at) VALUES (?,?,?,?,?,?,'building',?)",
       )
       .run(
         input.candidateId,
-        original.bookId,
-        original.capturedSourceId,
-        original.capturedConfigRevision,
+        previous.bookId,
+        previous.importId,
+        previous.sourceUpdatedAt,
+        inputPath,
         input.jobId,
         input.nowMs,
       );
-    const current = this.database
+    this.database
+      .prepare("UPDATE jobs SET captured_input_path = ? WHERE id = ?")
+      .run(inputPath, input.jobId);
+    const changed = this.database
       .prepare(
-        `UPDATE books SET current_candidate_id = ?, updated_at = ?
-         WHERE id = ? AND current_candidate_id = ?
-           AND draft_source_id = ? AND draft_config_revision = ?
-           AND deletion_requested_at IS NULL`,
+        "UPDATE books SET current_candidate_id = ? WHERE id = ? AND current_candidate_id = ? AND deletion_requested_at IS NULL",
       )
-      .run(
-        input.candidateId,
-        input.nowMs,
-        original.bookId,
-        original.candidateId,
-        original.capturedSourceId,
-        original.capturedConfigRevision,
-      );
-    if (current.changes !== 1) throw new Error("CANDIDATE_RETRY_STALE");
+      .run(input.candidateId, previous.bookId, previous.attemptId);
+    if (changed.changes !== 1) throw new Error("CANDIDATE_RETRY_STALE");
   }
-
   terminalize(input: {
     readonly candidateId: string;
     readonly jobId: string;
@@ -586,11 +267,9 @@ export class DraftCandidateRepository {
     readonly safeErrorCode: string;
     readonly state: "canceled" | "failed" | "interrupted";
   }): void {
-    const result = this.database
+    this.database
       .prepare(
-        `UPDATE draft_candidates
-         SET state = ?, safe_error_code = ?, completed_at = ?
-         WHERE id = ? AND job_id = ? AND state = 'building'`,
+        "UPDATE draft_candidates SET state = ?, safe_error_code = ?, completed_at = max(?, created_at) WHERE id = ? AND job_id = ? AND state = 'building'",
       )
       .run(
         input.state,
@@ -599,51 +278,37 @@ export class DraftCandidateRepository {
         input.candidateId,
         input.jobId,
       );
-    if (result.changes > 1) {
-      throw new Error("DRAFT_CANDIDATE_TERMINAL_UPDATE_INVALID");
-    }
   }
-
-  buildCommand(candidateId: string) {
+  buildCommand(
+    candidateId: string,
+  ): Omit<BuildCandidateCommand, "documentSha256"> {
     const row = this.database
       .prepare(
-        `SELECT candidate.*, jobs.version_id, jobs.captured_current_version_id,
-                config_revisions.yaml_rel_path,
-                source_snapshots.source_root_rel_path
-         FROM draft_candidates AS candidate
-         JOIN jobs ON jobs.id = candidate.job_id
-          AND jobs.candidate_id = candidate.id
-         JOIN config_revisions
-           ON config_revisions.book_id = candidate.book_id
-          AND config_revisions.revision = candidate.config_revision
-          AND config_revisions.source_id = candidate.source_id
-         JOIN source_snapshots ON source_snapshots.id = candidate.source_id
-         WHERE candidate.id = ? AND candidate.state = 'building'`,
+        "SELECT candidate.*, jobs.version_id AS build_version_id, jobs.captured_current_version_id FROM draft_candidates candidate JOIN jobs ON jobs.id = candidate.job_id AND jobs.candidate_id = candidate.id WHERE candidate.id = ? AND candidate.state = 'building'",
       )
       .get(candidateId) as
       | (CandidateRow & {
+          build_version_id: string;
           captured_current_version_id: string | null;
-          source_root_rel_path: string;
-          version_id: string;
-          yaml_rel_path: string;
         })
       | undefined;
-    if (!row?.version_id) throw new Error("BUILD_CANDIDATE_INPUT_INVALID");
-    return Object.freeze({
+    if (!row?.build_version_id)
+      throw new Error("BUILD_CANDIDATE_INPUT_INVALID");
+    return {
       bookId: row.book_id,
       candidateId: row.id,
       capturedCurrentVersionId: row.captured_current_version_id,
       compilerIdentity: candidateBuildIdentities.compiler,
-      configRelativePath: row.yaml_rel_path,
-      configRevision: row.config_revision,
+      inputRelativePath: row.input_rel_path,
+      sourceUpdatedAt: row.source_updated_at,
       jobId: row.job_id,
-      kind: "build_candidate" as const,
+      kind: "build_candidate",
       previewIdentity: candidateBuildIdentities.preview,
       readerIdentity: candidateBuildIdentities.reader,
       rendererIdentity: candidateBuildIdentities.renderer,
-      sourceId: row.source_id,
-      sourceRootRelativePath: row.source_root_rel_path,
-      versionId: row.version_id,
-    });
+      importId: row.import_id,
+      resourceRootRelativePath: "books/" + row.book_id,
+      versionId: row.build_version_id,
+    };
   }
 }

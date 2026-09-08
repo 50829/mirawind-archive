@@ -4,17 +4,15 @@ import { dirname, relative, resolve, sep } from "node:path";
 import type {
   AnalyzeImportCommand,
   PrepareDraftCommand,
+  SaveDraftCommand,
 } from "@/entrypoints/worker/protocol";
 import type { BuildCandidateCommand } from "@/modules/publishing/application/publishing-api";
 import { handleBuildCandidate } from "@/entrypoints/worker/handlers/build-candidate";
 import { analyzeImport } from "@/modules/publishing/adapters/worker/analyze-import";
 import { buildCandidateVersion } from "@/modules/publishing/adapters/filesystem/build-candidate-version";
 import { prepareDraft } from "@/modules/publishing/adapters/worker/prepare-draft";
-import {
-  printedContentsDiagnostics,
-  readPinnedAnalysis,
-} from "@/modules/publishing/adapters/worker/preview-diagnostics";
-import { parseBookConfigYaml } from "@/modules/publishing/core/publication/book-config-schema";
+import { prepareDraftSave } from "@/modules/publishing/adapters/worker/prepare-draft-save";
+import type { SafeDiagnostic } from "@/domain/errors";
 import { createStorageLayout } from "@/platform/filesystem/storage-layout";
 import { resolveContainedPath } from "@/platform/filesystem/contained-path";
 import {
@@ -28,21 +26,13 @@ export async function buildCandidateHandler(
   context: WorkerChildContext,
 ): Promise<WorkerChildOutcome> {
   const layout = await createStorageLayout(context.root);
-  const configPath = await resolveContainedPath(
+  const snapshotPath = await resolveContainedPath(
     context.root,
-    command.configRelativePath,
+    command.inputRelativePath,
   );
-  const config = parseBookConfigYaml(await readFile(configPath, "utf8"));
-  const source = config.source as Readonly<Record<string, unknown>>;
-  const analysis = await readPinnedAnalysis({
-    analysisPath: await resolveContainedPath(
-      context.root,
-      `books/${command.bookId}/draft/analyses/${command.sourceId}/${command.configRevision}.json`,
-    ),
-    configRevision: command.configRevision,
-    sourceId: command.sourceId,
-    sourceSha256: String(source.main_markdown_sha256),
-  });
+  const analysis = JSON.parse(
+    await readFile(resolve(dirname(snapshotPath), "analysis.json"), "utf8"),
+  ) as { diagnostics: readonly SafeDiagnostic[] };
   const artifact = await handleBuildCandidate({
     command,
     execute: ({ command: captured, onStage, signal }) =>
@@ -51,7 +41,7 @@ export async function buildCandidateHandler(
         createdAtMs: Date.now(),
         layout,
         onStage,
-        preparationDiagnostics: printedContentsDiagnostics(analysis),
+        preparationDiagnostics: analysis.diagnostics,
         ...(signal ? { signal } : {}),
       }),
     onProgress(progress) {
@@ -116,6 +106,7 @@ export async function prepareDraftHandler(
   );
   const result = await prepareDraft({
     archivePath,
+    bookId: command.bookId,
     importId: command.importId,
     onPhase(phase, completed, total) {
       context.reportProgress(phase, stepProgress(completed, total));
@@ -127,9 +118,6 @@ export async function prepareDraftHandler(
     selectedCandidatePath: command.selectedCandidateRelativePath,
     signal: context.signal,
     stagingDirectory,
-    ...(command.typographyProfile
-      ? { typographyProfile: command.typographyProfile }
-      : {}),
   });
   return Object.freeze({
     ok: true,
@@ -137,12 +125,29 @@ export async function prepareDraftHandler(
       preparedDraftRelativePath: relative(context.root, result.artifactPath)
         .split(sep)
         .join("/"),
-      preparedSourceFilesRelativePath: relative(
-        context.root,
-        result.sourceFilesPath,
-      )
-        .split(sep)
-        .join("/"),
     }),
   });
+}
+
+export async function saveDraftHandler(
+  command: SaveDraftCommand,
+  context: WorkerChildContext,
+): Promise<WorkerChildOutcome> {
+  const result = await prepareDraftSave({
+    root: context.root,
+    bookId: command.bookId,
+    requestPath: await resolveContainedPath(
+      context.root,
+      command.requestRelativePath,
+    ),
+    stagingDirectory: await resolveContainedPath(
+      context.root,
+      command.stagingRelativePath,
+    ),
+    signal: context.signal,
+    onPhase(phase, completed, total) {
+      context.reportProgress(phase, stepProgress(completed, total));
+    },
+  });
+  return { ok: true, result };
 }

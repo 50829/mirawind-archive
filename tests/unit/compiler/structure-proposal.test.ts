@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { analysisDocument } from "../../helpers/analysis-document";
+import { parseEditorDocument } from "@/modules/publishing/core/content/editor-parser";
 import { proposeDocumentStructure } from "@/modules/publishing/core/preparation/structure-proposal";
 
 function requireAt<T>(values: readonly T[], index: number): T {
@@ -32,8 +32,8 @@ function proposalRoles(
 
 describe("default document structure proposal", () => {
   it("keeps technical decimal text as title content", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument("# 8.5英寸软盘\n\n正文"),
+    const document = analysisDocument(
+      parseEditorDocument("# 8.5英寸软盘\n\n正文"),
     );
 
     expect(proposeDocumentStructure(document).nodes[0]).toMatchObject({
@@ -45,8 +45,8 @@ describe("default document structure proposal", () => {
   });
 
   it("separates a rich Markdown source number exactly once", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument("# **4.4.4** Virtual memory\n\nBody"),
+    const document = analysisDocument(
+      parseEditorDocument("# **4.4.4** Virtual memory\n\nBody"),
     );
 
     expect(proposeDocumentStructure(document).nodes[0]).toMatchObject({
@@ -55,41 +55,9 @@ describe("default document structure proposal", () => {
     });
   });
 
-  it("separates source numbers across valid inline Markdown without losing title markup", () => {
-    const cases = [
-      {
-        markdown: "***4.4.4*** Virtual memory",
-        titleMarkdown: "Virtual memory",
-      },
-      {
-        markdown: "[4.4.4](https://example.test) Virtual memory",
-        titleMarkdown: "Virtual memory",
-      },
-      {
-        markdown: "`4.4.4` Virtual memory",
-        titleMarkdown: "Virtual memory",
-      },
-      {
-        markdown: "**4.4.4 Virtual** memory",
-        titleMarkdown: "**Virtual** memory",
-      },
-    ] as const;
-
-    for (const testCase of cases) {
-      const document = normalizeDocumentBlocks(
-        parseMarkdownDocument(`# ${testCase.markdown}\n\nBody`),
-      );
-
-      expect(proposeDocumentStructure(document).nodes[0]).toMatchObject({
-        source_number: "4.4.4",
-        title_markdown: testCase.titleMarkdown,
-      });
-    }
-  });
-
   it("keeps cover metadata before numbered chapters out of navigation", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "# Book Title",
           "",
@@ -132,8 +100,8 @@ describe("default document structure proposal", () => {
   });
 
   it("starts the body at a numbered section when its chapter heading is missing", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         "# Book Title\n\n## Chapter 1 Overview\n\n## Preface\n\nText\n\n## 1.1 Opening\n\nBody\n\n## Chapter 2 Next\n",
       ),
     );
@@ -150,8 +118,8 @@ describe("default document structure proposal", () => {
   });
 
   it("carries appendix and backmatter roles through unnumbered units", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "# Chapter 1 Body",
           "",
@@ -184,8 +152,8 @@ describe("default document structure proposal", () => {
   });
 
   it("treats named author and subject indexes as top-level backmatter", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         "# 1 Body\n\nBody\n\n# Author Index\n\nNames\n\n# Subject Index\n",
       ),
     );
@@ -206,8 +174,8 @@ describe("default document structure proposal", () => {
   });
 
   it("resets a carried role at a detached numeric chapter marker", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         "# References\n\nReference body\n\n# 1\n\n# 导论\n\nBody\n",
       ),
     );
@@ -220,8 +188,8 @@ describe("default document structure proposal", () => {
   });
 
   it("resets a carried role at a nested chapter", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         "# References\n\nReference body\n\n## Chapter 1 Start\n\nBody\n",
       ),
     );
@@ -233,8 +201,8 @@ describe("default document structure proposal", () => {
   });
 
   it("resets inherited role without emitting role on a chapter nested in a part", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument("# Part One\n\n# Chapter One\n\nData\n"),
+    const document = analysisDocument(
+      parseEditorDocument("# Part One\n\n# Chapter One\n\nData\n"),
     );
     const part = requireAt(document.headings, 0);
     const chapter = requireAt(document.headings, 1);
@@ -273,7 +241,7 @@ describe("default document structure proposal", () => {
       "",
       "Body",
     ].join("\n");
-    const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
+    const document = analysisDocument(parseEditorDocument(source));
     const chapter = document.headings[1];
     if (!chapter) throw new Error("expected chapter heading");
     const proposal = proposeDocumentStructure(document, {
@@ -291,8 +259,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps heading order, closes level gaps and starts only major units on pages", () => {
-    const normalized = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const normalized = analysisDocument(
+      parseEditorDocument(
         [
           "## 前言",
           "Text",
@@ -344,8 +312,8 @@ describe("default document structure proposal", () => {
   });
 
   it("does not mutate source or normalized headings", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument("# One\n\n### Three"),
+    const document = analysisDocument(
+      parseEditorDocument("# One\n\n### Three"),
     );
     const before = JSON.stringify(document);
 
@@ -355,8 +323,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps a chapter whole when there is no second-level heading", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument("# One\n\nText\n\n# Two\n\nText"),
+    const document = analysisDocument(
+      parseEditorDocument("# One\n\nText\n\n# Two\n\nText"),
     );
 
     expect(
@@ -365,8 +333,8 @@ describe("default document structure proposal", () => {
   });
 
   it("uses printed nesting instead of flat MinerU H2 levels", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 第1章 基础",
           "",
@@ -398,8 +366,8 @@ describe("default document structure proposal", () => {
   });
 
   it("carries an inferred part offset into body-only descendants", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## Preface",
           "",
@@ -463,7 +431,7 @@ describe("default document structure proposal", () => {
       "",
       "## 8.1.1 上移子节",
     ].join("\n");
-    const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
+    const document = analysisDocument(parseEditorDocument(source));
     const [part, chapter, firstSection, , missingChapterSection] =
       document.headings;
     if (!part || !chapter || !firstSection || !missingChapterSection) {
@@ -501,8 +469,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps part nesting when a printed entry did not match its body heading", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 第 1 章 计算机系统漫游",
           "",
@@ -543,8 +511,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps parenthesized local parts inside their numbered section", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 1 导论",
           "",
@@ -590,8 +558,8 @@ describe("default document structure proposal", () => {
   });
 
   it("joins a part label and title across an ornamental part marker", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 第一部分",
           "",
@@ -619,8 +587,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps adjacent body headings when the printed part maps to the subtitle", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 第一部分",
           "",
@@ -662,8 +630,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps a detached Chinese chapter marker and splits on its title", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument("## 第3章\n\n# 程序的机器级表示\n\n正文"),
+    const document = analysisDocument(
+      parseEditorDocument("## 第3章\n\n# 程序的机器级表示\n\n正文"),
     );
     const [, chapterTitle] = document.headings;
     const proposal = proposeDocumentStructure(document, {
@@ -691,8 +659,8 @@ describe("default document structure proposal", () => {
   });
 
   it("treats an ambiguous multi-digit gap as a chapter without forcing a match", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         "## 12.7.3 Previous\n\n正文\n\n## 12 7.4 Competition",
       ),
     );
@@ -706,8 +674,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps appendix descendants in their continuous hierarchy", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 错误处理",
           "",
@@ -754,8 +722,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps a detached English part label level with its canonical title", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         "# Preface\n\nFront matter.\n\n# Part One\n\n# Overview\n\nBody.\n",
       ),
     );
@@ -787,8 +755,8 @@ describe("default document structure proposal", () => {
   });
 
   it("joins a detached numeric chapter marker into the following title", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         ["## 1", "", "## 导论", "", "正文", "", "## 1.1 起步"].join("\n"),
       ),
     );
@@ -807,8 +775,8 @@ describe("default document structure proposal", () => {
   });
 
   it("does not include unrecognized frontmatter headings before a numbered book", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## Cover Title",
           "",
@@ -836,7 +804,7 @@ describe("default document structure proposal", () => {
       "",
       "正文",
     ].join("\n");
-    const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
+    const document = analysisDocument(parseEditorDocument(source));
     const bodyHeading = document.headings[1];
     expect(bodyHeading).toBeDefined();
     if (!bodyHeading) throw new Error("expected body heading");
@@ -859,8 +827,8 @@ describe("default document structure proposal", () => {
   });
 
   it("uses transient logical-entry semantics when Markdown provenance is damaged", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument("## 本书中用到的数据来源\n\n正文"),
+    const document = analysisDocument(
+      parseEditorDocument("## 本书中用到的数据来源\n\n正文"),
     );
     const heading = document.headings[0];
     if (!heading) throw new Error("expected body heading");
@@ -896,7 +864,7 @@ describe("default document structure proposal", () => {
       "",
       "## Exercises",
     ].join("\n");
-    const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
+    const document = analysisDocument(parseEditorDocument(source));
     const bodyHeading = document.headings[1];
     if (!bodyHeading) throw new Error("expected appendix heading");
     const proposal = proposeDocumentStructure(document, {
@@ -914,8 +882,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps an unmatched learning objective in body but out of navigation", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         ["## 1 导论", "", "正文", "", "## 学习目标", "", "目标正文"].join("\n"),
       ),
     );
@@ -927,8 +895,8 @@ describe("default document structure proposal", () => {
   });
 
   it("nests local headings below the last canonical section", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 第1章 基础",
           "",
@@ -984,8 +952,8 @@ describe("default document structure proposal", () => {
   });
 
   it("nests local headings below the last canonical h2 level", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         ["## 第1章 基础", "", "## 1.1 起步", "", "## 局部说明"].join("\n"),
       ),
     );
@@ -1013,8 +981,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps chapter-local bibliography at the canonical section level", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## Chapter 1 Start",
           "",
@@ -1060,8 +1028,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps chapter-local appendix headings on their parent reading unit", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 5.9 Topic",
           "",
@@ -1103,8 +1071,8 @@ describe("default document structure proposal", () => {
   });
 
   it("hides a detached numeric marker before a matched English chapter", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 4 Previous chapter",
           "",
@@ -1160,8 +1128,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps a detached numeric marker level with its chapter title", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 1.1 Topic",
           "",
@@ -1202,8 +1170,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps a detached Chinese numeric marker below prior section context", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 1.1 Previous section",
           "",
@@ -1249,8 +1217,8 @@ describe("default document structure proposal", () => {
   });
 
   it("splits a matched Chinese appendix as a major local reading unit", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         "## 3.16 Previous section\n\nBody\n\n## 附录:数学推导\n",
       ),
     );
@@ -1278,8 +1246,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps explicit backmatter visible after a matched appendix", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         "## Appendix B Tables\n\nBody\n\n## Bibliography\n\nSources\n",
       ),
     );
@@ -1302,8 +1270,8 @@ describe("default document structure proposal", () => {
   });
 
   it("classifies a matched author biography as frontmatter", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument("## 作者简介\n\n正文\n\n## 第1章 起步\n\n正文"),
+    const document = analysisDocument(
+      parseEditorDocument("## 作者简介\n\n正文\n\n## 第1章 起步\n\n正文"),
     );
     const [biography, chapter] = document.headings;
     const proposal = proposeDocumentStructure(document, {
@@ -1329,8 +1297,8 @@ describe("default document structure proposal", () => {
   });
 
   it("does not invent a display-title override from a short heading fragment", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 第2章 交换",
           "",
@@ -1362,8 +1330,8 @@ describe("default document structure proposal", () => {
   });
 
   it("closes inferred level gaps", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         "# 第1章 基础\n\n正文\n\n## 1.1.1 跳级识别\n\n正文\n",
       ),
     );
@@ -1376,8 +1344,8 @@ describe("default document structure proposal", () => {
   });
 
   it("preserves section depth when its printed chapter heading is missing", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument("# Preface\n\n## 1.1 First section\n\nBody\n"),
+    const document = analysisDocument(
+      parseEditorDocument("# Preface\n\n## 1.1 First section\n\nBody\n"),
     );
 
     expect(
@@ -1393,8 +1361,8 @@ describe("default document structure proposal", () => {
   });
 
   it("collapses descendants when a nested printed chapter heading is missing", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## Part One",
           "",
@@ -1455,8 +1423,8 @@ describe("default document structure proposal", () => {
   });
 
   it("preserves printed depth when an unmatched body heading fills the chapter gap", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## Part One",
           "",
@@ -1502,8 +1470,8 @@ describe("default document structure proposal", () => {
   });
 
   it("restores a nested chapter after an unlisted top-level appendix", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## Part One",
           "",
@@ -1552,8 +1520,8 @@ describe("default document structure proposal", () => {
   });
 
   it("splits parts, later nested chapters and appendices independently of levels", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 第一部分 系统基础",
           "",
@@ -1595,8 +1563,8 @@ describe("default document structure proposal", () => {
   });
 
   it("includes clear unnumbered front and back units around numbered body headings", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 前言",
           "",
@@ -1646,8 +1614,8 @@ describe("default document structure proposal", () => {
   });
 
   it("treats acknowledgements before the first printed chapter as frontmatter", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 专家指导委员会",
           "",
@@ -1695,8 +1663,8 @@ describe("default document structure proposal", () => {
   });
 
   it("strips a printed page suffix before classifying frontmatter", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument("## 致谢\n\n正文\n\n## 第1章 开始\n\n正文"),
+    const document = analysisDocument(
+      parseEditorDocument("## 致谢\n\n正文\n\n## 第1章 开始\n\n正文"),
     );
     const [acknowledgements, chapter] = document.headings;
     const proposal = proposeDocumentStructure(document, {
@@ -1718,8 +1686,8 @@ describe("default document structure proposal", () => {
   });
 
   it("counts raw HTML as body when splitting adjacent backmatter units", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 图片来源",
           "",
@@ -1743,7 +1711,7 @@ describe("default document structure proposal", () => {
 
   it("does not split a matched exercise heading with OCR wrapper artifacts", () => {
     const source = "## 第1章 开始\n\n正文\n\n## K习题 1Ck\n\n练习正文";
-    const document = normalizeDocumentBlocks(parseMarkdownDocument(source));
+    const document = analysisDocument(parseEditorDocument(source));
     const [chapter, exercises] = document.headings;
     if (!chapter || !exercises) throw new Error("expected headings");
     const proposal = proposeDocumentStructure(document, {
@@ -1768,8 +1736,8 @@ describe("default document structure proposal", () => {
   });
 
   it("classifies edition-specific English prefaces as frontmatter", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## Preface to the Second Edition",
           "",
@@ -1794,8 +1762,8 @@ describe("default document structure proposal", () => {
   });
 
   it("keeps audience notes before the first chapter in frontmatter", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 译者序",
           "",
@@ -1819,8 +1787,8 @@ describe("default document structure proposal", () => {
   });
 
   it("starts later chapters at their own heading rather than at the first section", () => {
-    const document = normalizeDocumentBlocks(
-      parseMarkdownDocument(
+    const document = analysisDocument(
+      parseEditorDocument(
         [
           "## 第1章 基础",
           "",

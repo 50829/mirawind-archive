@@ -9,7 +9,6 @@ import {
   JobRepository,
   type UserJobRecord,
 } from "@/modules/publishing/adapters/sqlite/jobs";
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import {
   isJobPhase,
   type JobPhase,
@@ -23,6 +22,7 @@ import type { ProcessTreeMemoryObservation } from "@/observability/attempt-obser
 import type { StorageLayout } from "@/platform/filesystem/storage-layout";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
 import type { FrozenJobInput } from "@/entrypoints/worker/protocol";
+import { SafeApplicationError } from "@/domain/errors";
 
 export const workerHeartbeatIntervalMs = 10_000;
 
@@ -48,6 +48,7 @@ export type WorkerAttemptExecutionOutcome =
     }>;
 
 function safeExecutionError(error: unknown): string {
+  if (error instanceof SafeApplicationError) return error.code;
   return error instanceof Error && /^[A-Z][A-Z0-9_]{2,79}$/u.test(error.message)
     ? error.message
     : "WORKER_JOB_EXECUTION_FAILED";
@@ -68,7 +69,6 @@ export async function executeWorkerAttempt(input: {
     readonly phase: JobPhase;
     readonly progress: JobProgress;
   }) => void;
-  readonly sources: SourceRepository;
 }): Promise<WorkerAttemptExecutionOutcome> {
   const childController = new AbortController();
   const onShutdown = () => childController.abort("worker-shutdown");
@@ -112,13 +112,13 @@ export async function executeWorkerAttempt(input: {
         });
       }
     }
-    const command = captureFrozenJobInput(
-      input.job,
-      input.candidates,
-      input.drafts,
-      input.imports,
-      input.sources,
-    );
+    const command = await captureFrozenJobInput({
+      job: input.job,
+      candidates: input.candidates,
+      imports: input.imports,
+      database: input.database,
+      layout: input.layout,
+    });
     const execution = await (input.childRunner ?? runJobChild)(command, {
       onProgress(progress) {
         try {

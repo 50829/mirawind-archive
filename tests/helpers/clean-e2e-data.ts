@@ -3,8 +3,8 @@ import { dirname, resolve } from "node:path";
 
 const cacheRoot = resolve(".cache");
 const e2eDirectories = [
-  resolve(cacheRoot, "e2e-fixtures"),
-  resolve(cacheRoot, "e2e-playwright-data"),
+  resolve(cacheRoot, "e2e-ir-fixtures"),
+  resolve(cacheRoot, "e2e-playwright-ir-data"),
 ] as const;
 
 async function makeRemovable(path: string): Promise<void> {

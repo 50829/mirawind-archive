@@ -10,7 +10,6 @@ import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/d
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { withMigratedTestDatabase } from "../../helpers/database";
 
 describe("worker attempt terminal coordinator", () => {
@@ -53,7 +52,7 @@ describe("worker attempt terminal coordinator", () => {
           result: {
             jobId: command.jobId,
             ok: false,
-            protocolVersion: 5,
+            protocolVersion: 6,
             safeErrorClass: "content",
             safeErrorCode: "TEST_CHILD_FAILURE",
             type: "result",
@@ -68,7 +67,6 @@ describe("worker attempt terminal coordinator", () => {
         leaseOwner: "worker-a",
         repository: jobs,
         shutdownSignal: new AbortController().signal,
-        sources: new SourceRepository(database),
       });
       expect(outcome).toMatchObject({
         execution: { result: { ok: false } },

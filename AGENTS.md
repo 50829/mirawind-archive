@@ -24,15 +24,20 @@ authority artifact. Do not silently choose one.
   feature genuinely requires its artifacts. No fixed command sequence is mandatory.
 - Do not reopen product grilling for choices already covered by D-001 through D-086.
 - New product decisions go into `docs/decisions/decision-log.md` before code.
-- Schema changes require a version decision, migration, fixtures, and compatibility tests.
+- Schema changes require a version decision and evidence for the approved transition policy.
+  D-138 uses a new-data-root clean switch, without old-format adapters or migration tests.
 - Keep specs, plans, tasks, tests, and runtime docs synchronized with behavior.
 
 ## Non-negotiable architecture
 
 - One Linux host, one Astro Web process, one same-codebase worker, SQLite WAL, and local
   persistent storage.
-- Markdown plus versioned `book.yaml` are authoritative. AST, HTML, manifest, resources,
-  and search indexes are derived and rebuildable.
+- D-138 makes Mirawind-owned structured content IR the body authority. Only MinerU v2 JSON
+  ZIPs are accepted; parser AST, HTML, manifest, generated resources
+  and search indexes are derived. Source assets remain authoritative inputs.
+- Use a new data directory for the IR runtime, without migration or compatibility code.
+  D-139 authorizes deleting the old services and their dedicated Docker volume; other roots
+  remain untouched. Follow `docs/architecture/structured-content-ir.md`.
 - Published versions are immutable. SQLite `current_version_id` is the only current pointer.
 - Parsing, rendering, image work, and indexing never run in reader requests.
 - All book resources remain outside static public directories and pass through server-side
@@ -59,6 +64,12 @@ authority artifact. Do not silently choose one.
 - Enforce resource limits while streaming; metadata-only checks are not sufficient.
 
 ## Required evidence
+
+Do not add tests that only pin UI wording, CSS classes or numeric style values, DOM wrappers,
+or source-code spelling. UI text may locate a control; assertions must establish a meaningful
+behavior or data result. Do not retain one-off browser acceptance scripts that duplicate the
+shared test workflows. Content fidelity, accessibility, authorization and durability checks
+are not presentation-copy tests and remain required.
 
 Tests are mandatory for:
 

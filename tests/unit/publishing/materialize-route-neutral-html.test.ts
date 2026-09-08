@@ -8,22 +8,22 @@ describe("route-neutral reader HTML materialization", () => {
     const headingId = "blk_0123456789abcdefghijkl";
     const resourceId = "res_0123456789abcdefghijkl";
     const routeLinks = createRouteNeutralLinkScope("scope_primary_0123456789");
-    const headingToken = routeLinks.headingHref(headingId);
+    const headingToken = routeLinks.blockHref(headingId);
     const resourceToken = routeLinks.resourceUrl(resourceId);
     const textRouteLinks = createRouteNeutralLinkScope(
       "scope_text_0123456789012",
     );
-    const textHeadingToken = textRouteLinks.headingHref(headingId);
+    const textHeadingToken = textRouteLinks.blockHref(headingId);
     const textResourceToken = textRouteLinks.resourceUrl(resourceId);
     const html = `<p><a href="${headingToken}">next</a><img src="${resourceToken}" alt="x"></p><pre>href="${textHeadingToken}" src="${textResourceToken}"</pre>`;
     const result = materializeRouteNeutralHtmlVariants({
       html,
       preview: {
-        headingHref: (blockId) => `/preview/book/2#${blockId}`,
+        blockHref: (blockId) => `/preview/book/2#${blockId}`,
         resourceUrl: (id) => `/preview/assets/${id}?name="x"&raw=1`,
       },
       published: {
-        headingHref: (blockId) => `/read/book/2#${blockId}`,
+        blockHref: (blockId) => `/read/book/2#${blockId}`,
         resourceUrl: (id) => `/books/1/assets/ver_123/${id}`,
       },
       references: routeLinks.referencesIn(html),
@@ -53,13 +53,13 @@ describe("route-neutral reader HTML materialization", () => {
     (unsafePolicy) => {
       const headingId = "blk_0123456789abcdefghijkl";
       const routeLinks = createRouteNeutralLinkScope("scope_unsafe_0123456789");
-      const html = `<a href="${routeLinks.headingHref(headingId)}">next</a>`;
+      const html = `<a href="${routeLinks.blockHref(headingId)}">next</a>`;
       const safePolicy = {
-        headingHref: () => "/safe",
+        blockHref: () => "/safe",
         resourceUrl: () => "/asset",
       };
       const unsafe = {
-        headingHref: () => "https://example.test/unsafe",
+        blockHref: () => "https://example.test/unsafe",
         resourceUrl: () => "/asset",
       };
       expect(() =>
@@ -76,7 +76,7 @@ describe("route-neutral reader HTML materialization", () => {
   it("rejects malformed route-neutral tokens", () => {
     const headingId = "blk_0123456789abcdefghijkl";
     const routeLinks = createRouteNeutralLinkScope("scope_malformed_01234567");
-    const html = `<a href="${routeLinks.headingHref(headingId)}-invalid!">next</a>`;
+    const html = `<a href="${routeLinks.blockHref(headingId)}-invalid!">next</a>`;
     expect(() => routeLinks.referencesIn(html)).toThrow(
       "ROUTE_NEUTRAL_HEADING_TOKEN_INVALID",
     );

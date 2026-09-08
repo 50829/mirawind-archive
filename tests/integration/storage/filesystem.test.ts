@@ -83,24 +83,24 @@ describe("persistent filesystem boundary", () => {
 
   it("writes atomically and does not leave the temporary representation", async () => {
     const root = await temporaryRoot();
-    const target = join(root, "book.yaml");
-    await atomicWriteFile(target, "revision: 1\n", { mode: 0o600 });
-    await atomicWriteFile(target, "revision: 2\n", { mode: 0o600 });
-    expect(await readFile(target, "utf8")).toBe("revision: 2\n");
+    const target = join(root, "document.json");
+    await atomicWriteFile(target, '{"value":1}\n', { mode: 0o600 });
+    await atomicWriteFile(target, '{"value":2}\n', { mode: 0o600 });
+    expect(JSON.parse(await readFile(target, "utf8"))).toEqual({ value: 2 });
   });
 
   it("removes the temporary sibling when replacement fails", async () => {
     const root = await temporaryRoot();
-    const target = join(root, "book.yaml");
+    const target = join(root, "document.json");
     await mkdir(target);
     await writeFile(join(target, "preserved"), "old");
 
     await expect(
-      atomicWriteFile(target, "revision: 2\n", { mode: 0o600 }),
+      atomicWriteFile(target, '{"value":2}\n', { mode: 0o600 }),
     ).rejects.toThrow();
 
     expect(await readFile(join(target, "preserved"), "utf8")).toBe("old");
-    expect(await readdir(root)).toEqual(["book.yaml"]);
+    expect(await readdir(root)).toEqual(["document.json"]);
   });
 
   it("rejects reads and writes through a symlinked parent", async () => {

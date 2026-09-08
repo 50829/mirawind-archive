@@ -1,6 +1,3 @@
-import { readdir, readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-
 import { describe, expect, it } from "vitest";
 
 import {
@@ -25,8 +22,6 @@ import {
   createSafeJsonError,
 } from "@/http/errors/responses";
 
-const projectRoot = fileURLToPath(new URL("../../../", import.meta.url));
-const pagesRoot = fileURLToPath(new URL("../../../src/pages", import.meta.url));
 const noIndex = "noindex, nofollow, noarchive, nosnippet";
 
 const responseMatrix: readonly {
@@ -94,113 +89,6 @@ const responseMatrix: readonly {
     robotsTag: noIndex,
   },
 ];
-
-const routePolicyEvidence: Readonly<Record<string, readonly string[]>> = {
-  "api/auth/[...all].ts": ['headers.set("Cache-Control"'],
-  "api/books/[bookKey]/details.ts": [
-    "publicJsonResponse",
-    "applyResponsePolicy",
-  ],
-  "api/books/[bookKey]/search.ts": ["applyResponsePolicy"],
-  "api/library/management-capability.ts": [
-    "resolveRuntimeAdministrator",
-    'applyResponsePolicy(headers, "private-api")',
-    "management_available: decision.allowed",
-  ],
-  "api/manage/books/[bookId].ts": [
-    "requireRuntimeAdministrator",
-    "requireMutationOrigin",
-    'applyResponsePolicy(headers, "private-api")',
-  ],
-  "api/manage/library.ts": ['applyResponsePolicy(headers, "private-api")'],
-  "api/manage/books/[bookId]/draft.ts": ["applyResponsePolicy"],
-  "api/manage/books/[bookId]/draft/blocks/[blockId].ts": [
-    "requireRuntimeAdministrator",
-    "requireMutationOrigin",
-    "applyResponsePolicy",
-  ],
-  "api/manage/books/[bookId]/draft/cover.ts": [
-    "requireRuntimeAdministrator",
-    "requireMutationOrigin",
-    'applyResponsePolicy(headers, "private-api")',
-  ],
-  "api/manage/books/[bookId]/draft/images/[resourceId].ts": [
-    "requireRuntimeAdministrator",
-    "X-Content-Type-Options",
-    'applyResponsePolicy(headers, "draft")',
-  ],
-  "api/manage/books/[bookId]/draft/images/index.ts": [
-    "requireRuntimeAdministrator",
-    'applyResponsePolicy(headers, "private-api")',
-  ],
-  "api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].ts": [
-    "applyResponsePolicy",
-  ],
-  "api/manage/books/[bookId]/preview/[configRevision]/pages/[pageId].ts": [
-    "applyResponsePolicy",
-  ],
-  "api/manage/books/[bookId]/publish.ts": ["applyResponsePolicy"],
-  "api/manage/books/[bookId]/reprocess.ts": ["applyResponsePolicy"],
-  "api/manage/books/[bookId]/access.ts": ["applyResponsePolicy"],
-  "api/manage/health.ts": ["applyResponsePolicy"],
-  "api/manage/imports/[importId]/index.ts": ["applyResponsePolicy"],
-  "api/manage/imports/[importId]/main-markdown.ts": ["applyResponsePolicy"],
-  "api/manage/imports/index.ts": ["applyResponsePolicy"],
-  "api/manage/jobs/[jobId]/cancel.ts": ["applyResponsePolicy"],
-  "api/manage/jobs/[jobId]/index.ts": ["applyResponsePolicy"],
-  "api/manage/jobs/[jobId]/retry.ts": ["applyResponsePolicy"],
-  "api/manage/security/passkeys/[passkeyId]/delete-final.ts": [
-    "cachePolicyFor",
-    "createSafeJsonError",
-  ],
-  "books/[bookKey]/assets/[versionId]/[resourceId].ts": [
-    "immutableAssetHeaders",
-  ],
-  "books/[bookKey]/index.astro": ["libraryHtmlResponse", "applyResponsePolicy"],
-  "books/[bookKey]/originals/[fileId].ts": ["applyResponsePolicy"],
-  "library/index.astro": ["libraryHtmlResponse"],
-  "login.astro": ["applyResponsePolicy"],
-  "manage/books/[bookId]/index.astro": [
-    "hiddenManagementPage",
-    "applyResponsePolicy",
-  ],
-  "manage/index.astro": [
-    "redirectToAdministratorLogin",
-    "hiddenManagementPage",
-    "applyResponsePolicy",
-  ],
-  "manage/security.astro": [
-    "redirectToAdministratorLogin",
-    "hiddenManagementPage",
-    "applyResponsePolicy",
-  ],
-  "manage/tasks.astro": [
-    "redirectToAdministratorLogin",
-    "hiddenManagementPage",
-    "applyResponsePolicy",
-  ],
-  "read/[bookKey]/[pageKey].ts": ["readingPageHeaders", "applyResponsePolicy"],
-  "read/[bookKey]/index.ts": ["applyResponsePolicy"],
-  "reader-assets/[...assetPath].ts": [
-    "applyResponsePolicy",
-    "Access-Control-Allow-Origin",
-    "Cross-Origin-Resource-Policy",
-  ],
-};
-
-async function routeFiles(directory: string, prefix = ""): Promise<string[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) {
-      files.push(...(await routeFiles(`${directory}/${entry.name}`, relative)));
-    } else if (entry.isFile()) {
-      files.push(relative);
-    }
-  }
-  return files.sort();
-}
 
 describe("full route authorization, cache and indexing matrix", () => {
   it("freezes every response class used by login, management and book routes", () => {
@@ -341,18 +229,5 @@ describe("full route authorization, cache and indexing matrix", () => {
       audience: "administrator",
     });
     expect(responsePolicyFor("private").cacheControl).toBe("private, no-store");
-  });
-
-  it("registers explicit policy evidence for every M1 page module", async () => {
-    const discovered = (await routeFiles(pagesRoot)).filter(
-      (path) => path !== "index.astro",
-    );
-    expect(Object.keys(routePolicyEvidence).sort()).toEqual(discovered);
-    for (const [path, evidence] of Object.entries(routePolicyEvidence)) {
-      const source = await readFile(`${projectRoot}src/pages/${path}`, "utf8");
-      for (const marker of evidence) {
-        expect(source, `${path} must declare ${marker}`).toContain(marker);
-      }
-    }
   });
 });

@@ -1,5 +1,7 @@
 import { chmod, lstat, mkdir, readdir, rename } from "node:fs/promises";
 import { posix, relative, resolve, sep } from "node:path";
+import { readDraftHeader } from "./draft-document";
+import { retainedDraftSaveFiles } from "./draft-save-retention";
 
 import type Database from "better-sqlite3";
 
@@ -262,142 +264,93 @@ async function reconcileDraftOrphans(input: {
   readonly layout: StorageLayout;
   readonly removed: string[];
 }): Promise<void> {
-  const sourcePaths = new Set(
-    (
-      input.database
-        .prepare("SELECT source_root_rel_path FROM source_snapshots")
-        .all() as { source_root_rel_path: string }[]
-    ).map((row) => row.source_root_rel_path),
-  );
-  const originalPaths = new Set(
+  const retained = retainedDraftSaveFiles(input.database, input.layout);
+  const covers = resolve(input.layout.temporaryDirectory, "covers");
+  if (await existsAsDirectory(covers)) {
+    for (const entry of await readdir(covers)) {
+      if (!retained.covers.has(`tmp/covers/${entry}`))
+        await removeAgedOrphan({ ...input, path: resolve(covers, entry) });
+    }
+  }
+  const originals = new Set(
     (
       input.database
         .prepare("SELECT storage_rel_path FROM original_files")
         .all() as { storage_rel_path: string }[]
     ).map((row) => row.storage_rel_path),
   );
-  const assetPaths = new Set(
+  const assets = new Set(
     (
       input.database
-        .prepare("SELECT storage_rel_path FROM source_assets")
+        .prepare("SELECT storage_rel_path FROM book_resources")
         .all() as { storage_rel_path: string }[]
     ).map((row) => row.storage_rel_path),
   );
-  const configurations = input.database
-    .prepare(
-      "SELECT book_id, revision, source_id, yaml_rel_path FROM config_revisions",
-    )
-    .all() as {
-    book_id: number;
-    revision: number;
-    source_id: string;
-    yaml_rel_path: string;
-  }[];
-  const configDirectories = new Set(
-    configurations.map((row) => posix.dirname(row.yaml_rel_path)),
+  const activeInputs = new Set(
+    (
+      input.database
+        .prepare(
+          "SELECT captured_input_path FROM jobs WHERE state IN ('queued','running') AND kind='build_candidate' AND captured_input_path IS NOT NULL",
+        )
+        .all() as { captured_input_path: string }[]
+    ).map((row) => posix.dirname(row.captured_input_path)),
   );
-  const analysisPaths = new Set(
-    configurations.map(
-      (row) =>
-        `books/${row.book_id}/draft/analyses/${row.source_id}/${row.revision}.json`,
-    ),
-  );
-
-  const books = await readdir(input.layout.bookDirectory, {
+  for (const book of await readdir(input.layout.bookDirectory, {
     withFileTypes: true,
-  });
-  for (const book of books) {
+  })) {
     if (
       !book.isDirectory() ||
       book.isSymbolicLink() ||
       !/^[1-9][0-9]*$/u.test(book.name)
-    ) {
+    )
+      continue;
+    const root = resolve(input.layout.bookDirectory, book.name);
+    for (const [name, known] of [
+      ["assets", assets],
+      ["originals", originals],
+    ] as const) {
+      const directory = resolve(root, name);
+      if (!(await existsAsDirectory(directory))) continue;
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const path = "books/" + book.name + "/" + name + "/" + entry.name;
+        if (known.has(path) && entry.isFile() && !entry.isSymbolicLink())
+          continue;
+        await removeAgedOrphan({
+          ...input,
+          path: resolve(directory, entry.name),
+        });
+      }
+    }
+    const draft = resolve(root, "draft");
+    if (!(await existsAsDirectory(draft))) continue;
+    let updatedAt: number;
+    try {
+      updatedAt = readDraftHeader(
+        resolve(draft, "book.json"),
+        Number(book.name),
+      ).updated_at;
+    } catch {
       continue;
     }
-    const draftRoot = resolve(input.layout.bookDirectory, book.name, "draft");
-    if (!(await existsAsDirectory(draftRoot))) continue;
-    const draftEntries = await readdir(draftRoot, { withFileTypes: true });
-    for (const entry of draftEntries) {
-      if (entry.name.startsWith(".snapshot-") && entry.name.endsWith(".part")) {
-        await removeAgedOrphan({
-          cutoffMs: input.cutoffMs,
-          layout: input.layout,
-          path: resolve(draftRoot, entry.name),
-          removed: input.removed,
-        });
-      }
-    }
-
-    for (const [directoryName, known] of [
-      ["sources", sourcePaths],
-      ["originals", originalPaths],
-      ["assets", assetPaths],
-    ] as const) {
-      const directory = resolve(draftRoot, directoryName);
+    for (const name of ["views", "candidates", "saves"]) {
+      const directory = resolve(draft, name);
       if (!(await existsAsDirectory(directory))) continue;
-      const entries = await readdir(directory, { withFileTypes: true });
-      for (const entry of entries) {
-        const relativePath = `books/${book.name}/draft/${directoryName}/${entry.name}`;
-        if (known.has(relativePath) && !entry.isSymbolicLink()) continue;
-        await removeAgedOrphan({
-          cutoffMs: input.cutoffMs,
-          layout: input.layout,
-          path: resolve(directory, entry.name),
-          removed: input.removed,
-        });
-      }
-    }
-
-    const configsRoot = resolve(draftRoot, "configs");
-    if (await existsAsDirectory(configsRoot)) {
-      const revisions = await readdir(configsRoot, { withFileTypes: true });
-      for (const revision of revisions) {
-        const relativePath = `books/${book.name}/draft/configs/${revision.name}`;
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const path = "books/" + book.name + "/draft/" + name + "/" + entry.name;
         if (
-          configDirectories.has(relativePath) &&
-          revision.isDirectory() &&
-          !revision.isSymbolicLink()
-        ) {
+          !entry.isSymbolicLink() &&
+          entry.isDirectory() &&
+          (name === "views"
+            ? entry.name === String(updatedAt)
+            : name === "saves"
+              ? retained.receipts.has(path)
+              : activeInputs.has(path))
+        )
           continue;
-        }
         await removeAgedOrphan({
-          cutoffMs: input.cutoffMs,
-          layout: input.layout,
-          path: resolve(configsRoot, revision.name),
-          removed: input.removed,
+          ...input,
+          path: resolve(directory, entry.name),
         });
-      }
-    }
-
-    const analysesRoot = resolve(draftRoot, "analyses");
-    if (await existsAsDirectory(analysesRoot)) {
-      const sources = await readdir(analysesRoot, { withFileTypes: true });
-      for (const source of sources) {
-        const sourceDirectory = resolve(analysesRoot, source.name);
-        if (!source.isDirectory() || source.isSymbolicLink()) {
-          await removeAgedOrphan({
-            cutoffMs: input.cutoffMs,
-            layout: input.layout,
-            path: sourceDirectory,
-            removed: input.removed,
-          });
-          continue;
-        }
-        const analyses = await readdir(sourceDirectory, {
-          withFileTypes: true,
-        });
-        for (const analysis of analyses) {
-          const relativePath = `books/${book.name}/draft/analyses/${source.name}/${analysis.name}`;
-          if (analysisPaths.has(relativePath) && !analysis.isSymbolicLink()) {
-            continue;
-          }
-          await removeAgedOrphan({
-            cutoffMs: input.cutoffMs,
-            layout: input.layout,
-            path: resolve(sourceDirectory, analysis.name),
-            removed: input.removed,
-          });
-        }
       }
     }
   }

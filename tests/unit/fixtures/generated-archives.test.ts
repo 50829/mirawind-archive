@@ -45,9 +45,7 @@ describe("deterministic generated archives", () => {
     expect(first.metadata.pages).toBe(300);
     expect(await entryNames(first.bytes)).toEqual(
       expect.arrayContaining([
-        "stress-result/full.md",
-        "stress-result/content_list.json",
-        "stress-result/layout.json",
+        "stress-result/content_list_v2.json",
         "stress-result/images/image-003.png",
       ]),
     );

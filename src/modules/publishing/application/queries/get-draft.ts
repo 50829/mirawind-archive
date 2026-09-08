@@ -11,7 +11,7 @@ export type CurrentDraftCandidateState =
 
 export interface CurrentDraftCandidateRecord {
   readonly attemptId: string;
-  readonly configRevision: number;
+  readonly sourceUpdatedAt: number;
   readonly previewUrl: string | null;
   readonly safeErrorCode: string | null;
   readonly semanticDigest: string | null;
@@ -22,7 +22,7 @@ export interface CurrentDraftCandidateRecord {
 export interface CurrentDraftCandidateProjection {
   readonly attempt_id: string;
   readonly preview_url: string | null;
-  readonly revision: number;
+  readonly source_updated_at: number;
   readonly safe_error_code: string | null;
   readonly semantic_digest: string | null;
   readonly state: CurrentDraftCandidateState;
@@ -36,10 +36,10 @@ function isSafeErrorCode(value: string): boolean {
 function isPreviewUrl(
   value: string,
   bookId: number,
-  revision: number,
+  candidateId: string,
 ): boolean {
   return new RegExp(
-    `^/api/manage/books/${bookId}/preview/${revision}/pages/[1-9][0-9]*$`,
+    `^/api/manage/books/${bookId}/preview/${candidateId}/pages/[1-9][0-9]*$`,
     "u",
   ).test(value);
 }
@@ -47,20 +47,20 @@ function isPreviewUrl(
 export function getCurrentDraftCandidate(input: {
   readonly bookId: number;
   readonly candidate: CurrentDraftCandidateRecord | null;
-  readonly configRevision: number;
+  readonly sourceUpdatedAt: number;
 }): CurrentDraftCandidateProjection | null {
   if (
     !Number.isSafeInteger(input.bookId) ||
     input.bookId < 1 ||
-    !Number.isSafeInteger(input.configRevision) ||
-    input.configRevision < 1
+    !Number.isSafeInteger(input.sourceUpdatedAt) ||
+    input.sourceUpdatedAt < 0
   ) {
     throw new TypeError("DRAFT_CANDIDATE_QUERY_INVALID");
   }
   const candidate = input.candidate;
   if (candidate === null) return null;
   if (
-    candidate.configRevision !== input.configRevision ||
+    candidate.sourceUpdatedAt !== input.sourceUpdatedAt ||
     !currentDraftCandidateStates.includes(candidate.state) ||
     (candidate.safeErrorCode !== null &&
       !isSafeErrorCode(candidate.safeErrorCode))
@@ -74,7 +74,7 @@ export function getCurrentDraftCandidate(input: {
     candidate.semanticDigest !== null &&
     /^[a-f0-9]{64}$/u.test(candidate.semanticDigest) &&
     candidate.previewUrl !== null &&
-    isPreviewUrl(candidate.previewUrl, input.bookId, input.configRevision);
+    isPreviewUrl(candidate.previewUrl, input.bookId, candidate.attemptId);
   const hasNoReadyFields =
     candidate.versionId === null &&
     candidate.semanticDigest === null &&
@@ -90,7 +90,7 @@ export function getCurrentDraftCandidate(input: {
   return Object.freeze({
     attempt_id: candidate.attemptId,
     preview_url: candidate.previewUrl,
-    revision: candidate.configRevision,
+    source_updated_at: candidate.sourceUpdatedAt,
     safe_error_code: candidate.safeErrorCode,
     semantic_digest: candidate.semanticDigest,
     state: candidate.state,

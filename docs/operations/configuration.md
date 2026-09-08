@@ -28,8 +28,8 @@ Formal Better Auth sessions last 90 days and refresh after 7 days of activity. S
 sensitive credential operations remains 5 minutes.
 
 Use `pnpm dev` for the complete local runtime. The example `.env` selects `http://127.0.0.1:4322`
-and persistent `data/development`. The command enables development mode and local trust, applies
-migrations and initializes a local-only administrator when the directory is new. Data, origin,
+and persistent `data/library`. The command enables development mode and local trust, initializes
+the current database baseline and a local-only administrator when the directory is new. Data, origin,
 allowed hosts, RP ID and auth secret come from the shared configuration; the launcher does not
 replace them or create a new auth secret on restart. The separate `dev:web` and `dev:worker` scripts
 are diagnostic tools and require explicit configuration.
@@ -43,16 +43,16 @@ Data directories, caches and large import fixtures are excluded from hot-reload 
 Local security settings display the development login status; credential management is available
 only through a real authenticated session on the corresponding deployment.
 
-`data/development` contains the database and books, not disposable cache. Git ignores it, but cache
-cleanup must not remove it. To move an older `.cache/dev-data` installation, stop Web and worker,
-copy the complete directory to `data/development`, and retain the original until verification.
-Alternatively point `MIRAWIND_DATA_DIR` at that installation until it is moved.
+`data/library` contains the database and books, not disposable cache. Git ignores it, but cache
+cleanup must not remove it. D-138 requires a new root and MinerU v2 reimport, not copying an old
+Markdown installation into the current runtime. Older local roots are not runtime inputs and
+remain untouched unless separately authorized for removal.
 
 Web and worker receive the same data directory and schema-compatible configuration. Only
 the Web process receives public traffic. Caddy overwrites trusted forwarding headers and
 the Node origin is not published directly.
 
-Do not pass passwords, cookies, Passkey material, private Markdown, or recovery credentials
+Do not pass passwords, cookies, Passkey material, private content, or recovery credentials
 through command arguments or environment variables. Administrator bootstrap and recovery
 read passwords from a hidden interactive TTY.
 

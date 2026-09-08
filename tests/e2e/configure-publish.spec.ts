@@ -64,11 +64,11 @@ test("edits structure boundaries and publishes the ready candidate", async ({
   await selectStructure("Details");
   await selectedEditor.getByLabel("显示层级").selectOption("2");
   await page.getByRole("button", { name: "保存并更新预览" }).click();
-  await expect(page.getByRole("button", { name: "发布当前修订" })).toBeEnabled({
+  await expect(page.getByRole("button", { name: "发布当前预览" })).toBeEnabled({
     timeout: 30_000,
   });
 
-  await page.getByRole("button", { name: "发布当前修订" }).click();
+  await page.getByRole("button", { name: "发布当前预览" }).click();
   await expect(page.getByRole("link", { name: "开始阅读" })).toBeVisible({
     timeout: 60_000,
   });
@@ -89,7 +89,7 @@ test("edits structure boundaries and publishes the ready candidate", async ({
            JOIN book_versions ON book_versions.id = books.current_version_id
            JOIN original_files
              ON original_files.book_id = books.id
-            AND original_files.source_id = book_versions.source_id
+            AND original_files.import_id = book_versions.import_id
          WHERE books.current_version_id IS NOT NULL
          ORDER BY books.id DESC LIMIT 1`,
         )
@@ -145,11 +145,10 @@ test("edits structure boundaries and publishes the ready candidate", async ({
   await expect(
     anonymousPage.locator("code[data-code-language='typescript']"),
   ).toBeVisible();
-  await expect(anonymousPage.locator("[role='doc-noteref']")).toBeVisible();
+  await expect(anonymousPage.getByRole("main")).toContainText(
+    "Semantic note body.",
+  );
   await expect(anonymousPage.locator(".katex")).toBeVisible();
-  await expect(
-    anonymousPage.locator("aside[data-container-kind='note']"),
-  ).toBeVisible();
   await expect(anonymousPage.locator("canvas, iframe")).toHaveCount(0);
   const assetUrl = await anonymousPage.locator("img").getAttribute("src");
   expect(assetUrl).toBeTruthy();

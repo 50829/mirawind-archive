@@ -49,10 +49,10 @@ describe("registered original HTTP download", () => {
       bookId = fixture.book.id;
       const version = migrated.database
         .prepare(
-          "SELECT source_id, version_rel_path FROM book_versions WHERE id = ?",
+          "SELECT import_id, version_rel_path FROM book_versions WHERE id = ?",
         )
         .get(publicationTestVersionId) as {
-        source_id: string;
+        import_id: string;
         version_rel_path: string;
       };
       const originalPath = resolve(
@@ -81,7 +81,7 @@ describe("registered original HTTP download", () => {
       migrated.database
         .prepare(
           `INSERT INTO original_files (
-             id, book_id, source_id, role, storage_rel_path, original_name,
+             id, book_id, import_id, role, storage_rel_path, original_name,
              media_type, size_bytes, sha256, created_at
            ) VALUES (?, ?, ?, 'mineru_zip', ?, 'unsafe/original.zip',
                      'application/zip', ?, ?, 11)`,
@@ -89,7 +89,7 @@ describe("registered original HTTP download", () => {
         .run(
           fileId,
           bookId,
-          version.source_id,
+          version.import_id,
           `ignored/${fileId}`,
           sizeBytes,
           "a".repeat(64),

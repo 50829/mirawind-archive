@@ -34,9 +34,8 @@ export const GET: APIRoute = async ({ locals, params }) => {
   const book = publishing.findBook(bookId);
   const candidate = publishing.findCurrentCandidate(bookId);
   if (
-    !book?.draftConfigRevision ||
+    !book?.draftImportId ||
     !candidate?.versionId ||
-    candidate.configRevision !== book.draftConfigRevision ||
     candidate.state !== "ready"
   ) {
     throw new SafeApplicationError(
@@ -45,8 +44,18 @@ export const GET: APIRoute = async ({ locals, params }) => {
       404,
     );
   }
+  const layout = await getRuntimeStorageLayout();
+  if (
+    createPublishingArtifactServer(layout).readDraftTimestamp(bookId) !==
+    candidate.sourceUpdatedAt
+  )
+    throw new SafeApplicationError(
+      "NOT_FOUND",
+      "The image was not found.",
+      404,
+    );
   const resource = await createPublishingArtifactServer(
-    await getRuntimeStorageLayout(),
+    layout,
   ).readPreviewResource({
     bookId,
     resourceId,

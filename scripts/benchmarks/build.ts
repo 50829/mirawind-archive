@@ -18,7 +18,6 @@ import { fileURLToPath } from "node:url";
 
 import type Database from "better-sqlite3";
 
-import { createStrongEtag } from "@/http/cache/policies";
 import { SqliteBookAccessRepository } from "@/modules/catalog/adapters/sqlite/book-access";
 import { setBookAccess } from "@/modules/catalog/application/commands/set-book-access";
 import { applyMigrations } from "../../src/platform/sqlite/migrate.js";
@@ -587,30 +586,7 @@ async function benchmarkFixture(
     const jobs = new JobRepository(database);
     const imports = new ImportRepository(database);
     await waitForJob(jobs, upload.job.id, deadline);
-    let imported = imports.require(upload.import.id);
-    if (imported.state === "needs_main_confirmation") {
-      const candidates = imports.candidates(imported.id);
-      if (candidates.length !== 1 || !candidates[0]) {
-        throw new Error("BENCHMARK_MAIN_CANDIDATE_AMBIGUOUS");
-      }
-      imported = imports.confirmCandidate({
-        candidateId: candidates[0].id,
-        importId: imported.id,
-        nowMs: Date.now(),
-      });
-      jobs.create({
-        ...(imported.bookId === null ? {} : { bookId: imported.bookId }),
-        idempotency: {
-          key: idempotencyKey("benchmark-prepare", fixture),
-          operation: "benchmark.prepare",
-        },
-        importId: imported.id,
-        kind: "prepare_draft",
-        nowMs: Date.now(),
-      });
-    }
-
-    imported = await waitFor(
+    const imported = await waitFor(
       () => {
         const current = imports.require(upload.import.id);
         const latest = jobs.latestForImport(current.id);
@@ -655,24 +631,20 @@ async function benchmarkFixture(
       `fixture ${fixture.id} candidate`,
     );
     const book = drafts.requireBook(imported.bookId);
-    if (
-      !book.draftConfigRevision ||
-      !book.draftSourceId ||
-      !candidate.versionId
-    ) {
+    if (!book.draftImportId || !candidate.versionId) {
       throw new Error("BENCHMARK_DRAFT_CAPTURE_MISSING");
     }
     const previewReadyAt = performance.now();
 
     const publishRequestedAt = performance.now();
-    const config = drafts.requireConfig(book.id, book.draftConfigRevision);
     await publishCandidate({
       actorUserId: null,
       bookId: book.id,
-      expectedConfigEtag: createStrongEtag(config.yamlSha256),
+      expectedUpdatedAt: candidate.sourceUpdatedAt,
+      candidateId: candidate.attemptId,
       nowMs: Date.now(),
       policy: m1PublishPolicy,
-      publication: new CandidatePublicationRepository(database),
+      publication: new CandidatePublicationRepository(database, layout),
     });
     setBookAccess({
       access: "public",

@@ -3,8 +3,6 @@ import { randomBytes } from "node:crypto";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
-import remarkMath from "remark-math";
-import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 
@@ -15,10 +13,7 @@ import type {
 } from "../preparation/document-model";
 import type { ResourceResolution } from "./resource-model";
 import type { HeadingPresentation } from "./heading-presentation";
-import {
-  resolveHeadingLinkTarget,
-  type HeadingLinkIndex,
-} from "./compiled-book";
+import { resolveBlockLinkTarget, type BlockLinkIndex } from "./compiled-book";
 import { renderCode } from "./render-code";
 import { renderMath } from "./render-math";
 import {
@@ -65,8 +60,8 @@ export interface SemanticRenderResult {
 
 export interface RenderSemanticDocumentOptions {
   readonly document: NormalizedDocument;
-  readonly headingHref?: (blockId: string) => string;
-  readonly headingLinkIndex: HeadingLinkIndex;
+  readonly blockHref?: (blockId: string) => string;
+  readonly blockLinkIndex: BlockLinkIndex;
   readonly headingPresentations?: ReadonlyMap<
     string,
     RenderHeadingPresentation
@@ -106,15 +101,6 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
     assertSafePublishedUrl(url);
     resourceUrls.set(resource.id, url);
   }
-  const definitions = new Map<string, string>();
-  const collectDefinitions = (node: TransientDocumentNode) => {
-    if (node.type === "definition" && node.identifier && node.url) {
-      definitions.set(node.identifier.toUpperCase(), node.url);
-    }
-    for (const child of node.children ?? []) collectDefinitions(child);
-  };
-  collectDefinitions(options.document.root);
-
   const clone = (node: TransientDocumentNode): TreeNode => {
     const { children, ...properties } = node;
     const output: TreeNode = {
@@ -123,7 +109,8 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
     };
     if (node.blockId) {
       output.data = {
-        hProperties: { dataBlockId: node.blockId },
+        ...node.data,
+        hProperties: { ...node.data?.hProperties, dataBlockId: node.blockId },
       };
     }
 
@@ -224,20 +211,15 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
       };
     }
 
-    if (node.type === "image" || node.type === "imageReference") {
-      const originalUrl =
-        node.type === "image"
-          ? node.url
-          : node.identifier
-            ? definitions.get(node.identifier.toUpperCase())
-            : undefined;
-      const resourceId = originalUrl
-        ? resourceIdByOriginalUrl.get(originalUrl)
+    if (node.type === "image") {
+      const resourceId = node.url
+        ? resourceIdByOriginalUrl.get(node.url)
         : undefined;
       const publishedUrl = resourceId
         ? resourceUrls.get(resourceId)
         : undefined;
-      if (resourceId && publishedUrl) {
+      output.url = publishedUrl ?? "";
+      if (resourceId && publishedUrl)
         output.data = {
           ...(output.data ?? {}),
           hProperties: {
@@ -245,51 +227,11 @@ function rendererTree(options: RenderSemanticDocumentOptions): TreeNode {
             dataMirawindResource: resourceId,
           },
         };
-        if (node.type === "image") output.url = publishedUrl;
-      } else if (node.type === "image") {
-        output.url = "";
-      }
-    }
-    if (node.type === "definition" && node.url) {
-      const resourceId = resourceIdByOriginalUrl.get(node.url);
-      const publishedUrl = resourceId
-        ? resourceUrls.get(resourceId)
-        : undefined;
-      if (publishedUrl) output.url = publishedUrl;
     }
     return output;
   };
 
   const root = clone(options.document.root);
-  const turnImagesIntoFigures = (node: TreeNode) => {
-    for (const child of node.children ?? []) turnImagesIntoFigures(child);
-    if (
-      node.type !== "paragraph" ||
-      node.children?.length !== 1 ||
-      !["image", "imageReference"].includes(node.children[0]?.type ?? "")
-    ) {
-      return;
-    }
-    const image = node.children[0];
-    if (!image) return;
-    const caption = image.title || image.alt;
-    node.data = {
-      hName: "figure",
-      hProperties: {
-        ...(node.blockId ? { dataBlockId: node.blockId } : {}),
-      },
-    };
-    node.type = "mirawindFigure";
-    if (caption) {
-      image.title = null;
-      node.children.push({
-        children: [{ type: "text", value: caption }],
-        data: { hName: "figcaption" },
-        type: "mirawindFigureCaption",
-      });
-    }
-  };
-  turnImagesIntoFigures(root);
   Object.defineProperty(root, "_resourceUrls", {
     enumerable: false,
     value: resourceUrls,
@@ -310,97 +252,6 @@ function classNames(node: TreeNode): readonly unknown[] {
   return Array.isArray(node.properties?.className)
     ? node.properties.className
     : [];
-}
-
-const importedTableMathParser = unified().use(remarkParse).use(remarkMath);
-
-interface ImportedMathMatch {
-  readonly displayMode: boolean;
-  readonly end: number;
-  readonly source: string;
-  readonly start: number;
-}
-
-function importedMathMatches(value: string): readonly ImportedMathMatch[] {
-  const tree = importedTableMathParser.parse(value) as TreeNode;
-  const matches: ImportedMathMatch[] = [];
-  const visit = (node: TreeNode): void => {
-    if (node.type === "inlineMath" || node.type === "math") {
-      const position = node.position as
-        | {
-            readonly end?: { readonly offset?: number };
-            readonly start?: { readonly offset?: number };
-          }
-        | undefined;
-      const start = position?.start?.offset;
-      const end = position?.end?.offset;
-      if (
-        typeof start === "number" &&
-        typeof end === "number" &&
-        start >= 0 &&
-        end > start &&
-        end <= value.length &&
-        typeof node.value === "string"
-      ) {
-        matches.push({
-          displayMode:
-            node.type === "math" || value.slice(start, start + 2) === "$$",
-          end,
-          source: node.value,
-          start,
-        });
-      }
-      return;
-    }
-    for (const child of node.children ?? []) visit(child);
-  };
-  visit(tree);
-  return matches.sort((left, right) => left.start - right.start);
-}
-
-function importedTableMath(value: string): readonly TreeNode[] {
-  if (!value.includes("$")) return [{ type: "text", value }];
-  const matches = importedMathMatches(value);
-  if (matches.length === 0) return [{ type: "text", value }];
-  const output: TreeNode[] = [];
-  let cursor = 0;
-  for (const match of matches) {
-    if (match.start > cursor) {
-      output.push({ type: "text", value: value.slice(cursor, match.start) });
-    }
-    output.push({
-      children: [{ type: "text", value: match.source }],
-      properties: {
-        className: [match.displayMode ? "math-display" : "math-inline"],
-      },
-      tagName: "code",
-      type: "element",
-    });
-    cursor = match.end;
-  }
-  if (cursor < value.length) {
-    output.push({ type: "text", value: value.slice(cursor) });
-  }
-  return output;
-}
-
-function restoreImportedTableMath(tree: TreeNode): void {
-  const visit = (node: TreeNode, insideTable: boolean): void => {
-    const isElement = node.type === "element";
-    if (isElement && (node.tagName === "code" || node.tagName === "pre")) {
-      return;
-    }
-    const tableScope = insideTable || (isElement && node.tagName === "table");
-    if (!node.children) return;
-    node.children = node.children.flatMap((child) => {
-      if (tableScope && child.type === "text" && child.value) {
-        return importedTableMath(child.value);
-      }
-      visit(child, tableScope);
-      return [child];
-    });
-  };
-  visit(tree, false);
 }
 
 function renderMathNodes(
@@ -602,8 +453,8 @@ function repairFootnoteLinks(
 
 function repairInternalHeadingLinks(
   tree: TreeNode,
-  headingLinkIndex: HeadingLinkIndex,
-  headingHref: ((blockId: string) => string) | undefined,
+  blockLinkIndex: BlockLinkIndex,
+  blockHref: ((blockId: string) => string) | undefined,
 ): void {
   const visit = (node: TreeNode) => {
     if (
@@ -621,9 +472,9 @@ function repairInternalHeadingLinks(
       } catch {
         // Keep the literal fragment; an unresolved link fails below.
       }
-      const target = resolveHeadingLinkTarget(headingLinkIndex, decoded);
+      const target = resolveBlockLinkTarget(blockLinkIndex, decoded);
       if (!target) throw new Error("INTERNAL_HEADING_LINK_UNRESOLVED");
-      const href = headingHref?.(target) ?? `#${target}`;
+      const href = blockHref?.(target) ?? `#${target}`;
       if (
         !href.startsWith("/") &&
         !href.startsWith("#") &&
@@ -679,7 +530,6 @@ export async function renderSemanticDocument(
     })
     .use(rehypeSanitize, importedHtmlSanitizationSchema);
   const transformed = (await processor.run(tree as never)) as TreeNode;
-  restoreImportedTableMath(transformed);
   renderMathNodes(transformed, rendererState._mathSourceByMarker, diagnostics);
   restoreStableHeadingIds(transformed);
   repairFootnoteLinks(
@@ -692,8 +542,8 @@ export async function renderSemanticDocument(
   );
   repairInternalHeadingLinks(
     transformed,
-    options.headingLinkIndex,
-    options.headingHref,
+    options.blockLinkIndex,
+    options.blockHref,
   );
   const css = await highlightCodeBlocks(
     transformed,

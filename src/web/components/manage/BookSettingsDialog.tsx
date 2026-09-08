@@ -1,5 +1,6 @@
+import { waitForDraftSave } from "./wait-for-save";
 import { Check, ImageUp, Settings, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   manageDialog,
@@ -15,6 +16,7 @@ interface DraftImageChoice {
   readonly height: number;
   readonly media_type: string;
   readonly path: string;
+  readonly resource_id: string;
   readonly selected: boolean;
   readonly size_bytes: number;
   readonly url: string;
@@ -36,7 +38,6 @@ function authorsValue(value: unknown): string {
 export function BookSettingsDialog(props: {
   readonly disabled: boolean;
   readonly draft: DraftView;
-  readonly etag: string;
   readonly onChanged: () => Promise<void>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -46,8 +47,8 @@ export function BookSettingsDialog(props: {
   const [authors, setAuthors] = useState(
     authorsValue(props.draft.metadata.authors),
   );
-  const [coverPath, setCoverPath] = useState(
-    stringValue(props.draft.metadata.cover_path) || null,
+  const [coverId, setCoverId] = useState(
+    stringValue(props.draft.metadata.cover_resource_id) || null,
   );
   const [description, setDescription] = useState(
     stringValue(props.draft.metadata.description),
@@ -55,12 +56,20 @@ export function BookSettingsDialog(props: {
   const [error, setError] = useState("");
   const [images, setImages] = useState<readonly DraftImageChoice[]>([]);
   const [saving, setSaving] = useState(false);
+  const [expectedUpdatedAt, setExpectedUpdatedAt] = useState(
+    props.draft.updated_at,
+  );
   const [title, setTitle] = useState(stringValue(props.draft.metadata.title));
+  const fieldsRef = useRef({ alias, authors, coverId, description, title });
+  useEffect(() => {
+    fieldsRef.current = { alias, authors, coverId, description, title };
+  }, [alias, authors, coverId, description, title]);
 
   function resetFields() {
+    setExpectedUpdatedAt(props.draft.updated_at);
     setAlias(props.draft.alias ?? "");
     setAuthors(authorsValue(props.draft.metadata.authors));
-    setCoverPath(stringValue(props.draft.metadata.cover_path) || null);
+    setCoverId(stringValue(props.draft.metadata.cover_resource_id) || null);
     setDescription(stringValue(props.draft.metadata.description));
     setTitle(stringValue(props.draft.metadata.title));
     setError("");
@@ -88,6 +97,7 @@ export function BookSettingsDialog(props: {
   }
 
   async function saveMetadata() {
+    const submittedFields = JSON.stringify(fieldsRef.current);
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
       setError("标题不能为空。");
@@ -108,11 +118,12 @@ export function BookSettingsDialog(props: {
         `/api/manage/books/${props.draft.book_id}/draft`,
         {
           body: JSON.stringify({
+            expected_updated_at: expectedUpdatedAt,
             alias: alias.trim() || null,
             changes: [],
             metadata: {
               authors: normalizedAuthors.length > 0 ? normalizedAuthors : null,
-              cover_path: coverPath,
+              cover_resource_id: coverId,
               description: description.trim() || null,
               title: normalizedTitle,
             },
@@ -121,7 +132,6 @@ export function BookSettingsDialog(props: {
           credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
-            "If-Match": props.etag,
           },
           method: "PATCH",
         },
@@ -134,7 +144,9 @@ export function BookSettingsDialog(props: {
         );
         return;
       }
-      dialog.current?.close();
+      setExpectedUpdatedAt(await waitForDraftSave(response));
+      if (JSON.stringify(fieldsRef.current) === submittedFields)
+        dialog.current?.close();
       await props.onChanged();
     } catch {
       setError("书籍设置保存失败，请稍后重试。");
@@ -144,18 +156,19 @@ export function BookSettingsDialog(props: {
   }
 
   async function uploadCover(file: File) {
+    const previousCoverId = fieldsRef.current.coverId;
     setSaving(true);
     setError("");
     try {
       const body = new FormData();
       body.append("file", file);
+      body.append("expected_updated_at", String(expectedUpdatedAt));
       const response = await fetch(
         `/api/manage/books/${props.draft.book_id}/draft/cover`,
         {
           body,
           cache: "no-store",
           credentials: "same-origin",
-          headers: { "If-Match": props.etag },
           method: "POST",
         },
       );
@@ -167,8 +180,29 @@ export function BookSettingsDialog(props: {
         );
         return;
       }
-      dialog.current?.close();
+      const uploaded = (await response.clone().json()) as {
+        resource_id?: string;
+      };
+      const uploadedResourceId = uploaded.resource_id;
+      if (
+        !uploadedResourceId ||
+        !/^res_[A-Za-z0-9_-]{16,80}$/u.test(uploadedResourceId)
+      )
+        throw new Error("COVER_RESPONSE_INVALID");
+      setExpectedUpdatedAt(await waitForDraftSave(response));
+      setCoverId((current) =>
+        current === previousCoverId ? uploadedResourceId : current,
+      );
       await props.onChanged();
+      const imagesResponse = await fetch(
+        `/api/manage/books/${props.draft.book_id}/draft/images`,
+        { cache: "no-store", credentials: "same-origin" },
+      );
+      if (imagesResponse.ok)
+        setImages(
+          ((await imagesResponse.json()) as { images: DraftImageChoice[] })
+            .images,
+        );
     } catch {
       setError("封面上传失败，请稍后重试。");
     } finally {
@@ -284,23 +318,23 @@ export function BookSettingsDialog(props: {
             <legend className="text-sm font-semibold">封面</legend>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-3">
               <button
-                aria-pressed={coverPath === null}
+                aria-pressed={coverId === null}
                 className="relative aspect-[3/4] rounded-md border border-stone-300 bg-stone-100 p-2 text-sm font-semibold"
-                onClick={() => setCoverPath(null)}
+                onClick={() => setCoverId(null)}
                 type="button"
               >
                 自动封面
-                {coverPath === null && (
+                {coverId === null && (
                   <Check className="absolute right-2 top-2" size={18} />
                 )}
               </button>
               {images.map((image, index) => (
                 <button
                   aria-label={`选择封面 ${index + 1}`}
-                  aria-pressed={coverPath === image.path}
+                  aria-pressed={coverId === image.resource_id}
                   className="relative aspect-[3/4] overflow-hidden rounded-md border border-stone-300 bg-stone-100"
-                  key={image.path}
-                  onClick={() => setCoverPath(image.path)}
+                  key={image.resource_id}
+                  onClick={() => setCoverId(image.resource_id)}
                   type="button"
                 >
                   <img
@@ -309,7 +343,7 @@ export function BookSettingsDialog(props: {
                     loading="lazy"
                     src={image.url}
                   />
-                  {coverPath === image.path && (
+                  {coverId === image.resource_id && (
                     <Check
                       className="absolute right-2 top-2 rounded-full bg-white p-0.5 text-emerald-800"
                       size={20}

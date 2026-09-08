@@ -33,10 +33,8 @@ describe("safe locatable diagnostics", () => {
       evidence: ["numbering", "x".repeat(500)],
       location: {
         blockId: "blk_abcdefghijklmnop",
-        endByte: 20,
         pageIndex: 3,
         regionId: "region_abcdefghijklmnop",
-        startByte: 10,
       },
       message: "No unique body heading was found.",
       phase: "matching",
@@ -53,7 +51,7 @@ describe("safe locatable diagnostics", () => {
 
     expect(diagnostic).toMatchObject({
       confidence: "low",
-      location: { endByte: 20, pageIndex: 3, startByte: 10 },
+      location: { pageIndex: 3 },
       phase: "matching",
       targets: [
         {
@@ -69,15 +67,13 @@ describe("safe locatable diagnostics", () => {
     expect(diagnostic.location?.regionId).toBe("region_abcdefghijklmnop");
   });
 
-  it("drops invalid ranges and enum values from generated input", () => {
+  it("drops invalid identifiers and enum values from generated input", () => {
     const diagnostic = createSafeDiagnostic({
       code: "LAYOUT_EVIDENCE_INVALID",
       confidence: "unknown" as "low",
       location: {
         blockId: "private body text",
-        endByte: 2,
         regionId: "raw/archive/path",
-        startByte: 2,
       },
       message: "Invalid evidence.",
       phase: "unknown" as "contents",

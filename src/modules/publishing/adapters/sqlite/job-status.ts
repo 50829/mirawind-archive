@@ -10,12 +10,7 @@ function timestamp(value: number | null): string | null {
 }
 
 export function serializeJobStatus(job: JobRecord, subject: JobSubject) {
-  const kind =
-    job.kind === "purge_book"
-      ? "permanent_book_deletion"
-      : job.kind === "reclaim_versions"
-        ? "reclaim"
-        : job.kind;
+  const kind = job.kind === "purge_book" ? "permanent_book_deletion" : job.kind;
   const progress =
     job.state === "succeeded" && job.progress.total !== null
       ? Object.freeze({

@@ -1,45 +1,60 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mirawind.local/schemas/book.schema.json",
-  "title": "Mirawind book.yaml schema v4",
-  "description": "Portable publishing configuration for one cleaned Markdown source.",
+  "description": "Editable Mirawind IR; source coordinates and build state are not body fields.",
+  "title": "BookDocument",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
-    "revision",
     "book_id",
+    "updated_at",
     "metadata",
-    "source",
     "publishing",
-    "boundaries",
-    "structure"
+    "blocks",
+    "resources"
   ],
   "properties": {
-    "schema_version": { "const": 4 },
-    "revision": { "type": "integer", "minimum": 1 },
-    "book_id": { "type": "integer", "minimum": 1 },
-    "alias": { "$ref": "#/$defs/alias" },
-    "metadata": { "$ref": "#/$defs/metadata" },
-    "source": { "$ref": "#/$defs/source" },
-    "publishing": { "$ref": "#/$defs/publishing" },
-    "boundaries": { "$ref": "#/$defs/boundaries" },
-    "structure": {
+    "schema_version": {
+      "const": 1
+    },
+    "book_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "updated_at": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 8640000000000000
+    },
+    "alias": {
+      "$ref": "#/$defs/alias"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "publishing": {
+      "$ref": "#/$defs/publishing"
+    },
+    "blocks": {
       "type": "array",
-      "description": "Active headings in cleaned Markdown source order.",
-      "items": { "$ref": "#/$defs/structureNode" },
+      "items": {
+        "$ref": "#/$defs/block"
+      },
+      "maxItems": 20000,
+      "minItems": 1
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resource"
+      },
       "maxItems": 20000
     }
   },
   "$defs": {
-    "relativePath": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 2048,
-      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"
-    },
-    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "blockId": {
+    "id": {
       "type": "string",
       "pattern": "^blk_[A-Za-z0-9_-]{16,80}$"
     },
@@ -49,270 +64,792 @@
     },
     "alias": {
       "type": "string",
-      "pattern": "^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$",
-      "maxLength": 120
+      "maxLength": 120,
+      "pattern": "^(?![0-9]+$)[a-z0-9]+(?:-[a-z0-9]+)*$"
     },
-    "counter": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 2147483647
+    "inlineContent": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/inline"
+      },
+      "maxItems": 100000
+    },
+    "blockContent": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/block"
+      },
+      "maxItems": 20000
     },
     "metadata": {
+      "title": "BookMetadata",
       "type": "object",
       "additionalProperties": false,
-      "required": ["title"],
+      "required": [
+        "title"
+      ],
       "properties": {
-        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
-        "subtitle": { "type": "string", "maxLength": 500 },
+        "title": {
+          "type": "string",
+          "maxLength": 500,
+          "minLength": 1
+        },
+        "subtitle": {
+          "type": "string",
+          "maxLength": 500
+        },
         "authors": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1, "maxLength": 200 },
-          "uniqueItems": true,
-          "maxItems": 100
+          "items": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "maxItems": 100,
+          "uniqueItems": true
         },
         "contributors": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1, "maxLength": 200 },
-          "uniqueItems": true,
-          "maxItems": 100
+          "items": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "maxItems": 100,
+          "uniqueItems": true
         },
-        "description": { "type": "string", "maxLength": 10000 },
+        "description": {
+          "type": "string",
+          "maxLength": 10000
+        },
         "language": {
           "type": "string",
+          "maxLength": 100,
           "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
         },
-        "publisher": { "type": "string", "maxLength": 300 },
-        "year": { "type": "integer", "minimum": 1, "maximum": 9999 },
-        "edition": { "type": "string", "maxLength": 100 },
-        "isbn_10": { "type": "string", "pattern": "^[0-9]{9}[0-9X]$" },
-        "isbn_13": { "type": "string", "pattern": "^[0-9]{13}$" },
-        "cover_path": { "$ref": "#/$defs/relativePath" }
-      }
-    },
-    "source": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "main_markdown",
-        "main_markdown_sha256",
-        "original_files",
-        "preprocessing",
-        "blocks"
-      ],
-      "properties": {
-        "main_markdown": { "$ref": "#/$defs/relativePath" },
-        "main_markdown_sha256": { "$ref": "#/$defs/sha256" },
-        "original_files": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/originalFile" },
-          "maxItems": 100
+        "publisher": {
+          "type": "string",
+          "maxLength": 300
         },
-        "preprocessing": { "$ref": "#/$defs/preprocessing" },
-        "blocks": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/sourceBlock" },
-          "minItems": 1,
-          "maxItems": 20000
-        }
-      }
-    },
-    "sourceBlock": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "block_id",
-        "kind",
-        "start_offset",
-        "end_offset",
-        "text_fingerprint"
-      ],
-      "properties": {
-        "block_id": { "$ref": "#/$defs/blockId" },
-        "kind": {
-          "enum": [
-            "blockquote",
-            "code",
-            "footnoteDefinition",
-            "heading",
-            "image",
-            "listItem",
-            "math",
-            "paragraph",
-            "semanticContainer",
-            "table"
-          ]
-        },
-        "start_offset": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 268435456
-        },
-        "end_offset": {
+        "year": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 268435456
+          "maximum": 9999
         },
-        "text_fingerprint": {
+        "edition": {
           "type": "string",
-          "pattern": "^tfp_v1_[A-Za-z0-9_-]{43}$"
-        }
-      }
-    },
-    "originalFile": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "id",
-        "role",
-        "path",
-        "filename",
-        "media_type",
-        "size",
-        "sha256"
-      ],
-      "properties": {
-        "id": {
+          "maxLength": 100
+        },
+        "isbn_10": {
           "type": "string",
-          "pattern": "^file_[A-Za-z0-9_-]{16,80}$"
+          "pattern": "^[0-9]{9}[0-9X]$"
         },
-        "role": {
-          "enum": ["mineru_zip", "pdf", "epub", "image_archive", "other"]
-        },
-        "path": { "$ref": "#/$defs/relativePath" },
-        "filename": { "type": "string", "minLength": 1, "maxLength": 255 },
-        "media_type": {
+        "isbn_13": {
           "type": "string",
-          "pattern": "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$"
+          "pattern": "^[0-9]{13}$"
         },
-        "size": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 2147483648
-        },
-        "sha256": { "$ref": "#/$defs/sha256" }
-      }
-    },
-    "preprocessing": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["typography", "content_cleanup"],
-      "properties": {
-        "typography": { "$ref": "#/$defs/typographyProvenance" },
-        "content_cleanup": { "$ref": "#/$defs/contentCleanupProvenance" },
-        "source_edit": { "$ref": "#/$defs/sourceEditProvenance" }
-      }
-    },
-    "sourceEditProvenance": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["block_id", "input_sha256", "output_sha256"],
-      "properties": {
-        "block_id": { "$ref": "#/$defs/blockId" },
-        "input_sha256": { "$ref": "#/$defs/sha256" },
-        "output_sha256": { "$ref": "#/$defs/sha256" }
-      }
-    },
-    "typographyProvenance": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "profile",
-        "input_sha256",
-        "output_sha256",
-        "spaces_normalized",
-        "punctuation_converted",
-        "protected_nodes"
-      ],
-      "properties": {
-        "profile": { "enum": ["verbatim-v1", "zh-smart-v2"] },
-        "input_sha256": { "$ref": "#/$defs/sha256" },
-        "output_sha256": { "$ref": "#/$defs/sha256" },
-        "spaces_normalized": { "$ref": "#/$defs/counter" },
-        "punctuation_converted": { "$ref": "#/$defs/counter" },
-        "protected_nodes": { "$ref": "#/$defs/counter" }
-      }
-    },
-    "contentCleanupProvenance": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "input_sha256",
-        "output_sha256",
-        "printed_toc_regions_removed",
-        "helper_blocks_removed"
-      ],
-      "properties": {
-        "input_sha256": { "$ref": "#/$defs/sha256" },
-        "output_sha256": { "$ref": "#/$defs/sha256" },
-        "printed_toc_regions_removed": { "$ref": "#/$defs/counter" },
-        "helper_blocks_removed": { "$ref": "#/$defs/counter" }
-      }
-    },
-    "publishing": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["numbering", "code"],
-      "properties": {
-        "numbering": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["mode"],
-          "properties": {
-            "mode": { "enum": ["source", "generated", "none"] }
-          }
-        },
-        "code": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["line_numbers"],
-          "properties": { "line_numbers": { "type": "boolean" } }
+        "cover_resource_id": {
+          "$ref": "#/$defs/resourceId"
         }
       }
     },
     "boundaries": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["body_start_block_id"],
-      "properties": {
-        "body_start_block_id": { "$ref": "#/$defs/blockId" },
-        "appendix_start_block_id": { "$ref": "#/$defs/blockId" },
-        "backmatter_start_block_id": { "$ref": "#/$defs/blockId" }
-      }
-    },
-    "structureNode": {
+      "title": "BookBoundaries",
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "block_id",
-        "title_markdown",
-        "include_in_toc",
-        "display_level",
-        "starts_page"
+        "body_start_block_id"
       ],
       "properties": {
-        "block_id": { "$ref": "#/$defs/blockId" },
-        "title_markdown": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2000
+        "body_start_block_id": {
+          "$ref": "#/$defs/id"
         },
-        "source_number": { "type": "string", "minLength": 1, "maxLength": 100 },
-        "include_in_toc": { "type": "boolean" },
-        "display_level": { "type": "integer", "minimum": 1, "maximum": 4 },
-        "starts_page": { "type": "boolean" },
-        "alias": { "$ref": "#/$defs/alias" }
+        "appendix_start_block_id": {
+          "$ref": "#/$defs/id"
+        },
+        "backmatter_start_block_id": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "publishing": {
+      "title": "BookPublishing",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "numbering",
+        "code",
+        "boundaries"
+      ],
+      "properties": {
+        "numbering": {
+          "enum": [
+            "source",
+            "generated",
+            "none"
+          ]
+        },
+        "code": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "line_numbers"
+          ],
+          "properties": {
+            "line_numbers": {
+              "type": "boolean"
+            }
+          }
+        },
+        "boundaries": {
+          "$ref": "#/$defs/boundaries"
+        }
+      }
+    },
+    "resource": {
+      "title": "BookResource",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "media_type"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/resourceId"
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 2048,
+          "minLength": 1
+        },
+        "media_type": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$"
+        }
+      }
+    },
+    "inline": {
+      "title": "InlineNode",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "text"
+          ],
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 4194304
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "code"
+          ],
+          "properties": {
+            "type": {
+              "const": "code"
+            },
+            "code": {
+              "type": "string",
+              "maxLength": 4194304
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "latex"
+          ],
+          "properties": {
+            "type": {
+              "const": "math"
+            },
+            "latex": {
+              "type": "string",
+              "maxLength": 4194304
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "content"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "emphasis",
+                "strong",
+                "delete",
+                "subscript",
+                "superscript",
+                "underline"
+              ]
+            },
+            "content": {
+              "$ref": "#/$defs/inlineContent"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "target",
+            "content"
+          ],
+          "properties": {
+            "type": {
+              "const": "link"
+            },
+            "target": {
+              "$ref": "#/$defs/linkTarget"
+            },
+            "content": {
+              "$ref": "#/$defs/inlineContent"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "resource_id",
+            "alt"
+          ],
+          "properties": {
+            "type": {
+              "const": "image"
+            },
+            "resource_id": {
+              "$ref": "#/$defs/resourceId"
+            },
+            "alt": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "target_id"
+          ],
+          "properties": {
+            "type": {
+              "const": "footnote_reference"
+            },
+            "target_id": {
+              "$ref": "#/$defs/id"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "break"
+            }
+          }
+        }
+      ]
+    },
+    "linkTarget": {
+      "title": "ContentLinkTarget",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "url"
+          ],
+          "properties": {
+            "type": {
+              "const": "external"
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 8192,
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "block_id"
+          ],
+          "properties": {
+            "type": {
+              "const": "block"
+            },
+            "block_id": {
+              "$ref": "#/$defs/id"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "resource_id"
+          ],
+          "properties": {
+            "type": {
+              "const": "resource"
+            },
+            "resource_id": {
+              "$ref": "#/$defs/resourceId"
+            }
+          }
+        }
+      ]
+    },
+    "block": {
+      "title": "ContentBlock",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/heading"
+        },
+        {
+          "$ref": "#/$defs/paragraph"
+        },
+        {
+          "$ref": "#/$defs/code"
+        },
+        {
+          "$ref": "#/$defs/math"
+        },
+        {
+          "$ref": "#/$defs/image"
+        },
+        {
+          "$ref": "#/$defs/list"
+        },
+        {
+          "$ref": "#/$defs/quote"
+        },
+        {
+          "$ref": "#/$defs/table"
+        },
+        {
+          "$ref": "#/$defs/footnote"
+        },
+        {
+          "$ref": "#/$defs/container"
+        },
+        {
+          "$ref": "#/$defs/divider"
+        }
+      ]
+    },
+    "heading": {
+      "title": "HeadingBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "level",
+        "content",
+        "include_in_toc",
+        "starts_page",
+        "exclude_from_numbering"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "heading"
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "content": {
+          "$ref": "#/$defs/inlineContent"
+        },
+        "source_number": {
+          "type": "string",
+          "maxLength": 100,
+          "minLength": 1
+        },
+        "include_in_toc": {
+          "type": "boolean"
+        },
+        "starts_page": {
+          "type": "boolean"
+        },
+        "exclude_from_numbering": {
+          "type": "boolean"
+        },
+        "alias": {
+          "$ref": "#/$defs/alias"
+        }
+      }
+    },
+    "paragraph": {
+      "title": "ParagraphBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "content"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "paragraph"
+        },
+        "content": {
+          "$ref": "#/$defs/inlineContent"
+        }
+      }
+    },
+    "code": {
+      "title": "CodeBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "code",
+        "language"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "code"
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 4194304
+        },
+        "language": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "caption": {
+          "$ref": "#/$defs/inlineContent"
+        }
+      }
+    },
+    "math": {
+      "title": "MathBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "latex"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "math"
+        },
+        "latex": {
+          "type": "string",
+          "maxLength": 4194304
+        }
+      }
+    },
+    "image": {
+      "title": "ImageBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "resource_id",
+        "alt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "image"
+        },
+        "resource_id": {
+          "$ref": "#/$defs/resourceId"
+        },
+        "alt": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "caption": {
+          "$ref": "#/$defs/inlineContent"
+        },
+        "notes": {
+          "$ref": "#/$defs/blockContent"
+        }
+      }
+    },
+    "list": {
+      "title": "ListBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "ordered",
+        "items"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "list"
+        },
+        "ordered": {
+          "type": "boolean"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/listItem"
+          },
+          "maxItems": 20000,
+          "minItems": 1
+        }
+      }
+    },
+    "listItem": {
+      "title": "ListItem",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "content"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "content": {
+          "$ref": "#/$defs/blockContent"
+        },
+        "checked": {
+          "type": "boolean"
+        }
+      }
+    },
+    "quote": {
+      "title": "QuoteBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "content"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "quote"
+        },
+        "content": {
+          "$ref": "#/$defs/blockContent"
+        }
+      }
+    },
+    "table": {
+      "title": "TableBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "rows"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "table"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/tableCell"
+            },
+            "maxItems": 1000,
+            "minItems": 0
+          },
+          "maxItems": 20000,
+          "minItems": 1
+        },
+        "caption": {
+          "$ref": "#/$defs/inlineContent"
+        },
+        "notes": {
+          "$ref": "#/$defs/blockContent"
+        }
+      }
+    },
+    "tableCell": {
+      "title": "TableCell",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "content",
+        "header",
+        "row_span",
+        "col_span"
+      ],
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/blockContent"
+        },
+        "header": {
+          "type": "boolean"
+        },
+        "row_span": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000
+        },
+        "col_span": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "align": {
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        }
+      }
+    },
+    "footnote": {
+      "title": "FootnoteBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "content"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "footnote"
+        },
+        "content": {
+          "$ref": "#/$defs/blockContent"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 100
+        }
+      }
+    },
+    "container": {
+      "title": "ContainerBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "kind",
+        "content"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "container"
+        },
+        "kind": {
+          "enum": [
+            "definition",
+            "theorem",
+            "proof",
+            "example",
+            "exercise",
+            "solution",
+            "note",
+            "warning",
+            "aside",
+            "algorithm"
+          ]
+        },
+        "content": {
+          "$ref": "#/$defs/blockContent"
+        }
+      }
+    },
+    "divider": {
+      "title": "DividerBlock",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "const": "divider"
+        }
       }
     }
-  },
-  "x-semantic-validations": [
-    "book_id must match the owning book and revision must increase",
-    "typography output must equal content cleanup input; cleanup or latest source edit output must equal main Markdown",
-    "source block identities must be unique and match every parsed active block in source order",
-    "structure must reference every active heading exactly once in source order",
-    "title_markdown must contain inline Markdown only",
-    "display levels must form a continuous hierarchy",
-    "boundaries must reference source blocks and occur in body, appendix, backmatter order",
-    "page aliases must be unique and may only appear on page-start headings",
-    "body text and private reading data are forbidden"
-  ]
+  }
 }

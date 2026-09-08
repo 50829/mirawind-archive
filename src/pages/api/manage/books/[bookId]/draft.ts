@@ -1,5 +1,4 @@
 import type { APIRoute } from "astro";
-
 import {
   createPublishingArtifactServer,
   createPublishingDraftServer,
@@ -7,7 +6,7 @@ import {
 } from "@/composition/server/publishing-drafts";
 import { SafeApplicationError, type SafeDiagnostic } from "@/domain/errors";
 import { requireRuntimeAdministrator } from "@/http/authorization/runtime-admin";
-import { applyResponsePolicy, createStrongEtag } from "@/http/cache/policies";
+import { applyResponsePolicy } from "@/http/cache/policies";
 import { requireMutationOrigin } from "@/http/origin";
 import { readBoundedJson } from "@/http/json-body";
 import { getCurrentDraftCandidate } from "@/modules/publishing/application/publishing-api";
@@ -17,131 +16,111 @@ import {
 } from "@/composition/storage";
 
 export const prerender = false;
-
-function positiveInteger(value: string | undefined): number | null {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null;
+function identity(value: string | undefined): number {
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id < 1)
+    throw new SafeApplicationError(
+      "NOT_FOUND",
+      "The draft was not found.",
+      404,
+    );
+  return id;
 }
-
 export const GET: APIRoute = async ({ locals, params }) => {
   const { database } = requireRuntimeAdministrator(locals.session, {
     hideExistence: true,
   });
-  const bookId = positiveInteger(params.bookId);
-  if (!bookId) {
-    throw new SafeApplicationError(
-      "NOT_FOUND",
-      "The draft was not found.",
-      404,
-    );
-  }
+  const bookId = identity(params.bookId);
   const publishing = createPublishingDraftServer(database);
   const book = publishing.findBook(bookId);
-  if (!book?.draftConfigRevision || !book.draftSourceId) {
+  if (!book?.draftImportId)
     throw new SafeApplicationError(
       "NOT_FOUND",
       "The draft was not found.",
       404,
     );
-  }
-  const config = publishing.requireConfig(bookId, book.draftConfigRevision);
-  const layout = await getRuntimeStorageLayout();
-  const artifacts = createPublishingArtifactServer(layout);
-  const configValue = await artifacts.readBookConfig(config.yamlRelativePath);
-  const candidateRecord = publishing.findCurrentCandidate(bookId);
-  const candidate = getCurrentDraftCandidate({
-    bookId,
-    candidate: candidateRecord,
-    configRevision: book.draftConfigRevision,
-  });
-  let previewModel: Record<string, unknown> | null = null;
+  const artifacts = createPublishingArtifactServer(
+    await getRuntimeStorageLayout(),
+  );
+  const view = await artifacts.readDraftView(bookId);
+  const record = publishing.findCurrentCandidate(bookId);
+  const candidate =
+    record?.sourceUpdatedAt === view.updated_at
+      ? getCurrentDraftCandidate({
+          bookId,
+          candidate: record,
+          sourceUpdatedAt: view.updated_at,
+        })
+      : null;
+  let preview: Record<string, unknown> | null = null;
   let diagnostics: readonly SafeDiagnostic[] = [];
-  if (candidate?.state === "ready" && candidate.version_id !== null) {
-    const previewRelativePath = `books/${bookId}/versions/${candidate.version_id}/preview`;
-    previewModel = await artifacts.readPreviewModel(previewRelativePath);
-    diagnostics = await artifacts.readDiagnostics(
-      `${previewRelativePath}/diagnostics.json`,
-    );
+  if (candidate?.state === "ready" && candidate.version_id) {
+    const path =
+      "books/" + bookId + "/versions/" + candidate.version_id + "/preview";
+    preview = await artifacts.readPreviewModel(path);
+    if (
+      preview.source_updated_at !== view.updated_at ||
+      preview.candidate_id !== candidate.attempt_id
+    )
+      throw new SafeApplicationError(
+        "PREVIEW_IDENTITY_INVALID",
+        "The preview is unavailable.",
+        503,
+      );
+    diagnostics = await artifacts.readDiagnostics(path + "/diagnostics.json");
   }
-  const headers = new Headers({
-    ETag: createStrongEtag(config.yamlSha256),
-  });
+  const headers = new Headers();
   applyResponsePolicy(headers, "draft");
   return Response.json(
     {
       access: book.access,
       book_id: book.id,
       candidate,
-      candidate_published:
-        candidate?.version_id !== null &&
-        candidate?.version_id === book.currentVersionId,
-      alias: configValue.alias ?? null,
-      boundaries: configValue.boundaries,
-      config_revision: config.revision,
+      candidate_published: Boolean(
+        candidate?.version_id && candidate.version_id === book.currentVersionId,
+      ),
+      alias: view.alias,
+      boundaries: view.publishing.boundaries,
+      updated_at: view.updated_at,
       diagnostics,
-      metadata: configValue.metadata,
-      numbering: (
-        (configValue.publishing as Record<string, unknown>).numbering as Record<
-          string,
-          unknown
-        >
-      ).mode,
+      metadata: view.metadata,
+      numbering: view.publishing.numbering,
       published: book.currentVersionId !== null,
-      preview:
-        previewModel === null
-          ? null
-          : {
-              compiler_version: previewModel.compiler_version,
-              boundaries: previewModel.boundaries,
-              content_cleanup: previewModel.content_cleanup,
-              config_sha256: previewModel.config_sha256,
-              config_revision: previewModel.config_revision,
-              headings: previewModel.headings,
-              is_stale: false,
-              pages: previewModel.pages,
-              renderer_version: previewModel.renderer_version,
-              semantic_digest: previewModel.semantic_digest,
-              source_sha256: previewModel.source_sha256,
-              typography: previewModel.typography,
-            },
-      structure: configValue.structure,
-      title: (configValue.metadata as Record<string, unknown>).title,
+      pending_save: publishing.hasPendingSave(bookId),
+      preview: preview ? { ...preview, is_stale: false } : null,
+      structure: view.structure,
+      title: view.metadata.title,
     },
     { headers },
   );
 };
-
 export const PATCH: APIRoute = async ({ locals, params, request }) => {
   const { database } = requireRuntimeAdministrator(locals.session);
   requireMutationOrigin(request, getRuntimeEnvironment().publicOrigin);
-  const bookId = positiveInteger(params.bookId);
-  if (!bookId) {
+  const bookId = identity(params.bookId);
+  const body = await readBoundedJson(request);
+  if (!body || typeof body !== "object" || Array.isArray(body))
     throw new SafeApplicationError(
-      "NOT_FOUND",
-      "The draft was not found.",
-      404,
+      "DRAFT_PATCH_INVALID",
+      "A draft edit is required.",
+      400,
     );
-  }
-  const result = await publishingDraftActions.patchDraftConfig({
+  const { expected_updated_at, ...patch } = body as Record<string, unknown>;
+  if (typeof expected_updated_at !== "number")
+    throw new SafeApplicationError(
+      "DRAFT_TIMESTAMP_INVALID",
+      "A draft timestamp is required.",
+      400,
+    );
+  const result = publishingDraftActions.queueDraftSave({
     bookId,
     database,
-    expectedEtag: request.headers.get("if-match"),
     layout: await getRuntimeStorageLayout(),
+    expectedUpdatedAt: expected_updated_at,
+    patch,
     nowMs: Date.now(),
-    patch: await readBoundedJson(request),
   });
-  const headers = new Headers({ ETag: result.etag });
+  const headers = new Headers();
   applyResponsePolicy(headers, "private-api");
-  return Response.json(
-    {
-      book_id: bookId,
-      candidate: {
-        attempt_id: result.candidate.attemptId,
-        job_id: result.candidate.jobId,
-        state: result.candidate.state,
-      },
-      config_revision: result.revision,
-    },
-    { headers, status: 202 },
-  );
+  return Response.json(result, { headers, status: 202 });
 };

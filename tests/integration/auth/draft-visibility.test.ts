@@ -16,8 +16,8 @@ import { resetRuntimeStorageForTests } from "@/composition/storage";
 import { GET as getDraft } from "../../../src/pages/api/manage/books/[bookId]/draft.js";
 import { GET as getDraftImage } from "../../../src/pages/api/manage/books/[bookId]/draft/images/[resourceId].js";
 import { GET as getDraftImages } from "../../../src/pages/api/manage/books/[bookId]/draft/images/index.js";
-import { GET as getPreviewAsset } from "../../../src/pages/api/manage/books/[bookId]/preview/[configRevision]/assets/[resourceId].js";
-import { GET as getPreviewPage } from "../../../src/pages/api/manage/books/[bookId]/preview/[configRevision]/pages/[pageId].js";
+import { GET as getPreviewAsset } from "../../../src/pages/api/manage/books/[bookId]/preview/[candidateId]/assets/[resourceId].js";
+import { GET as getPreviewPage } from "../../../src/pages/api/manage/books/[bookId]/preview/[candidateId]/pages/[pageId].js";
 import { GET as getImport } from "../../../src/pages/api/manage/imports/[importId]/index.js";
 import { GET as getJob } from "../../../src/pages/api/manage/jobs/[jobId]/index.js";
 import { createTemporaryDataRoot } from "../../helpers/data-root.js";
@@ -151,25 +151,29 @@ describe("draft resource access", () => {
         ],
         [
           getPreviewPage as RouteHandler,
-          `/api/manage/books/${bookId}/preview/1/pages/1`,
+          `/api/manage/books/${bookId}/preview/candidate_0123456789abcdefghij/pages/1`,
           {
             bookId: String(bookId),
-            configRevision: "1",
+            candidateId: "candidate_0123456789abcdefghij",
             pageId: "1",
           },
-          { bookId: "987654", configRevision: "1", pageId: "1" },
+          {
+            bookId: "987654",
+            candidateId: "candidate_0123456789abcdefghij",
+            pageId: "1",
+          },
         ],
         [
           getPreviewAsset as RouteHandler,
-          `/api/manage/books/${bookId}/preview/1/assets/res_0123456789abcdefghij`,
+          `/api/manage/books/${bookId}/preview/candidate_0123456789abcdefghij/assets/res_0123456789abcdefghij`,
           {
             bookId: String(bookId),
-            configRevision: "1",
+            candidateId: "candidate_0123456789abcdefghij",
             resourceId: "res_0123456789abcdefghij",
           },
           {
             bookId: "987654",
-            configRevision: "1",
+            candidateId: "candidate_0123456789abcdefghij",
             resourceId: "res_missing0123456789abc",
           },
         ],
@@ -234,7 +238,7 @@ describe("draft resource access", () => {
         },
         import_id: importedId,
         preview: {
-          revision: null,
+          source_updated_at: null,
           state: "unavailable",
           url: null,
         },

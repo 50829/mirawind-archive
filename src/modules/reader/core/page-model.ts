@@ -23,6 +23,7 @@ export interface ReaderPageModel {
   readonly outline: readonly ReaderOutlineLink[];
   readonly pageOwnerHeadingId: string | null;
   readonly previousHref: string | null;
-  readonly previewRevision?: number;
+  readonly previewUpdatedAt?: number;
+  readonly previewCandidateId?: string;
   readonly toc: readonly ReaderTocLink[];
 }

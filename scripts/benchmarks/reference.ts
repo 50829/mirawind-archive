@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import Database from "better-sqlite3";
 
-import { createStrongEtag } from "@/http/cache/policies";
+import { readDraftHeader } from "@/modules/publishing/adapters/filesystem/draft-document";
+import { createStorageLayout } from "@/platform/filesystem/storage-layout";
 import { normalizeSearchQuery } from "../../src/modules/reader/core/search-query.js";
 import { CandidatePublicationRepository } from "../../src/modules/publishing/adapters/sqlite/candidate-publication.js";
 import { DraftCandidateRepository } from "../../src/modules/publishing/adapters/sqlite/draft-candidate-repository.js";
@@ -322,7 +323,8 @@ async function waitForWorker(process_: ManagedProcess): Promise<void> {
 
 function queueRebuild(databasePath: string): {
   readonly bookId: number;
-  readonly configEtag: string;
+  readonly sourceUpdatedAt: number;
+  readonly candidateId: string;
   readonly jobId: string;
   readonly versionId: string;
   readonly versionBefore: string;
@@ -330,31 +332,30 @@ function queueRebuild(databasePath: string): {
   const database = openDatabase(databasePath, { role: "worker" });
   try {
     const book = new DraftRepository(database).requireBook(1);
-    if (
-      !book.currentVersionId ||
-      !book.draftConfigRevision ||
-      !book.draftSourceId
-    ) {
+    if (!book.currentVersionId || !book.draftImportId) {
       throw new Error("REFERENCE_REBUILD_CAPTURE_MISSING");
     }
-    const candidate = new DraftCandidateRepository(
-      database,
-    ).createForCurrentRevision({
+    const candidate = new DraftCandidateRepository(database).createForDocument({
       bookId: book.id,
-      configRevision: book.draftConfigRevision,
+      sourceUpdatedAt: readDraftHeader(
+        resolve(
+          dirname(databasePath),
+          "../books",
+          String(book.id),
+          "draft/book.json",
+        ),
+        book.id,
+      ).updated_at,
       nowMs: Date.now(),
-      sourceId: book.draftSourceId,
+      importId: book.draftImportId,
     });
     const command = new DraftCandidateRepository(database).buildCommand(
       candidate.attemptId,
     );
-    const config = new DraftRepository(database).requireConfig(
-      book.id,
-      book.draftConfigRevision,
-    );
     return Object.freeze({
       bookId: book.id,
-      configEtag: createStrongEtag(config.yamlSha256),
+      sourceUpdatedAt: candidate.sourceUpdatedAt,
+      candidateId: candidate.attemptId,
       jobId: candidate.jobId,
       versionId: command.versionId,
       versionBefore: book.currentVersionId,
@@ -373,10 +374,14 @@ async function publishRebuild(
     await publishCandidate({
       actorUserId: null,
       bookId: rebuild.bookId,
-      expectedConfigEtag: rebuild.configEtag,
+      expectedUpdatedAt: rebuild.sourceUpdatedAt,
+      candidateId: rebuild.candidateId,
       nowMs: Date.now(),
       policy: m1PublishPolicy,
-      publication: new CandidatePublicationRepository(database),
+      publication: new CandidatePublicationRepository(
+        database,
+        await createStorageLayout(resolve(dirname(databasePath), "..")),
+      ),
     });
   } finally {
     database.close();
@@ -583,7 +588,16 @@ export async function runReferenceBenchmark(
       imageCount: 32,
       pages: 500,
     },
+    onResult(result) {
+      process.stderr.write(JSON.stringify(result) + "\n");
+    },
   });
+  await mkdir(dirname(input.outputJson), { recursive: true, mode: 0o700 });
+  await writeFile(
+    input.outputJson + ".build.json",
+    JSON.stringify(build, null, 2) + "\n",
+    { mode: 0o600 },
+  );
   if (build.status !== "passed") {
     throw new Error("REFERENCE_BUILD_GATE_FAILED");
   }

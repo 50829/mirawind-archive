@@ -1,23 +1,25 @@
 <!--
 Sync Impact Report
-- Version change: 2.0.0 → 3.0.0
+- Version change: 4.0.0 → 4.1.1
 - Modified principles:
-  - V. Evidence Before Completion: delivery evidence is proportional to behavioral and
-    architectural risk instead of requiring Spec Kit artifacts for every change.
+  - I. Authoritative Sources and Rebuildability: Mirawind-owned structured content IR replaces
+    Markdown as the target editable body authority.
+  - IV. Build Off the Request Path: includes structured-document processing explicitly.
 - Rationale and impact:
-  - Routine fixes, refactors, documentation and UI polish were paying more process cost than
-    their implementation risk justified.
-  - D-125 and the owner's explicit simplification request approve removal of the repository
-    Spec Kit integration and mandatory full-cycle workflow.
+  - D-136/D-137 approve structured content and mutable timestamped drafts; D-138 approves
+    direct MinerU v2 ingestion and a new-data-root clean switch without migration adapters.
+  - Storage integrity, stable references and immutable publication remain required.
 - Added sections: none
 - Removed sections: none
-- Templates:
-  - Removed repository-local Spec Kit templates, scripts, workflows and skills.
+- Templates: none; repository-local Spec Kit integration remains removed.
 - Runtime guidance:
-  - No runtime topology change.
+  - No topology change. The IR runtime uses data/library. Local functional, content,
+    security and reader-latency evidence is recorded in docs/operations/content-refactor-acceptance.md.
 - Operations guidance:
-  - No deployment or recovery change.
-- Follow-up TODOs: none
+  - Initialize a new data root. D-139 authorizes retiring the old services and their Docker
+    volume; other roots remain untouched and no deleted-volume rollback is promised.
+- Evidence:
+  - Follow docs/architecture/structured-content-ir.md for the current model and evidence gates.
 -->
 
 # Mirawind Library Constitution
@@ -26,15 +28,28 @@ Sync Impact Report
 
 ### I. Authoritative Sources and Rebuildability
 
-Markdown and the versioned `book.yaml` MUST remain the only editable, portable source of
-published book content and publishing configuration. ASTs, HTML, search indexes, resource
-maps, manifests, and other derived artifacts MUST be reproducible from authoritative inputs.
-`book.yaml` and `document-manifest.json` MUST use independent integer schema versions,
-strict validation, and rejection of unsupported newer versions. Every schema change MUST
+The target editable body authority MUST be a Mirawind-owned, versioned structured content IR.
+Accepted content and portable publishing settings MUST form one consistently captured revision.
+The accepted import path MUST directly process MinerU content-list v2 JSON from a validated ZIP.
+Independent format adapters, old JSON/Markdown import fallbacks and old-library migration paths
+MUST NOT be retained. Markdown fragments MAY be used by the existing block editor. Original
+inputs MAY remain as evidence but MUST NOT be a second editable body authority.
+Parser ASTs, HTML, search indexes, resource maps, manifests, and other derived artifacts MUST
+be reproducible from authoritative IR, referenced source assets and frozen build inputs.
+Source offsets, text fingerprints and preprocessing digest chains MUST NOT be mandatory body
+fields. Stable content references and storage-level integrity checks MUST retain their distinct
+roles; a revision identifier alone does not prove that stored bytes are intact.
+The IR, `document-manifest.json` and version integrity marker MUST use independent integer
+schema versions, strict validation, and rejection of unsupported newer versions. Every schema change MUST
 choose and document one transition policy: an explicit migration with compatibility
 evidence, or an owner-approved clean switch that rejects prior formats and defines tested
 data remediation. Runtime code MUST NOT silently reinterpret an unsupported format.
 Private reading data and credentials MUST NOT enter portable publishing configuration.
+
+D-138 approves a clean switch in a new data root, not automatic migration of the old root.
+D-139 explicitly authorizes retiring the old services and their dedicated Docker volume;
+other old roots remain untouched unless separately authorized. New IR runtime
+MUST reject that database baseline, and MUST NOT clear, reinterpret or automatically migrate it.
 
 Rationale: a single authority prevents silent divergence. Explicit transition policy keeps
 routine upgrades recoverable while allowing a deliberate, auditable reset when retaining
@@ -68,8 +83,9 @@ boundary; protection must cover every representation and failure path.
 
 ### IV. Build Off the Request Path
 
-Markdown parsing, AST creation, KaTeX rendering, code highlighting, image processing, and
-search indexing MUST run in bounded background jobs, never in a reader request. Reader
+Import parsing, whole-book IR processing, compiler AST creation, KaTeX rendering, code
+highlighting, image processing, and search indexing MUST run in bounded background jobs,
+never in a reader request. Reader
 requests MUST use immutable pre-generated artifacts and remain available on the previous
 published version while a rebuild runs. On the reference single-server deployment, an
 uncached public reading response MUST meet the approved p95 target of 300 ms. Background
@@ -154,4 +170,4 @@ Every high-risk feature plan and review MUST perform Constitution Check. Violati
 delivery unless the constitution itself is amended; a plan's Complexity Tracking section may
 explain necessary complexity but cannot waive a MUST requirement.
 
-**Version**: 3.0.0 | **Ratified**: 2026-07-24 | **Last Amended**: 2026-08-26
+**Version**: 4.1.1 | **Ratified**: 2026-07-24 | **Last Amended**: 2026-09-07

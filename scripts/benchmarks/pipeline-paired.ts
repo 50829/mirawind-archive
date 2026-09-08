@@ -233,7 +233,7 @@ export async function prepareReferenceFixtureView(input: {
 }): Promise<string> {
   const outputDirectory = resolve(input.outputDirectory);
   await rm(outputDirectory, { force: true, recursive: true });
-  await mkdir(join(outputDirectory, "reference-packs"), {
+  await mkdir(join(outputDirectory, "reference-packs-v2"), {
     mode: 0o700,
     recursive: true,
   });
@@ -267,7 +267,7 @@ export async function prepareReferenceFixtureView(input: {
       fixtureId: fixture.fixture_id,
       outputDirectory: join(
         outputDirectory,
-        "reference-packs",
+        "reference-packs-v2",
         fixture.fixture_id,
       ),
       pageIndices: Object.freeze([]),
@@ -791,7 +791,7 @@ export async function runPipelinePaired(
             realDirectory: fixtureView,
             realManifest: input.realManifest,
             referenceBindingsSha256,
-            referenceDirectory: join(input.realDirectory, "references-v2"),
+            referenceDirectory: join(input.realDirectory, "references-v3"),
             worktree,
           }),
         );

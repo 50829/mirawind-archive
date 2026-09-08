@@ -5,7 +5,11 @@ import { resolve } from "node:path";
 import { expect, it } from "vitest";
 import { chromium, type Browser } from "@playwright/test";
 
-import { buildZip } from "../../../scripts/fixtures/zip-builder";
+import {
+  mineruZip,
+  mineruTitle,
+  mineruParagraph,
+} from "../../helpers/mineru-v2";
 import { createTemporaryDataRoot } from "../../helpers/data-root";
 import {
   reserveTcpPort,
@@ -98,18 +102,9 @@ it("owns local Web and worker through upload, restart and process failures", asy
     await page.getByLabel("MinerU ZIP", { exact: true }).setInputFiles({
       name: "development-runtime.zip",
       mimeType: "application/zip",
-      buffer: buildZip({
-        entries: [
-          {
-            name: "Book/hybrid_auto/Mixed Case Book.md",
-            data: "# Local Runtime Book\n\nBody.",
-          },
-          {
-            name: "Book/hybrid_auto/Mixed Case Book_content_list.json",
-            data: "[]",
-          },
-        ],
-      }),
+      buffer: mineruZip([
+        [mineruTitle("Local Runtime Book"), mineruParagraph("Body.")],
+      ]),
     });
     await page.getByText("development-runtime.zip", { exact: true }).waitFor();
     const uploadedPromise = page.waitForResponse(
@@ -167,8 +162,10 @@ it("owns local Web and worker through upload, restart and process failures", asy
     const draftResponse = await fetch(
       `${origin}/api/manage/books/${book.book_id}/draft`,
     );
-    const draftEtag = draftResponse.headers.get("etag");
-    if (!draftEtag) throw new Error("Draft response is missing its ETag");
+    const draft = (await draftResponse.json()) as {
+      updated_at: number;
+      candidate: { attempt_id: string };
+    };
     const published = await fetch(
       `${origin}/api/manage/books/${book.book_id}/publish`,
       {
@@ -176,9 +173,11 @@ it("owns local Web and worker through upload, restart and process failures", asy
         headers: {
           Origin: origin,
           "Content-Type": "application/json",
-          "If-Match": draftEtag,
         },
-        body: "{}",
+        body: JSON.stringify({
+          expected_updated_at: draft.updated_at,
+          candidate_id: draft.candidate.attempt_id,
+        }),
       },
     );
     expect(published.ok).toBe(true);

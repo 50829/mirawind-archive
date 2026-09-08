@@ -1,10 +1,14 @@
-import type { HeadingNumberingMode } from "@/modules/publishing/application/publishing-api";
+import {
+  presentBookHeadings,
+  type HeadingNumberingMode,
+} from "@/modules/publishing/application/heading-api";
 
 export interface EditableStructureNode {
   readonly alias?: string;
   readonly block_id: string;
   readonly display_level: number;
   readonly include_in_toc: boolean;
+  readonly exclude_from_numbering: boolean;
   readonly source_number?: string;
   readonly starts_page: boolean;
   readonly title_markdown: string;
@@ -24,73 +28,30 @@ export interface StructurePreviewNode extends EditableStructureNode {
 
 export type { HeadingNumberingMode };
 
-function structureRoles(
-  nodes: readonly EditableStructureNode[],
-  boundaries: StructureBoundaries,
-): StructurePreviewNode["role"][] {
-  const bodyStart = nodes.findIndex(
-    (node) => node.block_id === boundaries.body_start_block_id,
-  );
-  const appendixStart = boundaries.appendix_start_block_id
-    ? nodes.findIndex(
-        (node) => node.block_id === boundaries.appendix_start_block_id,
-      )
-    : -1;
-  const backmatterStart = boundaries.backmatter_start_block_id
-    ? nodes.findIndex(
-        (node) => node.block_id === boundaries.backmatter_start_block_id,
-      )
-    : -1;
-  return nodes.map((_node, index) => {
-    if (backmatterStart >= 0 && index >= backmatterStart) return "backmatter";
-    if (appendixStart >= 0 && index >= appendixStart) return "appendix";
-    if (bodyStart >= 0 && index < bodyStart) return "frontmatter";
-    return "body";
-  });
-}
-
-function generatedNumbers(
-  nodes: readonly EditableStructureNode[],
-  roles: readonly StructurePreviewNode["role"][],
-): readonly (string | null)[] {
-  const counters = [0, 0, 0, 0];
-  let baseLevel: number | null = null;
-  return nodes.map((node, index) => {
-    if (roles[index] !== "body") return null;
-    if (baseLevel === null || node.display_level < baseLevel) {
-      baseLevel = node.display_level;
-    }
-    const counterIndex = node.display_level - baseLevel;
-    counters[counterIndex] = (counters[counterIndex] ?? 0) + 1;
-    counters.fill(0, counterIndex + 1);
-    return counters
-      .slice(0, counterIndex + 1)
-      .map(String)
-      .join(".");
-  });
-}
-
 export function buildStructurePreview(
   nodes: readonly EditableStructureNode[],
   boundaries: StructureBoundaries,
   numbering: HeadingNumberingMode,
 ): readonly StructurePreviewNode[] {
-  const roles = structureRoles(nodes, boundaries);
-  const generated = generatedNumbers(nodes, roles);
-  return nodes.map((node, index) => {
-    const number =
-      numbering === "none"
-        ? null
-        : numbering === "source"
-          ? (node.source_number ?? null)
-          : generated[index];
-    return Object.freeze({
-      ...node,
-      number: number ?? null,
-      preview_title: [number, node.title_markdown].filter(Boolean).join(" "),
-      role: roles[index] ?? "body",
-    });
+  const headings = presentBookHeadings({
+    blocks: nodes.map((node) => ({
+      id: node.block_id,
+      type: "heading",
+      level: node.display_level,
+      content: [{ type: "text", text: node.title_markdown }],
+      include_in_toc: node.include_in_toc,
+      starts_page: node.starts_page,
+      exclude_from_numbering: node.exclude_from_numbering,
+      ...(node.source_number ? { source_number: node.source_number } : {}),
+    })),
+    publishing: { numbering, boundaries, code: { line_numbers: false } },
   });
+  return nodes.map((node, index) => ({
+    ...node,
+    number: headings[index]?.number ?? null,
+    preview_title: headings[index]?.label ?? node.title_markdown,
+    role: headings[index]?.role ?? "body",
+  }));
 }
 
 export function mergeAcceptedNumbering(
@@ -123,6 +84,7 @@ export function mergeAcceptedNodes(
     for (const key of [
       "display_level",
       "include_in_toc",
+      "exclude_from_numbering",
       "starts_page",
       "title_markdown",
     ] as const) {

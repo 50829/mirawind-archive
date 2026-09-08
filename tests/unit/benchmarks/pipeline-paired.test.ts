@@ -1,8 +1,10 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   parsePairedBenchmarkReport,
@@ -13,12 +15,20 @@ import {
   loadOrCreateCorrectnessReceipt,
   parseCorrectnessReceipt,
   parsePipelinePairedArguments,
+  prepareReferenceFixtureView,
 } from "../../../scripts/benchmarks/pipeline-paired.js";
 import {
   assertBenchmarkEnvironmentCompatible,
   parseBenchmarkEnvironment,
 } from "../../../scripts/benchmarks/paired-environment.js";
 import type { ReferenceFixtureBinding } from "../../../scripts/benchmarks/reference-preflight.js";
+import * as referencePacks from "../../../scripts/fixtures/create-mineru-reference-pack";
+import { observeRealMineruSet } from "../../../scripts/fixtures/observe-mineru-references";
+import {
+  mineruParagraph,
+  mineruTitle,
+  mineruZip,
+} from "../../helpers/mineru-v2";
 
 const fixtureOrder = Array.from(
   { length: 15 },
@@ -157,7 +167,7 @@ describe("paired benchmark report schema", () => {
     const bindings: readonly ReferenceFixtureBinding[] = fixtureOrder.map(
       (fixtureId, index) => ({
         fixture_id: fixtureId,
-        reference_schema_version: 2,
+        reference_schema_version: 3,
         reference_sha256: index.toString(16).padStart(64, "0"),
         zip_sha256: (index + 20).toString(16).padStart(64, "0"),
       }),
@@ -166,6 +176,77 @@ describe("paired benchmark report schema", () => {
     expect(first).toEqual(fixtureOrderForPair(bindings, "a".repeat(64), 1));
     expect(first).not.toEqual(fixtureOrder);
     expect(fixtureOrderForPair(bindings, "a".repeat(64), 2)).not.toEqual(first);
+  });
+
+  it("observes JSON content from the prepared benchmark fixture view", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pipeline-fixture-view-"));
+    const fixtureId = "real-mineru-a7f31c";
+    const fileName = "book.zip";
+    const archive = mineruZip(
+      [[mineruTitle("Book"), mineruParagraph("A complete paragraph.")]],
+      [{ name: "result/book_origin.pdf", data: "%PDF synthetic" }],
+    );
+    const archiveSha256 = createHash("sha256").update(archive).digest("hex");
+    const createPack = referencePacks.createReferencePackFromArchive;
+    vi.spyOn(
+      referencePacks,
+      "createReferencePackFromArchive",
+    ).mockImplementation((input) =>
+      createPack({ ...input, pdfInspector: async () => 1 }),
+    );
+    try {
+      await writeFile(join(root, fileName), archive);
+      await writeFile(
+        join(root, "selected-fixtures.json"),
+        JSON.stringify({
+          schema_version: 1,
+          fixtures: [
+            {
+              file_name: fileName,
+              id: fixtureId,
+              mineru_version: "3.4.4",
+              page_count_range: { minimum: 1, maximum: 1 },
+              sha256: archiveSha256,
+              size_bytes: archive.byteLength,
+              usage_scope: {
+                designated_by: "administrator",
+                local_compatibility_testing: true,
+                local_performance_testing: true,
+                public_ci: false,
+                redistribution: false,
+                repository_storage: false,
+              },
+            },
+          ],
+        }),
+      );
+      const view = await prepareReferenceFixtureView({
+        fixtureFiles: [{ file_name: fileName, fixture_id: fixtureId }],
+        implementationRoot: fileURLToPath(
+          new URL("../../../", import.meta.url),
+        ),
+        manifestName: "selected-fixtures.json",
+        outputDirectory: join(root, "view"),
+        sourceDirectory: root,
+      });
+      const outputDirectory = join(root, "observed");
+      const summaries = await observeRealMineruSet({
+        fixtureIds: [fixtureId],
+        outputDirectory,
+        realDirectory: view,
+      });
+      const observed = JSON.parse(
+        await readFile(join(outputDirectory, `${fixtureId}.json`), "utf8"),
+      );
+      expect(summaries).toEqual([{ fixture_id: fixtureId, regions: 0 }]);
+      expect(observed).toMatchObject({
+        fixture_id: fixtureId,
+        archive_sha256: archiveSha256,
+        source_fidelity: { checked_blocks: 2, issues: [] },
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it("reuses an exact correctness receipt only for the bound source set", async () => {

@@ -8,6 +8,7 @@ const operationLabels: Readonly<Record<string, string>> = Object.freeze({
   build_candidate: "生成阅读预览",
   permanent_book_deletion: "永久删除图书",
   prepare_draft: "整理草稿",
+  save_draft: "保存草稿",
 });
 
 const phaseLabels: Readonly<Record<string, string>> = Object.freeze({
@@ -25,6 +26,9 @@ const phaseLabels: Readonly<Record<string, string>> = Object.freeze({
   render_pages: "渲染页面",
   security_check: "安全检查",
   starting: "正在启动",
+  validate_edit: "校验修改",
+  prepare_save: "保存正文",
+  succeeded: "已完成",
 });
 
 const unitLabels: Readonly<Record<JobProgress["unit"], string>> = Object.freeze(

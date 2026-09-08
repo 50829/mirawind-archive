@@ -10,7 +10,6 @@ import {
 import { resolve } from "node:path";
 
 import type Database from "better-sqlite3";
-import { stringify } from "yaml";
 import { describe, expect, it } from "vitest";
 
 import { reconcileStorage } from "@/composition/storage-reconciliation";
@@ -23,8 +22,7 @@ import {
   type CandidateRegistrationCrashPoint,
 } from "@/modules/publishing/adapters/sqlite/candidate-registration";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
-import { normalizeDocumentBlocks } from "@/modules/publishing/core/preparation/normalize-document";
-import { parseMarkdownDocument } from "@/modules/publishing/core/preparation/parse-markdown";
+import { serializeBookDocument } from "@/modules/publishing/core/content/book-document";
 import type { CandidateTreeCrashPoint } from "@/modules/publishing/application/candidate-durability";
 import {
   candidateBuildIdentities,
@@ -46,10 +44,10 @@ import {
   publicationTestLeaseOwner,
   setupPublicationFixture,
 } from "../../helpers/publication.js";
-import { createBookConfigV4 } from "../../helpers/book-config";
+import { smallBook, headingBlock, paragraphBlock } from "../../helpers/ir-book";
 
 const bookId = 9;
-const configRevision = 3;
+const sourceUpdatedAt = 1000;
 const createdAtMs = 1_753_315_200_000;
 const headingIds = [
   "blk_candidate_builder_heading_0001",
@@ -61,28 +59,29 @@ function sha256(value: string | Uint8Array): string {
 }
 
 function commandFor(suffix: string): BuildCandidateCommand {
-  const sourceId = `src_candidate_builder_${suffix}`;
+  const candidateId = `candidate_candidate_builder_${suffix}`;
   return parseBuildCandidateCommand({
     bookId,
-    candidateId: `candidate_candidate_builder_${suffix}`,
+    candidateId,
     capturedCurrentVersionId: null,
     compilerIdentity: candidateBuildIdentities.compiler,
-    configRelativePath: `books/${bookId}/draft/configs/${configRevision}/book.yaml`,
-    configRevision,
+    inputRelativePath: `books/${bookId}/draft/candidates/${candidateId}/book.json`,
+    documentSha256: "a".repeat(64),
+    sourceUpdatedAt,
     jobId: `job_candidate_builder_${suffix}`,
     kind: "build_candidate",
     previewIdentity: candidateBuildIdentities.preview,
     readerIdentity: candidateBuildIdentities.reader,
     rendererIdentity: candidateBuildIdentities.renderer,
-    sourceId,
-    sourceRootRelativePath: `books/${bookId}/draft/sources/${sourceId}`,
+    importId: `imp_candidate_builder_${suffix}`,
+    resourceRootRelativePath: `books/${bookId}`,
     versionId: `ver_candidate_builder_${suffix}`,
   });
 }
 
 async function writeCandidateInput(
   dataRoot: TemporaryDataRoot,
-  command: BuildCandidateCommand,
+  command: Omit<BuildCandidateCommand, "documentSha256">,
   options: {
     readonly originalContents?: string;
     readonly originalSha256?: string;
@@ -91,84 +90,100 @@ async function writeCandidateInput(
       readonly filename: string;
     };
   } = {},
-): Promise<void> {
-  const markdown = [
-    "# First chapter",
-    "",
-    "Body with `code/path.ts` and $x + y$.",
-    "",
-    "# Second chapter",
-    "",
-    "Final body.",
-    ...(options.resource
-      ? ["", `![Fixture image](${options.resource.filename})`]
-      : []),
-  ].join("\n");
-  const markdownSha256 = sha256(markdown);
-  let headingOrdinal = 0;
-  let contentOrdinal = 0;
-  const document = normalizeDocumentBlocks(parseMarkdownDocument(markdown), {
-    idFactory: (node) =>
-      node.type === "heading"
-        ? (headingIds[headingOrdinal++] ?? "blk_candidate_builder_overflow")
-        : `blk_candidate_builder_content_${String(++contentOrdinal).padStart(4, "0")}`,
-  });
-  const sourceRoot = resolve(dataRoot.path, command.sourceRootRelativePath);
-  const configPath = resolve(dataRoot.path, command.configRelativePath);
+): Promise<BuildCandidateCommand> {
+  const document = smallBook(command.bookId, command.sourceUpdatedAt);
+  document.metadata = {
+    title: "Candidate Builder Fixture",
+    authors: ["Fixture Author"],
+    language: "en",
+  };
+  document.publishing.numbering = "generated";
+  document.publishing.boundaries.body_start_block_id = headingIds[0];
+  document.blocks = [
+    { ...headingBlock("First chapter"), id: headingIds[0] },
+    {
+      ...paragraphBlock(""),
+      content: [
+        { type: "text", text: "Body with " },
+        { type: "code", code: "code/path.ts" },
+        { type: "text", text: " and " },
+        { type: "math", latex: "x + y" },
+      ],
+    },
+    { ...headingBlock("Second chapter"), id: headingIds[1] },
+    paragraphBlock("Final body."),
+  ];
+  const sourceRoot = resolve(dataRoot.path, command.resourceRootRelativePath);
+  const inputPath = resolve(dataRoot.path, command.inputRelativePath);
   const originalId = "file_candidate_builder_0001";
   const originalPath = resolve(
     dataRoot.layout.bookDirectory,
     String(command.bookId),
-    "draft/originals",
+    "originals",
     originalId,
   );
-  const originalFiles =
-    options.originalContents === undefined
-      ? []
-      : [
-          {
-            filename: "original.zip",
-            id: originalId,
-            media_type: "application/zip",
-            path: `originals/${originalId}`,
-            role: "mineru_zip",
-            sha256: options.originalSha256 ?? sha256(options.originalContents),
-            size: Buffer.byteLength(options.originalContents),
-          },
-        ];
+  const originalContents = options.originalContents ?? "original ZIP";
+  const originalFiles = [
+    {
+      filename: "original.zip",
+      id: originalId,
+      media_type: "application/zip",
+      path: `originals/${originalId}`,
+      role: "mineru_zip",
+      sha256: options.originalSha256 ?? sha256(originalContents),
+      size: Buffer.byteLength(originalContents),
+    },
+  ];
   await Promise.all([
     mkdir(sourceRoot, { mode: 0o700, recursive: true }),
-    mkdir(resolve(configPath, ".."), { mode: 0o700, recursive: true }),
+    mkdir(resolve(inputPath, ".."), { mode: 0o700, recursive: true }),
   ]);
-  await writeFile(resolve(sourceRoot, "book.md"), markdown, { mode: 0o400 });
+  const proof = [];
   if (options.resource) {
+    const resourceId = "res_candidate_builder_image0001";
+    const resourcePath = "assets/" + options.resource.filename;
+    document.resources.push({
+      id: resourceId,
+      path: resourcePath,
+      media_type: "image/png",
+    });
+    document.blocks.push({
+      id: "blk_candidate_builder_image0001",
+      type: "image",
+      resource_id: resourceId,
+      alt: "Fixture image",
+    });
+    proof.push({
+      id: resourceId,
+      sha256: sha256(options.resource.contents),
+      size: options.resource.contents.byteLength,
+    });
+    await mkdir(resolve(sourceRoot, "assets"), { recursive: true });
     await writeFile(
-      resolve(sourceRoot, options.resource.filename),
+      resolve(sourceRoot, resourcePath),
       options.resource.contents,
       { mode: 0o400 },
     );
   }
+  const json = serializeBookDocument(document);
+  await writeFile(inputPath, json, { mode: 0o400 });
+  await writeFile(resolve(sourceRoot, "draft/book.json"), json, {
+    mode: 0o600,
+  });
   await writeFile(
-    configPath,
-    stringify(
-      createBookConfigV4({
-        bookId: command.bookId,
-        document,
-        metadata: { authors: ["Fixture Author"], language: "en" },
-        numbering: "generated",
-        originalFiles,
-        revision: command.configRevision,
-        sourceSha256: markdownSha256,
-        title: "Candidate Builder Fixture",
-      }),
-      { lineWidth: 0 },
-    ),
-    { mode: 0o400 },
+    resolve(inputPath, "../resources.json"),
+    JSON.stringify(proof),
   );
-  if (options.originalContents !== undefined) {
-    await mkdir(resolve(originalPath, ".."), { mode: 0o700, recursive: true });
-    await writeFile(originalPath, options.originalContents, { mode: 0o400 });
-  }
+  await writeFile(
+    resolve(inputPath, "../original.json"),
+    JSON.stringify({ import_id: command.importId, files: originalFiles }),
+  );
+  await mkdir(resolve(originalPath, ".."), { mode: 0o700, recursive: true });
+  await writeFile(originalPath, originalContents, { mode: 0o400 });
+  return parseBuildCandidateCommand({
+    ...command,
+    documentSha256: sha256(json),
+  });
 }
 
 function distinctPhases(
@@ -184,8 +199,10 @@ async function registrationFixture(
   dataRoot: TemporaryDataRoot,
 ) {
   const fixture = setupPublicationFixture(database, { registerReady: false });
-  const command = fixture.candidates.buildCommand(fixture.candidate.attemptId);
-  await writeCandidateInput(dataRoot, command);
+  const command = await writeCandidateInput(
+    dataRoot,
+    fixture.candidates.buildCommand(fixture.candidate.attemptId),
+  );
   const artifact = await buildCandidateVersion({
     command,
     createdAtMs,
@@ -199,8 +216,10 @@ describe("isolated candidate child builder", () => {
   it("builds one immutable preview/public candidate with bounded telemetry", async () => {
     const dataRoot = await createTemporaryDataRoot("candidate-builder");
     try {
-      const command = commandFor("success_0001");
-      await writeCandidateInput(dataRoot, command);
+      const command = await writeCandidateInput(
+        dataRoot,
+        commandFor("success_0001"),
+      );
       const progress: JobProgressMessage[] = [];
       const artifact = await handleBuildCandidate({
         command,
@@ -337,7 +356,6 @@ describe("isolated candidate child builder", () => {
       expect(JSON.stringify(artifact)).not.toContain(
         "Candidate Builder Fixture",
       );
-      expect(JSON.stringify(artifact)).not.toContain("book.md");
       expect(JSON.stringify(artifact)).not.toContain(dataRoot.path);
     } finally {
       await dataRoot.cleanup();
@@ -347,8 +365,10 @@ describe("isolated candidate child builder", () => {
   it("removes staging and never exposes a ready tree after cancellation", async () => {
     const dataRoot = await createTemporaryDataRoot("candidate-cancel");
     try {
-      const command = commandFor("cancel_0001");
-      await writeCandidateInput(dataRoot, command);
+      const command = await writeCandidateInput(
+        dataRoot,
+        commandFor("cancel_0001"),
+      );
       const controller = new AbortController();
       await expect(
         handleBuildCandidate({
@@ -401,11 +421,14 @@ describe("isolated candidate child builder", () => {
       "candidate-original-integrity",
     );
     try {
-      const command = commandFor("original_integrity_0001");
-      await writeCandidateInput(dataRoot, command, {
-        originalContents: "not the registered original",
-        originalSha256: "f".repeat(64),
-      });
+      const command = await writeCandidateInput(
+        dataRoot,
+        commandFor("original_integrity_0001"),
+        {
+          originalContents: "not the registered original",
+          originalSha256: "f".repeat(64),
+        },
+      );
 
       await expect(
         buildCandidateVersion({
@@ -414,7 +437,7 @@ describe("isolated candidate child builder", () => {
           layout: dataRoot.layout,
           preparationDiagnostics: [],
         }),
-      ).rejects.toThrow("VERSION_FILE_INTEGRITY_MISMATCH");
+      ).rejects.toThrow("CANDIDATE_ORIGINAL_CHANGED");
       await expect(
         access(
           resolve(
@@ -433,13 +456,16 @@ describe("isolated candidate child builder", () => {
   it("rejects an invalid referenced image before a candidate becomes ready", async () => {
     const dataRoot = await createTemporaryDataRoot("candidate-image-security");
     try {
-      const command = commandFor("image_security_0001");
-      await writeCandidateInput(dataRoot, command, {
-        resource: {
-          contents: Buffer.from("not a raster image"),
-          filename: "image.png",
+      const command = await writeCandidateInput(
+        dataRoot,
+        commandFor("image_security_0001"),
+        {
+          resource: {
+            contents: Buffer.from("not a raster image"),
+            filename: "image.png",
+          },
         },
-      });
+      );
 
       await expect(
         buildCandidateVersion({
@@ -475,8 +501,10 @@ describe("isolated candidate child builder", () => {
         `candidate-crash-${point}`,
       );
       try {
-        const command = commandFor(`crash_${point}`);
-        await writeCandidateInput(dataRoot, command);
+        const command = await writeCandidateInput(
+          dataRoot,
+          commandFor(`crash_${point}`),
+        );
         await expect(
           handleBuildCandidate({
             command,
@@ -667,11 +695,11 @@ describe("isolated candidate child builder", () => {
         migrated.database,
         dataRoot,
       );
-      const newer = fixture.candidates.createForCurrentRevision({
+      const newer = fixture.candidates.createForDocument({
         bookId: command.bookId,
-        configRevision: command.configRevision,
+        sourceUpdatedAt: command.sourceUpdatedAt,
         nowMs: createdAtMs + 1,
-        sourceId: command.sourceId,
+        importId: command.importId,
       });
 
       await expect(

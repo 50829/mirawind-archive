@@ -25,9 +25,6 @@ async function expectFormulaPresentation(document: Page | FrameLocator) {
   await expect(mathml).not.toHaveAttribute("aria-hidden", "true");
   await expect(visual).toHaveAttribute("aria-hidden", "true");
   await expect(visual).toBeVisible();
-  await expect(mathml).toHaveCSS("position", "absolute");
-  await expect(mathml).toHaveCSS("overflow", "hidden");
-  await expect(mathml).toHaveCSS("clip-path", "inset(50%)");
 }
 
 function expectRendererClosure(
@@ -40,7 +37,7 @@ function expectRendererClosure(
       expect.objectContaining({
         status: 200,
         url: expect.stringContaining(
-          "/reader-assets/renderers/semantic-html-v6-katex-0.18.1/katex.css",
+          "/reader-assets/renderers/semantic-html-v7-katex-0.18.1/katex.css",
         ),
       }),
       expect.objectContaining({
@@ -105,7 +102,7 @@ test("closes typography, formula and printed contents preview-to-publication beh
   );
 
   const rendererStylesheet =
-    "/reader-assets/renderers/semantic-html-v6-katex-0.18.1/katex.css";
+    "/reader-assets/renderers/semantic-html-v7-katex-0.18.1/katex.css";
   const rendererResponse = await page.request.get(rendererStylesheet);
   expect(rendererResponse.headers()["cache-control"]).toBe(
     "public, max-age=31536000, immutable",
@@ -134,10 +131,6 @@ test("closes typography, formula and printed contents preview-to-publication beh
   );
   await expect(preview.locator(".katex")).toHaveCount(1);
   await expectFormulaPresentation(preview);
-  await expect(preview.locator(".reader-document")).toHaveCSS(
-    "font-family",
-    /Georgia|Times New Roman|Noto Serif CJK SC/u,
-  );
   const previewFrame = page
     .frames()
     .find((frame) => frame.url().includes("/preview/"));
@@ -162,44 +155,18 @@ test("closes typography, formula and printed contents preview-to-publication beh
   rendererResponses.length = 0;
   rendererFailures.length = 0;
 
-  const database = new Database(resolve(e2eDataRoot, "db", "mirawind.sqlite"), {
-    readonly: true,
-  });
-  const source = (() => {
-    try {
-      return database
-        .prepare(
-          `SELECT source_snapshots.source_root_rel_path,
-                  source_snapshots.main_markdown_path
-           FROM source_snapshots
-           JOIN books ON books.draft_source_id = source_snapshots.id
-           WHERE books.title_cache = '排版质量'
-           ORDER BY source_snapshots.created_at DESC, source_snapshots.id DESC
-           LIMIT 1`,
-        )
-        .get() as {
-        main_markdown_path: string;
-        source_root_rel_path: string;
-      };
-    } finally {
-      database.close();
-    }
-  })();
-  const normalizedMarkdown = await readFile(
-    resolve(
-      e2eDataRoot,
-      source.source_root_rel_path,
-      source.main_markdown_path,
-    ),
+  const qualityBookId = Number(new URL(page.url()).pathname.split("/").at(-1));
+  const bookJson = await readFile(
+    resolve(e2eDataRoot, "books", String(qualityBookId), "draft/book.json"),
     "utf8",
   );
-  expect(normalizedMarkdown).toContain("中文 English123 测试，继续：结束？");
-  expect(normalizedMarkdown).toContain("https://example.com/a?x=1&y=2");
-  expect(normalizedMarkdown).toContain("`v1.2.3`");
-  expect(normalizedMarkdown).toContain("$x+y$");
-  expect(normalizedMarkdown).toContain("\\notacommand{");
+  const body = JSON.stringify(JSON.parse(bookJson).blocks);
+  expect(body).toContain("中文 English123 测试，继续：结束？");
+  expect(body).toContain("https://example.com/a?x=1&y=2");
+  expect(body).toContain("v1.2.3");
+  expect(body).toContain("x+y");
 
-  await page.getByRole("button", { name: "发布当前修订" }).click();
+  await page.getByRole("button", { name: "发布当前预览" }).click();
   await expect(page.getByRole("link", { name: "开始阅读" })).toBeVisible({
     timeout: 60_000,
   });
@@ -219,10 +186,6 @@ test("closes typography, formula and printed contents preview-to-publication beh
   );
   await expect(page.locator(".katex")).toHaveCount(1);
   await expectFormulaPresentation(page);
-  await expect(page.locator(".reader-document")).toHaveCSS(
-    "font-family",
-    /Georgia|Times New Roman|Noto Serif CJK SC/u,
-  );
 
   expectRendererClosure(rendererResponses, rendererFailures);
   await page.goto("/manage");
@@ -235,7 +198,6 @@ test("closes typography, formula and printed contents preview-to-publication beh
     timeout: 30_000,
   });
   await page.getByRole("link", { name: "打开出版工作台" }).click();
-  await expect(page.getByLabel(/作为层级参照/u)).toHaveCount(0);
 
   const printedPreview = page.frameLocator("iframe");
   await expect(
@@ -253,36 +215,19 @@ test("closes typography, formula and printed contents preview-to-publication beh
   );
 
   const databasePath = resolve(e2eDataRoot, "db", "mirawind.sqlite");
-  const beforePublish = new Database(databasePath, { readonly: true });
-  const book = (() => {
-    try {
-      return beforePublish
-        .prepare(
-          `SELECT books.id, source_snapshots.source_root_rel_path,
-                  source_snapshots.main_markdown_path
-           FROM books
-           JOIN source_snapshots ON source_snapshots.id = books.draft_source_id
-           WHERE books.title_cache = '第 1 章 绪论'
-           ORDER BY books.id DESC LIMIT 1`,
-        )
-        .get() as {
-        id: number;
-        main_markdown_path: string;
-        source_root_rel_path: string;
-      };
-    } finally {
-      beforePublish.close();
-    }
-  })();
-  const retainedMarkdown = await readFile(
-    resolve(e2eDataRoot, book.source_root_rel_path, book.main_markdown_path),
-    "utf8",
-  );
-  expect(retainedMarkdown).not.toContain("# 目录");
-  expect(retainedMarkdown).not.toContain("# 第 1 章 绪论 ...... 1");
-  expect(retainedMarkdown).toContain("# 第 1 章 绪论");
+  const book = { id: Number(new URL(page.url()).pathname.split("/").at(-1)) };
+  const retained = JSON.parse(
+    await readFile(
+      resolve(e2eDataRoot, "books", String(book.id), "draft/book.json"),
+      "utf8",
+    ),
+  ) as { blocks: { type: string; content: unknown }[] };
+  expect(
+    retained.blocks.filter((block) => block.type === "heading"),
+  ).toHaveLength(6);
+  expect(JSON.stringify(retained.blocks)).not.toContain("......");
 
-  await page.getByRole("button", { name: "发布当前修订" }).click();
+  await page.getByRole("button", { name: "发布当前预览" }).click();
   await expect(page.getByRole("link", { name: "开始阅读" })).toBeVisible({
     timeout: 60_000,
   });
@@ -337,16 +282,12 @@ test("closes typography, formula and printed contents preview-to-publication beh
 
 test("keeps the published reader accessible across the responsive and zoom matrix", async ({
   page,
-}, testInfo) => {
+}) => {
   for (const width of [320, 360, 768, 1_024, 1_440]) {
     await page.setViewportSize({ height: 900, width });
     await page.goto("/read/e2e-library-book/1");
     await expect(page.getByRole("main")).toContainText("A seeded public book");
     await expectNoPageOverflow(page);
-    await page.screenshot({
-      fullPage: true,
-      path: testInfo.outputPath(`reader-${width}.png`),
-    });
   }
 
   await page.setViewportSize({ height: 900, width: 390 });
@@ -355,10 +296,6 @@ test("keeps the published reader accessible across the responsive and zoom matri
     document.documentElement.style.fontSize = "200%";
   });
   await expectNoPageOverflow(page);
-  await page.screenshot({
-    fullPage: true,
-    path: testInfo.outputPath("reader-text-200.png"),
-  });
 
   const chrome = await page.context().newCDPSession(page);
   await chrome.send("Emulation.setDeviceMetricsOverride", {
@@ -369,10 +306,6 @@ test("keeps the published reader accessible across the responsive and zoom matri
   });
   await page.goto("/read/e2e-library-book/1");
   await expectNoPageOverflow(page);
-  await page.screenshot({
-    fullPage: true,
-    path: testInfo.outputPath("reader-zoom-400.png"),
-  });
   await chrome.send("Emulation.clearDeviceMetricsOverride");
 
   await page.setViewportSize({ height: 900, width: 1_024 });

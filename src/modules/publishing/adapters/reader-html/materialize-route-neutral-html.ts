@@ -3,7 +3,7 @@ import { escapeAttribute } from "entities/escape";
 import type { RouteNeutralReference } from "../../core/publication/route-neutral-links";
 
 interface MaterializationPolicy {
-  readonly headingHref: (blockId: string) => string;
+  readonly blockHref: (blockId: string) => string;
   readonly resourceUrl: (resourceId: string) => string;
 }
 
@@ -40,7 +40,7 @@ function materialize(
     }
     const replacement =
       reference.kind === "heading"
-        ? policy.headingHref(reference.id)
+        ? policy.blockHref(reference.id)
         : policy.resourceUrl(reference.id);
     assertSafeOutputUrl(replacement);
     chunks.push(

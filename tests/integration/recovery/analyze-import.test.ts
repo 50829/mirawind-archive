@@ -11,6 +11,7 @@ import {
 } from "@/modules/publishing/adapters/worker/analyze-import";
 import { buildZip } from "../../../scripts/fixtures/zip-builder";
 import { withMigratedTestDatabase } from "../../helpers/database.js";
+import { mineruTitle, mineruParagraph } from "../../helpers/mineru-v2";
 
 const sha256 = "a".repeat(64);
 
@@ -44,8 +45,10 @@ describe("analyze_import handler", () => {
         dataRoot,
         [
           {
-            data: "# Book\n\n![image](images/a.png)",
-            name: "wrapper/full.md",
+            data: JSON.stringify([
+              [mineruTitle("Book"), mineruParagraph("Body.")],
+            ]),
+            name: "wrapper/content_list_v2.json",
           },
           { data: "{}", name: "wrapper/layout.json" },
           { data: "image", name: "wrapper/images/a.png" },
@@ -57,13 +60,20 @@ describe("analyze_import handler", () => {
 
       expect(artifact).toMatchObject({
         decision: "automatic",
-        reason: "cloud-high-confidence",
+        reason: "mineru-v2",
         selectedCandidateId: expect.stringMatching(/^cand_/u),
       });
-      expect(artifact.candidates[0]?.normalizedPath).toBe("wrapper/full.md");
+      expect(artifact.candidates[0]?.normalizedPath).toBe(
+        "wrapper/content_list_v2.json",
+      );
       expect(artifactText).not.toContain(dataRoot.path);
       await expect(
-        access(resolve(sealedExtractionDirectory, "tree/wrapper/full.md")),
+        access(
+          resolve(
+            sealedExtractionDirectory,
+            "tree/wrapper/content_list_v2.json",
+          ),
+        ),
       ).resolves.toBeUndefined();
 
       const imports = new ImportRepository(database);
@@ -91,7 +101,7 @@ describe("analyze_import handler", () => {
       expect(imports.candidates(imported.id)).toHaveLength(1);
     }));
 
-  it("pauses generic input for confirmation and rejects missing Markdown with a safe code", () =>
+  it("rejects missing MinerU v2 content and cleans the extraction", () =>
     withMigratedTestDatabase(async ({ database }, dataRoot) => {
       const imports = new ImportRepository(database);
       const genericRun = await runAnalysis(
@@ -119,11 +129,12 @@ describe("analyze_import handler", () => {
         }),
       ).toMatchObject({
         selectedCandidateId: null,
-        state: "needs_main_confirmation",
+        state: "rejected",
+        safeErrorCode: "IMPORT_MINERU_JSON_MISSING",
       });
       await expect(
         access(resolve(genericRun.sealedExtractionDirectory, "tree/notes.md")),
-      ).resolves.toBeUndefined();
+      ).rejects.toThrow();
 
       const secondRoot = {
         path: resolve(dataRoot.path, "second"),
@@ -152,7 +163,7 @@ describe("analyze_import handler", () => {
           repository: imports,
         }),
       ).toMatchObject({
-        safeErrorCode: "IMPORT_MAIN_MARKDOWN_MISSING",
+        safeErrorCode: "IMPORT_MINERU_JSON_MISSING",
         state: "rejected",
       });
       await expect(

@@ -10,6 +10,7 @@ import {
 } from "../../core/publication/search-model";
 import { materializeRouteNeutralHtmlVariants } from "./materialize-route-neutral-html";
 import type { CompiledBook } from "../../core/publication/compiled-book";
+import type { BookDocument } from "../../core/content/book-document.generated";
 import { pageMetadata } from "../../core/publication/compiled-book";
 import { buildManifestPageRecord } from "../../core/publication/manifest";
 import {
@@ -157,8 +158,9 @@ export async function materializeCandidatePages(input: {
   readonly bookId: number;
   readonly candidateDirectory: string;
   readonly compiled: CompiledBook;
-  readonly config: Readonly<Record<string, unknown>>;
-  readonly configRevision: number;
+  readonly bookDocument: BookDocument;
+  readonly candidateId: string;
+  readonly sourceUpdatedAt: number;
   readonly files: CandidateFileSink;
   readonly originalFiles: readonly Readonly<Record<string, unknown>>[];
   readonly onPageRendered?: (completed: number, total: number) => void;
@@ -208,7 +210,7 @@ export async function materializeCandidatePages(input: {
   const navigation: NavigationLink[] = [];
   for (const heading of compiled.headings) {
     const page = compiled.pageByHeadingId.get(heading.block_id);
-    if (!page) throw new Error("CANDIDATE_HEADING_PAGE_MISSING");
+    if (!page) throw new Error("CANDIDATE_BLOCK_PAGE_MISSING");
     pageByHeading.set(heading.block_id, page.pageId);
     const pageHeadings = headingsByPageId.get(page.pageId) ?? [];
     pageHeadings.push(heading);
@@ -225,8 +227,7 @@ export async function materializeCandidatePages(input: {
     }
   }
 
-  const metadata = input.config.metadata as
-    Readonly<Record<string, unknown>> | undefined;
+  const metadata = input.bookDocument.metadata;
   const authors = Array.isArray(metadata?.authors)
     ? metadata.authors.filter(
         (value): value is string => typeof value === "string",
@@ -235,15 +236,15 @@ export async function materializeCandidatePages(input: {
   const language =
     typeof metadata?.language === "string" ? metadata.language : "zh-CN";
   const bookKey =
-    typeof input.config.alias === "string"
-      ? input.config.alias
+    typeof input.bookDocument.alias === "string"
+      ? input.bookDocument.alias
       : String(input.bookId);
   const publicPageHref = (page: CompiledBook["pages"][number]) => {
     const pageKey = pageMetadata(compiled, page).alias ?? page.pageId;
     return `/read/${bookKey}/${pageKey}`;
   };
   const previewPageHref = (page: CompiledBook["pages"][number]) =>
-    `/api/manage/books/${input.bookId}/preview/${input.configRevision}/pages/${page.pageId}`;
+    `/api/manage/books/${input.bookId}/preview/${input.candidateId}/pages/${page.pageId}`;
   const navigationPage = (pageId: number) => {
     const page = compiled.pageById.get(pageId);
     if (!page) throw new Error("CANDIDATE_PAGE_MISSING");
@@ -323,18 +324,18 @@ export async function materializeCandidatePages(input: {
       const materializedBody = materializeRouteNeutralHtmlVariants({
         html: rendered.html,
         preview: {
-          headingHref(blockId) {
-            const pageId = pageByHeading.get(blockId);
-            if (!pageId) throw new Error("CANDIDATE_HEADING_PAGE_MISSING");
+          blockHref(blockId) {
+            const pageId = input.compiled.pageByBlockId.get(blockId)?.pageId;
+            if (!pageId) throw new Error("CANDIDATE_BLOCK_PAGE_MISSING");
             return `${previewPageHref(navigationPage(pageId))}#${blockId}`;
           },
           resourceUrl: (resourceId) =>
-            `/api/manage/books/${input.bookId}/preview/${input.configRevision}/assets/${resourceId}`,
+            `/api/manage/books/${input.bookId}/preview/${input.candidateId}/assets/${resourceId}`,
         },
         published: {
-          headingHref(blockId) {
-            const pageId = pageByHeading.get(blockId);
-            if (!pageId) throw new Error("CANDIDATE_HEADING_PAGE_MISSING");
+          blockHref(blockId) {
+            const pageId = input.compiled.pageByBlockId.get(blockId)?.pageId;
+            if (!pageId) throw new Error("CANDIDATE_BLOCK_PAGE_MISSING");
             return `${publicPageHref(navigationPage(pageId))}#${blockId}`;
           },
           resourceUrl: (resourceId) =>
@@ -359,7 +360,8 @@ export async function materializeCandidatePages(input: {
           nextHref: nextPage ? previewPageHref(nextPage) : null,
           originalDownloads: [],
           previousHref: previousPage ? previewPageHref(previousPage) : null,
-          previewRevision: input.configRevision,
+          previewUpdatedAt: input.sourceUpdatedAt,
+          previewCandidateId: input.candidateId,
           toc: previewToc,
         }),
         css: rendered.css,

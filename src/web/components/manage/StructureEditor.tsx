@@ -1,3 +1,4 @@
+import { DraftSaveFailure, waitForDraftSave } from "./wait-for-save";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
@@ -42,8 +43,6 @@ import { RichStructureTitle } from "./RichStructureTitle";
 
 interface HeadingContext {
   readonly block_id: string;
-  readonly source_level: number;
-  readonly source_title?: string;
   readonly title: string;
 }
 
@@ -87,7 +86,6 @@ export const StructureEditor = forwardRef<
   {
     readonly bookId: number;
     readonly boundaries: ContentBoundaries;
-    readonly etag: string;
     readonly focusedBlockId?: string | null;
     readonly headings: readonly HeadingContext[];
     readonly mobileHidden?: boolean;
@@ -95,7 +93,7 @@ export const StructureEditor = forwardRef<
     readonly onSelectHeading?: (blockId: string) => void;
     readonly onStateChange: (state: StructureEditorState) => void;
     readonly numbering: HeadingNumberingMode;
-    readonly revision: number;
+    readonly updatedAt: number;
     readonly saveDisabled?: boolean;
     readonly structure: readonly StructureNode[];
   }
@@ -122,6 +120,7 @@ export const StructureEditor = forwardRef<
     readonly boundaries: ContentBoundaries;
     readonly nodes: readonly StructureNode[];
     readonly numbering: HeadingNumberingMode;
+    readonly updatedAt: number | null;
   } | null>(null);
   const serverSnapshot = useRef({
     boundaries: props.boundaries,
@@ -130,7 +129,7 @@ export const StructureEditor = forwardRef<
   });
   const selectedDialog = useRef<HTMLDialogElement>(null);
   const selectedDialogTrigger = useRef<HTMLButtonElement>(null);
-  const lastRevision = useRef(props.revision);
+  const lastUpdatedAt = useRef(props.updatedAt);
   nodesRef.current = nodes;
   numberingRef.current = numbering;
   const headingById = useMemo(
@@ -156,7 +155,6 @@ export const StructureEditor = forwardRef<
       return [
         node.title_markdown,
         node.preview_title,
-        heading?.source_title,
         heading?.title,
         node.block_id,
       ].some((value) => value?.toLocaleLowerCase("zh-CN").includes(normalized));
@@ -191,9 +189,15 @@ export const StructureEditor = forwardRef<
   const selected = selectedIndex >= 0 ? nodes[selectedIndex] : undefined;
 
   useEffect(() => {
-    if (props.revision === lastRevision.current) return;
+    if (saving) return;
+    if (props.updatedAt === lastUpdatedAt.current) return;
     const accepted = acceptedSnapshot.current;
     const previous = accepted ?? serverSnapshot.current;
+    const externalConflict = accepted
+      ? props.updatedAt !== accepted.updatedAt
+      : JSON.stringify(nodesRef.current) !== JSON.stringify(previous.nodes) ||
+        JSON.stringify(boundaries) !== JSON.stringify(previous.boundaries) ||
+        numberingRef.current !== previous.numbering;
     setNodes((current) =>
       mergeAcceptedNodes(props.structure, previous.nodes, current),
     );
@@ -211,10 +215,17 @@ export const StructureEditor = forwardRef<
       nodes: props.structure,
       numbering: props.numbering,
     };
-    lastRevision.current = props.revision;
-    setConflict(false);
-    setStatus("");
-  }, [props.boundaries, props.numbering, props.revision, props.structure]);
+    lastUpdatedAt.current = props.updatedAt;
+    setConflict(externalConflict);
+    setStatus(externalConflict ? "草稿已更新，本地修改仍保留。" : "");
+  }, [
+    props.boundaries,
+    props.numbering,
+    props.updatedAt,
+    props.structure,
+    saving,
+    boundaries,
+  ]);
 
   useEffect(() => {
     if (
@@ -319,6 +330,19 @@ export const StructureEditor = forwardRef<
               </label>
             </div>
             <div className="structure-checks grid grid-cols-2 gap-3">
+              <label className="col-span-2 flex items-center gap-2">
+                <input
+                  className="size-4 accent-emerald-700"
+                  checked={selected.exclude_from_numbering}
+                  onChange={(event) =>
+                    updateSelected({
+                      exclude_from_numbering: event.currentTarget.checked,
+                    })
+                  }
+                  type="checkbox"
+                />
+                本节及子节不编号
+              </label>
               <label className="flex items-center gap-2">
                 <input
                   className="size-4 accent-emerald-700"
@@ -404,6 +428,7 @@ export const StructureEditor = forwardRef<
     for (const key of [
       "display_level",
       "include_in_toc",
+      "exclude_from_numbering",
       "starts_page",
       "title_markdown",
     ] as const) {
@@ -420,7 +445,7 @@ export const StructureEditor = forwardRef<
   const dirty = dirtyChanges.length > 0 || boundariesDirty || numberingDirty;
 
   async function save() {
-    if (!dirty || saving || props.saveDisabled) return;
+    if (!dirty || saving || conflict || props.saveDisabled) return;
     setSaving(true);
     setStatus("");
     setConflict(false);
@@ -429,6 +454,7 @@ export const StructureEditor = forwardRef<
     try {
       const response = await fetch(`/api/manage/books/${props.bookId}/draft`, {
         body: JSON.stringify({
+          expected_updated_at: props.updatedAt,
           ...(boundariesDirty ? { boundaries } : {}),
           changes: dirtyChanges,
           ...(numberingDirty ? { numbering: submittedNumbering } : {}),
@@ -437,7 +463,6 @@ export const StructureEditor = forwardRef<
         credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
-          "If-Match": props.etag,
         },
         method: "PATCH",
       });
@@ -454,10 +479,35 @@ export const StructureEditor = forwardRef<
         boundaries,
         nodes: submittedNodes,
         numbering: submittedNumbering,
+        updatedAt: null,
       };
+      const acceptedAt = await waitForDraftSave(response);
+      acceptedSnapshot.current = {
+        boundaries,
+        nodes: submittedNodes,
+        numbering: submittedNumbering,
+        updatedAt: acceptedAt,
+      };
+      if (acceptedAt === props.updatedAt) {
+        setNodes((current) =>
+          mergeAcceptedNodes(props.structure, submittedNodes, current),
+        );
+        acceptedSnapshot.current = null;
+      }
       await props.onSaved();
-    } catch {
-      setStatus("配置保存失败，请稍后重试。");
+    } catch (error) {
+      acceptedSnapshot.current = null;
+      if (
+        error instanceof DraftSaveFailure &&
+        error.code === "DRAFT_PRECONDITION_FAILED"
+      )
+        setConflict(true);
+      setStatus(
+        error instanceof DraftSaveFailure &&
+          error.code === "DRAFT_PRECONDITION_FAILED"
+          ? "草稿已更新，本地修改仍保留。"
+          : "修改未保存，请检查内容后重试。",
+      );
     } finally {
       setSaving(false);
     }

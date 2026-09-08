@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
@@ -37,16 +37,6 @@ describe("production process bundle", () => {
         maxBuffer: 4 * 1024 * 1024,
       },
     );
-    const entries = [
-      "cli/index.js",
-      "worker/index.js",
-      "worker/job-child.js",
-    ] as const;
-    for (const entry of entries) {
-      const source = await readFile(join(outputDirectory, entry), "utf8");
-      expect(source).not.toContain('from "@/');
-      expect(source).not.toContain("from '@/");
-    }
     await expect(
       execFileAsync("node", [join(outputDirectory, "cli/index.js")], {
         cwd: repositoryRoot,

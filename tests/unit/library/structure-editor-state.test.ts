@@ -14,6 +14,7 @@ describe("publishing workbench local edit retention", () => {
       {
         block_id: "blk_structure_editor_state_frontmatter",
         display_level: 1,
+        exclude_from_numbering: false,
         include_in_toc: true,
         source_number: "P",
         starts_page: true,
@@ -22,6 +23,7 @@ describe("publishing workbench local edit retention", () => {
       {
         block_id: "blk_structure_editor_state_body",
         display_level: 1,
+        exclude_from_numbering: false,
         include_in_toc: true,
         source_number: "Chapter 9",
         starts_page: true,
@@ -30,6 +32,7 @@ describe("publishing workbench local edit retention", () => {
       {
         block_id: "blk_structure_editor_state_child",
         display_level: 2,
+        exclude_from_numbering: false,
         include_in_toc: false,
         source_number: "Section 42",
         starts_page: false,
@@ -38,6 +41,7 @@ describe("publishing workbench local edit retention", () => {
       {
         block_id: "blk_structure_editor_state_appendix",
         display_level: 1,
+        exclude_from_numbering: false,
         include_in_toc: true,
         source_number: "Appendix A",
         starts_page: true,
@@ -84,6 +88,7 @@ describe("publishing workbench local edit retention", () => {
     const submittedNode: EditableStructureNode = {
       block_id: "blk_structure_editor_state_0001",
       display_level: 1,
+      exclude_from_numbering: false,
       include_in_toc: true,
       starts_page: true,
       title_markdown: "Submitted title",
@@ -105,6 +110,7 @@ describe("publishing workbench local edit retention", () => {
     expect(mergeAcceptedNodes(server, submitted, local)).toEqual([
       expect.objectContaining({
         display_level: 2,
+        exclude_from_numbering: false,
         include_in_toc: true,
         title_markdown: "Typed after submit",
       }),
@@ -116,6 +122,7 @@ describe("publishing workbench local edit retention", () => {
       {
         block_id: "blk_structure_editor_state_0003",
         display_level: 1,
+        exclude_from_numbering: false,
         include_in_toc: true,
         starts_page: true,
         title_markdown: "Server title",
@@ -146,6 +153,7 @@ describe("publishing workbench local edit retention", () => {
         {
           block_id: "blk_structure_editor_state_0002",
           display_level: 1,
+          exclude_from_numbering: false,
           include_in_toc: true,
           starts_page: true,
           title_markdown: "Appendix",
@@ -155,6 +163,7 @@ describe("publishing workbench local edit retention", () => {
     ).toEqual({
       block_id: "blk_structure_editor_state_0002",
       display_level: 3,
+      exclude_from_numbering: false,
       include_in_toc: true,
       starts_page: true,
       title_markdown: "Appendix",

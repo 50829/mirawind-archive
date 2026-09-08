@@ -98,7 +98,7 @@ export function buildSearchRowsForBlocks(input: {
         ),
         bookId: input.bookId,
         heading: normalize(currentHeading),
-        kind: block.type,
+        kind: block.contentKind ?? block.type,
         ordinal,
         pageId,
         title,

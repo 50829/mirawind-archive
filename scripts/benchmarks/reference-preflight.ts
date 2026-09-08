@@ -3,7 +3,7 @@ const sha256Pattern = /^[a-f0-9]{64}$/u;
 
 export interface ReferenceFixtureBinding {
   readonly fixture_id: string;
-  readonly reference_schema_version: 2;
+  readonly reference_schema_version: 3;
   readonly reference_sha256: string;
   readonly zip_sha256: string;
 }
@@ -46,21 +46,21 @@ export function assertReferencePreflight(
       ]) ||
       typeof item.fixture_id !== "string" ||
       !fixtureIdPattern.test(item.fixture_id) ||
-      item.reference_schema_version !== 2 ||
+      item.reference_schema_version !== 3 ||
       typeof item.reference_sha256 !== "string" ||
       !sha256Pattern.test(item.reference_sha256) ||
       typeof item.zip_sha256 !== "string" ||
       !sha256Pattern.test(item.zip_sha256)
     ) {
       throw new Error(
-        item.reference_schema_version === 2
+        item.reference_schema_version === 3
           ? "REFERENCE_PREFLIGHT_BINDING_INVALID"
           : "REFERENCE_PREFLIGHT_SCHEMA_INVALID",
       );
     }
     return Object.freeze({
       fixture_id: item.fixture_id,
-      reference_schema_version: 2 as const,
+      reference_schema_version: 3 as const,
       reference_sha256: item.reference_sha256,
       zip_sha256: item.zip_sha256,
     });
@@ -110,19 +110,19 @@ export async function loadReferencePreflight(input: {
   const bindings = await Promise.all(
     fixtures.map(async (fixture) => {
       const referenceBytes = await readFile(
-        join(input.realDirectory, "references-v2", `${fixture.id}.json`),
+        join(input.realDirectory, "references-v3", `${fixture.id}.json`),
       );
       const reference = JSON.parse(referenceBytes.toString("utf8")) as unknown;
       if (
         !isObject(reference) ||
-        reference.schema_version !== 2 ||
+        reference.schema_version !== 3 ||
         reference.archive_sha256 !== fixture.sha256
       ) {
         throw new Error("REFERENCE_PREFLIGHT_BINDING_INVALID");
       }
       return Object.freeze({
         fixture_id: fixture.id,
-        reference_schema_version: 2 as const,
+        reference_schema_version: 3 as const,
         reference_sha256: sha256(referenceBytes),
         zip_sha256: fixture.sha256,
       });

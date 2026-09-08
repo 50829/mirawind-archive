@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
+import { readDraftHeader } from "@/modules/publishing/adapters/filesystem/draft-document";
 import {
   argumentMap,
   boundedInteger,
@@ -134,24 +135,31 @@ async function waitForRunningCandidate(
 function scheduleCandidate(database: Database.Database, bookId: number): void {
   const draft = database
     .prepare(
-      `SELECT draft_source_id, draft_config_revision
+      `SELECT draft_import_id
        FROM books
        WHERE id = ? AND deletion_requested_at IS NULL`,
     )
     .get(bookId) as
     | {
-        readonly draft_config_revision: number | null;
-        readonly draft_source_id: string | null;
+        readonly draft_import_id: string | null;
       }
     | undefined;
-  if (!draft?.draft_source_id || !draft.draft_config_revision) {
+  if (!draft?.draft_import_id) {
     throw new Error("READ_DURING_BUILD_DRAFT_MISSING");
   }
-  new DraftCandidateRepository(database).createForCurrentRevision({
+  new DraftCandidateRepository(database).createForDocument({
     bookId,
-    configRevision: draft.draft_config_revision,
+    sourceUpdatedAt: readDraftHeader(
+      resolve(
+        dirname(database.name),
+        "../books",
+        String(bookId),
+        "draft/book.json",
+      ),
+      bookId,
+    ).updated_at,
     nowMs: Date.now(),
-    sourceId: draft.draft_source_id,
+    importId: draft.draft_import_id,
   });
 }
 

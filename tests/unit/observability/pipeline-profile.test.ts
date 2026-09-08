@@ -48,11 +48,11 @@ describe("pipeline profile", () => {
     const jobId = "job_profile_test_12345678";
 
     await startPipelineProfile({ jobId, jobKind: "prepare_draft" });
-    await profilePipelineStage("typography", () => undefined);
+    await profilePipelineStage("candidate_discovery", () => undefined);
     recordPipelineProfileMetrics({
-      headings: 12,
-      markdown_bytes: 4_096,
-      protected_nodes: 33,
+      archive_files: 12,
+      archive_uncompressed_bytes: 4_096,
+      content_candidates: 1,
     });
     await finishPipelineProfile("passed");
 
@@ -62,21 +62,34 @@ describe("pipeline profile", () => {
       job_id: jobId,
       job_kind: "prepare_draft",
       metrics: {
-        headings: 12,
-        markdown_bytes: 4_096,
-        protected_nodes: 33,
+        archive_files: 12,
+        archive_uncompressed_bytes: 4_096,
+        content_candidates: 1,
       },
-      schema_version: 1,
+      schema_version: 2,
       status: "passed",
     });
-    expect(profile.stages.map((stage) => stage.name)).toEqual(["typography"]);
-    expect(raw).not.toContain("book title");
-    expect(raw).not.toContain("/private/source.md");
+    expect(profile.stages).toMatchObject([
+      {
+        name: "candidate_discovery",
+        status: "passed",
+        duration_ms: expect.any(Number),
+      },
+    ]);
+    expect(() =>
+      parsePipelineProfileArtifact({ ...profile, schema_version: 1 }),
+    ).toThrow("PIPELINE_PROFILE_INVALID");
+    expect(() =>
+      parsePipelineProfileArtifact({
+        ...profile,
+        stages: [{ ...profile.stages[0], name: "unknown" }],
+      }),
+    ).toThrow("PIPELINE_PROFILE_STAGE_INVALID");
   });
 
-  it("rejects unknown fields and unknown stage names", () => {
+  it("rejects unknown fields", () => {
     expect(() =>
-      parsePipelineProfileArtifact({ schema_version: 1, secret: "content" }),
+      parsePipelineProfileArtifact({ schema_version: 2, secret: "content" }),
     ).toThrow("PIPELINE_PROFILE_FIELDS_INVALID");
   });
 });

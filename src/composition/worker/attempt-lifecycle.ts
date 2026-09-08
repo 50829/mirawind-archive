@@ -11,6 +11,7 @@ import {
 } from "../book-deletion";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
+import { DraftSaveRepository } from "@/modules/publishing/adapters/sqlite/draft-saves";
 import {
   JobRepository,
   type JobErrorClass,
@@ -37,11 +38,7 @@ export async function cancelImportJob(input: {
     return;
   }
   const imported = input.imports.require(input.job.importId);
-  if (
-    ["uploaded", "analyzing", "needs_main_confirmation", "preparing"].includes(
-      imported.state,
-    )
-  ) {
+  if (["uploaded", "analyzing", "preparing"].includes(imported.state)) {
     input.imports.cancel(imported.id, input.nowMs);
   }
   await rm(resolve(input.layout.root, "staging", input.job.id), {
@@ -181,8 +178,17 @@ export function retryJobAttempt(input: {
         withImmediateTransaction(input.database, operation),
     });
   }
-  return input.jobs.retry(input.job.id, {
-    automatic: input.automatic,
-    nowMs: input.nowMs,
+  return withImmediateTransaction(input.database, () => {
+    const retry = input.jobs.retry(input.job.id, {
+      automatic: input.automatic,
+      nowMs: input.nowMs,
+    });
+    if (input.job.kind === "save_draft")
+      new DraftSaveRepository(input.database).copyForRetry(
+        input.job.id,
+        retry.id,
+        input.nowMs,
+      );
+    return retry;
   });
 }

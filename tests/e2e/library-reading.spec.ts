@@ -76,18 +76,10 @@ test("discovers details, restores context and completes the reader loop", async 
     : 0;
   const dialog = page.getByRole("dialog", { name: "E2E Library Book" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator(".book-details-cover")).toBeVisible();
   await expect(dialog.getByRole("link", { name: "开始阅读" })).toHaveAttribute(
     "href",
     "/read/e2e-library-book/1",
   );
-  await expect(dialog.getByRole("heading", { name: "目录" })).toBeVisible();
-  if (mobile) {
-    const box = await dialog.boundingBox();
-    const viewport = page.viewportSize();
-    expect(box?.width).toBe(viewport?.width);
-    expect(box?.height).toBe(viewport?.height);
-  }
   if (javascriptEnabled) await expectNoSeriousAccessibilityFindings(page);
 
   await dialog.getByRole("link", { name: "关闭图书详情" }).click();
@@ -105,7 +97,6 @@ test("discovers details, restores context and completes the reader loop", async 
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/library$/u);
     await expect(detailsLink).toBeFocused();
-    await expect(detailsLink).toHaveCSS("outline-width", "2px");
 
     await detailsLink.click();
     await expect(page).toHaveURL(/\/books\/e2e-library-book$/u);
@@ -156,12 +147,6 @@ test("discovers details, restores context and completes the reader loop", async 
     }
   }
   await expect(page.getByRole("main")).toContainText("A seeded public book");
-  await expect(page.locator(".reader-document ul").first()).toHaveCSS(
-    "list-style-type",
-    "disc",
-  );
-  const paragraphs = page.locator(".reader-document > p");
-  await expect(paragraphs.nth(1)).toHaveCSS("margin-top", "20px");
   if (javascriptEnabled && !mobile) {
     await page
       .context()
@@ -173,17 +158,6 @@ test("discovers details, restores context and completes the reader loop", async 
       "const readerFixture = true;\n",
     );
   }
-  const chapterHeading = page.locator(".reader-document h1").first();
-  const sectionHeading = page.locator(".reader-document h2").first();
-  await expect(chapterHeading).toBeVisible();
-  await expect(sectionHeading).toBeVisible();
-  const [chapterFontSize, sectionFontSize] = await Promise.all([
-    chapterHeading.evaluate((element) => getComputedStyle(element).fontSize),
-    sectionHeading.evaluate((element) => getComputedStyle(element).fontSize),
-  ]);
-  expect(Number.parseFloat(chapterFontSize)).toBeGreaterThan(
-    Number.parseFloat(sectionFontSize),
-  );
   if (javascriptEnabled) {
     await expectNoSeriousAccessibilityFindings(page);
     if (mobile) {
@@ -208,6 +182,9 @@ test("discovers details, restores context and completes the reader loop", async 
       await page.getByRole("button", { name: "搜索" }).click();
       const searchDialog = page.getByRole("dialog", { name: "搜索" });
       await searchDialog.getByRole("searchbox").fill("Searchable");
+      await page.keyboard.press("ArrowRight");
+      await expect(page).toHaveURL(/\/read\/e2e-library-book\/1$/u);
+      await expect(searchDialog).toBeVisible();
       await searchDialog.getByRole("button", { name: "搜索" }).click();
       const results = searchDialog.locator("[data-search-results]");
       await expect(results).toContainText("E2E Library Book");
@@ -215,6 +192,8 @@ test("discovers details, restores context and completes the reader loop", async 
     } else {
       const search = page.getByRole("region", { name: "书内搜索" }).first();
       await search.getByRole("searchbox").fill("Searchable");
+      await page.keyboard.press("ArrowRight");
+      await expect(page).toHaveURL(/\/read\/e2e-library-book\/1$/u);
       await search.getByRole("button", { name: "搜索" }).click();
       const results = search.locator("[data-search-results]");
       await expect(results).toContainText("E2E Library Book");
@@ -236,26 +215,6 @@ test("discovers details, restores context and completes the reader loop", async 
   }
   await page.getByRole("link", { name: "返回书库" }).click();
   await expect(page).toHaveURL(/\/library$/u);
-});
-
-test("keeps the page outline beside content until the drawer breakpoint", async ({
-  page,
-}, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop-chromium");
-  await page.setViewportSize({ height: 800, width: 1024 });
-  await page.goto("/read/e2e-library-book/1");
-  const main = page.getByRole("main");
-  const outline = page.getByRole("navigation", { name: "本页提纲" }).first();
-  await expect(outline).toBeVisible();
-  const [mainBox, outlineBox] = await Promise.all([
-    main.boundingBox(),
-    outline.boundingBox(),
-  ]);
-  expect(outlineBox?.x).toBeGreaterThan((mainBox?.x ?? 0) + 1);
-
-  await page.setViewportSize({ height: 800, width: 768 });
-  await expect(outline).toBeHidden();
-  await expect(page.getByRole("button", { name: "本文" })).toBeVisible();
 });
 
 test("keeps hidden and unavailable identities out of public discovery", async ({

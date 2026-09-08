@@ -40,37 +40,6 @@ describe("durable job repository", () => {
     secondDatabase.close();
   });
 
-  it("retires old maintenance rows and excludes them from queue health", async () => {
-    const [database, secondDatabase] = await connections();
-    const repository = new JobRepository(database);
-    database.exec(`
-      INSERT INTO jobs (
-        id, kind, state, attempt, automatic_retry_count, phase,
-        progress_json, created_at, lease_owner, lease_until
-      ) VALUES
-        ('job_legacy_reconcile_0001', 'reconcile', 'queued', 1, 0, 'queued',
-         '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}', 1000,
-         NULL, NULL),
-        ('job_legacy_reclaim_000001', 'reclaim_versions', 'running', 1, 0, 'starting',
-         '{"completed":0,"total":null,"unit":"steps","processed_bytes":null}', 1001,
-         'worker:legacy', 9999)
-    `);
-
-    expect(repository.observeQueue(2_000)).toMatchObject({
-      queuedCount: 0,
-      runningCount: 0,
-    });
-    expect(repository.retireMaintenanceJobs(3_000)).toBe(2);
-    expect(
-      database.prepare("SELECT DISTINCT state FROM jobs ORDER BY state").all(),
-    ).toEqual([{ state: "canceled" }]);
-    expect(
-      repository.claimNext({ leaseOwner: "worker-a", nowMs: 3_001 }),
-    ).toBeNull();
-    database.close();
-    secondDatabase.close();
-  });
-
   it("uses a 10-second heartbeat and expires a lease after 60 seconds", async () => {
     const [database, secondDatabase] = await connections();
     const repository = new JobRepository(database);

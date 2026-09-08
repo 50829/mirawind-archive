@@ -5,8 +5,7 @@ export interface BookDeletionTokenInput {
   readonly bookId: number;
   readonly currentCandidateId: string | null;
   readonly currentVersionId: string | null;
-  readonly draftConfigRevision: number | null;
-  readonly draftSourceId: string | null;
+  readonly draftImportId: string | null;
   readonly title: string;
   readonly updatedAtMs: number;
 }
@@ -20,12 +19,11 @@ function titleDigest(title: string): string {
 export function createBookDeletionToken(input: BookDeletionTokenInput): string {
   const hash = createHash("sha256");
   for (const part of [
-    "book-permanent-deletion-v1",
+    "book-permanent-deletion-v2",
     String(input.bookId),
     String(input.updatedAtMs),
     input.alias ?? "",
-    input.draftSourceId ?? "",
-    String(input.draftConfigRevision ?? ""),
+    input.draftImportId ?? "",
     input.currentCandidateId ?? "",
     input.currentVersionId ?? "",
     titleDigest(input.title),

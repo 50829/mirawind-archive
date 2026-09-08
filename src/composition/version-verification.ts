@@ -113,8 +113,7 @@ async function checkMarker(
   if (
     marker.book_id !== version.bookId ||
     marker.version_id !== version.id ||
-    marker.source_id !== version.sourceId ||
-    marker.config_revision !== version.configRevision ||
+    marker.source_updated_at !== version.sourceUpdatedAt ||
     marker.predecessor_version_id !== version.predecessorVersionId ||
     marker.manifest_sha256 !== version.manifestSha256 ||
     (marker.compiler as Readonly<Record<string, unknown>>).version !==
@@ -143,7 +142,7 @@ export async function verifyVersionQuickly(
   try {
     const checked = await checkMarker(layout, version);
     const byPath = new Map(checked.files.map((file) => [file.path, file]));
-    const authorities = ["book.yaml", "document-manifest.json"] as const;
+    const authorities = ["book.json", "document-manifest.json"] as const;
     for (const path of authorities) {
       const declared = byPath.get(path);
       if (!declared) throw new Error("VERSION_REQUIRED_FILE_INVALID");
@@ -246,7 +245,7 @@ export async function verifyAndRecoverCurrentVersions(input: {
       !presentationIntegrityFailures.has(current.id) &&
       currentPresentation &&
       currentPresentation.bookId === book.bookId &&
-      currentPresentation.configRevision === current.configRevision
+      currentPresentation.sourceUpdatedAt === current.sourceUpdatedAt
         ? await verifyVersionQuickly(input.layout, current)
         : ({ code: "VERSION_IDENTITY_MISMATCH", ok: false } as const);
     if (result.ok) continue;
@@ -271,7 +270,7 @@ export async function verifyAndRecoverCurrentVersions(input: {
         presentationIntegrityFailures.has(candidate.id) ||
         !candidatePresentation ||
         candidatePresentation.bookId !== candidate.bookId ||
-        candidatePresentation.configRevision !== candidate.configRevision
+        candidatePresentation.sourceUpdatedAt !== candidate.sourceUpdatedAt
       ) {
         continue;
       }

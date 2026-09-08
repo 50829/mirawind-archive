@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { LibraryService } from "@/modules/catalog/adapters/sqlite/library";
 
 import { withMigratedTestDatabase } from "../../helpers/database.js";
@@ -53,22 +52,17 @@ describe("book details service", () => {
         database,
         nowMs: 12,
       });
-      const sourceId = (
-        database
-          .prepare("SELECT source_id FROM book_versions WHERE id = ?")
-          .get(publicationTestVersionId) as { source_id: string }
-      ).source_id;
-      new SourceRepository(database).registerOriginal({
-        bookId: fixture.book.id,
-        id: "file_library_details_test_0001",
-        mediaType: "application/zip",
-        nowMs: 13,
-        originalName: "Book source.zip",
-        sha256: "e".repeat(64),
-        sizeBytes: 1024,
-        sourceId,
-        storageRelativePath: "ignored/source.zip",
-      });
+      database
+        .prepare(
+          `INSERT INTO original_files (id,book_id,import_id,role,storage_rel_path,original_name,media_type,size_bytes,sha256,created_at)
+        VALUES (?,?,?,'mineru_zip','ignored/source.zip','Book source.zip','application/zip',1024,?,13)`,
+        )
+        .run(
+          "file_library_details_test_0001",
+          fixture.book.id,
+          fixture.imported.id,
+          "e".repeat(64),
+        );
 
       const details = new LibraryService(database).resolveDetails({
         administrator: anonymous,

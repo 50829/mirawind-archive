@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
-import { createStrongEtag } from "@/http/cache/policies";
 import { SqliteBookAccessRepository } from "@/modules/catalog/adapters/sqlite/book-access";
 import { setBookAccess } from "@/modules/catalog/application/commands/set-book-access";
 import type { BookVersionPresentation } from "@/modules/catalog/application/catalog-api";
@@ -10,7 +11,6 @@ import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/d
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import { JobRepository } from "@/modules/publishing/adapters/sqlite/jobs";
-import { SourceRepository } from "@/modules/publishing/adapters/sqlite/sources";
 import { VersionRepository } from "@/modules/publishing/adapters/sqlite/versions";
 import {
   m1PublishPolicy,
@@ -18,9 +18,13 @@ import {
 } from "@/modules/publishing/application/publishing-api";
 import type { SearchSpool } from "@/modules/publishing/core/publication/search-model";
 import { withImmediateTransaction } from "@/platform/sqlite/immediate-transaction";
+import type { StorageLayout } from "@/platform/filesystem/storage-layout";
+import { smallBook } from "./ir-book";
+import { serializeBookDocument } from "@/modules/publishing/core/content/book-document";
+import { readDraftHeader } from "@/modules/publishing/adapters/filesystem/draft-document";
 
 const hash = "a".repeat(64);
-export const publicationTestSourceId = "src_stale_publish_test_0001";
+export const publicationTestUpdatedAt = 1000;
 export const publicationTestVersionId = "ver_candidate_publish_test_0001";
 const blockId = "blk_stale_publish_test_0001";
 export const publicationTestLeaseOwner = "worker:test";
@@ -32,13 +36,13 @@ export function presentationForTest(
   return Object.freeze({
     alias: null,
     bookId,
-    configRevision: 1,
+    sourceUpdatedAt: publicationTestUpdatedAt,
     coverResourceId: null,
     createdAtMs: 11,
     firstPageAlias: null,
     firstPageId: 1,
     metadataJson: "{}\n",
-    projectionSchemaVersion: 2,
+    projectionSchemaVersion: 3,
     projectionSha256: hash,
     title: "Book",
     tocEntryCount: 0,
@@ -95,34 +99,22 @@ export function setupPublicationFixture(
     uploadSha256: hash,
     uploadSizeBytes: 1,
   });
-  new SourceRepository(database).createSnapshot({
-    analysisVersion: "test-v1",
-    bookId: book.id,
-    createdFromImportId: imported.id,
-    id: publicationTestSourceId,
-    mainMarkdownPath: "book.md",
-    mainMarkdownSha256: hash,
-    nowMs: 3,
-    origin: "import",
-    sourceRootRelativePath: "books/1/draft/sources/source",
-  });
-  drafts.addConfigRevision({
-    bookId: book.id,
-    nowMs: 4,
-    revision: 1,
-    schemaVersion: 4,
-    sourceId: publicationTestSourceId,
-    title: "Book",
-    yamlRelativePath: "books/1/draft/configs/1/book.yaml",
-    yamlSha256: hash,
-  });
+  const layout = publicationLayoutForTest(database);
+  const document = smallBook(book.id, publicationTestUpdatedAt);
+  const draftPath = resolve(
+    layout.bookDirectory,
+    String(book.id),
+    "draft/book.json",
+  );
+  mkdirSync(dirname(draftPath), { recursive: true, mode: 0o700 });
+  writeFileSync(draftPath, serializeBookDocument(document), { mode: 0o600 });
 
   const candidates = new DraftCandidateRepository(database);
-  const candidate = candidates.createForCurrentRevision({
+  const candidate = candidates.createForDocument({
     bookId: book.id,
-    configRevision: 1,
+    sourceUpdatedAt: publicationTestUpdatedAt,
     nowMs: 5,
-    sourceId: publicationTestSourceId,
+    importId: imported.id,
   });
   database
     .prepare("UPDATE jobs SET version_id = ? WHERE id = ? AND state = 'queued'")
@@ -140,19 +132,19 @@ export function setupPublicationFixture(
     withImmediateTransaction(database, () => {
       new VersionRepository(database).registerReadyWithSearch({
         bookId: book.id,
-        compilerVersion: "compiler-v6",
+        compilerVersion: "compiler-v7",
         completeAtMs: 11,
-        configRevision: 1,
+        sourceUpdatedAt: publicationTestUpdatedAt,
         createdByJobId: candidate.jobId,
         expectedSearchBlockIds: [blockId],
-        manifestSchemaVersion: 3,
+        manifestSchemaVersion: 4,
         manifestSha256: hash,
         predecessorVersionId: null,
         presentation: presentationForTest(book.id),
         presentationWriter: new BookPresentationRepository(database),
-        rendererVersion: "semantic-html-v6-katex-0.18.1",
+        rendererVersion: "semantic-html-v7-katex-0.18.1",
         semanticDigest: hash,
-        sourceId: publicationTestSourceId,
+        importId: imported.id,
         spool: spool(book.id, publicationTestVersionId),
         versionId: publicationTestVersionId,
         versionRelativePath: `books/1/versions/${publicationTestVersionId}`,
@@ -179,6 +171,10 @@ export function setupPublicationFixture(
   if (!candidateJob) throw new Error("CANDIDATE_JOB_MISSING");
   return {
     book,
+    document,
+    draftPath,
+    imported,
+    layout,
     candidate: candidates.require(candidate.attemptId),
     candidateJob,
     candidates,
@@ -192,26 +188,30 @@ export async function publishReadyCandidateForTest(input: {
   readonly actorUserId?: string | null;
   readonly bookId: number;
   readonly database: Database.Database;
-  readonly expectedConfigEtag?: string;
+  readonly expectedUpdatedAt?: number;
+  readonly candidateId?: string;
   readonly nowMs: number;
 }) {
-  let expectedConfigEtag = input.expectedConfigEtag;
-  if (!expectedConfigEtag) {
-    const drafts = new DraftRepository(input.database);
-    const book = drafts.requireBook(input.bookId);
-    if (book.draftConfigRevision === null) {
-      throw new Error("DRAFT_CONFIG_REVISION_MISSING");
-    }
-    const config = drafts.requireConfig(input.bookId, book.draftConfigRevision);
-    expectedConfigEtag = createStrongEtag(config.yamlSha256);
-  }
+  const layout = publicationLayoutForTest(input.database);
+  const expectedUpdatedAt =
+    input.expectedUpdatedAt ??
+    readDraftHeader(
+      resolve(layout.bookDirectory, String(input.bookId), "draft/book.json"),
+      input.bookId,
+    ).updated_at;
+  const candidate = new DraftCandidateRepository(input.database).findCurrent(
+    input.bookId,
+  );
+  const candidateId = input.candidateId ?? candidate?.attemptId;
+  if (!candidateId) throw new Error("CANDIDATE_MISSING");
   const published = await publishCandidate({
     actorUserId: input.actorUserId ?? null,
     bookId: input.bookId,
-    expectedConfigEtag,
+    expectedUpdatedAt,
+    candidateId,
     nowMs: input.nowMs,
     policy: m1PublishPolicy,
-    publication: new CandidatePublicationRepository(input.database),
+    publication: new CandidatePublicationRepository(input.database, layout),
   });
   if ((input.access ?? "public") === "public") {
     setBookAccess({
@@ -223,4 +223,17 @@ export async function publishReadyCandidateForTest(input: {
     });
   }
   return published;
+}
+
+export function publicationLayoutForTest(
+  database: Database.Database,
+): StorageLayout {
+  const root = dirname(dirname(database.name));
+  return {
+    root,
+    databaseDirectory: resolve(root, "db"),
+    bookDirectory: resolve(root, "books"),
+    temporaryDirectory: resolve(root, "tmp"),
+    uploadDirectory: resolve(root, "tmp/uploads"),
+  };
 }

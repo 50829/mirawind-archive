@@ -9,8 +9,8 @@
     "pnpm": "11.9.0"
   },
   "scripts": {
+    "generate:content-types": "node scripts/generate-content-types.mjs",
     "benchmark:environment": "tsx scripts/benchmarks/environment.ts",
-    "benchmark:compilation-complexity": "tsx scripts/benchmarks/compilation-complexity.ts",
     "benchmark:library": "tsx scripts/benchmarks/library.ts",
     "benchmark:pipeline-profile": "tsx scripts/benchmarks/pipeline-profile.ts",
     "benchmark:pipeline-paired": "tsx scripts/benchmarks/pipeline-paired.ts",
@@ -20,7 +20,6 @@
     "benchmark:read-during-build": "tsx scripts/benchmarks/read-during-build.ts",
     "benchmark:reference": "tsx scripts/benchmarks/reference.ts",
     "benchmark:search": "tsx scripts/benchmarks/search.ts",
-    "audit:migration-recovery": "tsx scripts/audits/migration-recovery.ts",
     "architecture:check": "tsx scripts/architecture/dependency-graph.ts src",
     "architecture:imports": "tsx scripts/architecture/canonical-imports.ts",
     "architecture:names": "tsx scripts/architecture/semantic-names.ts",
@@ -46,7 +45,7 @@
     "prepare:assets": "pnpm prepare:renderer-assets && pnpm prepare:reader-assets && pnpm prepare:styles",
     "prepare:reader-assets": "node scripts/prepare-reader-assets.mjs",
     "prepare:renderer-assets": "node scripts/prepare-renderer-assets.mjs",
-    "prepare:styles": "tailwindcss -i src/styles/reader.css -o public/_astro/styles/mirawind-reader-v3-tailwind-4.3.3.css --minify",
+    "prepare:styles": "tailwindcss -i src/styles/reader.css -o public/_astro/styles/mirawind-reader-v4-tailwind-4.3.3.css --minify",
     "preview": "astro preview",
     "start": "node dist/server/entry.mjs",
     "test": "vitest run --passWithNoTests",
@@ -55,11 +54,10 @@
     "test:e2e": "playwright test --pass-with-no-tests",
     "test:integration": "vitest run --project integration --passWithNoTests",
     "test:unit": "vitest run --project unit --passWithNoTests",
-    "typecheck": "astro check && tsc --noEmit && tsc -p tsconfig.processes.json --noEmit",
+    "typecheck": "node scripts/generate-content-types.mjs --check && astro check && tsc --noEmit && tsc -p tsconfig.processes.json --noEmit",
     "worker": "node dist/processes/worker/index.js"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "7.2.1",
     "@astrojs/node": "11.0.2",
     "@astrojs/react": "6.0.1",
     "@better-auth/passkey": "1.6.25",
@@ -74,6 +72,7 @@
     "astro": "7.1.3",
     "better-auth": "1.6.25",
     "better-sqlite3": "12.11.1",
+    "diff": "9.0.0",
     "entities": "6.0.1",
     "katex": "0.18.1",
     "lucide-react": "^1.26.0",
@@ -85,14 +84,15 @@
     "rehype-raw": "7.0.0",
     "rehype-sanitize": "6.0.0",
     "rehype-stringify": "10.0.1",
+    "remark-directive": "4.0.0",
     "remark-gfm": "4.0.1",
     "remark-math": "6.0.0",
     "remark-parse": "11.0.0",
     "remark-rehype": "11.1.2",
+    "remark-stringify": "11.0.0",
     "sharp": "0.35.3",
     "shiki": "4.3.1",
-    "unified": "11.0.5",
-    "yaml": "2.9.0"
+    "unified": "11.0.5"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "12.1.0",
@@ -120,6 +120,7 @@
     "eslint-plugin-react-refresh": "0.5.3",
     "globals": "17.7.0",
     "happy-dom": "20.11.1",
+    "json-schema-to-typescript": "15.0.4",
     "lightningcss": "1.33.0",
     "prettier": "3.9.6",
     "prettier-plugin-astro": "0.14.1",
@@ -128,6 +129,7 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.65.0",
     "vite": "8.1.5",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "yaml": "2.9.0"
   }
 }

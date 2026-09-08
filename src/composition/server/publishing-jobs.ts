@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 import { cancelBookDeletion, retryBookDeletion } from "../book-deletion";
 import { DraftCandidateRepository } from "@/modules/publishing/adapters/sqlite/draft-candidate-repository";
 import { DraftRepository } from "@/modules/publishing/adapters/sqlite/drafts";
+import { DraftSaveRepository } from "@/modules/publishing/adapters/sqlite/draft-saves";
 import { ImportRepository } from "@/modules/publishing/adapters/sqlite/imports";
 import {
   serializeJobStatus,
@@ -81,9 +82,29 @@ export function createPublishingJobServer(database: Database.Database) {
             withImmediateTransaction(database, operation),
         });
       }
-      return jobs.retry(jobId, input);
+      return withImmediateTransaction(database, () => {
+        const retry = jobs.retry(jobId, input);
+        if (job?.kind === "save_draft")
+          new DraftSaveRepository(database).copyForRetry(
+            jobId,
+            retry.id,
+            input.nowMs,
+          );
+        return retry;
+      });
     },
-    serializeJobStatus: (job: NonNullable<ReturnType<JobRepository["get"]>>) =>
-      serializeJobStatus(job, jobSubject(job)),
+    serializeJobStatus: (
+      job: NonNullable<ReturnType<JobRepository["get"]>>,
+    ) => ({
+      ...serializeJobStatus(job, jobSubject(job)),
+      ...(job.kind === "save_draft"
+        ? {
+            accepted_updated_at: new DraftSaveRepository(database).require(
+              job.id,
+            ).accepted_updated_at,
+            retry_job_id: jobs.latestRetryOf(job.id)?.id ?? null,
+          }
+        : {}),
+    }),
   });
 }

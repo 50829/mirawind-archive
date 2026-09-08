@@ -80,6 +80,7 @@ describe("job child IPC protocol", () => {
       analyze_import: handler,
       build_candidate: handler,
       prepare_draft: handler,
+      save_draft: handler,
       purge_book: handler,
     } satisfies JobCommandRegistry<string>;
     const jobId = createOpaqueId("job");
@@ -133,23 +134,24 @@ describe("job child IPC protocol", () => {
     const bookId = 1;
     const candidateId = createOpaqueId("draftCandidate");
     const jobId = createOpaqueId("job");
-    const sourceId = createOpaqueId("source");
+    const importId = createOpaqueId("import");
     const versionId = createOpaqueId("version");
     const message = {
       input: {
         bookId,
         candidateId,
         capturedCurrentVersionId: null,
-        compilerIdentity: "compiler-v6",
-        configRelativePath: `books/${bookId}/draft/configs/2/book.yaml`,
-        configRevision: 2,
+        compilerIdentity: "compiler-v7",
+        inputRelativePath: `books/${bookId}/draft/candidates/${candidateId}/book.json`,
+        documentSha256: "a".repeat(64),
+        sourceUpdatedAt: 2000,
         jobId,
         kind: "build_candidate",
-        previewIdentity: "draft-preview-v6",
-        readerIdentity: "mirawind-reader-v3-tailwind-4.3.3",
-        rendererIdentity: "semantic-html-v6-katex-0.18.1",
-        sourceId,
-        sourceRootRelativePath: `books/${bookId}/draft/sources/${sourceId}`,
+        previewIdentity: "draft-preview-v7",
+        readerIdentity: "mirawind-reader-v4-tailwind-4.3.3",
+        rendererIdentity: "semantic-html-v7-katex-0.18.1",
+        importId,
+        resourceRootRelativePath: `books/${bookId}`,
         versionId,
       },
       protocolVersion: jobChildProtocolVersion,
@@ -160,7 +162,7 @@ describe("job child IPC protocol", () => {
     expect(
       isRunJobMessage({
         ...message,
-        input: { ...message.input, sourceRootRelativePath: null },
+        input: { ...message.input, resourceRootRelativePath: null },
       }),
     ).toBe(false);
   });

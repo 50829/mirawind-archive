@@ -377,7 +377,7 @@ export class PublishedBookService {
          LEFT JOIN original_files
            ON original_files.id = ?
           AND original_files.book_id = books.id
-          AND original_files.source_id = book_versions.source_id
+          AND original_files.import_id = book_versions.import_id
          WHERE ${predicate.sql}
            AND books.deletion_requested_at IS NULL
          LIMIT 1`,
